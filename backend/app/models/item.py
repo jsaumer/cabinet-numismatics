@@ -209,6 +209,19 @@ class ChecklistSlot(Base):
     checklist: Mapped[Checklist] = relationship(back_populates="slots")
 
 
+class AppSetting(Base):
+    """Key/value application settings (display currency, source keys, toggles).
+    Values are JSON so strings, numbers, and booleans store uniformly."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[dict | str | int | bool | None] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ExchangeRate(Base):
     """Cache of currency exchange rates, refreshed on demand (like spot prices)."""
 

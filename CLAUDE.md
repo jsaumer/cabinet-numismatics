@@ -82,10 +82,14 @@ catalog depth (sets/lots, variety, custom_fields JSON, bulk edit), polish
 (dark mode via CSS variables + toggle, append-only item edit history,
 completeness checklists). Migrations through `0007`. Stats currency rule:
 convert at cached daily rates, exclude + count what can't convert. Money is
-per row (the lot). Backup/restore in scripts/, rehearsed. **Remaining:** the
-photo-niceties bundle (lightbox, drag-drop/paste upload, URL import, image
-editing, webcam), sold-comps price source, and Phase 6 / homelab deployment
-(Traefik + Authentik forward-auth, CI on Forgejo). See docs/roadmap.md.
+per row (the lot). Backup/restore in scripts/, rehearsed. Pricing program (roadmap Phase 5.5) M1 is done: `app_settings` table
+(migration `0008`), `GET/PUT /api/settings` (secrets write-only, masked),
+`/settings` page (display currency, melt cadence + toggle, Numista/PCGS
+credentials ahead of their adapters, cached market data). Display currency
+and melt cadence are DB-backed with env fallback. **Next: pricing M2 —
+Numista adapter** (coins + notes by numista ref + grade), then M3 PCGS, M4
+estimate provenance, M5 pricing reports. Also open: photo-niceties bundle,
+Phase 6 / homelab deployment (Traefik + Authentik, CI). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 

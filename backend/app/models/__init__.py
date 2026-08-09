@@ -1,5 +1,6 @@
 # Import models here so Alembic autogenerate sees them via Base.metadata.
 from app.models.item import (
+    AppSetting,
     CatalogRef,
     Checklist,
     ChecklistSlot,
@@ -17,6 +18,7 @@ from app.models.item import (
 )
 
 __all__ = [
+    "AppSetting",
     "CatalogRef",
     "Checklist",
     "ChecklistSlot",

@@ -10,6 +10,10 @@ ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
 plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
 `checklists` + `checklist_slots`.
 
+Revision `0008` (pricing program M1) added `app_settings` — key/value JSON
+settings (display currency, source toggles, API credentials, melt cadence),
+read through `app/services/app_settings.py` with defaults and env fallbacks.
+
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
 `item_events` (append-only edit history: action + `{field: [old, new]}`

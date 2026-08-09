@@ -95,8 +95,12 @@ guidance, not appraisals.
   a confidence score — *the sold-listings integration; not yet built
   (deferred stretch goal; the adapter registry it plugs into exists).*
 - ◐ **[Nice]** Pluggable price-source adapters: the registry and adapter
-  interface exist with melt as the single adapter; further sources
-  (sold-listing comps, price guides) plug in there.
+  interface exist with melt as the single adapter; further sources plug in
+  there. Researched (Aug 2026): **Numista API** (free key, coins + notes,
+  prices by grade) and **PCGS Public API** (free, US price guide + Auction
+  Prices Realized) are viable; eBay Marketplace Insights is closed to new
+  applicants, so eBay comps stay a manual-entry path. See the Pricing
+  program phase below.
 - ✔ **[Nice]** Scheduled / periodic re-estimation: stale melt estimates
   refresh every 12h (window set by `REESTIMATE_DAYS`; manual values are never
   superseded); on-demand refresh from the dashboard.
@@ -242,6 +246,37 @@ Pull from the **[Nice]** items as desired, roughly in value order:
 - ✔ **5C — polish:** completeness checklists, dark mode, edit history.
 - **Photo niceties — not pulled yet:** in-browser image editing, lightbox,
   clipboard/drag-drop/URL upload, webcam capture.
+
+### Phase 5.5 — Pricing program: settings, sources, reports
+Fully enable configurable price estimation: a settings surface, the two
+researched external sources, estimate provenance, and pricing-quality
+reports. Staged so each milestone is independently useful.
+
+- **M1 — Settings backbone + page.** `app_settings` table and
+  `GET/PUT /api/settings` (secrets write-only, masked on read); a `/settings`
+  page with General (app-wide display currency, melt refresh cadence, melt
+  on/off), Price sources (Numista API key + toggle, PCGS token + toggle —
+  configurable ahead of their adapters), and Cached data (current spot
+  prices and exchange rates with fetch times). Display currency and
+  re-estimation cadence move from env/hardcoded into DB settings with env
+  fallback.
+- **M2 — Numista adapter.** Coins *and* notes priced by `numista` catalog
+  ref + grade (free key, 2,000 req/month); per-source response caching in
+  the DB; enabled only when a key is configured; medium confidence
+  (collector-swap-derived estimates).
+- **M3 — PCGS adapter.** US coins by PCGS number/cert: price-guide values
+  (medium confidence) and Auction Prices Realized (high confidence — real
+  sales); OAuth token from the PCGS public API program, 1,000 calls/day.
+- **M4 — Estimate provenance.** Store each source's response summary
+  alongside the estimate (`price_estimates.details`) so a value can be
+  explained, not just asserted; filter value history by source.
+- **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
+  why — no ref, source unconfigured, fetch failed), stale-estimates view,
+  per-source breakdown, and estimate-vs-reality accuracy (last estimate
+  against realized price on sold items).
+
+*Exit: every priceable item has a sourced, explainable, configurable
+estimate — and you can see where pricing is thin.*
 
 ### Phase 6 — Open-source release [OSS]
 Only if/when you decide to publish. Precursor for homelab use: push to the

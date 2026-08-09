@@ -4,6 +4,7 @@ import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { applyTheme, initialTheme } from "./components/theme";
 import Checklists from "./pages/Checklists";
 import Dashboard from "./pages/Dashboard";
+import Settings from "./pages/Settings";
 import ItemDetail from "./pages/ItemDetail";
 import ItemForm from "./pages/ItemForm";
 import ItemList from "./pages/ItemList";
@@ -25,6 +26,7 @@ export default function App() {
           <NavLink to="/" end>Collection</NavLink>
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
+          <NavLink to="/settings" title="Settings">⚙</NavLink>
           <button
             className="theme-toggle"
             title="Toggle dark mode"
@@ -40,6 +42,7 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/items/new" element={<ItemForm />} />
           <Route path="/items/:id" element={<ItemDetail />} />
           <Route path="/items/:id/edit" element={<ItemForm />} />

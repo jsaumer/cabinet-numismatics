@@ -580,6 +580,21 @@ table.estimates td {
   color: var(--ink-2);
 }
 
+/* Settings */
+.source-row {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.source-row:last-child {
+  border-bottom: none;
+}
+.source-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 /* History */
 details.history summary {
   cursor: pointer;

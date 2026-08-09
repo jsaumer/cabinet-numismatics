@@ -227,6 +227,41 @@ export interface ChecklistDetail {
   slots: ChecklistSlot[];
 }
 
+export interface SourceStatus {
+  key: string;
+  name: string;
+  enabled: boolean;
+  configured: boolean;
+  available: boolean;
+  secret_hint: string | null;
+  note: string | null;
+}
+
+export interface CachedValue {
+  label: string;
+  value: string;
+  source: string;
+  fetched_at: string;
+}
+
+export interface AppSettings {
+  display_currency: string;
+  reestimate_days: number;
+  reestimate_days_overridden: boolean;
+  sources: SourceStatus[];
+  cached: CachedValue[];
+}
+
+export interface AppSettingsUpdate {
+  display_currency?: string;
+  reestimate_days?: number;
+  melt_enabled?: boolean;
+  numista_enabled?: boolean;
+  numista_api_key?: string;
+  pcgs_enabled?: boolean;
+  pcgs_api_token?: string;
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, init);
   if (!resp.ok) {
@@ -324,6 +359,10 @@ export const api = {
       json("PATCH", { filled }),
     ),
   deleteChecklist: (id: number) => req<void>(`/api/checklists/${id}`, { method: "DELETE" }),
+
+  getSettings: () => req<AppSettings>("/api/settings"),
+  updateSettings: (payload: AppSettingsUpdate) =>
+    req<AppSettings>("/api/settings", json("PUT", payload)),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];

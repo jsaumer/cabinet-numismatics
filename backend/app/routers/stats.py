@@ -16,7 +16,14 @@ from app.schemas import (
     ValueHistory,
     ValuePoint,
 )
+from app.services.app_settings import display_currency
 from app.services.currency import Converter
+
+
+def _resolve_currency(db: Session, currency: str | None) -> str:
+    """Explicit ?currency= wins; otherwise the app-wide display currency."""
+    return currency.upper() if currency else display_currency(db)
+
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -38,13 +45,13 @@ def _load_items(db: Session) -> list[Item]:
 
 @router.get("/collection", response_model=CollectionStats)
 def collection_stats(
-    currency: str = Query(default="USD", min_length=3, max_length=3),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
 ):
-    """Collection totals in one display currency. Other currencies are
-    converted at cached daily rates; amounts with no obtainable rate are
-    excluded and counted, never guessed."""
-    currency = currency.upper()
+    """Collection totals in one display currency (the app-wide setting unless
+    overridden). Other currencies are converted at cached daily rates;
+    amounts with no obtainable rate are excluded and counted, never guessed."""
+    currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
     items = _load_items(db)
 
@@ -107,13 +114,13 @@ def _entry(key: str, b: _Bucket) -> BreakdownEntry:
 
 @router.get("/breakdowns", response_model=Breakdowns)
 def breakdowns(
-    currency: str = Query(default="USD", min_length=3, max_length=3),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
 ):
     """Owned items grouped by country, type, decade, grade, and tag, plus
     acquisitions by year. Counts include every owned item; money sums are
     converted into the display currency (unconvertible amounts excluded)."""
-    currency = currency.upper()
+    currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
     dims: dict[str, dict[str, _Bucket]] = {
         d: defaultdict(_Bucket) for d in ("country", "type", "decade", "grade", "tag", "acq_year")
@@ -155,13 +162,13 @@ def breakdowns(
 
 @router.get("/gains", response_model=Gains)
 def gains(
-    currency: str = Query(default="USD", min_length=3, max_length=3),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
 ):
     """Per-item gain/loss in the display currency (converted where needed):
     unrealized for owned items with both a price and an estimate, realized for
     sold items."""
-    currency = currency.upper()
+    currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
     unrealized: list[GainEntry] = []
     realized: list[GainEntry] = []
@@ -211,14 +218,14 @@ def _month_ends(months: int) -> list[date]:
 
 @router.get("/value-history", response_model=ValueHistory)
 def value_history(
-    currency: str = Query(default="USD", min_length=3, max_length=3),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
     months: int = Query(default=24, ge=1, le=120),
     db: Session = Depends(get_db),
 ):
     """Collection value at each month-end: per owned item, the latest estimate
     on or before that date (converted at today's cached rates — historical
     rates are out of scope for a personal tool)."""
-    currency = currency.upper()
+    currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
     items = [i for i in _load_items(db) if i.status == "owned"]
 

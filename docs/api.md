@@ -114,6 +114,19 @@ export to PDF via the browser's print dialog) are built on these endpoints.
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint.
 
+## Settings
+
+| Method | Path             | Purpose                                          |
+|--------|------------------|--------------------------------------------------|
+| `GET`  | `/api/settings`  | App settings + source status + cached market data|
+| `PUT`  | `/api/settings`  | Partial update                                   |
+
+Settings cover the app-wide display currency (used by all stats endpoints
+unless `?currency=` overrides), the melt refresh cadence (DB override of the
+`REESTIMATE_DAYS` env var; takes effect without restart), source toggles, and
+source credentials (Numista API key, PCGS token). **Secrets are write-only**:
+reads return only a configured flag and a last-4 hint, never the value.
+
 ## Checklists (completeness tracking)
 
 | Method   | Path                                    | Purpose                     |

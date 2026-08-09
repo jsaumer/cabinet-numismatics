@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db import get_db
 from app.models import PriceEstimate
 from app.routers.items import get_item_or_404
 from app.schemas import EstimateCreate, EstimateOut, RefreshResult
 from app.services import pricing
+from app.services.app_settings import effective_reestimate_days, get_setting
 
 router = APIRouter(prefix="/api/items/{item_id}", tags=["estimates"])
 refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
@@ -18,8 +18,10 @@ refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
 @refresh_router.post("/refresh-melt", response_model=RefreshResult)
 def refresh_melt(db: Session = Depends(get_db)):
     """Re-run stale melt estimates now (the scheduler does this automatically
-    every 12h for estimates older than REESTIMATE_DAYS)."""
-    return pricing.refresh_melt_estimates(db, get_settings().reestimate_days)
+    every 12h using the cadence configured in Settings)."""
+    if not get_setting(db, "melt_enabled"):
+        raise HTTPException(status_code=422, detail="Melt estimation is disabled in Settings")
+    return pricing.refresh_melt_estimates(db, effective_reestimate_days(db))
 
 
 @router.get("/estimates", response_model=list[EstimateOut])
@@ -52,6 +54,8 @@ def auto_estimate(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """Produce an automatic estimate. Phase 3 ships the melt-value adapter;
     further sources join the registry later."""
     item = get_item_or_404(db, item_id)
+    if not get_setting(db, "melt_enabled"):
+        raise HTTPException(status_code=422, detail="Melt estimation is disabled in Settings")
     try:
         result = pricing.melt_estimate(db, item)
     except pricing.NotApplicable as exc:
