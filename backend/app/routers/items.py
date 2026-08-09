@@ -4,6 +4,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font
 from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -264,40 +266,7 @@ def export_csv(db: Session = Depends(get_db)):
         writer = csv.writer(buf)
         writer.writerow(CSV_COLUMNS)
         for item in rows:
-            latest = item.estimates[0] if item.estimates else None
-            writer.writerow(
-                [
-                    item.id,
-                    item.type,
-                    item.status,
-                    item.country,
-                    item.denomination,
-                    item.year,
-                    item.mint_mark or "",
-                    item.series or "",
-                    item.composition or "",
-                    item.weight_g or "",
-                    item.fineness or "",
-                    item.grade.scale if item.grade else "",
-                    item.grade.code if item.grade else "",
-                    item.cert_service or "",
-                    item.cert_number or "",
-                    item.quantity,
-                    item.acquisition_date or "",
-                    item.acquisition_price or "",
-                    item.currency,
-                    item.acquired_from or "",
-                    item.storage_location or "",
-                    item.sold_date or "",
-                    item.sold_price or "",
-                    item.notes or "",
-                    "|".join(t.name for t in item.tags),
-                    "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
-                    latest.estimated_value if latest else "",
-                    latest.currency if latest else "",
-                    item.created_at.isoformat(),
-                ]
-            )
+            writer.writerow(_export_row(item))
             yield buf.getvalue()
             buf.seek(0)
             buf.truncate(0)
@@ -307,6 +276,68 @@ def export_csv(db: Session = Depends(get_db)):
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="cabinet-items.csv"'},
     )
+
+
+@router.get("/export.xlsx")
+def export_xlsx(db: Session = Depends(get_db)):
+    rows = db.execute(select(Item).options(*ITEM_LOAD).order_by(Item.created_at)).scalars().all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Collection"
+    ws.append(CSV_COLUMNS)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    ws.freeze_panes = "A2"
+    for item in rows:
+        ws.append([str(v) if isinstance(v, uuid.UUID) else v for v in _export_row(item)])
+    for column, header in zip(ws.columns, CSV_COLUMNS, strict=True):
+        width = max(len(header), *(len(str(c.value or "")) for c in column))
+        ws.column_dimensions[column[0].column_letter].width = min(width + 2, 40)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="cabinet-items.xlsx"'},
+    )
+
+
+def _export_row(item: Item) -> list:
+    latest = item.estimates[0] if item.estimates else None
+    return [
+        item.id,
+        item.type,
+        item.status,
+        item.country,
+        item.denomination,
+        item.year,
+        item.mint_mark or "",
+        item.series or "",
+        item.composition or "",
+        item.weight_g or "",
+        item.fineness or "",
+        item.grade.scale if item.grade else "",
+        item.grade.code if item.grade else "",
+        item.cert_service or "",
+        item.cert_number or "",
+        item.quantity,
+        item.acquisition_date or "",
+        item.acquisition_price or "",
+        item.currency,
+        item.acquired_from or "",
+        item.storage_location or "",
+        item.sold_date or "",
+        item.sold_price or "",
+        item.notes or "",
+        "|".join(t.name for t in item.tags),
+        "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
+        latest.estimated_value if latest else "",
+        latest.currency if latest else "",
+        item.created_at.isoformat(),
+    ]
 
 
 def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:

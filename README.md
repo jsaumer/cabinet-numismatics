@@ -19,6 +19,9 @@ market prices.
   optional confidence), kept as append-only history; one-click melt-value
   estimates for precious-metal items from live spot prices; collection
   totals with cost basis and realized/unrealized gains.
+- **Insights & reporting** — dashboard with collection value, breakdowns by
+  country/decade/grade/tag, realized and unrealized gain/loss, charts;
+  Excel/CSV export; printable insurance report (browser Print → PDF).
 - **Backup/restore** — one script captures the database and photos together;
   see [docs/backup-restore.md](docs/backup-restore.md).
 

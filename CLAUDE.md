@@ -75,17 +75,17 @@ Phase 0 so future sessions can run them without asking. -->
 
 ## Current status & next step
 
-Phase 3 (valuation) is complete: melt-value adapter (spot × weight × fineness
-× quantity via gold-api.com, 12h cache in `spot_prices`, stale fallback) at
-`POST /api/items/{id}/estimate`, optional confidence on manual estimates,
-and `GET /api/stats/collection` totals in a declared display currency
-(mismatched currencies excluded + counted, never mixed — full conversion is
-Phase 5). Money convention: prices/estimates are per row (the lot), not per
-piece. Sold-comps integration was deferred as a stretch goal. Migrations
-through `0004`. Phases 0–2 done earlier (see git history; backup/restore in
-scripts/, rehearsed). **Next: Phase 4 — insights & reporting** — dashboard
-breakdowns, realized + unrealized gain/loss views, Excel export,
-printable/insurance report, basic charts. See docs/roadmap.md.
+Phase 4 (insights & reporting) is complete: `/api/stats/breakdowns` and
+`/api/stats/gains`, Excel export (`export.xlsx`), a dashboard (hero value,
+stat tiles, single-hue SVG charts, gains tables) at `/dashboard`, and a
+print-optimized insurance report at `/report` (browser Print → PDF — a
+deliberate substitute for a server-side PDF library). All stats follow the
+declared-display-currency rule from Phase 3 (no conversion; mismatches
+excluded + counted). Money convention: prices/estimates are per row (the
+lot). Migrations through `0004`; phases 0–3 in git history; backup/restore
+in scripts/, rehearsed; sold-comps deferred. **Next: Phase 5 — depth &
+niceties** (pull [Nice] items as desired) and/or homelab deployment behind
+Traefik + Authentik with CI on Forgejo. See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 

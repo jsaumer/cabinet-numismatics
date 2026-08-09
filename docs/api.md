@@ -21,6 +21,7 @@ described without an auth layer; add one before exposing the app publicly.
 | `POST`   | `/api/items`              | Create an item                      |
 | `POST`   | `/api/items/import`       | Import items from CSV (multipart)   |
 | `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
+| `GET`    | `/api/items/export.xlsx`  | Export the collection as Excel      |
 | `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
 | `PATCH`  | `/api/items/{id}`         | Update fields on an item            |
 | `POST`   | `/api/items/{id}/clone`   | Duplicate an item (not its photos)  |
@@ -74,14 +75,21 @@ can't be melt-priced and 502 when no spot price is obtainable. See
 
 ## Stats
 
-| Method | Path                     | Purpose                                       |
-|--------|--------------------------|-----------------------------------------------|
-| `GET`  | `/api/stats/collection`  | Totals in a display currency (`?currency=`)   |
+| Method | Path                     | Purpose                                        |
+|--------|--------------------------|------------------------------------------------|
+| `GET`  | `/api/stats/collection`  | Totals in a display currency (`?currency=`)    |
+| `GET`  | `/api/stats/breakdowns`  | Owned items grouped by country/type/decade/grade/tag + acquisitions by year |
+| `GET`  | `/api/stats/gains`       | Per-item unrealized (owned) and realized (sold) gain/loss |
 
 Counts by status/type, cost basis, estimated value (latest estimate per owned
 item), unrealized gain (items with both price and estimate), and realized
-gain (sold items). No currency conversion: rows in other currencies are
-excluded from totals and reported in `excluded_other_currency`.
+gain (sold items). All three endpoints follow the same currency rule — no
+conversion: rows in other currencies are excluded from money sums (and
+reported in `excluded_other_currency` on `/collection`; breakdowns still
+count such items).
+
+The dashboard and the printable insurance report (`/report` in the UI —
+export to PDF via the browser's print dialog) are built on these endpoints.
 
 ## Reference data
 

@@ -181,6 +181,40 @@ class ImportResult(BaseModel):
     errors: list[ImportError_]
 
 
+class BreakdownEntry(BaseModel):
+    key: str
+    count: int
+    cost_basis: float
+    estimated_value: float
+
+
+class Breakdowns(BaseModel):
+    """Owned items grouped along each dimension. Sums follow the display
+    currency rule (mismatched rows count but don't sum)."""
+
+    currency: str
+    by_country: list[BreakdownEntry]
+    by_type: list[BreakdownEntry]
+    by_decade: list[BreakdownEntry]
+    by_grade: list[BreakdownEntry]
+    by_tag: list[BreakdownEntry]
+    acquisitions_by_year: list[BreakdownEntry]
+
+
+class GainEntry(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    cost_basis: float
+    value: float  # latest estimate (unrealized) or sold price (realized)
+    gain: float
+
+
+class Gains(BaseModel):
+    currency: str
+    unrealized: list[GainEntry]  # owned items with both price and estimate
+    realized: list[GainEntry]  # sold items with both prices
+
+
 class CollectionStats(BaseModel):
     """Totals in a single declared display currency; rows in other currencies
     are excluded and counted, never silently mixed."""

@@ -167,7 +167,8 @@ export default function ItemList() {
         <div className="spacer" />
         <button onClick={() => importInput.current?.click()}>Import CSV</button>
         <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={doImport} />
-        <a className="button" href="/api/items/export.csv">Export CSV</a>
+        <a className="button" href="/api/items/export.csv">CSV</a>
+        <a className="button" href="/api/items/export.xlsx">Excel</a>
         <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 

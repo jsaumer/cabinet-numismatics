@@ -197,9 +197,11 @@ stretch goal deferred — revisit alongside Phase 5's scheduled re-estimation).
 ### Phase 4 — Insights & reporting
 - Dashboard and breakdowns (country, type, year, grade, tag).
 - Gain/loss view — realized (sold items) and unrealized; Excel export;
-  printable/insurance PDF report.
+  printable/insurance report (print-optimized HTML — the browser's
+  Print → PDF replaces a server-side PDF library on purpose: lighter, and the
+  user controls paper/margins).
 - Basic charts.
-*Exit: you can understand and report on the collection at a glance.*
+*Exit: you can understand and report on the collection at a glance.* ✔ Done.
 
 ### Phase 5 — Depth & niceties
 Pull from the **[Nice]** items as desired, roughly in value order:

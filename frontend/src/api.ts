@@ -125,6 +125,37 @@ export interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
+export interface BreakdownEntry {
+  key: string;
+  count: number;
+  cost_basis: number;
+  estimated_value: number;
+}
+
+export interface Breakdowns {
+  currency: string;
+  by_country: BreakdownEntry[];
+  by_type: BreakdownEntry[];
+  by_decade: BreakdownEntry[];
+  by_grade: BreakdownEntry[];
+  by_tag: BreakdownEntry[];
+  acquisitions_by_year: BreakdownEntry[];
+}
+
+export interface GainEntry {
+  item_id: string;
+  label: string;
+  cost_basis: number;
+  value: number;
+  gain: number;
+}
+
+export interface Gains {
+  currency: string;
+  unrealized: GainEntry[];
+  realized: GainEntry[];
+}
+
 export interface CollectionStats {
   currency: string;
   counts: Record<string, number>;
@@ -197,6 +228,21 @@ export const api = {
     req<Estimate>(`/api/items/${itemId}/estimate`, { method: "POST" }),
 
   collectionStats: () => req<CollectionStats>("/api/stats/collection"),
+  breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),
+  gains: () => req<Gains>("/api/stats/gains"),
+
+  async allItems(): Promise<ItemListEntry[]> {
+    const items: ItemListEntry[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = await api.listItems(
+        new URLSearchParams({ limit: "500", offset: String(offset), sort: "country" }),
+      );
+      items.push(...page.items);
+      offset += page.items.length;
+      if (offset >= page.total || page.items.length === 0) return items;
+    }
+  },
 };
 
 export const photoUrl = (key: string) => `/photos/${key}`;
