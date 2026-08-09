@@ -75,15 +75,16 @@ Phase 0 so future sessions can run them without asking. -->
 
 ## Current status & next step
 
-Phase 1 (usable catalog) is complete: item CRUD with filters/sort/pagination,
-photo upload with angle + primary designation, append-only manual value
-estimates, CSV export, and a react-router SPA (list, detail, create/edit
-views). Migration `0002` creates `items`, `item_photos`, `price_estimates`.
-**Next: Phase 2 — polished catalog** — schema-completing item fields (status +
-sold tracking, composition/weight/fineness, certification, acquisition source,
-storage), grading + catalog reference tables, full-text search, tags,
-thumbnails + EXIF correction + real image validation, CSV import, rehearsed
-backup/restore, responsive pass. See docs/roadmap.md for the reasoning.
+Phase 2 (polished catalog) is complete: schema-complete items (status + sold
+tracking, composition/weight/fineness, seeded Sheldon/PMG grading,
+certification, provenance, storage), tags + catalog refs, advanced filters +
+search, clone, CSV import/export round-trip, Pillow photo pipeline
+(validation, thumbnails, EXIF, reorder), URL-persisted list state, responsive
+pass, and rehearsed backup/restore (`scripts/backup.sh` / `restore.sh`, see
+docs/backup-restore.md). Migrations through `0003`. **Next: Phase 3 —
+valuation** — melt-value adapter first (spot × weight × fineness), optional
+user confidence on manual estimates, collection totals with an explicit
+multi-currency decision, then sold-comps as stretch. See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 

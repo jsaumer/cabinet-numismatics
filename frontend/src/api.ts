@@ -1,25 +1,58 @@
 export type ItemType = "coin" | "note";
+export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
+
+export interface Grade {
+  id: number;
+  scale: string;
+  code: string;
+  label: string;
+  rank: number;
+}
+
+export interface CatalogRef {
+  catalog: string;
+  ref_code: string;
+}
+
+export interface TagInfo {
+  name: string;
+  count: number;
+}
 
 export interface Item {
   id: string;
   type: ItemType;
+  status: ItemStatus;
   country: string;
   denomination: string;
   year: number;
   mint_mark: string | null;
   series: string | null;
+  composition: string | null;
+  weight_g: number | null;
+  fineness: number | null;
+  grade: Grade | null;
+  cert_service: string | null;
+  cert_number: string | null;
   quantity: number;
   acquisition_date: string | null;
   acquisition_price: number | null;
   currency: string;
+  acquired_from: string | null;
+  storage_location: string | null;
+  sold_date: string | null;
+  sold_price: number | null;
   notes: string | null;
+  tags: string[];
+  catalog_refs: CatalogRef[];
   created_at: string;
   updated_at: string;
 }
 
 export interface ItemListEntry extends Item {
   primary_photo_key: string | null;
+  primary_thumb_key: string | null;
   latest_value: number | null;
   latest_value_currency: string | null;
 }
@@ -31,6 +64,9 @@ export interface Photo {
   thumb_key: string | null;
   angle: Angle | null;
   is_primary: boolean;
+  position: number;
+  width: number | null;
+  height: number | null;
   uploaded_at: string;
 }
 
@@ -59,16 +95,34 @@ export interface ItemPage {
 
 export interface ItemPayload {
   type: ItemType;
+  status: ItemStatus;
   country: string;
   denomination: string;
   year: number;
   mint_mark: string | null;
   series: string | null;
+  composition: string | null;
+  weight_g: number | null;
+  fineness: number | null;
+  grade_id: number | null;
+  cert_service: string | null;
+  cert_number: string | null;
   quantity: number;
   acquisition_date: string | null;
   acquisition_price: number | null;
   currency: string;
+  acquired_from: string | null;
+  storage_location: string | null;
+  sold_date: string | null;
+  sold_price: number | null;
   notes: string | null;
+  tags: string[];
+  catalog_refs: CatalogRef[];
+}
+
+export interface ImportResult {
+  created: number;
+  errors: { row: number; error: string }[];
 }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
@@ -100,6 +154,17 @@ export const api = {
   updateItem: (id: string, payload: Partial<ItemPayload>) =>
     req<Item>(`/api/items/${id}`, json("PATCH", payload)),
   deleteItem: (id: string) => req<void>(`/api/items/${id}`, { method: "DELETE" }),
+  cloneItem: (id: string) => req<Item>(`/api/items/${id}/clone`, { method: "POST" }),
+
+  importCsv: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return req<ImportResult>("/api/items/import", { method: "POST", body: form });
+  },
+
+  listGrades: (scale?: string) =>
+    req<Grade[]>(`/api/grades${scale ? `?scale=${scale}` : ""}`),
+  listTags: () => req<TagInfo[]>("/api/tags"),
 
   uploadPhoto: (itemId: string, file: File, angle: Angle | "") => {
     const form = new FormData();
@@ -110,12 +175,20 @@ export const api = {
   updatePhoto: (photoId: string, payload: { angle?: Angle; is_primary?: boolean }) =>
     req<Photo>(`/api/photos/${photoId}`, json("PATCH", payload)),
   deletePhoto: (photoId: string) => req<void>(`/api/photos/${photoId}`, { method: "DELETE" }),
+  reorderPhotos: (itemId: string, order: string[]) =>
+    req<Photo[]>(`/api/items/${itemId}/photos/order`, json("POST", { order })),
 
-  addEstimate: (itemId: string, payload: { estimated_value: number; currency: string; source: string }) =>
-    req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
+  addEstimate: (
+    itemId: string,
+    payload: { estimated_value: number; currency: string; source: string },
+  ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
 };
 
 export const photoUrl = (key: string) => `/photos/${key}`;
 
 export const money = (value: number | null | undefined, currency: string | null | undefined) =>
-  value == null ? "—" : `${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency ?? ""}`.trim();
+  value == null
+    ? "—"
+    : `${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency ?? ""}`.trim();
+
+export const gradeScaleFor = (type: ItemType) => (type === "coin" ? "sheldon" : "pmg");

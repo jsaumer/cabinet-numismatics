@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 
@@ -7,22 +8,28 @@ os.environ.setdefault("PHOTO_DIR", os.path.join(tempfile.gettempdir(), "cabinet-
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from PIL import Image
+from sqlalchemy import create_engine, insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
 from app.db import Base, get_db
 from app.main import app
+from app.models import Grade
+from app.models.grades_seed import seed_rows
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    """TestClient backed by a fresh in-memory SQLite DB and a temp photo dir."""
+    """TestClient backed by a fresh in-memory SQLite DB (grades seeded) and a
+    temp photo dir."""
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(insert(Grade), seed_rows())
     TestSession = sessionmaker(bind=engine, autoflush=False)
 
     def override_get_db():
@@ -42,6 +49,12 @@ def client(tmp_path, monkeypatch):
         app.dependency_overrides.clear()
         get_settings.cache_clear()
         engine.dispose()
+
+
+def image_bytes(fmt: str = "PNG", size=(60, 40), color=(200, 30, 30)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, fmt)
+    return buf.getvalue()
 
 
 COIN = {

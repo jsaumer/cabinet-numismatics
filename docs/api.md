@@ -15,33 +15,45 @@ described without an auth layer; add one before exposing the app publicly.
 
 ## Items
 
-| Method   | Path                      | Purpose                            |
-|----------|---------------------------|------------------------------------|
-| `GET`    | `/api/items`              | List items (filter/paginate)       |
-| `POST`   | `/api/items`              | Create an item                     |
-| `GET`    | `/api/items/export.csv`   | Export the collection as CSV       |
-| `GET`    | `/api/items/{id}`         | Get one item with photos/estimates |
-| `PATCH`  | `/api/items/{id}`         | Update fields on an item           |
-| `DELETE` | `/api/items/{id}`         | Delete an item and its photos      |
+| Method   | Path                      | Purpose                             |
+|----------|---------------------------|-------------------------------------|
+| `GET`    | `/api/items`              | List items (filter/paginate)        |
+| `POST`   | `/api/items`              | Create an item                      |
+| `POST`   | `/api/items/import`       | Import items from CSV (multipart)   |
+| `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
+| `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
+| `PATCH`  | `/api/items/{id}`         | Update fields on an item            |
+| `POST`   | `/api/items/{id}/clone`   | Duplicate an item (not its photos)  |
+| `DELETE` | `/api/items/{id}`         | Delete an item and its photos       |
 
-**List query parameters** (all optional): `type`, `country`, `year`, `q`
-(substring match over notes/series/country/denomination), `limit`, `offset`,
-`sort` (field name, `-` prefix for descending; e.g. `-year`). A `grade` filter
-arrives with grading in Phase 2. The list response includes each item's
-primary photo key and latest estimated value.
+**List query parameters** (all optional): `type`, `status`, `country`, `year`,
+`year_min`/`year_max`, `tag`, `grade_min`/`grade_max` (grade rank 1–70),
+`value_min`/`value_max` (latest estimate), `q` (substring match over
+notes/series/country/denomination/cert numbers/catalog refs/tags), `limit`,
+`offset`, `sort` (field name or `grade`, `-` prefix for descending). The list
+response includes each item's primary photo/thumbnail keys and latest
+estimated value.
+
+Item payloads accept `tags` (list of names, get-or-create) and `catalog_refs`
+(list of `{catalog, ref_code}`). CSV import consumes the export format;
+derived columns are ignored and per-row failures are reported without
+aborting the rest.
 
 ## Photos
 
-| Method   | Path                              | Purpose                     |
-|----------|-----------------------------------|-----------------------------|
-| `GET`    | `/api/items/{id}/photos`          | List an item's photos       |
-| `POST`   | `/api/items/{id}/photos`          | Upload a photo (multipart)  |
-| `PATCH`  | `/api/photos/{photo_id}`          | Set angle / mark primary    |
-| `DELETE` | `/api/photos/{photo_id}`          | Delete a photo              |
+| Method   | Path                              | Purpose                        |
+|----------|-----------------------------------|--------------------------------|
+| `GET`    | `/api/items/{id}/photos`          | List an item's photos          |
+| `POST`   | `/api/items/{id}/photos`          | Upload a photo (multipart)     |
+| `POST`   | `/api/items/{id}/photos/order`    | Reorder photos (full id list)  |
+| `PATCH`  | `/api/photos/{photo_id}`          | Set angle / mark primary       |
+| `DELETE` | `/api/photos/{photo_id}`          | Delete a photo                 |
 
-Upload accepts a single image file plus optional `angle`. The backend writes
-the original to the photo volume and generates a thumbnail. Responses include
-the file keys; the files themselves are served by nginx at
+Upload accepts a single image file plus optional `angle`. Files are validated
+as real JPEG/PNG/WebP images (the declared content-type is not trusted), EXIF
+orientation is corrected, and a JPEG thumbnail is generated alongside the
+original. The first photo uploaded becomes the primary image. Responses
+include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
 
 ## Price estimates
@@ -60,12 +72,13 @@ a confidence score — arrives in Phase 3; see
 
 ## Reference data
 
-*(Phase 2 — not yet implemented.)*
+| Method | Path              | Purpose                                        |
+|--------|-------------------|------------------------------------------------|
+| `GET`  | `/api/grades`     | List grade scales and codes (`?scale=` filter) |
+| `GET`  | `/api/tags`       | List tags with usage counts                    |
 
-| Method | Path              | Purpose                          |
-|--------|-------------------|----------------------------------|
-| `GET`  | `/api/grades`     | List grade scales and codes      |
-| `GET`  | `/api/catalogs`   | List known catalogs              |
+Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
+references are managed inline on items rather than via a standalone endpoint.
 
 ## Health
 

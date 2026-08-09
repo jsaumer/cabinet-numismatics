@@ -5,6 +5,7 @@ description = "Cabinet API — coin & paper money collection manager backend"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
+    "pillow>=10.0",
     "python-multipart>=0.0.9",
     "uvicorn[standard]>=0.30",
     "sqlalchemy>=2.0",

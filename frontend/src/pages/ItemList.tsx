@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, ItemPage, money, photoUrl } from "../api";
+import { api, ImportResult, ItemPage, money, photoUrl } from "../api";
 
 const PAGE_SIZE = 50;
 
@@ -11,78 +11,182 @@ const SORTS = [
   { value: "year", label: "Year ↑" },
   { value: "-year", label: "Year ↓" },
   { value: "country", label: "Country A–Z" },
+  { value: "-grade", label: "Grade ↓" },
   { value: "-acquisition_price", label: "Paid ↓" },
 ];
 
+const FILTER_KEYS = [
+  "type", "status", "country", "year", "q", "tag",
+  "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
+] as const;
+
 export default function ItemList() {
   const navigate = useNavigate();
-  const [type, setType] = useState("");
-  const [country, setCountry] = useState("");
-  const [year, setYear] = useState("");
-  const [q, setQ] = useState("");
-  const [sort, setSort] = useState("-created_at");
-  const [offset, setOffset] = useState(0);
+  const [params, setParams] = useSearchParams();
   const [page, setPage] = useState<ItemPage | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(
+    ["year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max"].some((k) =>
+      params.has(k),
+    ),
+  );
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
+
+  const sort = params.get("sort") ?? "-created_at";
+  const offset = Number(params.get("offset") ?? "0");
+
+  const get = (key: string) => params.get(key) ?? "";
+  const set = (key: string, value: string) => {
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        if (key !== "offset") next.delete("offset"); // filter change resets paging
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   useEffect(() => {
-    const params = new URLSearchParams({ sort, limit: String(PAGE_SIZE), offset: String(offset) });
-    if (type) params.set("type", type);
-    if (country) params.set("country", country);
-    if (year) params.set("year", year);
-    if (q) params.set("q", q);
+    const query = new URLSearchParams({
+      sort,
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    });
+    for (const key of FILTER_KEYS) {
+      const value = params.get(key);
+      if (value) query.set(key, value);
+    }
     const timer = setTimeout(() => {
-      api.listItems(params).then(setPage).catch((e: Error) => setError(e.message));
+      api.listItems(query).then(setPage).catch((e: Error) => setError(e.message));
     }, 250); // debounce text input
     return () => clearTimeout(timer);
-  }, [type, country, year, q, sort, offset]);
+  }, [params, sort, offset]);
 
-  const resetOffset = () => setOffset(0);
+  async function doImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setImportResult(null);
+    try {
+      setImportResult(await api.importCsv(file));
+      set("offset", ""); // refresh from page one
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  const hasFilters = FILTER_KEYS.some((k) => params.get(k));
 
   return (
     <>
       <div className="toolbar">
         <label className="field">
           Type
-          <select value={type} onChange={(e) => { setType(e.target.value); resetOffset(); }}>
+          <select value={get("type")} onChange={(e) => set("type", e.target.value)}>
             <option value="">All</option>
             <option value="coin">Coins</option>
             <option value="note">Notes</option>
           </select>
         </label>
         <label className="field">
-          Country
-          <input value={country} placeholder="e.g. Canada"
-            onChange={(e) => { setCountry(e.target.value); resetOffset(); }} />
+          Status
+          <select value={get("status")} onChange={(e) => set("status", e.target.value)}>
+            <option value="">All</option>
+            <option value="owned">Owned</option>
+            <option value="sold">Sold</option>
+            <option value="wishlist">Wishlist</option>
+          </select>
         </label>
         <label className="field">
-          Year
-          <input value={year} type="number" style={{ width: "6rem" }}
-            onChange={(e) => { setYear(e.target.value); resetOffset(); }} />
+          Country
+          <input value={get("country")} placeholder="e.g. Canada"
+            onChange={(e) => set("country", e.target.value)} />
+        </label>
+        <label className="field">
+          Tag
+          <input value={get("tag")} placeholder="e.g. silver"
+            onChange={(e) => set("tag", e.target.value)} />
         </label>
         <label className="field">
           Search
-          <input value={q} placeholder="notes, series…"
-            onChange={(e) => { setQ(e.target.value); resetOffset(); }} />
+          <input value={get("q")} placeholder="notes, series, cert, ref…"
+            onChange={(e) => set("q", e.target.value)} />
         </label>
         <label className="field">
           Sort
-          <select value={sort} onChange={(e) => { setSort(e.target.value); resetOffset(); }}>
+          <select value={sort} onChange={(e) => set("sort", e.target.value)}>
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
         </label>
+        <button onClick={() => setShowAdvanced(!showAdvanced)}>
+          {showAdvanced ? "Less" : "More…"}
+        </button>
         <div className="spacer" />
+        <button onClick={() => importInput.current?.click()}>Import CSV</button>
+        <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={doImport} />
         <a className="button" href="/api/items/export.csv">Export CSV</a>
         <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 
+      {showAdvanced && (
+        <div className="toolbar advanced">
+          <label className="field">
+            Year from
+            <input type="number" value={get("year_min")}
+              onChange={(e) => set("year_min", e.target.value)} />
+          </label>
+          <label className="field">
+            Year to
+            <input type="number" value={get("year_max")}
+              onChange={(e) => set("year_max", e.target.value)} />
+          </label>
+          <label className="field">
+            Grade ≥ (rank)
+            <input type="number" min={1} max={70} value={get("grade_min")}
+              onChange={(e) => set("grade_min", e.target.value)} />
+          </label>
+          <label className="field">
+            Grade ≤ (rank)
+            <input type="number" min={1} max={70} value={get("grade_max")}
+              onChange={(e) => set("grade_max", e.target.value)} />
+          </label>
+          <label className="field">
+            Value ≥
+            <input type="number" min={0} value={get("value_min")}
+              onChange={(e) => set("value_min", e.target.value)} />
+          </label>
+          <label className="field">
+            Value ≤
+            <input type="number" min={0} value={get("value_max")}
+              onChange={(e) => set("value_max", e.target.value)} />
+          </label>
+        </div>
+      )}
+
       {error && <p className="error">{error}</p>}
+      {importResult && (
+        <p className={importResult.errors.length ? "error" : "muted"}>
+          Imported {importResult.created} item{importResult.created === 1 ? "" : "s"}.
+          {importResult.errors.length > 0 && (
+            <>
+              {" "}{importResult.errors.length} row(s) failed:{" "}
+              {importResult.errors.map((e) => `row ${e.row}: ${e.error}`).join("; ")}
+            </>
+          )}
+        </p>
+      )}
 
       {page && page.items.length === 0 && (
         <div className="empty">
-          {page.total === 0 && !type && !country && !year && !q
+          {page.total === 0 && !hasFilters
             ? "No items yet — add the first piece of your collection."
             : "Nothing matches these filters."}
         </div>
@@ -97,9 +201,10 @@ export default function ItemList() {
               <th>Country</th>
               <th>Denomination</th>
               <th>Year</th>
-              <th>Series</th>
-              <th className="num">Qty</th>
-              <th className="num">Paid</th>
+              <th>Grade</th>
+              <th className="hide-sm">Series</th>
+              <th className="num hide-sm">Qty</th>
+              <th className="num hide-sm">Paid</th>
               <th className="num">Value</th>
             </tr>
           </thead>
@@ -107,22 +212,28 @@ export default function ItemList() {
             {page.items.map((item) => (
               <tr key={item.id} onClick={() => navigate(`/items/${item.id}`)}>
                 <td style={{ width: "52px" }}>
-                  {item.primary_photo_key ? (
-                    <img className="thumb" src={photoUrl(item.primary_photo_key)} alt="" />
+                  {item.primary_thumb_key ? (
+                    <img className="thumb" src={photoUrl(item.primary_thumb_key)} alt="" />
                   ) : (
                     <div className="thumb placeholder">{item.type === "coin" ? "◎" : "▭"}</div>
                   )}
                 </td>
-                <td><span className={`badge ${item.type}`}>{item.type}</span></td>
+                <td>
+                  <span className={`badge ${item.type}`}>{item.type}</span>
+                  {item.status !== "owned" && (
+                    <span className={`badge status-${item.status}`}>{item.status}</span>
+                  )}
+                </td>
                 <td>{item.country}</td>
                 <td>
                   {item.denomination}
                   {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}
                 </td>
                 <td>{item.year}</td>
-                <td className="muted">{item.series ?? ""}</td>
-                <td className="num">{item.quantity}</td>
-                <td className="num">{money(item.acquisition_price, item.currency)}</td>
+                <td>{item.grade ? item.grade.code : <span className="muted">—</span>}</td>
+                <td className="muted hide-sm">{item.series ?? ""}</td>
+                <td className="num hide-sm">{item.quantity}</td>
+                <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>
                 <td className="num">{money(item.latest_value, item.latest_value_currency)}</td>
               </tr>
             ))}
@@ -132,7 +243,10 @@ export default function ItemList() {
 
       {page && page.total > PAGE_SIZE && (
         <div className="pagination">
-          <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
+          <button
+            disabled={offset === 0}
+            onClick={() => set("offset", String(Math.max(0, offset - PAGE_SIZE)))}
+          >
             ← Prev
           </button>
           <span className="muted">
@@ -140,7 +254,7 @@ export default function ItemList() {
           </span>
           <button
             disabled={offset + PAGE_SIZE >= page.total}
-            onClick={() => setOffset(offset + PAGE_SIZE)}
+            onClick={() => set("offset", String(offset + PAGE_SIZE))}
           >
             Next →
           </button>

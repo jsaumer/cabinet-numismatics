@@ -20,5 +20,8 @@ dist/
 .idea/
 .vscode/
 
+# Backups (see docs/backup-restore.md)
+backups/
+
 # Claude Code personal (machine-local) notes
 CLAUDE.local.md

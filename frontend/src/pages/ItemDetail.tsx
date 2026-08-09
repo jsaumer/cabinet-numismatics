@@ -29,6 +29,14 @@ export default function ItemDetail() {
   const act = (fn: () => Promise<unknown>) => () =>
     fn().then(reload).catch((e: Error) => setError(e.message));
 
+  const movePhoto = (index: number, delta: number) => {
+    const order = item.photos.map((p) => p.id);
+    const target = index + delta;
+    if (target < 0 || target >= order.length) return;
+    [order[index], order[target]] = [order[target], order[index]];
+    act(() => api.reorderPhotos(item.id, order))();
+  };
+
   async function upload(e: FormEvent<HTMLInputElement>) {
     const file = e.currentTarget.files?.[0];
     if (!file || !id) return;
@@ -62,6 +70,16 @@ export default function ItemDetail() {
     }
   }
 
+  async function cloneItem() {
+    if (!id) return;
+    try {
+      const copy = await api.cloneItem(id);
+      navigate(`/items/${copy.id}/edit`);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
   async function deleteItem() {
     if (!id || !window.confirm("Delete this item and all its photos?")) return;
     try {
@@ -73,6 +91,12 @@ export default function ItemDetail() {
   }
 
   const latest = item.estimates[0];
+  const fact = (label: string, value: string | number | null | undefined) => (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value == null || value === "" ? "—" : value}</dd>
+    </div>
+  );
 
   return (
     <>
@@ -82,20 +106,47 @@ export default function ItemDetail() {
           {item.mint_mark ? ` "${item.mint_mark}"` : ""}
         </h1>
         <span className={`badge ${item.type}`}>{item.type}</span>
+        {item.status !== "owned" && (
+          <span className={`badge status-${item.status}`}>{item.status}</span>
+        )}
         <div className="spacer" />
+        <button onClick={cloneItem}>Clone</button>
         <Link className="button" to={`/items/${item.id}/edit`}>Edit</Link>
         <button className="danger" onClick={deleteItem}>Delete</button>
       </div>
 
       <div className="card">
         <dl className="facts">
-          <div><dt>Series</dt><dd>{item.series ?? "—"}</dd></div>
-          <div><dt>Quantity</dt><dd>{item.quantity}</dd></div>
-          <div><dt>Acquired</dt><dd>{item.acquisition_date ?? "—"}</dd></div>
-          <div><dt>Paid</dt><dd>{money(item.acquisition_price, item.currency)}</dd></div>
-          <div><dt>Latest value</dt>
-            <dd>{latest ? money(latest.estimated_value, latest.currency) : "—"}</dd></div>
+          {fact("Series", item.series)}
+          {fact("Grade", item.grade ? `${item.grade.code} (${item.grade.label})` : null)}
+          {fact(
+            "Certification",
+            item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : null,
+          )}
+          {fact("Composition", item.composition)}
+          {fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}
+          {fact("Fineness", item.fineness)}
+          {fact("Quantity", item.quantity)}
+          {fact("Acquired", item.acquisition_date)}
+          {fact("Paid", money(item.acquisition_price, item.currency))}
+          {fact("From", item.acquired_from)}
+          {fact("Storage", item.storage_location)}
+          {item.status === "sold" && fact("Sold on", item.sold_date)}
+          {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
+          {fact("Latest value", latest ? money(latest.estimated_value, latest.currency) : null)}
         </dl>
+        {(item.tags.length > 0 || item.catalog_refs.length > 0) && (
+          <p style={{ marginBottom: 0 }}>
+            {item.tags.map((t) => (
+              <Link key={t} className="chip" to={`/?tag=${encodeURIComponent(t)}`}>{t}</Link>
+            ))}
+            {item.catalog_refs.map((r) => (
+              <span key={`${r.catalog}:${r.ref_code}`} className="chip ref">
+                {r.catalog}: {r.ref_code}
+              </span>
+            ))}
+          </p>
+        )}
         {item.notes && <p style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{item.notes}</p>}
       </div>
 
@@ -103,12 +154,15 @@ export default function ItemDetail() {
         <h2>Photos</h2>
         {item.photos.length === 0 && <p className="muted">No photos yet.</p>}
         <div className="photo-grid">
-          {item.photos.map((photo) => (
+          {item.photos.map((photo, index) => (
             <div key={photo.id} className={`photo-card${photo.is_primary ? " primary" : ""}`}>
               <a href={photoUrl(photo.file_key)} target="_blank" rel="noreferrer">
-                <img src={photoUrl(photo.file_key)} alt={photo.angle ?? "photo"} />
+                <img src={photoUrl(photo.thumb_key ?? photo.file_key)}
+                  alt={photo.angle ?? "photo"} />
               </a>
               <div className="row">
+                <button title="Move left" disabled={index === 0}
+                  onClick={() => movePhoto(index, -1)}>←</button>
                 <select
                   value={photo.angle ?? ""}
                   onChange={(e) =>
@@ -120,10 +174,9 @@ export default function ItemDetail() {
                     <option key={a} value={a}>{a}</option>
                   ))}
                 </select>
-                <button
-                  title="Delete photo"
-                  onClick={act(() => api.deletePhoto(photo.id))}
-                >
+                <button title="Move right" disabled={index === item.photos.length - 1}
+                  onClick={() => movePhoto(index, 1)}>→</button>
+                <button title="Delete photo" onClick={act(() => api.deletePhoto(photo.id))}>
                   ✕
                 </button>
               </div>
@@ -142,7 +195,8 @@ export default function ItemDetail() {
         <div className="estimate-form">
           <label className="field">
             Angle
-            <select value={uploadAngle} onChange={(e) => setUploadAngle(e.target.value as Angle | "")}>
+            <select value={uploadAngle}
+              onChange={(e) => setUploadAngle(e.target.value as Angle | "")}>
               <option value="">unspecified</option>
               {ANGLES.map((a) => (
                 <option key={a} value={a}>{a}</option>

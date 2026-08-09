@@ -2,42 +2,92 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ItemTypeName = Literal["coin", "note"]
+ItemStatusName = Literal["owned", "sold", "wishlist"]
 AngleName = Literal["obverse", "reverse", "edge", "other"]
+
+
+class GradeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    scale: str
+    code: str
+    label: str
+    rank: int
+
+
+class CatalogRefIn(BaseModel):
+    catalog: str = Field(min_length=1, max_length=50)
+    ref_code: str = Field(min_length=1, max_length=100)
+
+
+class CatalogRefOut(CatalogRefIn):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TagOut(BaseModel):
+    name: str
+    count: int
 
 
 class ItemBase(BaseModel):
     type: ItemTypeName
+    status: ItemStatusName = "owned"
     country: str = Field(min_length=1, max_length=100)
     denomination: str = Field(min_length=1, max_length=100)
     year: int = Field(ge=-700, le=2100)  # numismatics goes back a while
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
+    composition: str | None = Field(default=None, max_length=100)
+    weight_g: float | None = Field(default=None, gt=0)
+    fineness: float | None = Field(default=None, gt=0, le=1)
+    cert_service: str | None = Field(default=None, max_length=50)
+    cert_number: str | None = Field(default=None, max_length=50)
     quantity: int = Field(default=1, ge=1)
     acquisition_date: date | None = None
     acquisition_price: float | None = Field(default=None, ge=0)
     currency: str = Field(default="USD", min_length=3, max_length=3)
+    acquired_from: str | None = Field(default=None, max_length=200)
+    storage_location: str | None = Field(default=None, max_length=200)
+    sold_date: date | None = None
+    sold_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
 
 
 class ItemCreate(ItemBase):
-    pass
+    grade_id: int | None = None
+    tags: list[str] = []
+    catalog_refs: list[CatalogRefIn] = []
 
 
 class ItemUpdate(BaseModel):
     type: ItemTypeName | None = None
+    status: ItemStatusName | None = None
     country: str | None = Field(default=None, min_length=1, max_length=100)
     denomination: str | None = Field(default=None, min_length=1, max_length=100)
     year: int | None = Field(default=None, ge=-700, le=2100)
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
+    composition: str | None = Field(default=None, max_length=100)
+    weight_g: float | None = Field(default=None, gt=0)
+    fineness: float | None = Field(default=None, gt=0, le=1)
+    grade_id: int | None = None
+    cert_service: str | None = Field(default=None, max_length=50)
+    cert_number: str | None = Field(default=None, max_length=50)
     quantity: int | None = Field(default=None, ge=1)
     acquisition_date: date | None = None
     acquisition_price: float | None = Field(default=None, ge=0)
     currency: str | None = Field(default=None, min_length=3, max_length=3)
+    acquired_from: str | None = Field(default=None, max_length=200)
+    storage_location: str | None = Field(default=None, max_length=200)
+    sold_date: date | None = None
+    sold_price: float | None = Field(default=None, ge=0)
     notes: str | None = None
+    tags: list[str] | None = None
+    catalog_refs: list[CatalogRefIn] | None = None
 
 
 class PhotoOut(BaseModel):
@@ -49,12 +99,19 @@ class PhotoOut(BaseModel):
     thumb_key: str | None
     angle: AngleName | None
     is_primary: bool
+    position: int
+    width: int | None
+    height: int | None
     uploaded_at: datetime
 
 
 class PhotoUpdate(BaseModel):
     angle: AngleName | None = None
     is_primary: bool | None = None
+
+
+class PhotoOrder(BaseModel):
+    order: list[uuid.UUID] = Field(min_length=1)
 
 
 class EstimateCreate(BaseModel):
@@ -80,14 +137,23 @@ class ItemOut(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    grade: GradeOut | None = None
+    tags: list[str] = []
+    catalog_refs: list[CatalogRefOut] = []
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _tag_names(cls, value):
+        return [t.name if hasattr(t, "name") else t for t in value]
 
 
 class ItemListEntry(ItemOut):
     """List view: item plus its primary photo and latest estimate, if any."""
 
     primary_photo_key: str | None = None
+    primary_thumb_key: str | None = None
     latest_value: float | None = None
     latest_value_currency: str | None = None
 
@@ -102,3 +168,13 @@ class ItemList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ImportError_(BaseModel):
+    row: int
+    error: str
+
+
+class ImportResult(BaseModel):
+    created: int
+    errors: list[ImportError_]

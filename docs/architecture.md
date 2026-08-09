@@ -58,8 +58,8 @@ read-only under `/photos/`. The database stores only the relative file keys.
 1. Client POSTs item data to `/api/items`.
 2. Backend validates and writes a row to postgres.
 3. Client uploads photos to `/api/items/{id}/photos`.
-4. Backend writes the original to the photo volume (thumbnail generation
-   arrives in Phase 2).
+4. Backend validates the image, corrects EXIF orientation, and writes the
+   original plus a generated thumbnail to the photo volume.
 5. Backend records photo metadata (file keys) in postgres.
 6. nginx serves the files directly at `/photos/{key}`.
 
@@ -101,8 +101,8 @@ The backend derives `DATABASE_URL` from these in `docker-compose.yaml`, and
 - Single-host deployment is the design target. For remote access, terminate
   TLS at the nginx proxy (add a cert and a `443` server block) or place the
   stack behind an existing reverse proxy / tunnel.
-- Back up the two named volumes (`db_data` and `photo_data`) to protect the
-  collection records and their photos.
+- Back up with `./scripts/backup.sh` (database dump + photo archive together);
+  see [backup-restore.md](backup-restore.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

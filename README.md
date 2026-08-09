@@ -8,14 +8,18 @@ market prices.
 
 ## Features
 
-- **Collection management** — catalog coins and notes with denomination,
-  country, year, mint mark, series, quantity, and acquisition details; filter,
-  sort, and export to CSV. (Grading and catalog references arrive in Phase 2.)
-- **Photo management** — upload obverse/reverse photos per item with a primary
-  image, stored on a local volume. (Automatic thumbnails arrive in Phase 2.)
+- **Collection management** — catalog coins and notes with full detail:
+  identity, Sheldon/PMG grading, certification, composition and weight,
+  provenance, storage location, and owned/sold/wishlist status. Search,
+  filter (including grade and value ranges), tag, clone, CSV import/export.
+- **Photo management** — upload photos per item with angle designation, a
+  primary image, drag-free reordering, automatic thumbnails, and EXIF
+  orientation correction.
 - **Value tracking** — record timestamped value estimates per item, kept as
   append-only history. (Automatic estimates from price sources arrive in
   Phase 3.)
+- **Backup/restore** — one script captures the database and photos together;
+  see [docs/backup-restore.md](docs/backup-restore.md).
 
 ## Architecture
 
