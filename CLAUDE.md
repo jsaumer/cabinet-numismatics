@@ -75,11 +75,13 @@ Phase 0 so future sessions can run them without asking. -->
 
 ## Current status & next step
 
-Phase 0 (foundations) is complete: FastAPI skeleton with `/api/health`,
-SQLAlchemy + Alembic baseline, React/Vite frontend that displays API health,
-all three services wired through compose, pytest + ruff configured. **Next:
-Phase 1 — usable catalog** — item CRUD with core fields, list + detail views,
-photo upload, manual value entry, CSV export.
+Phase 1 (usable catalog) is complete: item CRUD with filters/sort/pagination,
+photo upload with angle + primary designation, append-only manual value
+estimates, CSV export, and a react-router SPA (list, detail, create/edit
+views). Migration `0002` creates `items`, `item_photos`, `price_estimates`.
+**Next: Phase 2 — polished catalog** — grading + catalog reference tables,
+full-text search, tags, thumbnails + EXIF correction, CSV import,
+backup/restore, responsive pass.
 
 ## Notes for working in Claude Code (desktop app)
 

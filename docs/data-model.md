@@ -3,6 +3,11 @@
 The schema centers on **items**, with photos and price estimates hanging off
 each item, plus a few reference tables for grades and catalog numbers.
 
+**Migration status:** `items`, `item_photos`, and `price_estimates` exist as of
+Phase 1 (revision `0002`). The reference tables (`grades`, `catalog_refs`,
+`item_catalog_refs`) and the `items.grade_id` column arrive with grading in
+Phase 2.
+
 ## Entity relationships
 
 ```
@@ -66,7 +71,7 @@ Timestamped estimates so history is retained rather than overwritten.
 | `source`          | text        | which source produced the estimate       |
 | `estimated_value` | numeric     |                                          |
 | `currency`        | text        | ISO 4217                                 |
-| `confidence`      | numeric     | 0.0–1.0                                  |
+| `confidence`      | numeric null| 0.0–1.0; null for manual entries         |
 | `sample_size`     | int null    | number of comparables used               |
 | `fetched_at`      | timestamptz |                                          |
 

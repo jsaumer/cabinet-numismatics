@@ -15,3 +15,11 @@ engine = create_engine(
     connect_args={"connect_timeout": 3},
 )
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

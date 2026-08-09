@@ -1,34 +1,24 @@
-import { useEffect, useState } from "react";
+import { Link, Route, Routes } from "react-router-dom";
 
-type Health = { status: string; db: string };
+import ItemDetail from "./pages/ItemDetail";
+import ItemForm from "./pages/ItemForm";
+import ItemList from "./pages/ItemList";
 
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<Health>;
-      })
-      .then(setHealth)
-      .catch((err: Error) => setError(err.message));
-  }, []);
-
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: "32rem", margin: "4rem auto" }}>
-      <h1>Cabinet</h1>
-      <p>Numismatics — Coin &amp; Paper Money Collection Manager</p>
-      {error ? (
-        <p>API unreachable: {error}</p>
-      ) : health ? (
-        <p>
-          API: {health.status} · database: {health.db}
-        </p>
-      ) : (
-        <p>Checking API…</p>
-      )}
-    </main>
+    <>
+      <header className="site-header">
+        <Link to="/">Cabinet</Link>
+        <span className="subtitle">Numismatics — Coin &amp; Paper Money Collection Manager</span>
+      </header>
+      <main>
+        <Routes>
+          <Route path="/" element={<ItemList />} />
+          <Route path="/items/new" element={<ItemForm />} />
+          <Route path="/items/:id" element={<ItemDetail />} />
+          <Route path="/items/:id/edit" element={<ItemForm />} />
+        </Routes>
+      </main>
+    </>
   );
 }

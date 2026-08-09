@@ -15,17 +15,20 @@ described without an auth layer; add one before exposing the app publicly.
 
 ## Items
 
-| Method   | Path               | Purpose                            |
-|----------|--------------------|------------------------------------|
-| `GET`    | `/api/items`       | List items (filter/paginate)       |
-| `POST`   | `/api/items`       | Create an item                     |
-| `GET`    | `/api/items/{id}`  | Get one item with photos/estimates |
-| `PATCH`  | `/api/items/{id}`  | Update fields on an item           |
-| `DELETE` | `/api/items/{id}`  | Delete an item and its photos      |
+| Method   | Path                      | Purpose                            |
+|----------|---------------------------|------------------------------------|
+| `GET`    | `/api/items`              | List items (filter/paginate)       |
+| `POST`   | `/api/items`              | Create an item                     |
+| `GET`    | `/api/items/export.csv`   | Export the collection as CSV       |
+| `GET`    | `/api/items/{id}`         | Get one item with photos/estimates |
+| `PATCH`  | `/api/items/{id}`         | Update fields on an item           |
+| `DELETE` | `/api/items/{id}`         | Delete an item and its photos      |
 
-**List query parameters** (all optional): `type`, `country`, `year`,
-`grade`, `q` (free-text over notes/series), `limit`, `offset`,
-`sort`.
+**List query parameters** (all optional): `type`, `country`, `year`, `q`
+(substring match over notes/series/country/denomination), `limit`, `offset`,
+`sort` (field name, `-` prefix for descending; e.g. `-year`). A `grade` filter
+arrives with grading in Phase 2. The list response includes each item's
+primary photo key and latest estimated value.
 
 ## Photos
 
@@ -43,16 +46,21 @@ the file keys; the files themselves are served by nginx at
 
 ## Price estimates
 
-| Method | Path                          | Purpose                               |
-|--------|-------------------------------|---------------------------------------|
-| `POST` | `/api/items/{id}/estimate`    | Produce a new price estimate          |
-| `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item     |
+| Method | Path                          | Purpose                                  |
+|--------|-------------------------------|------------------------------------------|
+| `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
+| `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
+| `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate *(Phase 3)*|
 
-`POST .../estimate` looks up comparables, computes an estimate, and returns the
-new `price_estimates` record. See [price-sources.md](price-sources.md) for how
-estimates are produced.
+Estimates are append-only: each `POST .../estimates` adds a timestamped record
+(`estimated_value`, `currency`, `source`), never overwriting history. The
+automatic `POST .../estimate` lookup — comparables by catalog ref + grade, with
+a confidence score — arrives in Phase 3; see
+[price-sources.md](price-sources.md).
 
 ## Reference data
+
+*(Phase 2 — not yet implemented.)*
 
 | Method | Path              | Purpose                          |
 |--------|-------------------|----------------------------------|

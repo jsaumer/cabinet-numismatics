@@ -1,2 +1,4 @@
-# SQLAlchemy models arrive in Phase 1. Import them here so Alembic
-# autogenerate sees them via Base.metadata.
+# Import models here so Alembic autogenerate sees them via Base.metadata.
+from app.models.item import Item, ItemPhoto, PriceEstimate
+
+__all__ = ["Item", "ItemPhoto", "PriceEstimate"]
