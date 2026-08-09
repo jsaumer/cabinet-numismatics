@@ -9,11 +9,13 @@ market prices.
 ## Features
 
 - **Collection management** — catalog coins and notes with denomination,
-  country, year, mint mark, grade, quantity, and acquisition details.
-- **Photo management** — upload obverse/reverse photos per item, stored on a
-  local volume with automatic thumbnails.
-- **Price estimation** — retrieve market comparables and record timestamped,
-  confidence-scored estimates per item.
+  country, year, mint mark, series, quantity, and acquisition details; filter,
+  sort, and export to CSV. (Grading and catalog references arrive in Phase 2.)
+- **Photo management** — upload obverse/reverse photos per item with a primary
+  image, stored on a local volume. (Automatic thumbnails arrive in Phase 2.)
+- **Value tracking** — record timestamped value estimates per item, kept as
+  append-only history. (Automatic estimates from price sources arrive in
+  Phase 3.)
 
 ## Architecture
 
@@ -35,13 +37,13 @@ them directly. See [docs/architecture.md](docs/architecture.md) for detail.
 git clone <your-repo-url> cabinet-numismatics
 cd cabinet-numismatics
 cp .env.example .env        # then edit secrets in .env
-# build the frontend once so nginx has static files to serve:
-#   (from ./frontend)  npm install && npm run build
 docker compose up --build
+docker compose exec backend alembic upgrade head
 ```
 
-Once running, the app is available at http://localhost/ and the API docs
-(auto-generated OpenAPI) at http://localhost/api/docs.
+No host Node or Python install is needed — the frontend is built inside the
+proxy image. Once running, the app is available at http://localhost/ and the
+API docs (auto-generated OpenAPI) at http://localhost/api/docs.
 
 ## Configuration
 

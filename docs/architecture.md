@@ -58,7 +58,8 @@ read-only under `/photos/`. The database stores only the relative file keys.
 1. Client POSTs item data to `/api/items`.
 2. Backend validates and writes a row to postgres.
 3. Client uploads photos to `/api/items/{id}/photos`.
-4. Backend writes the original to the photo volume and generates a thumbnail.
+4. Backend writes the original to the photo volume (thumbnail generation
+   arrives in Phase 2).
 5. Backend records photo metadata (file keys) in postgres.
 6. nginx serves the files directly at `/photos/{key}`.
 

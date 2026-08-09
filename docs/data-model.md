@@ -8,6 +8,11 @@ Phase 1 (revision `0002`). The reference tables (`grades`, `catalog_refs`,
 `item_catalog_refs`) and the `items.grade_id` column arrive with grading in
 Phase 2.
 
+**Planned Phase 2 columns on `items`** (see the roadmap's "schema-complete
+before data-complete" note): `status` (`owned` | `sold` | `wishlist`) with
+`sold_date` / `sold_price`, `composition`, `weight_g`, `fineness`,
+`cert_service` + `cert_number`, `acquired_from`, and `storage_location`.
+
 ## Entity relationships
 
 ```

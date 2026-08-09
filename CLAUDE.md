@@ -79,9 +79,11 @@ Phase 1 (usable catalog) is complete: item CRUD with filters/sort/pagination,
 photo upload with angle + primary designation, append-only manual value
 estimates, CSV export, and a react-router SPA (list, detail, create/edit
 views). Migration `0002` creates `items`, `item_photos`, `price_estimates`.
-**Next: Phase 2 — polished catalog** — grading + catalog reference tables,
-full-text search, tags, thumbnails + EXIF correction, CSV import,
-backup/restore, responsive pass.
+**Next: Phase 2 — polished catalog** — schema-completing item fields (status +
+sold tracking, composition/weight/fineness, certification, acquisition source,
+storage), grading + catalog reference tables, full-text search, tags,
+thumbnails + EXIF correction + real image validation, CSV import, rehearsed
+backup/restore, responsive pass. See docs/roadmap.md for the reasoning.
 
 ## Notes for working in Claude Code (desktop app)
 
