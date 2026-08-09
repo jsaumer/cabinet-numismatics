@@ -234,8 +234,7 @@ def _list_entry(item: Item) -> ItemListEntry:
     )
 
 
-@router.get("", response_model=ItemList)
-def list_items(
+def filter_query(
     type: str | None = Query(default=None, pattern="^(coin|note)$"),
     status: str | None = Query(default=None, pattern="^(owned|sold|wishlist)$"),
     country: str | None = None,
@@ -249,6 +248,28 @@ def list_items(
     value_min: float | None = Query(default=None, ge=0),
     value_max: float | None = Query(default=None, ge=0),
     q: str | None = None,
+) -> dict:
+    """The list filters, shared by list and both exports via Depends."""
+    return {
+        "type": type,
+        "status": status,
+        "country": country,
+        "year": year,
+        "year_min": year_min,
+        "year_max": year_max,
+        "tag": tag,
+        "set_id": set_id,
+        "grade_min": grade_min,
+        "grade_max": grade_max,
+        "value_min": value_min,
+        "value_max": value_max,
+        "q": q,
+    }
+
+
+@router.get("", response_model=ItemList)
+def list_items(
+    filters: dict = Depends(filter_query),
     sort: str = "-created_at",
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -263,22 +284,7 @@ def list_items(
     else:
         raise HTTPException(status_code=422, detail=f"Unknown sort field: {field}")
 
-    stmt = _filtered(
-        select(Item),
-        type=type,
-        status=status,
-        country=country,
-        year=year,
-        year_min=year_min,
-        year_max=year_max,
-        tag=tag,
-        set_id=set_id,
-        grade_min=grade_min,
-        grade_max=grade_max,
-        value_min=value_min,
-        value_max=value_max,
-        q=q,
-    )
+    stmt = _filtered(select(Item), **filters)
     if field == "grade":
         stmt = stmt.outerjoin(Grade, Item.grade_id == Grade.id)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
@@ -291,8 +297,12 @@ def list_items(
 
 
 @router.get("/export.csv")
-def export_csv(db: Session = Depends(get_db)):
-    rows = db.execute(select(Item).options(*ITEM_LOAD).order_by(Item.created_at)).scalars().all()
+def export_csv(filters: dict = Depends(filter_query), db: Session = Depends(get_db)):
+    rows = (
+        db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
+        .scalars()
+        .all()
+    )
 
     def generate():
         buf = io.StringIO()
@@ -312,8 +322,12 @@ def export_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/export.xlsx")
-def export_xlsx(db: Session = Depends(get_db)):
-    rows = db.execute(select(Item).options(*ITEM_LOAD).order_by(Item.created_at)).scalars().all()
+def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get_db)):
+    rows = (
+        db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
+        .scalars()
+        .all()
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -436,8 +450,19 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="Missing CSV header (expected export format)")
 
     created = 0
+    skipped = 0
     errors = []
     for line_no, row in enumerate(reader, start=2):  # 1-based; header is line 1
+        # Rows whose id already exists are skipped, so re-importing an export
+        # (or importing the same file twice) never duplicates the collection.
+        raw_id = (row.get("id") or "").strip()
+        if raw_id:
+            try:
+                if db.get(Item, uuid.UUID(raw_id)) is not None:
+                    skipped += 1
+                    continue
+            except ValueError:
+                pass  # malformed id: treat the row as new
         try:
             payload, grade_id = _row_to_payload(row, db)
             item = _build_item(db, payload, grade_id)
@@ -450,7 +475,7 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
             msg = exc.errors()[0]["msg"] if isinstance(exc, ValidationError) else str(exc)
             errors.append({"row": line_no, "error": msg})
     db.commit()
-    return ImportResult(created=created, errors=errors)
+    return ImportResult(created=created, skipped=skipped, errors=errors)
 
 
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:

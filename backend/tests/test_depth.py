@@ -87,6 +87,18 @@ def test_bulk_edit(client):
     assert client.post("/api/items/bulk", json={"ids": [missing]}).status_code == 404
 
 
+def test_export_respects_filters(client):
+    _create(client, COIN)
+    _create(client, {**COIN, "type": "note", "denomination": "5 dollars"})
+
+    filtered = client.get("/api/items/export.csv", params={"type": "note"}).text
+    rows = list(csv.DictReader(io.StringIO(filtered)))
+    assert len(rows) == 1 and rows[0]["type"] == "note"
+
+    everything = client.get("/api/items/export.csv").text
+    assert len(list(csv.DictReader(io.StringIO(everything)))) == 2
+
+
 def test_csv_round_trip_with_depth_fields(client):
     set_id = client.post("/api/sets", json={"name": "Type set"}).json()["id"]
     _create(
@@ -112,7 +124,7 @@ def test_csv_round_trip_with_depth_fields(client):
     resp = client.post(
         "/api/items/import", files={"file": ("items.csv", exported.encode(), "text/csv")}
     )
-    assert resp.json() == {"created": 1, "errors": []}
+    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
     restored = client.get("/api/items").json()["items"][0]
     assert restored["variety"] == "1932-D"
     assert restored["set"]["name"] == "Type set"

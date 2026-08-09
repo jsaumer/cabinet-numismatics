@@ -272,6 +272,7 @@ class ImportError_(BaseModel):
 
 class ImportResult(BaseModel):
     created: int
+    skipped: int  # rows whose id already exists (re-importing an export is safe)
     errors: list[ImportError_]
 
 

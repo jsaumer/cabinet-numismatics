@@ -165,7 +165,15 @@ def test_csv_round_trip(client):
         "/api/items/import", files={"file": ("items.csv", exported.encode(), "text/csv")}
     )
     assert resp.status_code == 200
-    assert resp.json() == {"created": 1, "errors": []}
+    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
+
+    # re-importing an export of the CURRENT collection is a no-op (id dedupe)
+    re_exported = client.get("/api/items/export.csv").text
+    resp = client.post(
+        "/api/items/import", files={"file": ("again.csv", re_exported.encode(), "text/csv")}
+    )
+    assert resp.json() == {"created": 0, "skipped": 1, "errors": []}
+    assert client.get("/api/items").json()["total"] == 1  # no duplicates
 
     body = client.get("/api/items").json()
     assert body["total"] == 1

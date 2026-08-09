@@ -135,6 +135,7 @@ export interface ItemPayload {
 
 export interface ImportResult {
   created: number;
+  skipped: number;
   errors: { row: number; error: string }[];
 }
 
@@ -232,11 +233,21 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
     let detail: string | undefined;
     try {
       const body = await resp.json();
-      if (typeof body.detail === "string") detail = body.detail;
+      if (typeof body.detail === "string") {
+        detail = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        // FastAPI validation errors: [{loc: ["body", "field", ...], msg}, …]
+        detail = body.detail
+          .map((e: { loc?: (string | number)[]; msg?: string }) => {
+            const field = (e.loc ?? []).filter((p) => p !== "body").join(".");
+            return field ? `${field}: ${e.msg}` : e.msg;
+          })
+          .join("; ");
+      }
     } catch {
       /* non-JSON error body */
     }
-    throw new Error(detail ?? `HTTP ${resp.status}`);
+    throw new Error(detail || `HTTP ${resp.status}`);
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;

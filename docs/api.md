@@ -39,8 +39,9 @@ estimated value.
 
 Item payloads accept `tags` (list of names, get-or-create) and `catalog_refs`
 (list of `{catalog, ref_code}`). CSV import consumes the export format;
-derived columns are ignored and per-row failures are reported without
-aborting the rest.
+derived columns are ignored, rows whose `id` already exists are skipped (so
+re-importing an export never duplicates the collection), and per-row failures
+are reported without aborting the rest.
 
 ## Photos
 

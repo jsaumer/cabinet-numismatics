@@ -33,6 +33,12 @@ export default function ItemDetail() {
 
   useEffect(reload, [reload]);
 
+  // default the manual-estimate currency to the item's own currency
+  const itemCurrency = item?.currency;
+  useEffect(() => {
+    if (itemCurrency) setEstCurrency(itemCurrency);
+  }, [itemCurrency]);
+
   if (error) return <p className="error">{error}</p>;
   if (!item) return <p className="muted">Loading…</p>;
 
@@ -48,18 +54,21 @@ export default function ItemDetail() {
   };
 
   async function upload(e: FormEvent<HTMLInputElement>) {
-    const file = e.currentTarget.files?.[0];
-    if (!file || !id) return;
+    const files = Array.from(e.currentTarget.files ?? []);
+    if (files.length === 0 || !id) return;
     setUploading(true);
     setError(null);
+    e.currentTarget.value = "";
     try {
-      await api.uploadPhoto(id, file, uploadAngle);
+      for (const file of files) {
+        await api.uploadPhoto(id, file, uploadAngle);
+      }
       reload();
     } catch (err) {
       setError((err as Error).message);
+      reload(); // earlier files in the batch may have landed
     } finally {
       setUploading(false);
-      e.currentTarget.value = "";
     }
   }
 
@@ -144,7 +153,12 @@ export default function ItemDetail() {
         <dl className="facts">
           {fact("Series", item.series)}
           {fact("Variety", item.variety)}
-          {fact("Set / lot", item.set?.name)}
+          <div>
+            <dt>Set / lot</dt>
+            <dd>
+              {item.set ? <Link to={`/?set_id=${item.set.id}`}>{item.set.name}</Link> : "—"}
+            </dd>
+          </div>
           {fact("Grade", item.grade ? `${item.grade.code} (${item.grade.label})` : null)}
           {fact(
             "Certification",
@@ -206,7 +220,14 @@ export default function ItemDetail() {
                 </select>
                 <button title="Move right" disabled={index === item.photos.length - 1}
                   onClick={() => movePhoto(index, 1)}>→</button>
-                <button title="Delete photo" onClick={act(() => api.deletePhoto(photo.id))}>
+                <button
+                  title="Delete photo"
+                  onClick={() => {
+                    if (window.confirm("Delete this photo?")) {
+                      act(() => api.deletePhoto(photo.id))();
+                    }
+                  }}
+                >
                   ✕
                 </button>
               </div>
@@ -234,9 +255,15 @@ export default function ItemDetail() {
             </select>
           </label>
           <label className="field">
-            {uploading ? "Uploading…" : "Add photo"}
-            <input type="file" accept="image/jpeg,image/png,image/webp"
+            {uploading ? "Uploading…" : "Add photos"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple
               disabled={uploading} onChange={upload} />
+          </label>
+          <label className="field">
+            📷 Camera
+            {/* capture opens the camera directly on phones; a normal picker elsewhere */}
+            <input type="file" accept="image/jpeg,image/png,image/webp"
+              capture="environment" disabled={uploading} onChange={upload} />
           </label>
         </div>
       </div>

@@ -93,8 +93,10 @@ export default function ItemForm() {
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
   const [sets, setSets] = useState<SetInfo[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
 
   useEffect(() => {
     api.listGrades(gradeScaleFor(form.type)).then(setGrades).catch(() => setGrades([]));
@@ -102,6 +104,10 @@ export default function ItemForm() {
 
   useEffect(() => {
     api.listSets().then(setSets).catch(() => setSets([]));
+    api
+      .breakdowns()
+      .then((b) => setCountries(b.by_country.map((e) => e.key)))
+      .catch(() => setCountries([]));
   }, []);
 
   async function newSet() {
@@ -162,18 +168,45 @@ export default function ItemForm() {
   const setRef = (index: number, field: keyof CatalogRef, value: string) =>
     setRefs((rs) => rs.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function save(addAnother: boolean) {
     setSaving(true);
     setError(null);
+    setSavedNote(null);
     try {
       const payload = toPayload(form, refs, customFields);
       const saved = id ? await api.updateItem(id, payload) : await api.createItem(payload);
-      navigate(`/items/${saved.id}`);
+      if (!addAnother) {
+        navigate(`/items/${saved.id}`);
+        return;
+      }
+      // keep the fields that tend to repeat during a bulk-entry session
+      setForm((f) => ({
+        ...EMPTY,
+        type: f.type,
+        country: f.country,
+        currency: f.currency,
+        acquisition_date: f.acquisition_date,
+        acquired_from: f.acquired_from,
+        storage_location: f.storage_location,
+        set_id: f.set_id,
+        composition: f.composition,
+        fineness: f.fineness,
+        tags: f.tags,
+      }));
+      setRefs([]);
+      setCustomFields([]);
+      setSavedNote(`Added ${saved.country} ${saved.denomination}, ${saved.year}.`);
+      window.scrollTo(0, 0);
+      setSaving(false);
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
     }
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    save(false);
   }
 
   const text = (field: keyof FormState, label: string, props: object = {}) => (
@@ -189,18 +222,31 @@ export default function ItemForm() {
         <h1>{id ? "Edit item" : "Add item"}</h1>
       </div>
       {error && <p className="error">{error}</p>}
+      {savedNote && <p className="muted">{savedNote}</p>}
       <form onSubmit={submit}>
         <div className="card">
           <h2>Identity</h2>
           <div className="item-form">
             <label className="field">
               Type
-              <select value={form.type} onChange={(e) => set("type")(e.target.value)}>
+              <select
+                value={form.type}
+                onChange={(e) =>
+                  // switching type switches grading scale — a grade from the
+                  // other scale must not survive the switch
+                  setForm((f) => ({ ...f, type: e.target.value as ItemType, grade_id: "" }))
+                }
+              >
                 <option value="coin">Coin</option>
                 <option value="note">Note</option>
               </select>
             </label>
-            {text("country", "Country *", { required: true })}
+            {text("country", "Country *", { required: true, list: "country-options" })}
+            <datalist id="country-options">
+              {countries.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
             {text("denomination", "Denomination *", { required: true, placeholder: 'e.g. "25 cents"' })}
             {text("year", "Year *", { required: true, type: "number" })}
             {text("mint_mark", "Mint mark")}
@@ -332,6 +378,15 @@ export default function ItemForm() {
           <button className="primary" type="submit" disabled={saving}>
             {saving ? "Saving…" : id ? "Save changes" : "Add item"}
           </button>
+          {!id && (
+            <button type="button" disabled={saving}
+              onClick={(e) => {
+                const formEl = (e.target as HTMLElement).closest("form");
+                if (formEl?.reportValidity()) save(true);
+              }}>
+              Save &amp; add another
+            </button>
+          )}
           <button type="button" onClick={() => navigate(-1)}>Cancel</button>
         </div>
       </form>

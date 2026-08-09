@@ -16,7 +16,7 @@ const SORTS = [
 ];
 
 const FILTER_KEYS = [
-  "type", "status", "country", "year", "q", "tag",
+  "type", "status", "country", "year", "q", "tag", "set_id",
   "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
 ] as const;
 
@@ -32,6 +32,11 @@ export default function ItemList() {
   );
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [stats, setStats] = useState<CollectionStats | null>(null);
+  const [tagNames, setTagNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.listTags().then((ts) => setTagNames(ts.map((t) => t.name))).catch(() => setTagNames([]));
+  }, []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkStorage, setBulkStorage] = useState("");
@@ -131,6 +136,16 @@ export default function ItemList() {
 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
 
+  const exportQuery = (() => {
+    const p = new URLSearchParams();
+    for (const key of FILTER_KEYS) {
+      const value = params.get(key);
+      if (value) p.set(key, value);
+    }
+    const s = p.toString();
+    return s ? `?${s}` : "";
+  })();
+
   const gain = (value: number) => (
     <b className={value >= 0 ? "gain" : "loss"}>
       {value >= 0 ? "+" : ""}
@@ -188,9 +203,20 @@ export default function ItemList() {
         </label>
         <label className="field">
           Tag
-          <input value={get("tag")} placeholder="e.g. silver"
+          <input value={get("tag")} placeholder="e.g. silver" list="tag-options"
             onChange={(e) => set("tag", e.target.value)} />
+          <datalist id="tag-options">
+            {tagNames.map((t) => (
+              <option key={t} value={t} />
+            ))}
+          </datalist>
         </label>
+        {get("set_id") && (
+          <button title="Clear the set filter" style={{ alignSelf: "end" }}
+            onClick={() => set("set_id", "")}>
+            set filter ✕
+          </button>
+        )}
         <label className="field">
           Search
           <input value={get("q")} placeholder="notes, series, cert, ref…"
@@ -210,8 +236,14 @@ export default function ItemList() {
         <div className="spacer" />
         <button onClick={() => importInput.current?.click()}>Import CSV</button>
         <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={doImport} />
-        <a className="button" href="/api/items/export.csv">CSV</a>
-        <a className="button" href="/api/items/export.xlsx">Excel</a>
+        <a className="button" href={`/api/items/export.csv${exportQuery}`}
+          title={exportQuery ? "Exports the current filters" : "Exports everything"}>
+          CSV
+        </a>
+        <a className="button" href={`/api/items/export.xlsx${exportQuery}`}
+          title={exportQuery ? "Exports the current filters" : "Exports everything"}>
+          Excel
+        </a>
         <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 
@@ -254,6 +286,7 @@ export default function ItemList() {
       {importResult && (
         <p className={importResult.errors.length ? "error" : "muted"}>
           Imported {importResult.created} item{importResult.created === 1 ? "" : "s"}.
+          {importResult.skipped > 0 && ` ${importResult.skipped} already existed (skipped).`}
           {importResult.errors.length > 0 && (
             <>
               {" "}{importResult.errors.length} row(s) failed:{" "}
@@ -290,11 +323,13 @@ export default function ItemList() {
           </label>
           <label className="field">
             Add tag
-            <input value={bulkAddTag} onChange={(e) => setBulkAddTag(e.target.value)} />
+            <input value={bulkAddTag} list="tag-options"
+              onChange={(e) => setBulkAddTag(e.target.value)} />
           </label>
           <label className="field">
             Remove tag
-            <input value={bulkRemoveTag} onChange={(e) => setBulkRemoveTag(e.target.value)} />
+            <input value={bulkRemoveTag} list="tag-options"
+              onChange={(e) => setBulkRemoveTag(e.target.value)} />
           </label>
           <button className="primary" style={{ alignSelf: "end" }} disabled={bulkBusy}
             onClick={applyBulk}>
