@@ -26,11 +26,13 @@ has modest performance needs.
 
 ## Services
 
-### proxy (nginx)
-The single public entry point. It serves the built frontend static files and
-the photo files directly, and proxies `/api/` to the backend. Sets
+### proxy (nginx, built image)
+The single public entry point. Its image is built from the multi-stage
+`frontend/Dockerfile` (Node build stage → nginx stage with the static files
+baked in), so `docker compose up --build` needs no host Node install. It serves
+the frontend and photo files directly, and proxies `/api/` to the backend. Sets
 `client_max_body_size` high enough for photo uploads. Config lives in
-`proxy/nginx.conf`.
+`proxy/nginx.conf`, mounted into the container.
 
 ### backend (built image)
 FastAPI application exposing the REST API under `/api/`. It also runs
@@ -86,11 +88,12 @@ The backend derives `DATABASE_URL` from these in `docker-compose.yaml`, and
 - **Backend:** run FastAPI with `uvicorn app.main:app --reload`, with
   `DATABASE_URL` pointed at a local or containerized postgres and `PHOTO_DIR`
   set to a local directory.
-- **Frontend:** run the Vite dev server and proxy `/api` to the backend. For a
-  production build, `npm run build` emits static files to `frontend/dist`,
-  which nginx serves.
-- **Full stack:** build the frontend, then `docker compose up --build` brings
-  everything up with nginx as the entry point at http://localhost/.
+- **Frontend:** `npm run dev` runs the Vite dev server, which proxies `/api`
+  to localhost:8000. `npm run build` emits static files to `frontend/dist`
+  (only needed for local inspection — the container build does this itself).
+- **Full stack:** `docker compose up --build` brings everything up with nginx
+  as the entry point at http://localhost/; the frontend is built inside the
+  proxy image.
 
 ## Deployment notes
 

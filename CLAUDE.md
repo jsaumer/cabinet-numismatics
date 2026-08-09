@@ -54,27 +54,32 @@ frontend/                React + Vite app (Phase 0 onward)
 ## Build & run
 
 - Full stack: `docker compose up --build` — nginx serves at http://localhost/,
-  API docs at http://localhost/api/docs.
-- Frontend must be built (`npm run build` in `frontend/`) so nginx has static
-  files to serve; the build output is `frontend/dist`.
+  API docs at http://localhost/api/docs. The frontend is built inside the proxy
+  image (multi-stage `frontend/Dockerfile`), so no host Node install is needed.
+- Frontend dev: `npm run dev` in `frontend/` — the Vite dev server proxies
+  `/api` to localhost:8000. Production build output is `frontend/dist`.
 - Backend dev: `uvicorn app.main:app --reload` with `DATABASE_URL` and
   `PHOTO_DIR` set.
 
 <!-- Fill in exact test/lint/migration commands as they are established in
 Phase 0 so future sessions can run them without asking. -->
 
-- Tests: TBD (add the command here once the test setup lands in Phase 0).
-- Lint/format: TBD (add here once configured).
-- Migrations: create-tables-on-startup is acceptable through early phases; real
-  migrations arrive around Phase 2–3, before the schema holds data worth
-  keeping.
+- Tests: in `backend/` — `pip install -e .[dev]` once, then `pytest`. Tests do
+  not require a running database.
+- Lint/format: in `backend/` — `ruff check .` and `ruff format .`.
+- Migrations: Alembic, run in `backend/` with `DATABASE_URL` set —
+  `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
+  to create. Inside the compose stack:
+  `docker compose exec backend alembic upgrade head`. The baseline revision
+  (`0001`) is empty; the first real tables arrive with Phase 1 models.
 
 ## Current status & next step
 
-Scaffolding and documentation are complete (compose, nginx, README, all docs,
-roadmap, backend/frontend stub READMEs). **Next: Phase 0 backend scaffold** —
-FastAPI skeleton, database models, migrations baseline, wired into the compose
-stack with a health check.
+Phase 0 (foundations) is complete: FastAPI skeleton with `/api/health`,
+SQLAlchemy + Alembic baseline, React/Vite frontend that displays API health,
+all three services wired through compose, pytest + ruff configured. **Next:
+Phase 1 — usable catalog** — item CRUD with core fields, list + detail views,
+photo upload, manual value entry, CSV export.
 
 ## Notes for working in Claude Code (desktop app)
 

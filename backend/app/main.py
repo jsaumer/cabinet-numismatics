@@ -1,0 +1,24 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI
+
+from app.config import get_settings
+from app.routers import health
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Path(get_settings().photo_dir).mkdir(parents=True, exist_ok=True)
+    yield
+
+
+app = FastAPI(
+    title="Cabinet API",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    redoc_url=None,
+)
+
+app.include_router(health.router)
