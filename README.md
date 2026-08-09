@@ -15,9 +15,10 @@ market prices.
 - **Photo management** — upload photos per item with angle designation, a
   primary image, drag-free reordering, automatic thumbnails, and EXIF
   orientation correction.
-- **Value tracking** — record timestamped value estimates per item, kept as
-  append-only history. (Automatic estimates from price sources arrive in
-  Phase 3.)
+- **Value tracking** — record timestamped value estimates per item (with
+  optional confidence), kept as append-only history; one-click melt-value
+  estimates for precious-metal items from live spot prices; collection
+  totals with cost basis and realized/unrealized gains.
 - **Backup/restore** — one script captures the database and photos together;
   see [docs/backup-restore.md](docs/backup-restore.md).
 

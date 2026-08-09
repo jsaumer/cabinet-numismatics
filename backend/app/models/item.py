@@ -148,6 +148,18 @@ class ItemPhoto(Base):
     item: Mapped[Item] = relationship(back_populates="photos")
 
 
+class SpotPrice(Base):
+    """Cache of precious-metal spot prices (USD per gram), refreshed on demand."""
+
+    __tablename__ = "spot_prices"
+
+    metal: Mapped[str] = mapped_column(String(20), primary_key=True)
+    price_per_gram: Mapped[Decimal] = mapped_column(Numeric(12, 6))
+    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    source: Mapped[str] = mapped_column(String(100))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PriceEstimate(Base):
     __tablename__ = "price_estimates"
 

@@ -178,6 +178,7 @@ the whole collection is entered.
   for pg_dump + photo volume together, with a tested restore drill.
 - Responsive UI pass.
 *Exit: pleasant day-to-day cataloging; safe to trust with the whole collection.*
+✔ Done.
 
 ### Phase 3 — Valuation
 Easiest-first ordering: melt value is deterministic and ToS-clean; sold-listing
@@ -189,7 +190,9 @@ comps are the hardest integration, so they come last, not first.
 - Adapter interface for further sources; confidence scoring.
 - Sold-listing comps integration as the stretch goal (subject to terms of
   service).
-*Exit: the collection has trackable, sourced value estimates.*
+*Exit: the collection has trackable, sourced value estimates.* ✔ Done (melt
+adapter, manual confidence, totals with declared display currency; sold-comps
+stretch goal deferred — revisit alongside Phase 5's scheduled re-estimation).
 
 ### Phase 4 — Insights & reporting
 - Dashboard and breakdowns (country, type, year, grade, tag).

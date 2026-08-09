@@ -23,13 +23,16 @@ The following are options; which to enable depends on their current terms of
 service and API availability. **Always review each source's ToS before
 automating access — some prohibit scraping or require an API agreement.**
 
-### Melt value (first automatic source)
-For precious-metal items, `weight × fineness × spot price` gives a
-deterministic floor value with near-1.0 confidence and no terms-of-service
-concerns — spot prices are available from free APIs. Requires the structured
-composition/weight/fineness fields (Phase 2). This ships *before* the harder
-sources below: it is trivial to compute, always explainable, and covers the
-bullion floor of most collections.
+### Melt value (implemented — the first automatic source)
+For precious-metal items, `weight × fineness × spot price × quantity` gives a
+deterministic floor value with no terms-of-service concerns. Implemented in
+`app/services/pricing.py`: the metal is detected from the `composition` text
+(gold/silver/platinum/palladium), fineness falls back to a percentage in the
+composition ("90% silver" → 0.900), and spot prices come from gold-api.com
+(free, keyless, USD/oz) cached in the `spot_prices` table for 12 hours — a
+stale cached price is used if the upstream is down. Estimates record the spot
+price used in their `source` (e.g. `melt:silver @ 1.0562/g`) and carry
+confidence 0.95.
 
 ### Sold-listing comparables
 Marketplaces that expose *sold* prices give the closest thing to real market
@@ -46,9 +49,7 @@ and may not be available via API — some may require manual entry of values.
 The app should always allow manually recording a value the user researched
 themselves — their own comps, a dealer quote, or an auction result. Manual
 entries are first-class `price_estimates` rows with `source = "manual"` and a
-confidence the user sets. *(Implementation status: manual entry exists as of
-Phase 1 and stores `confidence = null`; the optional user-set confidence field
-arrives with the Phase 3 valuation work.)*
+confidence the user sets (optional — omitted confidence is stored as null).
 
 ## Confidence scoring
 

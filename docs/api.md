@@ -62,13 +62,26 @@ include the file keys; the files themselves are served by nginx at
 |--------|-------------------------------|------------------------------------------|
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
 | `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
-| `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate *(Phase 3)*|
+| `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate            |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
-(`estimated_value`, `currency`, `source`), never overwriting history. The
-automatic `POST .../estimate` lookup — comparables by catalog ref + grade, with
-a confidence score — arrives in Phase 3; see
+(`estimated_value`, `currency`, `source`, optional `confidence` 0–1), never
+overwriting history. `POST .../estimate` runs the automatic adapters —
+currently melt value (spot × weight × fineness × quantity, metal detected
+from `composition`); it answers 422 with the missing prerequisite when an item
+can't be melt-priced and 502 when no spot price is obtainable. See
 [price-sources.md](price-sources.md).
+
+## Stats
+
+| Method | Path                     | Purpose                                       |
+|--------|--------------------------|-----------------------------------------------|
+| `GET`  | `/api/stats/collection`  | Totals in a display currency (`?currency=`)   |
+
+Counts by status/type, cost basis, estimated value (latest estimate per owned
+item), unrealized gain (items with both price and estimate), and realized
+gain (sold items). No currency conversion: rows in other currencies are
+excluded from totals and reported in `excluded_other_currency`.
 
 ## Reference data
 

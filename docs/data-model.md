@@ -3,11 +3,16 @@
 The schema centers on **items**, with photos and price estimates hanging off
 each item, plus a few reference tables for grades and catalog numbers.
 
-**Migration status:** the full schema below exists as of Phase 2. Revision
+**Migration status:** the full schema below exists as of Phase 3. Revision
 `0002` created `items`, `item_photos`, `price_estimates`; revision `0003`
 added the Phase 2 item columns, `grades` (seeded with the Sheldon and PMG
 scales), `tags` + `item_tags`, `catalog_refs` + `item_catalog_refs`, and
-photo ordering.
+photo ordering; revision `0004` added `spot_prices`.
+
+**Money convention:** `acquisition_price`, `sold_price`, and
+`estimated_value` are all **per row** — the whole lot as entered — never
+per-piece. Automatic estimates multiply per-piece value by `quantity` to
+match.
 
 ## Entity relationships
 
@@ -91,6 +96,11 @@ Timestamped estimates so history is retained rather than overwritten.
 Free-form labels for arbitrary grouping (`tags.id`, unique `tags.name`;
 `item_tags` joins item ↔ tag, both cascade). Tags are created on first use
 via item payloads; tags no item uses remain listed with count 0.
+
+### spot_prices (cache)
+Per-metal spot price cache for melt estimates (`metal` PK, `price_per_gram`,
+`currency`, `source`, `fetched_at`). Refreshed on demand when older than 12
+hours; a stale row is used if the upstream fetch fails.
 
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from

@@ -118,6 +118,7 @@ class EstimateCreate(BaseModel):
     estimated_value: float = Field(gt=0)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     source: str = Field(default="manual", min_length=1, max_length=100)
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class EstimateOut(BaseModel):
@@ -178,3 +179,17 @@ class ImportError_(BaseModel):
 class ImportResult(BaseModel):
     created: int
     errors: list[ImportError_]
+
+
+class CollectionStats(BaseModel):
+    """Totals in a single declared display currency; rows in other currencies
+    are excluded and counted, never silently mixed."""
+
+    currency: str
+    counts: dict[str, int]  # owned / sold / wishlist / coins / notes / total
+    cost_basis: float  # owned items with a price in the display currency
+    estimated_value: float  # owned items' latest estimates in the display currency
+    unrealized_gain: float  # over owned items having BOTH price and estimate
+    realized_gain: float  # sold items: sold_price - acquisition_price
+    estimated_items: int  # owned items contributing to estimated_value
+    excluded_other_currency: int  # rows skipped from any total (currency mismatch)

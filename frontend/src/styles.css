@@ -289,6 +289,28 @@ table.estimates td {
   font-size: 0.85rem;
 }
 
+.stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #57606a;
+}
+.stats-strip b {
+  color: #1f2328;
+}
+.stats-strip .gain {
+  color: #116329;
+}
+.stats-strip .loss {
+  color: #b42318;
+}
+
 .badge.status-sold {
   background: #ffe2dd;
   color: #93261b;

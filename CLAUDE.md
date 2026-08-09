@@ -75,16 +75,17 @@ Phase 0 so future sessions can run them without asking. -->
 
 ## Current status & next step
 
-Phase 2 (polished catalog) is complete: schema-complete items (status + sold
-tracking, composition/weight/fineness, seeded Sheldon/PMG grading,
-certification, provenance, storage), tags + catalog refs, advanced filters +
-search, clone, CSV import/export round-trip, Pillow photo pipeline
-(validation, thumbnails, EXIF, reorder), URL-persisted list state, responsive
-pass, and rehearsed backup/restore (`scripts/backup.sh` / `restore.sh`, see
-docs/backup-restore.md). Migrations through `0003`. **Next: Phase 3 —
-valuation** — melt-value adapter first (spot × weight × fineness), optional
-user confidence on manual estimates, collection totals with an explicit
-multi-currency decision, then sold-comps as stretch. See docs/roadmap.md.
+Phase 3 (valuation) is complete: melt-value adapter (spot × weight × fineness
+× quantity via gold-api.com, 12h cache in `spot_prices`, stale fallback) at
+`POST /api/items/{id}/estimate`, optional confidence on manual estimates,
+and `GET /api/stats/collection` totals in a declared display currency
+(mismatched currencies excluded + counted, never mixed — full conversion is
+Phase 5). Money convention: prices/estimates are per row (the lot), not per
+piece. Sold-comps integration was deferred as a stretch goal. Migrations
+through `0004`. Phases 0–2 done earlier (see git history; backup/restore in
+scripts/, rehearsed). **Next: Phase 4 — insights & reporting** — dashboard
+breakdowns, realized + unrealized gain/loss views, Excel export,
+printable/insurance report, basic charts. See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 

@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, ImportResult, ItemPage, money, photoUrl } from "../api";
+import { api, CollectionStats, ImportResult, ItemPage, money, photoUrl } from "../api";
 
 const PAGE_SIZE = 50;
 
@@ -31,7 +31,12 @@ export default function ItemList() {
     ),
   );
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [stats, setStats] = useState<CollectionStats | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.collectionStats().then(setStats).catch(() => setStats(null));
+  }, [page]); // refresh totals when the list data changes
 
   const sort = params.get("sort") ?? "-created_at";
   const offset = Number(params.get("offset") ?? "0");
@@ -83,8 +88,38 @@ export default function ItemList() {
 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
 
+  const gain = (value: number) => (
+    <b className={value >= 0 ? "gain" : "loss"}>
+      {value >= 0 ? "+" : ""}
+      {money(value, stats?.currency)}
+    </b>
+  );
+
   return (
     <>
+      {stats && stats.counts.total > 0 && (
+        <div className="stats-strip">
+          <span><b>{stats.counts.owned}</b> owned</span>
+          {stats.counts.sold > 0 && <span><b>{stats.counts.sold}</b> sold</span>}
+          {stats.counts.wishlist > 0 && (
+            <span><b>{stats.counts.wishlist}</b> wishlist</span>
+          )}
+          <span>cost basis <b>{money(stats.cost_basis, stats.currency)}</b></span>
+          <span>
+            est. value <b>{money(stats.estimated_value, stats.currency)}</b>
+            {stats.estimated_items < stats.counts.owned && (
+              <span className="muted"> ({stats.estimated_items} of {stats.counts.owned})</span>
+            )}
+          </span>
+          <span>unrealized {gain(stats.unrealized_gain)}</span>
+          {stats.counts.sold > 0 && <span>realized {gain(stats.realized_gain)}</span>}
+          {stats.excluded_other_currency > 0 && (
+            <span className="muted">
+              {stats.excluded_other_currency} item(s) in other currencies excluded
+            </span>
+          )}
+        </div>
+      )}
       <div className="toolbar">
         <label className="field">
           Type

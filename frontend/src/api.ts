@@ -125,6 +125,17 @@ export interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
+export interface CollectionStats {
+  currency: string;
+  counts: Record<string, number>;
+  cost_basis: number;
+  estimated_value: number;
+  unrealized_gain: number;
+  realized_gain: number;
+  estimated_items: number;
+  excluded_other_currency: number;
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, init);
   if (!resp.ok) {
@@ -180,8 +191,12 @@ export const api = {
 
   addEstimate: (
     itemId: string,
-    payload: { estimated_value: number; currency: string; source: string },
+    payload: { estimated_value: number; currency: string; source: string; confidence: number | null },
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
+  autoEstimate: (itemId: string) =>
+    req<Estimate>(`/api/items/${itemId}/estimate`, { method: "POST" }),
+
+  collectionStats: () => req<CollectionStats>("/api/stats/collection"),
 };
 
 export const photoUrl = (key: string) => `/photos/${key}`;

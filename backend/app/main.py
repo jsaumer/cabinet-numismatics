@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.routers import estimates, health, items, photos, reference
+from app.routers import estimates, health, items, photos, reference, stats
 
 
 @asynccontextmanager
@@ -26,3 +26,4 @@ app.include_router(items.router)
 app.include_router(photos.router)
 app.include_router(estimates.router)
 app.include_router(reference.router)
+app.include_router(stats.router)

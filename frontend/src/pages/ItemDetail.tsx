@@ -15,6 +15,9 @@ export default function ItemDetail() {
   const [estValue, setEstValue] = useState("");
   const [estCurrency, setEstCurrency] = useState("USD");
   const [estSource, setEstSource] = useState("manual");
+  const [estConfidence, setEstConfidence] = useState("");
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     if (!id) return;
@@ -62,11 +65,26 @@ export default function ItemDetail() {
         estimated_value: Number(estValue),
         currency: estCurrency.trim().toUpperCase(),
         source: estSource.trim() || "manual",
+        confidence: estConfidence === "" ? null : Number(estConfidence),
       });
       setEstValue("");
       reload();
     } catch (err) {
       setError((err as Error).message);
+    }
+  }
+
+  async function autoEstimate() {
+    if (!id) return;
+    setEstimating(true);
+    setEstimateError(null);
+    try {
+      await api.autoEstimate(id);
+      reload();
+    } catch (err) {
+      setEstimateError((err as Error).message);
+    } finally {
+      setEstimating(false);
     }
   }
 
@@ -214,12 +232,14 @@ export default function ItemDetail() {
       <div className="card">
         <h2>Value history</h2>
         {item.estimates.length === 0 && (
-          <p className="muted">No value recorded yet — add one you researched below.</p>
+          <p className="muted">
+            No value recorded yet — add one you researched, or try an automatic estimate.
+          </p>
         )}
         {item.estimates.length > 0 && (
           <table className="estimates">
             <thead>
-              <tr><th>Date</th><th>Value</th><th>Source</th></tr>
+              <tr><th>Date</th><th>Value</th><th>Source</th><th>Confidence</th></tr>
             </thead>
             <tbody>
               {item.estimates.map((est) => (
@@ -227,11 +247,20 @@ export default function ItemDetail() {
                   <td>{new Date(est.fetched_at).toLocaleDateString()}</td>
                   <td>{money(est.estimated_value, est.currency)}</td>
                   <td className="muted">{est.source}</td>
+                  <td className="muted">
+                    {est.confidence == null ? "—" : `${Math.round(est.confidence * 100)}%`}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        <div className="estimate-form">
+          <button onClick={autoEstimate} disabled={estimating}>
+            {estimating ? "Estimating…" : "⚖ Melt value"}
+          </button>
+          {estimateError && <span className="error">{estimateError}</span>}
+        </div>
         <form className="estimate-form" onSubmit={addEstimate}>
           <label className="field">
             Value
@@ -247,6 +276,12 @@ export default function ItemDetail() {
             Source
             <input value={estSource} placeholder="e.g. eBay sold, Red Book"
               onChange={(e) => setEstSource(e.target.value)} />
+          </label>
+          <label className="field">
+            Confidence (0–1)
+            <input type="number" step="0.05" min="0" max="1" value={estConfidence}
+              placeholder="optional" style={{ width: "6rem" }}
+              onChange={(e) => setEstConfidence(e.target.value)} />
           </label>
           <button className="primary" type="submit">Record value</button>
         </form>
