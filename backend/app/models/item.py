@@ -163,6 +163,52 @@ class ItemPhoto(Base):
     item: Mapped[Item] = relationship(back_populates="photos")
 
 
+class ItemEvent(Base):
+    """Append-only edit history for an item (created/updated). Integer PK so
+    same-second events still order correctly."""
+
+    __tablename__ = "item_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("items.id", ondelete="CASCADE"), index=True
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    action: Mapped[str] = mapped_column(String(20))  # created | updated
+    changes: Mapped[dict | None] = mapped_column(JSON)  # {field: [old, new]}
+
+
+class Checklist(Base):
+    """A completeness target (e.g. a date/mint run) tracked as a slot list."""
+
+    __tablename__ = "checklists"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    slots: Mapped[list["ChecklistSlot"]] = relationship(
+        back_populates="checklist", cascade="all, delete-orphan", order_by="ChecklistSlot.position"
+    )
+
+
+class ChecklistSlot(Base):
+    __tablename__ = "checklist_slots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    checklist_id: Mapped[int] = mapped_column(
+        ForeignKey("checklists.id", ondelete="CASCADE"), index=True
+    )
+    label: Mapped[str] = mapped_column(String(200))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    filled: Mapped[bool] = mapped_column(Boolean, default=False)
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("items.id", ondelete="SET NULL")
+    )
+
+    checklist: Mapped[Checklist] = relationship(back_populates="slots")
+
+
 class ExchangeRate(Base):
     """Cache of currency exchange rates, refreshed on demand (like spot prices)."""
 

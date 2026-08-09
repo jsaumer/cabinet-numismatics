@@ -1,6 +1,8 @@
 import csv
 import io
+import json
 import uuid
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -10,13 +12,12 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-import json
-
 from app.db import get_db
-from app.models import CatalogRef, Grade, Item, ItemSet, PriceEstimate, Tag
+from app.models import CatalogRef, Grade, Item, ItemEvent, ItemSet, PriceEstimate, Tag
 from app.schemas import (
     BulkResult,
     BulkUpdate,
+    EventOut,
     ImportResult,
     ItemCreate,
     ItemDetail,
@@ -134,6 +135,20 @@ def _check_grade(db: Session, grade_id: int | None) -> None:
 def _check_set(db: Session, set_id: int | None) -> None:
     if set_id is not None and db.get(ItemSet, set_id) is None:
         raise HTTPException(status_code=422, detail=f"Unknown set_id {set_id}")
+
+
+def _jsonable(value):
+    if isinstance(value, Decimal):
+        return float(value)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    return value
+
+
+def record_event(db: Session, item_id: uuid.UUID, action: str, changes: dict | None = None):
+    db.add(ItemEvent(item_id=item_id, action=action, changes=changes))
 
 
 def _latest_value_subquery():
@@ -389,9 +404,7 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
     set_id = None
     set_name = data.pop("set", "").strip()
     if set_name:
-        existing = db.execute(
-            select(ItemSet).where(ItemSet.name == set_name)
-        ).scalar_one_or_none()
+        existing = db.execute(select(ItemSet).where(ItemSet.name == set_name)).scalar_one_or_none()
         if existing is None:
             existing = ItemSet(name=set_name)
             db.add(existing)
@@ -430,6 +443,7 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
             item = _build_item(db, payload, grade_id)
             db.add(item)
             db.flush()
+            record_event(db, item.id, "created", {"via": ["import", file.filename]})
             created += 1
         except (ValueError, ValidationError) as exc:
             db.rollback()
@@ -454,6 +468,8 @@ def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -
 def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     item = _build_item(db, payload)
     db.add(item)
+    db.flush()
+    record_event(db, item.id, "created")
     db.commit()
     return get_item_or_404(db, item.id, load_related=True)
 
@@ -467,8 +483,13 @@ def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(get_db)):
     item = get_item_or_404(db, item_id, load_related=True)
     fields = payload.model_dump(exclude_unset=True)
+    changes: dict = {}
     if "tags" in fields:
+        old_tags = sorted(t.name for t in item.tags)
         item.tags = resolve_tags(db, fields.pop("tags") or [])
+        new_tags = sorted(t.name for t in item.tags)
+        if old_tags != new_tags:
+            changes["tags"] = [old_tags, new_tags]
     if "catalog_refs" in fields:
         item.catalog_refs = resolve_catalog_refs(db, payload.catalog_refs or [])
         fields.pop("catalog_refs")
@@ -477,9 +498,26 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
     if "set_id" in fields:
         _check_set(db, fields["set_id"])
     for field, value in fields.items():
+        old = getattr(item, field)
+        if old != value:
+            changes[field] = [_jsonable(old), _jsonable(value)]
         setattr(item, field, value)
+    if changes:
+        record_event(db, item.id, "updated", changes)
     db.commit()
     return get_item_or_404(db, item_id, load_related=True)
+
+
+@router.get("/{item_id}/history", response_model=list[EventOut])
+def item_history(item_id: uuid.UUID, db: Session = Depends(get_db)):
+    get_item_or_404(db, item_id)
+    return (
+        db.execute(
+            select(ItemEvent).where(ItemEvent.item_id == item_id).order_by(ItemEvent.id.desc())
+        )
+        .scalars()
+        .all()
+    )
 
 
 @router.post("/bulk", response_model=BulkResult)
@@ -506,6 +544,11 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
 
     add = resolve_tags(db, payload.add_tags)
     remove_names = {n.strip() for n in payload.remove_tags if n.strip()}
+    summary = {f: [None, _jsonable(v)] for f, v in fields.items()}
+    if payload.add_tags:
+        summary["add_tags"] = [None, payload.add_tags]
+    if remove_names:
+        summary["remove_tags"] = [None, sorted(remove_names)]
     for item in items:
         for field, value in fields.items():
             setattr(item, field, value)
@@ -514,6 +557,8 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
             item.tags.extend(t for t in add if t.name not in existing)
         if remove_names:
             item.tags = [t for t in item.tags if t.name not in remove_names]
+        if summary:
+            record_event(db, item.id, "updated", {"bulk": [None, True], **summary})
     db.commit()
     return BulkResult(updated=len(items))
 
@@ -533,6 +578,8 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     copy.tags = list(source.tags)
     copy.catalog_refs = list(source.catalog_refs)
     db.add(copy)
+    db.flush()
+    record_event(db, copy.id, "created", {"cloned_from": [None, str(source.id)]})
     db.commit()
     return get_item_or_404(db, copy.id, load_related=True)
 

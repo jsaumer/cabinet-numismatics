@@ -25,10 +25,12 @@ described without an auth layer; add one before exposing the app publicly.
 | `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
 | `PATCH`  | `/api/items/{id}`         | Update fields on an item            |
 | `POST`   | `/api/items/{id}/clone`   | Duplicate an item (not its photos)  |
+| `GET`    | `/api/items/{id}/history` | Edit history (created/updated diffs)|
+| `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
 | `DELETE` | `/api/items/{id}`         | Delete an item and its photos       |
 
 **List query parameters** (all optional): `type`, `status`, `country`, `year`,
-`year_min`/`year_max`, `tag`, `grade_min`/`grade_max` (grade rank 1–70),
+`year_min`/`year_max`, `tag`, `set_id`, `grade_min`/`grade_max` (grade rank 1–70),
 `value_min`/`value_max` (latest estimate), `q` (substring match over
 notes/series/country/denomination/cert numbers/catalog refs/tags), `limit`,
 `offset`, `sort` (field name or `grade`, `-` prefix for descending). The list
@@ -64,6 +66,7 @@ include the file keys; the files themselves are served by nginx at
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
 | `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
 | `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate            |
+| `POST` | `/api/estimates/refresh-melt` | Re-run stale melt estimates now          |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1), never
@@ -71,7 +74,10 @@ overwriting history. `POST .../estimate` runs the automatic adapters —
 currently melt value (spot × weight × fineness × quantity, metal detected
 from `composition`); it answers 422 with the missing prerequisite when an item
 can't be melt-priced and 502 when no spot price is obtainable. See
-[price-sources.md](price-sources.md).
+[price-sources.md](price-sources.md). An in-process scheduler re-runs stale
+melt estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7;
+`0` disables); a melt refresh never supersedes an item whose latest estimate
+is manual.
 
 ## Stats
 
@@ -80,26 +86,42 @@ can't be melt-priced and 502 when no spot price is obtainable. See
 | `GET`  | `/api/stats/collection`  | Totals in a display currency (`?currency=`)    |
 | `GET`  | `/api/stats/breakdowns`  | Owned items grouped by country/type/decade/grade/tag + acquisitions by year |
 | `GET`  | `/api/stats/gains`       | Per-item unrealized (owned) and realized (sold) gain/loss |
+| `GET`  | `/api/stats/value-history` | Month-end collection value over time (`?months=`) |
 
 Counts by status/type, cost basis, estimated value (latest estimate per owned
 item), unrealized gain (items with both price and estimate), and realized
-gain (sold items). All three endpoints follow the same currency rule — no
-conversion: rows in other currencies are excluded from money sums (and
-reported in `excluded_other_currency` on `/collection`; breakdowns still
-count such items).
+gain (sold items). All stats endpoints share one currency rule: amounts in
+other currencies are **converted** into the display currency at cached daily
+ECB rates (frankfurter.dev, 24h cache, stale fallback); amounts with no
+obtainable rate are **excluded** and counted — never guessed
+(`converted_other_currency` / `excluded_other_currency` on `/collection`).
 
 The dashboard and the printable insurance report (`/report` in the UI —
 export to PDF via the browser's print dialog) are built on these endpoints.
 
 ## Reference data
 
-| Method | Path              | Purpose                                        |
-|--------|-------------------|------------------------------------------------|
-| `GET`  | `/api/grades`     | List grade scales and codes (`?scale=` filter) |
-| `GET`  | `/api/tags`       | List tags with usage counts                    |
+| Method   | Path                | Purpose                                        |
+|----------|---------------------|------------------------------------------------|
+| `GET`    | `/api/grades`       | List grade scales and codes (`?scale=` filter) |
+| `GET`    | `/api/tags`         | List tags with usage counts                    |
+| `GET`    | `/api/sets`         | List sets/lots with item counts                |
+| `POST`   | `/api/sets`         | Create a set (409 on duplicate name)           |
+| `PATCH`  | `/api/sets/{id}`    | Rename / edit a set                            |
+| `DELETE` | `/api/sets/{id}`    | Delete a set (items are detached, not deleted) |
 
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint.
+
+## Checklists (completeness tracking)
+
+| Method   | Path                                    | Purpose                     |
+|----------|-----------------------------------------|-----------------------------|
+| `GET`    | `/api/checklists`                       | List with filled/total      |
+| `POST`   | `/api/checklists`                       | Create with a slot list     |
+| `GET`    | `/api/checklists/{id}`                  | Detail with slots           |
+| `PATCH`  | `/api/checklists/{id}/slots/{slot_id}`  | Check/uncheck or link item  |
+| `DELETE` | `/api/checklists/{id}`                  | Delete a checklist          |
 
 ## Health
 

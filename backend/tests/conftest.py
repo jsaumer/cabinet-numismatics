@@ -9,7 +9,7 @@ os.environ.setdefault("PHOTO_DIR", os.path.join(tempfile.gettempdir(), "cabinet-
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
-from sqlalchemy import create_engine, insert
+from sqlalchemy import create_engine, event, insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -39,6 +39,12 @@ def client(tmp_path, monkeypatch):
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
+
+    @event.listens_for(engine, "connect")
+    def _enable_fk(dbapi_conn, _record):
+        # Make SQLite honor ON DELETE CASCADE / SET NULL like postgres does.
+        dbapi_conn.execute("pragma foreign_keys=on")
+
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
         conn.execute(insert(Grade), seed_rows())

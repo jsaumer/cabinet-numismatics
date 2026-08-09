@@ -205,11 +205,13 @@ stretch goal deferred — revisit alongside Phase 5's scheduled re-estimation).
 
 ### Phase 5 — Depth & niceties
 Pull from the **[Nice]** items as desired, roughly in value order:
-- Varieties/sub-types, sets/lots, custom fields, bulk edit. (Wishlist is
+- ✔ Varieties/sub-types, sets/lots, custom fields, bulk edit. (Wishlist is
   covered by item status in Phase 2.)
-- In-browser image editing, lightbox, clipboard/URL upload, webcam.
-- Scheduled re-estimation, full currency conversion, value-over-time charts.
-- Completeness tracking, dark mode, edit history.
+- In-browser image editing, lightbox, clipboard/URL upload, webcam —
+  **not pulled yet** (the remaining photo-niceties bundle).
+- ✔ Scheduled re-estimation, currency conversion (daily ECB rates),
+  value-over-time charts.
+- ✔ Completeness tracking (checklists), dark mode, edit history.
 
 ### Phase 6 — Open-source release [OSS]
 Only if/when you decide to publish.

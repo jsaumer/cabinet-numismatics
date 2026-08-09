@@ -3,7 +3,14 @@
    2px surface gaps, hairline gridlines, text in ink tokens (never the series
    color), no legend for a single series — the title names it. */
 
-const SERIES = "#2a78d6"; // validated: ≥3:1 on the white card surface
+/* Colors come from CSS variables so the theme toggle swaps light/dark chart
+   steps (both validated against their surfaces). */
+const SERIES = "var(--series)";
+const GRID = "var(--chart-grid)";
+const AXIS = "var(--chart-axis)";
+const MUTED = "var(--chart-muted)";
+const INK = "var(--ink)";
+const SURFACE = "var(--surface)";
 
 export interface ChartDatum {
   key: string;
@@ -64,11 +71,11 @@ export function Columns({ data, format }: { data: ChartDatum[]; format: (v: numb
     >
       {/* gridline at the clean max + baseline */}
       <line x1={0} x2={width} y1={H - scaleY(niceMax)} y2={H - scaleY(niceMax)}
-        stroke="#e1e0d9" strokeWidth={1} />
-      <text x={0} y={H - scaleY(niceMax) - 3} fontSize={10} fill="#898781">
+        stroke={GRID} strokeWidth={1} />
+      <text x={0} y={H - scaleY(niceMax) - 3} fontSize={10} fill={MUTED}>
         {format(niceMax)}
       </text>
-      <line x1={0} x2={width} y1={H} y2={H} stroke="#c3c2b7" strokeWidth={1} />
+      <line x1={0} x2={width} y1={H} y2={H} stroke={AXIS} strokeWidth={1} />
 
       {data.map((d, i) => {
         const h = scaleY(d.value);
@@ -78,12 +85,12 @@ export function Columns({ data, format }: { data: ChartDatum[]; format: (v: numb
             <title>{d.title ?? `${d.key}: ${format(d.value)}`}</title>
             {d.value > 0 && <path d={bar(x, H - h, colW, h)} fill={SERIES} />}
             {d === peak && (
-              <text x={x + colW / 2} y={H - h - 5} fontSize={10.5} fill="#1f2328"
+              <text x={x + colW / 2} y={H - h - 5} fontSize={10.5} fill={INK}
                 textAnchor="middle" fontWeight={600}>
                 {format(d.value)}
               </text>
             )}
-            <text x={x + colW / 2} y={H + 14} fontSize={10} fill="#898781" textAnchor="middle">
+            <text x={x + colW / 2} y={H + 14} fontSize={10} fill={MUTED} textAnchor="middle">
               {d.key.length > 5 ? `’${d.key.slice(-2)}` : d.key}
             </text>
           </g>
@@ -129,12 +136,12 @@ export function LineChart({
 
   return (
     <svg className="linechart" viewBox={`0 0 ${W} ${H + 20}`} style={{ width: "100%" }} role="img">
-      <line x1={0} x2={W} y1={y(niceMax)} y2={y(niceMax)} stroke="#e1e0d9" strokeWidth={1} />
-      <text x={0} y={y(niceMax) - 3} fontSize={10} fill="#898781">{format(niceMax)}</text>
-      <line x1={0} x2={W} y1={H} y2={H} stroke="#c3c2b7" strokeWidth={1} />
+      <line x1={0} x2={W} y1={y(niceMax)} y2={y(niceMax)} stroke={GRID} strokeWidth={1} />
+      <text x={0} y={y(niceMax) - 3} fontSize={10} fill={MUTED}>{format(niceMax)}</text>
+      <line x1={0} x2={W} y1={H} y2={H} stroke={AXIS} strokeWidth={1} />
 
-      <path d={area} fill="#2a78d6" opacity={0.1} />
-      <path d={path} fill="none" stroke="#2a78d6" strokeWidth={2}
+      <path d={area} fill={SERIES} opacity={0.1} />
+      <path d={path} fill="none" stroke={SERIES} strokeWidth={2}
         strokeLinejoin="round" strokeLinecap="round" />
 
       {data.map((d, i) => (
@@ -142,7 +149,7 @@ export function LineChart({
           <title>{`${d.key}: ${format(d.value)}`}</title>
           <circle cx={x(i)} cy={y(d.value)} r={7} fill="transparent" />
           {i % ticks === 0 && i < data.length - 1 && (
-            <text x={x(i)} y={H + 14} fontSize={10} fill="#898781" textAnchor="middle">
+            <text x={x(i)} y={H + 14} fontSize={10} fill={MUTED} textAnchor="middle">
               {d.key}
             </text>
           )}
@@ -150,13 +157,13 @@ export function LineChart({
       ))}
 
       {/* end dot with surface ring + direct label */}
-      <circle cx={x(data.length - 1)} cy={y(last.value)} r={6} fill="#fff" />
-      <circle cx={x(data.length - 1)} cy={y(last.value)} r={4} fill="#2a78d6" />
+      <circle cx={x(data.length - 1)} cy={y(last.value)} r={6} fill={SURFACE} />
+      <circle cx={x(data.length - 1)} cy={y(last.value)} r={4} fill={SERIES} />
       <text x={x(data.length - 1) + 9} y={y(last.value) + 4} fontSize={11}
-        fill="#1f2328" fontWeight={600}>
+        fill={INK} fontWeight={600}>
         {format(last.value)}
       </text>
-      <text x={x(data.length - 1)} y={H + 14} fontSize={10} fill="#898781" textAnchor="middle">
+      <text x={x(data.length - 1)} y={H + 14} fontSize={10} fill={MUTED} textAnchor="middle">
         {last.key}
       </text>
     </svg>

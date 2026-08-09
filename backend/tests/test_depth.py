@@ -54,12 +54,8 @@ def test_custom_fields(client):
     assert resp.json()["custom_fields"] == {"die state": "early"}
 
     too_many = {f"k{i}": "v" for i in range(21)}
-    assert (
-        client.post("/api/items", json={**COIN, "custom_fields": too_many}).status_code == 422
-    )
-    assert (
-        client.post("/api/items", json={**COIN, "custom_fields": {"k": 5}}).status_code == 422
-    )
+    assert client.post("/api/items", json={**COIN, "custom_fields": too_many}).status_code == 422
+    assert client.post("/api/items", json={**COIN, "custom_fields": {"k": 5}}).status_code == 422
 
 
 def test_bulk_edit(client):

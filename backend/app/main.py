@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.routers import estimates, health, items, photos, reference, stats
+from app.routers import checklists, estimates, health, items, photos, reference, stats
 
 logger = logging.getLogger(__name__)
 
@@ -58,3 +58,4 @@ app.include_router(estimates.router)
 app.include_router(estimates.refresh_router)
 app.include_router(reference.router)
 app.include_router(stats.router)
+app.include_router(checklists.router)

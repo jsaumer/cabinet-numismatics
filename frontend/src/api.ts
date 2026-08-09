@@ -198,6 +198,34 @@ export interface RefreshResult {
   failed: number;
 }
 
+export interface ItemEvent {
+  id: number;
+  at: string;
+  action: string;
+  changes: Record<string, [unknown, unknown]> | null;
+}
+
+export interface ChecklistSummary {
+  id: number;
+  name: string;
+  total: number;
+  filled: number;
+}
+
+export interface ChecklistSlot {
+  id: number;
+  label: string;
+  position: number;
+  filled: boolean;
+  item_id: string | null;
+}
+
+export interface ChecklistDetail {
+  id: number;
+  name: string;
+  slots: ChecklistSlot[];
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, init);
   if (!resp.ok) {
@@ -272,6 +300,19 @@ export const api = {
   gains: () => req<Gains>("/api/stats/gains"),
   valueHistory: (months = 24) => req<ValueHistory>(`/api/stats/value-history?months=${months}`),
   refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
+
+  itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
+
+  listChecklists: () => req<ChecklistSummary[]>("/api/checklists"),
+  createChecklist: (name: string, slots: string[]) =>
+    req<ChecklistDetail>("/api/checklists", json("POST", { name, slots })),
+  getChecklist: (id: number) => req<ChecklistDetail>(`/api/checklists/${id}`),
+  updateSlot: (checklistId: number, slotId: number, filled: boolean) =>
+    req<ChecklistSlot>(
+      `/api/checklists/${checklistId}/slots/${slotId}`,
+      json("PATCH", { filled }),
+    ),
+  deleteChecklist: (id: number) => req<void>(`/api/checklists/${id}`, { method: "DELETE" }),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];

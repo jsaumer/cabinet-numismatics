@@ -3,11 +3,19 @@
 The schema centers on **items**, with photos and price estimates hanging off
 each item, plus a few reference tables for grades and catalog numbers.
 
-**Migration status:** the full schema below exists as of Phase 3. Revision
-`0002` created `items`, `item_photos`, `price_estimates`; revision `0003`
-added the Phase 2 item columns, `grades` (seeded with the Sheldon and PMG
-scales), `tags` + `item_tags`, `catalog_refs` + `item_catalog_refs`, and
-photo ordering; revision `0004` added `spot_prices`.
+**Migration status:** the full schema exists as of Phase 5. Revision `0002`
+created `items`, `item_photos`, `price_estimates`; `0003` added the Phase 2
+item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and photo
+ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
+plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
+`checklists` + `checklist_slots`.
+
+**Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
+rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
+`item_events` (append-only edit history: action + `{field: [old, new]}`
+JSON, cascade with the item); `checklists`/`checklist_slots` (completeness
+targets: label, position, filled, optional item link SET NULL). `items` also
+gained `variety` (text) and `custom_fields` (JSON key→value, max 20).
 
 **Money convention:** `acquisition_price`, `sold_price`, and
 `estimated_value` are all **per row** — the whole lot as entered — never

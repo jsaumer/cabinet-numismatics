@@ -9,16 +9,20 @@ market prices.
 ## Features
 
 - **Collection management** — catalog coins and notes with full detail:
-  identity, Sheldon/PMG grading, certification, composition and weight,
-  provenance, storage location, and owned/sold/wishlist status. Search,
-  filter (including grade and value ranges), tag, clone, CSV import/export.
+  identity, variety, Sheldon/PMG grading, certification, composition and
+  weight, provenance, storage location, sets/lots, custom fields, and
+  owned/sold/wishlist status. Search, filter (including grade and value
+  ranges), tag, clone, bulk edit, per-item edit history, completeness
+  checklists, CSV import/export.
 - **Photo management** — upload photos per item with angle designation, a
   primary image, drag-free reordering, automatic thumbnails, and EXIF
   orientation correction.
 - **Value tracking** — record timestamped value estimates per item (with
-  optional confidence), kept as append-only history; one-click melt-value
-  estimates for precious-metal items from live spot prices; collection
-  totals with cost basis and realized/unrealized gains.
+  optional confidence), kept as append-only history; one-click and scheduled
+  melt-value estimates from live spot prices; multi-currency totals converted
+  at daily ECB rates; value-over-time charts; cost basis and
+  realized/unrealized gains.
+- **Dark mode** — full light/dark theming with a header toggle.
 - **Insights & reporting** — dashboard with collection value, breakdowns by
   country/decade/grade/tag, realized and unrealized gain/loss, charts;
   Excel/CSV export; printable insurance report (browser Print → PDF).

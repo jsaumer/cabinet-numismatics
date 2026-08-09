@@ -75,17 +75,17 @@ Phase 0 so future sessions can run them without asking. -->
 
 ## Current status & next step
 
-Phase 4 (insights & reporting) is complete: `/api/stats/breakdowns` and
-`/api/stats/gains`, Excel export (`export.xlsx`), a dashboard (hero value,
-stat tiles, single-hue SVG charts, gains tables) at `/dashboard`, and a
-print-optimized insurance report at `/report` (browser Print → PDF — a
-deliberate substitute for a server-side PDF library). All stats follow the
-declared-display-currency rule from Phase 3 (no conversion; mismatches
-excluded + counted). Money convention: prices/estimates are per row (the
-lot). Migrations through `0004`; phases 0–3 in git history; backup/restore
-in scripts/, rehearsed; sold-comps deferred. **Next: Phase 5 — depth &
-niceties** (pull [Nice] items as desired) and/or homelab deployment behind
-Traefik + Authentik with CI on Forgejo. See docs/roadmap.md.
+Phases 0–4 complete (see git history). Phase 5: three of four bundles done —
+value depth (currency conversion via frankfurter.dev daily rates, value-over-
+time charts, scheduled + on-demand melt refresh, REESTIMATE_DAYS env),
+catalog depth (sets/lots, variety, custom_fields JSON, bulk edit), polish
+(dark mode via CSS variables + toggle, append-only item edit history,
+completeness checklists). Migrations through `0007`. Stats currency rule:
+convert at cached daily rates, exclude + count what can't convert. Money is
+per row (the lot). Backup/restore in scripts/, rehearsed. **Remaining:** the
+photo-niceties bundle (lightbox, drag-drop/paste upload, URL import, image
+editing, webcam), sold-comps price source, and Phase 6 / homelab deployment
+(Traefik + Authentik forward-auth, CI on Forgejo). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 

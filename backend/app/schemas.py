@@ -200,6 +200,50 @@ class BulkResult(BaseModel):
     updated: int
 
 
+class EventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    at: datetime
+    action: str
+    changes: dict | None
+
+
+class ChecklistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    slots: list[str] = Field(min_length=1, max_length=500)
+
+
+class SlotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    label: str
+    position: int
+    filled: bool
+    item_id: uuid.UUID | None
+
+
+class SlotUpdate(BaseModel):
+    filled: bool | None = None
+    item_id: uuid.UUID | None = None
+
+
+class ChecklistSummary(BaseModel):
+    id: int
+    name: str
+    total: int
+    filled: int
+
+
+class ChecklistDetail(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    slots: list[SlotOut]
+
+
 class ItemListEntry(ItemOut):
     """List view: item plus its primary photo and latest estimate, if any."""
 

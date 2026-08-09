@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { Angle, api, ItemDetail as ItemDetailData, money, photoUrl } from "../api";
+import { Angle, api, ItemDetail as ItemDetailData, ItemEvent, money, photoUrl } from "../api";
 import { LineChart } from "../components/charts";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
@@ -19,6 +19,12 @@ export default function ItemDetail() {
   const [estConfidence, setEstConfidence] = useState("");
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [events, setEvents] = useState<ItemEvent[] | null>(null);
+
+  const loadHistory = () => {
+    if (!id) return;
+    api.itemHistory(id).then(setEvents).catch(() => setEvents([]));
+  };
 
   const reload = useCallback(() => {
     if (!id) return;
@@ -303,6 +309,30 @@ export default function ItemDetail() {
           <button className="primary" type="submit">Record value</button>
         </form>
       </div>
+
+      <details className="history" onToggle={(e) => e.currentTarget.open && loadHistory()}>
+        <summary>Edit history</summary>
+        {events === null && <p className="muted">Loading…</p>}
+        {events && events.length === 0 && <p className="muted">No history recorded.</p>}
+        {events?.map((event) => (
+          <div className="history-entry" key={event.id}>
+            <span className="muted">{new Date(event.at).toLocaleString()}</span> — {event.action}
+            {event.changes && (
+              <>
+                {": "}
+                {Object.entries(event.changes).map(([field, [from, to]]) => (
+                  <span key={field}>
+                    <code>{field}</code>{" "}
+                    <span className="muted">
+                      {JSON.stringify(from)} → {JSON.stringify(to)}
+                    </span>{" "}
+                  </span>
+                ))}
+              </>
+            )}
+          </div>
+        ))}
+      </details>
     </>
   );
 }
