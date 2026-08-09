@@ -38,6 +38,17 @@ Restoring into a *fresh* deployment works the same way: bring the stack up,
 run `docker compose exec backend alembic upgrade head` once so the database
 exists, then restore.
 
+## Secrets in backups
+
+The database dump contains price-source API credentials **encrypted at rest**
+(see [security.md](security.md)); the encryption key is *not* in the backup —
+it lives in `.env` (`SECRET_KEY`) or on the private `backend_state` volume.
+Restoring onto a host without the matching key works fine; the affected
+sources simply show as not configured, and you re-enter the keys in Settings.
+
+Back up `.env` separately and treat it as sensitive: it holds both the
+database password and the encryption key.
+
 ## Notes
 
 - Single-user means no write-concurrency concerns: any moment is a consistent

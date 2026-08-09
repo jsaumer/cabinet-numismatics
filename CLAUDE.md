@@ -83,7 +83,9 @@ catalog depth (sets/lots, variety, custom_fields JSON, bulk edit), polish
 completeness checklists). Migrations through `0007`. Stats currency rule:
 convert at cached daily rates, exclude + count what can't convert. Money is
 per row (the lot). Backup/restore in scripts/, rehearsed. Pricing program (roadmap Phase 5.5) M1 is done: `app_settings` table
-(migration `0008`), `GET/PUT /api/settings` (secrets write-only, masked),
+(migration `0008`), `GET/PUT /api/settings` (secrets Fernet-encrypted at rest
+via `services/crypto.py` + `SECRET_KEY`, write-only, masked; see
+docs/security.md),
 `/settings` page (display currency, melt cadence + toggle, Numista/PCGS
 credentials ahead of their adapters, cached market data). Display currency
 and melt cadence are DB-backed with env fallback. **Next: pricing M2 —

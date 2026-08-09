@@ -70,6 +70,10 @@ the open-source/deployment hardening track.
 - **Backup/restore**: one script captures the database dump and photo archive
   together, with a rehearsed restore path — see
   [docs/backup-restore.md](docs/backup-restore.md).
+- **Configurable pricing**: a Settings page for display currency, melt
+  cadence, and price-source credentials — stored **encrypted at rest** and
+  never readable back through the API
+  (see [docs/security.md](docs/security.md)).
 
 ## Architecture
 
@@ -109,7 +113,8 @@ from `.env.example`).
 | `DB_USER`         | Postgres username                                    |
 | `DB_PASSWORD`     | Postgres password                                    |
 | `DB_NAME`         | Postgres database name                               |
-| `REESTIMATE_DAYS` | Optional: re-run melt estimates older than this many days (default `7`; `0` disables the scheduler) |
+| `REESTIMATE_DAYS` | Optional: default melt re-estimation window in days (Settings overrides it; `0` disables the scheduler) |
+| `SECRET_KEY`      | Recommended: Fernet key encrypting stored price-source API credentials. Auto-generated onto a private volume if unset. Comma-separated to rotate. See [docs/security.md](docs/security.md) |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and
@@ -133,6 +138,7 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 - [API](docs/api.md) — REST endpoints (mirrors the OpenAPI spec)
 - [Price sources](docs/price-sources.md) — where estimates come from and caveats
 - [Backup & restore](docs/backup-restore.md) — what a backup contains and how to drill it
+- [Security](docs/security.md) — secrets at rest, key management, exposure guidance
 - [Roadmap](docs/roadmap.md) — full feature list, what's done, what remains
 - [Developing with Claude Code](docs/claude-code.md) — how the project is built from Phase 0 on
 

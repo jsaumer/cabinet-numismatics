@@ -75,14 +75,18 @@ read-only under `/photos/`. The database stores only the relative file keys.
 All configuration is via environment variables, loaded from `.env`
 (gitignored). Start from `.env.example`.
 
-| Variable      | Purpose                                          |
-|---------------|--------------------------------------------------|
-| `DB_USER`     | Postgres username                                |
-| `DB_PASSWORD` | Postgres password                                |
-| `DB_NAME`     | Postgres database name                           |
+| Variable          | Purpose                                              |
+|-------------------|------------------------------------------------------|
+| `DB_USER`         | Postgres username                                    |
+| `DB_PASSWORD`     | Postgres password                                    |
+| `DB_NAME`         | Postgres database name                               |
+| `REESTIMATE_DAYS` | Default melt re-estimation window (Settings overrides)|
+| `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
 
-The backend derives `DATABASE_URL` from these in `docker-compose.yaml`, and
-`PHOTO_DIR` points at the mounted photo volume.
+The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
+`PHOTO_DIR` points at the mounted photo volume, and `SECRET_KEY_FILE` points
+at the private `backend_state` volume used when `SECRET_KEY` is unset. See
+[security.md](security.md) for key management and rotation.
 
 ## Development
 
@@ -103,6 +107,9 @@ The backend derives `DATABASE_URL` from these in `docker-compose.yaml`, and
   stack behind an existing reverse proxy / tunnel.
 - Back up with `./scripts/backup.sh` (database dump + photo archive together);
   see [backup-restore.md](backup-restore.md).
+- There is no application-level auth by design; put the stack behind an
+  authenticating proxy with TLS before exposing it beyond a trusted network.
+  See [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

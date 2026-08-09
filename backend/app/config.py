@@ -8,6 +8,11 @@ class Settings(BaseSettings):
     photo_dir: str = "./photos"
     # Re-run stale melt estimates this often (days); 0 disables the scheduler.
     reestimate_days: int = 7
+    # Fernet key(s) encrypting stored secrets; comma-separated to rotate (the
+    # first encrypts, any decrypts). Unset → a key is generated into
+    # secret_key_file, which must stay off the publicly served photo volume.
+    secret_key: str = ""
+    secret_key_file: str = "/data/state/secret.key"
 
     @property
     def sqlalchemy_url(self) -> str:

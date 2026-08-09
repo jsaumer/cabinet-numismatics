@@ -7,8 +7,12 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       - PHOTO_DIR=/data/photos
+      - SECRET_KEY_FILE=/data/state/secret.key
     volumes:
       - photo_data:/data/photos
+      # Private backend state (encryption key fallback). Deliberately NOT the
+      # photo volume, which nginx serves publicly.
+      - backend_state:/data/state
     depends_on:
       db:
         condition: service_healthy
@@ -52,3 +56,4 @@ services:
 volumes:
   db_data:
   photo_data:
+  backend_state:

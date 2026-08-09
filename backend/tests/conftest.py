@@ -1,3 +1,4 @@
+import base64
 import io
 import os
 import tempfile
@@ -5,6 +6,10 @@ import tempfile
 # Point PHOTO_DIR somewhere disposable before app.config is imported,
 # so the lifespan hook doesn't create a photos/ dir in the repo.
 os.environ.setdefault("PHOTO_DIR", os.path.join(tempfile.gettempdir(), "cabinet-test-photos"))
+# Deterministic encryption key so tests never generate or read a key file.
+os.environ.setdefault(
+    "SECRET_KEY", base64.urlsafe_b64encode(b"cabinet-test-key-32-bytes-long!!").decode()
+)
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +23,7 @@ from app.db import Base, get_db
 from app.main import app
 from app.models import Grade
 from app.models.grades_seed import seed_rows
+from app.services import crypto
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +65,7 @@ def client(tmp_path, monkeypatch):
 
     monkeypatch.setenv("PHOTO_DIR", str(tmp_path))
     get_settings.cache_clear()
+    crypto.reset_cache()
     app.dependency_overrides[get_db] = override_get_db
     try:
         with TestClient(app) as c:
@@ -66,6 +73,7 @@ def client(tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.clear()
         get_settings.cache_clear()
+        crypto.reset_cache()
         engine.dispose()
 
 

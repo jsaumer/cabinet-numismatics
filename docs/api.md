@@ -124,8 +124,10 @@ references are managed inline on items rather than via a standalone endpoint.
 Settings cover the app-wide display currency (used by all stats endpoints
 unless `?currency=` overrides), the melt refresh cadence (DB override of the
 `REESTIMATE_DAYS` env var; takes effect without restart), source toggles, and
-source credentials (Numista API key, PCGS token). **Secrets are write-only**:
-reads return only a configured flag and a last-4 hint, never the value.
+source credentials (Numista API key, PCGS token). **Secrets are write-only and
+encrypted at rest**: reads return only a configured flag and a last-4 hint,
+never the value, and stored credentials are Fernet-encrypted before they reach
+the database. See [security.md](security.md).
 
 ## Checklists (completeness tracking)
 

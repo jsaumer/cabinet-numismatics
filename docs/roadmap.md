@@ -141,6 +141,9 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
+- ✔ **[Core]** Secrets handled to standard: price-source credentials are
+  Fernet-encrypted at rest with env-supplied keys and rotation support, and
+  are write-only through the API. See `security.md`.
 - **[Nice]** Authentication. For homelab deployment behind an authenticating
   reverse proxy (e.g. Traefik + Authentik forward-auth), no application code
   is needed — that is the intended path for private networked use.
@@ -252,8 +255,9 @@ Fully enable configurable price estimation: a settings surface, the two
 researched external sources, estimate provenance, and pricing-quality
 reports. Staged so each milestone is independently useful.
 
-- **M1 — Settings backbone + page.** `app_settings` table and
-  `GET/PUT /api/settings` (secrets write-only, masked on read); a `/settings`
+- **M1 — Settings backbone + page.** ✔ `app_settings` table and
+  `GET/PUT /api/settings` (secrets encrypted at rest, write-only, masked on
+  read — see `security.md`); a `/settings`
   page with General (app-wide display currency, melt refresh cadence, melt
   on/off), Price sources (Numista API key + toggle, PCGS token + toggle —
   configurable ahead of their adapters), and Cached data (current spot

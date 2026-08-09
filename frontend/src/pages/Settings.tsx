@@ -150,6 +150,10 @@ export default function Settings() {
 
       <div className="card">
         <h2>Price sources</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          🔒 Keys are encrypted before they are stored and can never be read back — only
+          replaced or removed.
+        </p>
         {settings.sources.map(sourceCard)}
       </div>
 
