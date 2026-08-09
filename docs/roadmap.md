@@ -7,9 +7,15 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
+**Status (August 2026): Phases 0–5 are built** (Phase 5 minus the
+photo-niceties bundle). A ✔ marks shipped items below. What remains, all
+optional: the photo-niceties bundle, the sold-listing comps price source,
+import mappings for other collection tools, and the deployment/OSS track
+(Phase 6 — auth at the proxy, CI, packaging).
+
 Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
 tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
-released publicly.
+released publicly · **✔** shipped.
 
 ---
 
@@ -17,109 +23,133 @@ released publicly.
 
 The heart of the app: describing what you own, accurately and flexibly.
 
-- **[MVP]** Add / edit / delete items (coins and notes).
-- **[MVP]** Core fields: type, country, denomination, year, mint mark, series,
-  quantity, acquisition date, acquisition price + currency, free-text notes.
-- **[MVP]** List view with sorting and basic filtering (type, country, year).
-- **[MVP]** Item detail view.
-- **[Core]** Item status: `owned` / `sold` / `wishlist`, with sold date and
-  realized price on sold items. Enables *realized* gain/loss reporting in
-  Phase 4 and subsumes the separate wishlist feature.
-- **[Core]** Composition & weight: metal, weight (g), fineness as structured
-  fields — prerequisite for melt-value estimation in Phase 3.
-- **[Core]** Grading: attach a grade from a recognized scale (Sheldon for
-  coins; PMG / PCGS-style for notes), stored against a reference table.
-- **[Core]** Certification tracking: grading service + cert number for slabbed
-  pieces (distinct from the grade; verifiable and insurance-relevant).
-- **[Core]** Acquisition source: where a piece came from (dealer, show,
+- ✔ **[MVP]** Add / edit / delete items (coins and notes).
+- ✔ **[MVP]** Core fields: type, country, denomination, year, mint mark,
+  series, quantity, acquisition date, acquisition price + currency, free-text
+  notes.
+- ✔ **[MVP]** List view with sorting and basic filtering (type, country, year).
+- ✔ **[MVP]** Item detail view.
+- ✔ **[Core]** Item status: `owned` / `sold` / `wishlist`, with sold date and
+  realized price on sold items. Enables *realized* gain/loss reporting and
+  subsumes the separate wishlist feature.
+- ✔ **[Core]** Composition & weight: metal, weight (g), fineness as structured
+  fields — the melt-value prerequisite.
+- ✔ **[Core]** Grading: Sheldon (coins) and PMG (notes) scales, seeded into a
+  reference table by migration.
+- ✔ **[Core]** Certification tracking: grading service + cert number for
+  slabbed pieces (distinct from the grade; verifiable and insurance-relevant).
+- ✔ **[Core]** Acquisition source: where a piece came from (dealer, show,
   auction, inheritance) — provenance in one field.
-- **[Core]** Catalog references: link items to Krause / Numista / Red Book
+- ✔ **[Core]** Catalog references: link items to Krause / Numista / Red Book
   numbers for identification and price matching.
-- **[Core]** Full-text search across notes, series, and identifiers.
-- **[Core]** Advanced / combined filters (grade ranges, value ranges, tags).
-- **[Core]** Tags / custom labels for arbitrary grouping (type sets, wishlists,
-  "for sale").
-- **[Core]** Duplicate / clone an item to speed up entering similar pieces.
-- **[Nice]** Varieties & sub-types (e.g. die varieties, overdates) as
-  structured data rather than notes.
-- **[Nice]** Lots & sets: group items sold or held together, with set-level
-  metadata.
-- **[Nice]** Storage/location tracking (which album, slab, box, safe).
-- **[Nice]** Custom user-defined fields.
-- **[Nice]** Bulk edit across multiple items.
+- ✔ **[Core]** Search across notes, series, variety, cert numbers, catalog
+  refs, and tags.
+- ✔ **[Core]** Advanced / combined filters (grade ranges, latest-value ranges,
+  year ranges, tags, sets, status).
+- ✔ **[Core]** Tags / custom labels for arbitrary grouping.
+- ✔ **[Core]** Duplicate / clone an item to speed up entering similar pieces.
+- ✔ **[Nice]** Varieties & sub-types (die varieties, overdates) as a
+  structured, searchable field.
+- ✔ **[Nice]** Lots & sets: group items held or sold together; deleting a set
+  detaches items rather than deleting them.
+- ✔ **[Nice]** Storage/location tracking (which album, slab, box, safe).
+- ✔ **[Nice]** Custom user-defined fields (up to 20 per item, validated).
+- ✔ **[Nice]** Bulk edit across selected items (fields + add/remove tags).
 
 ## 2. Photo management
 
-- **[MVP]** Upload photos per item; store originals on the photo volume.
-- **[MVP]** Obverse / reverse designation; mark a primary image.
-- **[Core]** Automatic thumbnail generation and EXIF-orientation correction.
-- **[Core]** Multiple photos per item (obverse, reverse, edge, detail, slab).
-- **[Core]** Delete / reorder photos; change designation.
+- ✔ **[MVP]** Upload photos per item; store originals on the photo volume.
+- ✔ **[MVP]** Obverse / reverse designation; mark a primary image (first
+  upload becomes primary automatically).
+- ✔ **[Core]** Automatic thumbnail generation and EXIF-orientation correction;
+  uploads validated as real images (declared content-type is not trusted).
+- ✔ **[Core]** Multiple photos per item (obverse, reverse, edge, other).
+- ✔ **[Core]** Delete / reorder photos; change designation; primary promotion
+  on delete.
 - **[Nice]** In-browser crop / rotate / straighten.
 - **[Nice]** Drag-and-drop and paste-from-clipboard upload.
 - **[Nice]** Import a photo from a URL.
 - **[Nice]** Lightbox / zoom for close inspection.
 - **[Nice]** Webcam capture for direct photographing.
 
+*(The unshipped [Nice] items above are the remaining "photo niceties"
+bundle.)*
+
 ## 3. Market price / valuation
 
 See `price-sources.md` for the sourcing detail and caveats. Value estimates are
 guidance, not appraisals.
 
-- **[MVP]** Manual value entry: record a value you researched, with source and
-  date, stored as a timestamped estimate.
-- **[Core]** Melt value: spot price × weight × fineness for precious-metal
-  items. Deterministic, high-confidence, ToS-clean — the *first* automatic
-  source, not the last.
-- **[Core]** Estimate history retained per item (append-only), so value can be
-  tracked over time.
-- **[Core]** Collection total value (sum of latest estimates), with cost basis
-  vs. estimated value. Requires an explicit multi-currency answer *before*
-  building: simple daily-rate conversion, or a declared single display
-  currency — a total that silently mixes currencies is wrong.
-- **[Core]** On-demand estimate: look up comparables by catalog ref + grade and
-  record an estimate with a confidence score.
-- **[Nice]** Pluggable price-source adapters (sold-listing comps, price
-  guides), each toggleable and rate-limited.
-- **[Nice]** Scheduled / periodic re-estimation of the whole collection.
-- **[Nice]** Currency conversion for multi-currency collections.
-- **[Nice]** Value-over-time chart per item and per collection.
+- ✔ **[MVP]** Manual value entry: record a value you researched, with source,
+  date, and optional confidence, stored as a timestamped estimate.
+- ✔ **[Core]** Melt value: spot price × weight × fineness × quantity for
+  precious-metal items. Deterministic, high-confidence, ToS-clean — the
+  *first* automatic source, not the last. Metal detected from composition;
+  fineness falls back to a percentage in the composition text.
+- ✔ **[Core]** Estimate history retained per item (append-only), so value can
+  be tracked over time.
+- ✔ **[Core]** Collection total value with cost basis vs. estimate. The
+  multi-currency answer: convert at cached daily ECB rates; exclude and count
+  anything unconvertible — never silently mix currencies.
+- **[Core]** On-demand estimate from comparables by catalog ref + grade with
+  a confidence score — *the sold-listings integration; not yet built
+  (deferred stretch goal; the adapter registry it plugs into exists).*
+- ◐ **[Nice]** Pluggable price-source adapters: the registry and adapter
+  interface exist with melt as the single adapter; further sources
+  (sold-listing comps, price guides) plug in there.
+- ✔ **[Nice]** Scheduled / periodic re-estimation: stale melt estimates
+  refresh every 12h (window set by `REESTIMATE_DAYS`; manual values are never
+  superseded); on-demand refresh from the dashboard.
+- ✔ **[Nice]** Currency conversion for multi-currency collections (daily ECB
+  rates, 24h cache, stale fallback).
+- ✔ **[Nice]** Value-over-time chart per item and per collection.
 
 ## 4. Stats, reports & insights
 
-- **[Core]** Dashboard: counts, total cost basis, total estimated value, and
-  top-level breakdowns.
-- **[Core]** Breakdowns by country, type, year/decade, grade, and tag.
-- **[Core]** Cost-basis vs. estimated-value comparison (unrealized gain/loss).
-- **[Core]** Export the collection to CSV / Excel.
-- **[Nice]** Printable / PDF collection report.
-- **[Nice]** Charts: composition, value distribution, acquisitions over time.
-- **[Nice]** Completeness tracking against a target set (e.g. a date/mint run).
-- **[Nice]** Insurance report (itemized values, photos, totals).
+- ✔ **[Core]** Dashboard: counts, total cost basis, total estimated value,
+  and top-level breakdowns.
+- ✔ **[Core]** Breakdowns by country, type, decade, grade, and tag, plus
+  acquisitions by year.
+- ✔ **[Core]** Cost-basis vs. estimated-value comparison — unrealized (owned)
+  *and* realized (sold) gain/loss, per item and in total.
+- ✔ **[Core]** Export the collection to CSV and Excel.
+- ✔ **[Nice]** Printable collection report — print-optimized HTML; the
+  browser's Print → PDF replaces a server-side PDF library on purpose
+  (lighter, and the user controls paper/margins).
+- ✔ **[Nice]** Charts: value by country/tag, items by decade/grade,
+  acquisitions over time, value over time.
+- ✔ **[Nice]** Completeness tracking against a target set (checklists with
+  progress, e.g. a date/mint run).
+- ✔ **[Nice]** Insurance report (itemized values, photos, certs, totals,
+  disclaimer).
 
 ## 5. Platform, data & operations
 
 Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 
-- **[MVP]** Containerized deployment via Docker Compose (backend, proxy, db).
-- **[MVP]** Persistent storage for data and photos; config via `.env`.
-- **[MVP]** Auto-generated API docs (OpenAPI / Swagger).
-- **[Core]** Data import: bring in an existing collection from CSV.
-- **[Core]** Backup / restore: a simple, documented way to dump and restore the
-  database and photos together.
-- **[Core]** Responsive UI that works on phone and tablet, not just desktop.
-- **[Core]** Data validation and sensible error messages.
+- ✔ **[MVP]** Containerized deployment via Docker Compose (backend, proxy, db).
+- ✔ **[MVP]** Persistent storage for data and photos; config via `.env`.
+- ✔ **[MVP]** Auto-generated API docs (OpenAPI / Swagger).
+- ✔ **[Core]** Data import from CSV, round-tripping the export format with
+  per-row error reporting.
+- ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive
+  together, documented **and rehearsed** (see backup-restore.md).
+- ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
+- ✔ **[Core]** Data validation and sensible error messages (real image
+  validation, enum/range checks, actionable estimate errors).
 - **[Nice]** Authentication. For homelab deployment behind an authenticating
-  reverse proxy (e.g. Traefik + Authentik forward-auth), no application code is
-  needed — that is the intended path for private networked use. Application-
-  level login only becomes necessary for direct public exposure or the OSS
-  release.
+  reverse proxy (e.g. Traefik + Authentik forward-auth), no application code
+  is needed — that is the intended path for private networked use.
+  Application-level login only becomes necessary for direct public exposure
+  or the OSS release.
 - **[Nice]** CI (ruff + pytest + image build) once the repo is pushed to the
   homelab Forgejo; promote to required for the OSS release.
-- **[Nice]** Import mappings for common formats (OpenNumismat, Colnect, generic
-  spreadsheets).
-- **[Nice]** Audit/history of edits to an item.
-- **[Nice]** Dark mode / theming.
+- **[Nice]** Import mappings for common formats (OpenNumismat, Colnect,
+  generic spreadsheets).
+- ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
+  diffs).
+- ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
+  dark chart palette).
 
 ## 6. Open-source readiness [OSS]
 
@@ -129,9 +159,11 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - **[OSS]** CONTRIBUTING guide, issue/PR templates, code of conduct.
 - **[OSS]** Setup docs good enough for a stranger to self-host in one sitting.
 - **[OSS]** Seed/demo data and screenshots.
-- **[OSS]** Automated tests and CI on pull requests.
+- **[OSS]** Automated tests and CI on pull requests. *(The tests exist — 54
+  backend tests run without a database; CI wiring is the missing piece.)*
 - **[OSS]** Versioned releases and a changelog.
-- **[OSS]** Database migrations (not just create-on-startup) for safe upgrades.
+- ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
+  upgrades — Alembic since Phase 0, revisions `0001`–`0007`.
 
 ---
 
@@ -140,7 +172,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 Each phase ends at a state that is usable on its own, so the tool is never
 "half-built and unusable" between milestones.
 
-### Phase 0 — Foundations
+### Phase 0 — Foundations ✔
 Scaffolding so features have somewhere to live. From this phase on, Cabinet is
 built with Claude Code (see `claude-code.md`); commit the repo-root `CLAUDE.md`
 early so every session starts with full context.
@@ -150,18 +182,18 @@ early so every session starts with full context.
 - Compose stack running end to end with the nginx proxy.
 - Health check. (CI was deferred — see the Platform section; it arrives with
   the Forgejo push.)
-*Exit: `docker compose up` serves an empty but working app.* ✔ Done.
+*Exit: `docker compose up` serves an empty but working app.*
 
-### Phase 1 — Usable catalog (MVP)
+### Phase 1 — Usable catalog (MVP) ✔
 The point at which you can actually start entering your collection.
 - Item CRUD with core fields; list + detail views.
 - Basic sorting and filtering.
 - Photo upload with obverse/reverse and a primary image.
 - Manual value entry.
 - CSV export.
-*Exit: you can catalog real items with photos and see them back.* ✔ Done.
+*Exit: you can catalog real items with photos and see them back.*
 
-### Phase 2 — Polished catalog (Core cataloging + photos)
+### Phase 2 — Polished catalog ✔
 Schema-completing phase: add the fields that are cheap now and expensive after
 the whole collection is entered.
 - New item fields: status (owned/sold/wishlist + sold date/price), composition
@@ -178,46 +210,47 @@ the whole collection is entered.
   for pg_dump + photo volume together, with a tested restore drill.
 - Responsive UI pass.
 *Exit: pleasant day-to-day cataloging; safe to trust with the whole collection.*
-✔ Done.
 
-### Phase 3 — Valuation
+### Phase 3 — Valuation ✔
 Easiest-first ordering: melt value is deterministic and ToS-clean; sold-listing
 comps are the hardest integration, so they come last, not first.
 - Melt-value adapter (spot price × weight × fineness) as the first automatic
-  source; allow optional user-set confidence on manual entries.
+  source; optional user-set confidence on manual entries.
 - Collection total value + cost basis vs. estimate — with the multi-currency
-  decision made explicitly (simple conversion or declared display currency).
+  decision made explicitly (a declared display currency at Phase 3; upgraded
+  to daily-rate conversion in Phase 5A).
 - Adapter interface for further sources; confidence scoring.
-- Sold-listing comps integration as the stretch goal (subject to terms of
-  service).
-*Exit: the collection has trackable, sourced value estimates.* ✔ Done (melt
-adapter, manual confidence, totals with declared display currency; sold-comps
-stretch goal deferred — revisit alongside Phase 5's scheduled re-estimation).
+- Sold-listing comps integration as the stretch goal — **deferred**; still
+  the natural next valuation feature (subject to terms of service).
+*Exit: the collection has trackable, sourced value estimates.*
 
-### Phase 4 — Insights & reporting
+### Phase 4 — Insights & reporting ✔
 - Dashboard and breakdowns (country, type, year, grade, tag).
 - Gain/loss view — realized (sold items) and unrealized; Excel export;
   printable/insurance report (print-optimized HTML — the browser's
   Print → PDF replaces a server-side PDF library on purpose: lighter, and the
   user controls paper/margins).
 - Basic charts.
-*Exit: you can understand and report on the collection at a glance.* ✔ Done.
+*Exit: you can understand and report on the collection at a glance.*
 
-### Phase 5 — Depth & niceties
+### Phase 5 — Depth & niceties (3 of 4 bundles ✔)
 Pull from the **[Nice]** items as desired, roughly in value order:
-- ✔ Varieties/sub-types, sets/lots, custom fields, bulk edit. (Wishlist is
-  covered by item status in Phase 2.)
-- In-browser image editing, lightbox, clipboard/URL upload, webcam —
-  **not pulled yet** (the remaining photo-niceties bundle).
-- ✔ Scheduled re-estimation, currency conversion (daily ECB rates),
-  value-over-time charts.
-- ✔ Completeness tracking (checklists), dark mode, edit history.
+- ✔ **5A — value depth:** scheduled re-estimation, currency conversion
+  (daily ECB rates), value-over-time charts.
+- ✔ **5B — catalog depth:** varieties/sub-types, sets/lots, custom fields,
+  bulk edit. (Wishlist is covered by item status from Phase 2.)
+- ✔ **5C — polish:** completeness checklists, dark mode, edit history.
+- **Photo niceties — not pulled yet:** in-browser image editing, lightbox,
+  clipboard/drag-drop/URL upload, webcam capture.
 
 ### Phase 6 — Open-source release [OSS]
-Only if/when you decide to publish.
-- Authentication, license, contributing docs, seed data, screenshots.
+Only if/when you decide to publish. Precursor for homelab use: push to the
+Forgejo, add CI, deploy behind Traefik + Authentik (no app-level auth
+needed).
+- Authentication (for true public exposure), license, contributing docs,
+  seed data, screenshots.
 - Hardened setup docs, CI on PRs, versioned releases + changelog.
-- Migration story for upgrades.
+- Migration story for upgrades (already in place — Alembic end to end).
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
 
 ---
@@ -228,17 +261,20 @@ Only if/when you decide to publish.
   an authenticating reverse proxy (Traefik + Authentik forward-auth) covers
   private networked use with zero application code. App-level login is only a
   prerequisite for direct public exposure or the OSS release, so it sits there.
-- **Schema-complete before data-complete.** Phase 2 front-loads every field
-  the collection will need (status, composition, certification, provenance)
+- **Schema-complete before data-complete.** Phase 2 front-loaded every field
+  the collection would need (status, composition, certification, provenance)
   because adding columns is cheap before the full collection is entered and
   tedious after.
 - **Valuation before insights.** Reports about value are only meaningful once
-  estimates exist, so Phase 3 precedes Phase 4.
-- **Easiest price source first.** Melt value ships before sold-listing comps:
-  it is deterministic, needs no external agreement, and covers the bullion
-  floor of most collections.
-- **Migrations are already real.** Alembic has been in place since Phase 0
-  (baseline `0001`, Phase 1 tables in `0002`) — every schema change from here
-  is a revision, never create-on-startup.
-- **[Nice] items are intentionally unordered within Phase 5** — pull whichever
-  scratch your own itch first, since this is a personal tool first.
+  estimates exist, so Phase 3 preceded Phase 4.
+- **Easiest price source first.** Melt value shipped before sold-listing
+  comps: it is deterministic, needs no external agreement, and covers the
+  bullion floor of most collections. Comps remain the open valuation item.
+- **Migrations are real.** Alembic since Phase 0; every schema change is a
+  revision (`0001`–`0007`), never create-on-startup.
+- **External APIs get the same treatment:** keyless, cached in the database,
+  stale-tolerant, and never trusted with collection data (spot prices via
+  gold-api.com, exchange rates via frankfurter.dev).
+- **[Nice] items are intentionally unordered within Phase 5** — pulled by
+  preference, since this is a personal tool first. Three of four bundles are
+  in; photo niceties await an itch.
