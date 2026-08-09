@@ -20,6 +20,13 @@ export interface TagInfo {
   count: number;
 }
 
+export interface SetInfo {
+  id: number;
+  name: string;
+  notes: string | null;
+  item_count?: number;
+}
+
 export interface Item {
   id: string;
   type: ItemType;
@@ -29,10 +36,13 @@ export interface Item {
   year: number;
   mint_mark: string | null;
   series: string | null;
+  variety: string | null;
   composition: string | null;
   weight_g: number | null;
   fineness: number | null;
   grade: Grade | null;
+  set: SetInfo | null;
+  custom_fields: Record<string, string> | null;
   cert_service: string | null;
   cert_number: string | null;
   quantity: number;
@@ -101,10 +111,13 @@ export interface ItemPayload {
   year: number;
   mint_mark: string | null;
   series: string | null;
+  variety: string | null;
   composition: string | null;
   weight_g: number | null;
   fineness: number | null;
   grade_id: number | null;
+  set_id: number | null;
+  custom_fields: Record<string, string> | null;
   cert_service: string | null;
   cert_number: string | null;
   quantity: number;
@@ -225,6 +238,15 @@ export const api = {
   listGrades: (scale?: string) =>
     req<Grade[]>(`/api/grades${scale ? `?scale=${scale}` : ""}`),
   listTags: () => req<TagInfo[]>("/api/tags"),
+  listSets: () => req<SetInfo[]>("/api/sets"),
+  createSet: (name: string) => req<SetInfo>("/api/sets", json("POST", { name })),
+
+  bulkUpdate: (payload: {
+    ids: string[];
+    set?: Partial<ItemPayload>;
+    add_tags?: string[];
+    remove_tags?: string[];
+  }) => req<{ updated: number }>("/api/items/bulk", json("POST", payload)),
 
   uploadPhoto: (itemId: string, file: File, angle: Angle | "") => {
     const form = new FormData();

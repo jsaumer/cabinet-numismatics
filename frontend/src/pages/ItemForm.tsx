@@ -1,7 +1,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { api, CatalogRef, Grade, gradeScaleFor, ItemPayload, ItemStatus, ItemType } from "../api";
+import {
+  api,
+  CatalogRef,
+  Grade,
+  gradeScaleFor,
+  ItemPayload,
+  ItemStatus,
+  ItemType,
+  SetInfo,
+} from "../api";
 
 const EMPTY = {
   type: "coin" as ItemType,
@@ -11,6 +20,8 @@ const EMPTY = {
   year: "",
   mint_mark: "",
   series: "",
+  variety: "",
+  set_id: "",
   composition: "",
   weight_g: "",
   fineness: "",
@@ -34,7 +45,15 @@ type FormState = typeof EMPTY;
 const opt = (v: string) => v.trim() || null;
 const optNum = (v: string) => (v === "" ? null : Number(v));
 
-function toPayload(form: FormState, refs: CatalogRef[]): ItemPayload {
+function toPayload(
+  form: FormState,
+  refs: CatalogRef[],
+  fields: { key: string; value: string }[],
+): ItemPayload {
+  const custom: Record<string, string> = {};
+  for (const f of fields) {
+    if (f.key.trim()) custom[f.key.trim()] = f.value;
+  }
   return {
     type: form.type,
     status: form.status,
@@ -43,6 +62,9 @@ function toPayload(form: FormState, refs: CatalogRef[]): ItemPayload {
     year: Number(form.year),
     mint_mark: opt(form.mint_mark),
     series: opt(form.series),
+    variety: opt(form.variety),
+    set_id: form.set_id === "" ? null : Number(form.set_id),
+    custom_fields: Object.keys(custom).length ? custom : null,
     composition: opt(form.composition),
     weight_g: optNum(form.weight_g),
     fineness: optNum(form.fineness),
@@ -68,13 +90,31 @@ export default function ItemForm() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [refs, setRefs] = useState<CatalogRef[]>([]);
+  const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
+  const [sets, setSets] = useState<SetInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api.listGrades(gradeScaleFor(form.type)).then(setGrades).catch(() => setGrades([]));
   }, [form.type]);
+
+  useEffect(() => {
+    api.listSets().then(setSets).catch(() => setSets([]));
+  }, []);
+
+  async function newSet() {
+    const name = window.prompt("New set name:");
+    if (!name?.trim()) return;
+    try {
+      const created = await api.createSet(name.trim());
+      setSets((s) => [...s, created]);
+      setForm((f) => ({ ...f, set_id: String(created.id) }));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -89,6 +129,8 @@ export default function ItemForm() {
           year: String(item.year),
           mint_mark: item.mint_mark ?? "",
           series: item.series ?? "",
+          variety: item.variety ?? "",
+          set_id: item.set ? String(item.set.id) : "",
           composition: item.composition ?? "",
           weight_g: item.weight_g == null ? "" : String(item.weight_g),
           fineness: item.fineness == null ? "" : String(item.fineness),
@@ -107,6 +149,9 @@ export default function ItemForm() {
           tags: item.tags.join(", "),
         });
         setRefs(item.catalog_refs);
+        setCustomFields(
+          Object.entries(item.custom_fields ?? {}).map(([key, value]) => ({ key, value })),
+        );
       })
       .catch((e: Error) => setError(e.message));
   }, [id]);
@@ -122,7 +167,7 @@ export default function ItemForm() {
     setSaving(true);
     setError(null);
     try {
-      const payload = toPayload(form, refs);
+      const payload = toPayload(form, refs, customFields);
       const saved = id ? await api.updateItem(id, payload) : await api.createItem(payload);
       navigate(`/items/${saved.id}`);
     } catch (err) {
@@ -159,8 +204,22 @@ export default function ItemForm() {
             {text("denomination", "Denomination *", { required: true, placeholder: 'e.g. "25 cents"' })}
             {text("year", "Year *", { required: true, type: "number" })}
             {text("mint_mark", "Mint mark")}
-            {text("series", "Series / variety")}
+            {text("series", "Series")}
+            {text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
             {text("quantity", "Quantity", { type: "number", min: 1 })}
+            <label className="field">
+              Set / lot
+              <span style={{ display: "flex", gap: "0.3rem" }}>
+                <select value={form.set_id} style={{ flex: 1 }}
+                  onChange={(e) => set("set_id")(e.target.value)}>
+                  <option value="">none</option>
+                  {sets.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={newSet} title="Create a new set">+</button>
+              </span>
+            </label>
           </div>
         </div>
 
@@ -235,6 +294,29 @@ export default function ItemForm() {
                 <button type="button"
                   onClick={() => setRefs((rs) => [...rs, { catalog: "", ref_code: "" }])}>
                   + Add reference
+                </button>
+              </div>
+            </div>
+            <div className="field full">
+              Custom fields
+              {customFields.map((f, i) => (
+                <div className="ref-row" key={i}>
+                  <input value={f.key} placeholder="field name"
+                    onChange={(e) => setCustomFields((cf) =>
+                      cf.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
+                  <input value={f.value} placeholder="value"
+                    onChange={(e) => setCustomFields((cf) =>
+                      cf.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
+                  <button type="button" title="Remove"
+                    onClick={() => setCustomFields((cf) => cf.filter((_, j) => j !== i))}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div>
+                <button type="button"
+                  onClick={() => setCustomFields((cf) => [...cf, { key: "", value: "" }])}>
+                  + Add field
                 </button>
               </div>
             </div>

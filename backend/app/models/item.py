@@ -3,6 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     Date,
@@ -68,6 +69,16 @@ class Tag(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True)
 
 
+class ItemSet(Base):
+    """A set or lot: items grouped because they're held or sold together."""
+
+    __tablename__ = "sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
 class CatalogRef(Base):
     """Reference table: external catalog numbers (Krause, Numista, Red Book…)."""
 
@@ -90,6 +101,7 @@ class Item(Base):
     year: Mapped[int] = mapped_column(Integer, index=True)
     mint_mark: Mapped[str | None] = mapped_column(String(20))
     series: Mapped[str | None] = mapped_column(String(200))
+    variety: Mapped[str | None] = mapped_column(String(200))  # die variety, overdate…
     composition: Mapped[str | None] = mapped_column(String(100))
     weight_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
     fineness: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))  # e.g. 0.9000
@@ -104,6 +116,8 @@ class Item(Base):
     storage_location: Mapped[str | None] = mapped_column(String(200))
     sold_date: Mapped[date | None] = mapped_column(Date)
     sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    set_id: Mapped[int | None] = mapped_column(ForeignKey("sets.id", ondelete="SET NULL"))
+    custom_fields: Mapped[dict | None] = mapped_column(JSON)  # user-defined key→value
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -111,6 +125,7 @@ class Item(Base):
     )
 
     grade: Mapped[Grade | None] = relationship(lazy="joined")
+    set: Mapped[ItemSet | None] = relationship(lazy="joined")
     tags: Mapped[list[Tag]] = relationship(secondary=item_tags, order_by=Tag.name)
     catalog_refs: Mapped[list[CatalogRef]] = relationship(
         secondary=item_catalog_refs, order_by=CatalogRef.catalog

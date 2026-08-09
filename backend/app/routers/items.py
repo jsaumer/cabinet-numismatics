@@ -10,9 +10,13 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+import json
+
 from app.db import get_db
-from app.models import CatalogRef, Grade, Item, PriceEstimate, Tag
+from app.models import CatalogRef, Grade, Item, ItemSet, PriceEstimate, Tag
 from app.schemas import (
+    BulkResult,
+    BulkUpdate,
     ImportResult,
     ItemCreate,
     ItemDetail,
@@ -50,6 +54,7 @@ CSV_COLUMNS = [
     "year",
     "mint_mark",
     "series",
+    "variety",
     "composition",
     "weight_g",
     "fineness",
@@ -68,6 +73,8 @@ CSV_COLUMNS = [
     "notes",
     "tags",
     "catalog_refs",
+    "set",
+    "custom_fields",
     "latest_value",
     "latest_value_currency",
     "created_at",
@@ -124,6 +131,11 @@ def _check_grade(db: Session, grade_id: int | None) -> None:
         raise HTTPException(status_code=422, detail=f"Unknown grade_id {grade_id}")
 
 
+def _check_set(db: Session, set_id: int | None) -> None:
+    if set_id is not None and db.get(ItemSet, set_id) is None:
+        raise HTTPException(status_code=422, detail=f"Unknown set_id {set_id}")
+
+
 def _latest_value_subquery():
     return (
         select(PriceEstimate.estimated_value)
@@ -145,6 +157,7 @@ def _filtered(
     year_min: int | None,
     year_max: int | None,
     tag: str | None,
+    set_id: int | None,
     grade_min: int | None,
     grade_max: int | None,
     value_min: float | None,
@@ -165,6 +178,8 @@ def _filtered(
         stmt = stmt.where(Item.year <= year_max)
     if tag:
         stmt = stmt.where(Item.tags.any(Tag.name.ilike(tag)))
+    if set_id is not None:
+        stmt = stmt.where(Item.set_id == set_id)
     if grade_min is not None:
         stmt = stmt.where(Item.grade.has(Grade.rank >= grade_min))
     if grade_max is not None:
@@ -179,6 +194,7 @@ def _filtered(
             or_(
                 Item.notes.ilike(like),
                 Item.series.ilike(like),
+                Item.variety.ilike(like),
                 Item.country.ilike(like),
                 Item.denomination.ilike(like),
                 Item.cert_number.ilike(like),
@@ -212,6 +228,7 @@ def list_items(
     year_min: int | None = None,
     year_max: int | None = None,
     tag: str | None = None,
+    set_id: int | None = None,
     grade_min: int | None = Query(default=None, ge=1, le=70),
     grade_max: int | None = Query(default=None, ge=1, le=70),
     value_min: float | None = Query(default=None, ge=0),
@@ -240,6 +257,7 @@ def list_items(
         year_min=year_min,
         year_max=year_max,
         tag=tag,
+        set_id=set_id,
         grade_min=grade_min,
         grade_max=grade_max,
         value_min=value_min,
@@ -316,6 +334,7 @@ def _export_row(item: Item) -> list:
         item.year,
         item.mint_mark or "",
         item.series or "",
+        item.variety or "",
         item.composition or "",
         item.weight_g or "",
         item.fineness or "",
@@ -334,6 +353,8 @@ def _export_row(item: Item) -> list:
         item.notes or "",
         "|".join(t.name for t in item.tags),
         "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
+        item.set.name if item.set else "",
+        json.dumps(item.custom_fields) if item.custom_fields else "",
         latest.estimated_value if latest else "",
         latest.currency if latest else "",
         item.created_at.isoformat(),
@@ -364,7 +385,27 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
             raise ValueError(f"Bad catalog ref {chunk!r}; expected 'catalog:code'")
         catalog, ref_code = chunk.split(":", 1)
         refs.append({"catalog": catalog.strip(), "ref_code": ref_code.strip()})
-    payload = ItemCreate(**data, tags=tags, catalog_refs=refs)
+
+    set_id = None
+    set_name = data.pop("set", "").strip()
+    if set_name:
+        existing = db.execute(
+            select(ItemSet).where(ItemSet.name == set_name)
+        ).scalar_one_or_none()
+        if existing is None:
+            existing = ItemSet(name=set_name)
+            db.add(existing)
+            db.flush()
+        set_id = existing.id
+
+    raw_cf = data.pop("custom_fields", "")
+    if raw_cf:
+        try:
+            data["custom_fields"] = json.loads(raw_cf)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Bad custom_fields JSON: {exc}") from exc
+
+    payload = ItemCreate(**data, tags=tags, catalog_refs=refs, set_id=set_id)
     return payload, grade_id
 
 
@@ -403,6 +444,7 @@ def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -
     item = Item(**data)
     item.grade_id = grade_id if grade_id is not None else payload.grade_id
     _check_grade(db, item.grade_id)
+    _check_set(db, item.set_id)
     item.tags = resolve_tags(db, payload.tags)
     item.catalog_refs = resolve_catalog_refs(db, payload.catalog_refs)
     return item
@@ -432,10 +474,48 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
         fields.pop("catalog_refs")
     if "grade_id" in fields:
         _check_grade(db, fields["grade_id"])
+    if "set_id" in fields:
+        _check_set(db, fields["set_id"])
     for field, value in fields.items():
         setattr(item, field, value)
     db.commit()
     return get_item_or_404(db, item_id, load_related=True)
+
+
+@router.post("/bulk", response_model=BulkResult)
+def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
+    """Apply the same changes to many items at once: scalar field updates via
+    `set` (tags/refs inside it are ignored), plus add_tags / remove_tags."""
+    items = (
+        db.execute(select(Item).where(Item.id.in_(payload.ids)).options(selectinload(Item.tags)))
+        .scalars()
+        .all()
+    )
+    if len(items) != len(set(payload.ids)):
+        raise HTTPException(status_code=404, detail="One or more items not found")
+
+    fields = {}
+    if payload.set is not None:
+        fields = payload.set.model_dump(exclude_unset=True)
+        fields.pop("tags", None)
+        fields.pop("catalog_refs", None)
+        if "grade_id" in fields:
+            _check_grade(db, fields["grade_id"])
+        if "set_id" in fields:
+            _check_set(db, fields["set_id"])
+
+    add = resolve_tags(db, payload.add_tags)
+    remove_names = {n.strip() for n in payload.remove_tags if n.strip()}
+    for item in items:
+        for field, value in fields.items():
+            setattr(item, field, value)
+        if add:
+            existing = {t.name for t in item.tags}
+            item.tags.extend(t for t in add if t.name not in existing)
+        if remove_names:
+            item.tags = [t for t in item.tags if t.name not in remove_names]
+    db.commit()
+    return BulkResult(updated=len(items))
 
 
 @router.post("/{item_id}/clone", response_model=ItemOut, status_code=201)

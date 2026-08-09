@@ -137,6 +137,8 @@ export default function ItemDetail() {
       <div className="card">
         <dl className="facts">
           {fact("Series", item.series)}
+          {fact("Variety", item.variety)}
+          {fact("Set / lot", item.set?.name)}
           {fact("Grade", item.grade ? `${item.grade.code} (${item.grade.label})` : null)}
           {fact(
             "Certification",
@@ -153,6 +155,9 @@ export default function ItemDetail() {
           {item.status === "sold" && fact("Sold on", item.sold_date)}
           {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
           {fact("Latest value", latest ? money(latest.estimated_value, latest.currency) : null)}
+          {Object.entries(item.custom_fields ?? {}).map(([key, value]) => (
+            <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
+          ))}
         </dl>
         {(item.tags.length > 0 || item.catalog_refs.length > 0) && (
           <p style={{ marginBottom: 0 }}>

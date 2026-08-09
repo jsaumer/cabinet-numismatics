@@ -32,7 +32,50 @@ export default function ItemList() {
   );
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [stats, setStats] = useState<CollectionStats | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkStorage, setBulkStorage] = useState("");
+  const [bulkAddTag, setBulkAddTag] = useState("");
+  const [bulkRemoveTag, setBulkRemoveTag] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
+
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  async function applyBulk() {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const set: Record<string, string> = {};
+      if (bulkStatus) set.status = bulkStatus;
+      if (bulkStorage.trim()) set.storage_location = bulkStorage.trim();
+      await api.bulkUpdate({
+        ids: [...selected],
+        set: Object.keys(set).length ? (set as never) : undefined,
+        add_tags: bulkAddTag.trim() ? [bulkAddTag.trim()] : [],
+        remove_tags: bulkRemoveTag.trim() ? [bulkRemoveTag.trim()] : [],
+      });
+      setSelected(new Set());
+      setBulkStatus("");
+      setBulkStorage("");
+      setBulkAddTag("");
+      setBulkRemoveTag("");
+      set0(); // refetch
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const set0 = () => setParams((prev) => new URLSearchParams(prev), { replace: true });
 
   useEffect(() => {
     api.collectionStats().then(setStats).catch(() => setStats(null));
@@ -228,10 +271,60 @@ export default function ItemList() {
         </div>
       )}
 
+      {selected.size > 0 && (
+        <div className="toolbar advanced">
+          <span style={{ alignSelf: "center" }}><b>{selected.size}</b> selected</span>
+          <label className="field">
+            Set status
+            <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+              <option value="">unchanged</option>
+              <option value="owned">Owned</option>
+              <option value="sold">Sold</option>
+              <option value="wishlist">Wishlist</option>
+            </select>
+          </label>
+          <label className="field">
+            Set storage
+            <input value={bulkStorage} placeholder="unchanged"
+              onChange={(e) => setBulkStorage(e.target.value)} />
+          </label>
+          <label className="field">
+            Add tag
+            <input value={bulkAddTag} onChange={(e) => setBulkAddTag(e.target.value)} />
+          </label>
+          <label className="field">
+            Remove tag
+            <input value={bulkRemoveTag} onChange={(e) => setBulkRemoveTag(e.target.value)} />
+          </label>
+          <button className="primary" style={{ alignSelf: "end" }} disabled={bulkBusy}
+            onClick={applyBulk}>
+            {bulkBusy ? "Applying…" : "Apply"}
+          </button>
+          <button style={{ alignSelf: "end" }} onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
+      )}
+
       {page && page.items.length > 0 && (
         <table className="items">
           <thead>
             <tr>
+              <th style={{ width: "28px" }}>
+                <input
+                  type="checkbox"
+                  checked={page.items.every((i) => selected.has(i.id))}
+                  onChange={(e) =>
+                    setSelected(
+                      e.target.checked
+                        ? new Set([...selected, ...page.items.map((i) => i.id)])
+                        : new Set(
+                            [...selected].filter((id) => !page.items.some((i) => i.id === id)),
+                          ),
+                    )
+                  }
+                />
+              </th>
               <th></th>
               <th>Type</th>
               <th>Country</th>
@@ -247,6 +340,10 @@ export default function ItemList() {
           <tbody>
             {page.items.map((item) => (
               <tr key={item.id} onClick={() => navigate(`/items/${item.id}`)}>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selected.has(item.id)}
+                    onChange={() => toggle(item.id)} />
+                </td>
                 <td style={{ width: "52px" }}>
                   {item.primary_thumb_key ? (
                     <img className="thumb" src={photoUrl(item.primary_thumb_key)} alt="" />

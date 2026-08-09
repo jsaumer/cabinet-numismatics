@@ -33,6 +33,34 @@ class TagOut(BaseModel):
     count: int
 
 
+class SetCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    notes: str | None = None
+
+
+class SetOut(SetCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+
+class SetWithCount(SetOut):
+    item_count: int
+
+
+def _validate_custom_fields(value: dict | None) -> dict | None:
+    if value is None:
+        return None
+    if len(value) > 20:
+        raise ValueError("At most 20 custom fields")
+    for k, v in value.items():
+        if not k.strip() or len(k) > 50:
+            raise ValueError("Custom field names must be 1-50 characters")
+        if not isinstance(v, str) or len(v) > 500:
+            raise ValueError("Custom field values must be strings of at most 500 characters")
+    return {k.strip(): v for k, v in value.items()}
+
+
 class ItemBase(BaseModel):
     type: ItemTypeName
     status: ItemStatusName = "owned"
@@ -41,6 +69,7 @@ class ItemBase(BaseModel):
     year: int = Field(ge=-700, le=2100)  # numismatics goes back a while
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
+    variety: str | None = Field(default=None, max_length=200)
     composition: str | None = Field(default=None, max_length=100)
     weight_g: float | None = Field(default=None, gt=0)
     fineness: float | None = Field(default=None, gt=0, le=1)
@@ -54,11 +83,15 @@ class ItemBase(BaseModel):
     storage_location: str | None = Field(default=None, max_length=200)
     sold_date: date | None = None
     sold_price: float | None = Field(default=None, ge=0)
+    custom_fields: dict[str, str] | None = None
     notes: str | None = None
+
+    _cf = field_validator("custom_fields")(_validate_custom_fields)
 
 
 class ItemCreate(ItemBase):
     grade_id: int | None = None
+    set_id: int | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefIn] = []
 
@@ -71,10 +104,13 @@ class ItemUpdate(BaseModel):
     year: int | None = Field(default=None, ge=-700, le=2100)
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
+    variety: str | None = Field(default=None, max_length=200)
     composition: str | None = Field(default=None, max_length=100)
     weight_g: float | None = Field(default=None, gt=0)
     fineness: float | None = Field(default=None, gt=0, le=1)
     grade_id: int | None = None
+    set_id: int | None = None
+    custom_fields: dict[str, str] | None = None
     cert_service: str | None = Field(default=None, max_length=50)
     cert_number: str | None = Field(default=None, max_length=50)
     quantity: int | None = Field(default=None, ge=1)
@@ -88,6 +124,8 @@ class ItemUpdate(BaseModel):
     notes: str | None = None
     tags: list[str] | None = None
     catalog_refs: list[CatalogRefIn] | None = None
+
+    _cf = field_validator("custom_fields")(_validate_custom_fields)
 
 
 class PhotoOut(BaseModel):
@@ -139,6 +177,7 @@ class ItemOut(ItemBase):
 
     id: uuid.UUID
     grade: GradeOut | None = None
+    set: SetOut | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefOut] = []
     created_at: datetime
@@ -148,6 +187,17 @@ class ItemOut(ItemBase):
     @classmethod
     def _tag_names(cls, value):
         return [t.name if hasattr(t, "name") else t for t in value]
+
+
+class BulkUpdate(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    set: ItemUpdate | None = None  # scalar fields applied to every item
+    add_tags: list[str] = []
+    remove_tags: list[str] = []
+
+
+class BulkResult(BaseModel):
+    updated: int
 
 
 class ItemListEntry(ItemOut):
