@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql://numis:changeme@localhost:5432/numismatics"
     photo_dir: str = "./photos"
+    # Re-run stale melt estimates this often (days); 0 disables the scheduler.
+    reestimate_days: int = 7
 
     @property
     def sqlalchemy_url(self) -> str:

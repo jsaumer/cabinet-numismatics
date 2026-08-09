@@ -20,6 +20,18 @@ from app.models import Grade
 from app.models.grades_seed import seed_rows
 
 
+@pytest.fixture(autouse=True)
+def _no_network_rates(monkeypatch):
+    """Exchange-rate fetches never hit the network in tests; individual tests
+    monkeypatch a working rate when they need conversion."""
+    from app.services import currency
+
+    def unavailable(base, quote):
+        raise currency.RateUnavailable("offline in tests")
+
+    monkeypatch.setattr(currency, "fetch_rate", unavailable)
+
+
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     """TestClient backed by a fresh in-memory SQLite DB (grades seeded) and a

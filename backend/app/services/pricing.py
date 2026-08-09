@@ -133,3 +133,48 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
 
 # Adapter registry: later sources (sold comps, price guides) append here.
 ADAPTERS = {"melt": melt_estimate}
+
+
+def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
+    """Re-run melt estimates for owned items whose LATEST estimate is a melt
+    estimate older than max_age_days. Items whose latest estimate is manual are
+    left alone — a fresh melt value must never bury the user's own number.
+    Returns {"updated": n, "skipped": n, "failed": n}."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models import PriceEstimate
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    updated = skipped = failed = 0
+    items = (
+        db.execute(select(Item).where(Item.status == "owned").options(selectinload(Item.estimates)))
+        .scalars()
+        .all()
+    )
+    for item in items:
+        latest = item.estimates[0] if item.estimates else None
+        if (
+            latest is None
+            or not latest.source.startswith("melt:")
+            or _as_utc(latest.fetched_at) > cutoff
+        ):
+            skipped += 1
+            continue
+        try:
+            result = melt_estimate(db, item)
+        except (NotApplicable, SpotUnavailable):
+            failed += 1
+            continue
+        db.add(
+            PriceEstimate(
+                item_id=item.id,
+                source=result.source,
+                estimated_value=result.estimated_value,
+                currency=result.currency,
+                confidence=result.confidence,
+            )
+        )
+        updated += 1
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "failed": failed}

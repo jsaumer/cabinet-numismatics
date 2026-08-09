@@ -4,13 +4,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.models import PriceEstimate
 from app.routers.items import get_item_or_404
-from app.schemas import EstimateCreate, EstimateOut
+from app.schemas import EstimateCreate, EstimateOut, RefreshResult
 from app.services import pricing
 
 router = APIRouter(prefix="/api/items/{item_id}", tags=["estimates"])
+refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
+
+
+@refresh_router.post("/refresh-melt", response_model=RefreshResult)
+def refresh_melt(db: Session = Depends(get_db)):
+    """Re-run stale melt estimates now (the scheduler does this automatically
+    every 12h for estimates older than REESTIMATE_DAYS)."""
+    return pricing.refresh_melt_estimates(db, get_settings().reestimate_days)
 
 
 @router.get("/estimates", response_model=list[EstimateOut])

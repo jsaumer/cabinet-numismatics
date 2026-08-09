@@ -164,7 +164,25 @@ export interface CollectionStats {
   unrealized_gain: number;
   realized_gain: number;
   estimated_items: number;
+  converted_other_currency: number;
   excluded_other_currency: number;
+}
+
+export interface ValuePoint {
+  date: string;
+  value: number;
+  estimated_items: number;
+}
+
+export interface ValueHistory {
+  currency: string;
+  points: ValuePoint[];
+}
+
+export interface RefreshResult {
+  updated: number;
+  skipped: number;
+  failed: number;
 }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
@@ -230,6 +248,8 @@ export const api = {
   collectionStats: () => req<CollectionStats>("/api/stats/collection"),
   breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),
   gains: () => req<Gains>("/api/stats/gains"),
+  valueHistory: (months = 24) => req<ValueHistory>(`/api/stats/value-history?months=${months}`),
+  refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];

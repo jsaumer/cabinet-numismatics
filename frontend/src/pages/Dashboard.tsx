@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, Breakdowns, CollectionStats, GainEntry, Gains, money } from "../api";
-import { ChartDatum, Columns, HBars } from "../components/charts";
+import { api, Breakdowns, CollectionStats, GainEntry, Gains, money, ValueHistory } from "../api";
+import { ChartDatum, Columns, HBars, LineChart } from "../components/charts";
 
 const TOP_N = 8;
 
@@ -18,17 +18,40 @@ export default function Dashboard() {
   const [stats, setStats] = useState<CollectionStats | null>(null);
   const [breakdowns, setBreakdowns] = useState<Breakdowns | null>(null);
   const [gains, setGains] = useState<Gains | null>(null);
+  const [history, setHistory] = useState<ValueHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([api.collectionStats(), api.breakdowns(), api.gains()])
-      .then(([s, b, g]) => {
+  const load = () =>
+    Promise.all([api.collectionStats(), api.breakdowns(), api.gains(), api.valueHistory()])
+      .then(([s, b, g, h]) => {
         setStats(s);
         setBreakdowns(b);
         setGains(g);
+        setHistory(h);
       })
       .catch((e: Error) => setError(e.message));
+
+  useEffect(() => {
+    load();
   }, []);
+
+  async function refreshMelt() {
+    setRefreshing(true);
+    setRefreshNote(null);
+    try {
+      const r = await api.refreshMelt();
+      setRefreshNote(
+        `Melt refresh: ${r.updated} updated, ${r.skipped} skipped${r.failed ? `, ${r.failed} failed` : ""}.`,
+      );
+      await load();
+    } catch (e) {
+      setRefreshNote((e as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   if (error) return <p className="error">{error}</p>;
   if (!stats || !breakdowns || !gains) return <p className="muted">Loading…</p>;
@@ -79,8 +102,12 @@ export default function Dashboard() {
       <div className="detail-header">
         <h1>Dashboard</h1>
         <div className="spacer" />
+        <button onClick={refreshMelt} disabled={refreshing}>
+          {refreshing ? "Refreshing…" : "⚖ Refresh melt values"}
+        </button>
         <Link className="button" to="/report">Insurance report</Link>
       </div>
+      {refreshNote && <p className="muted">{refreshNote}</p>}
 
       <div className="card hero-card">
         <div className="hero">
@@ -121,12 +148,25 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        {stats.excluded_other_currency > 0 && (
+        {(stats.converted_other_currency > 0 || stats.excluded_other_currency > 0) && (
           <p className="muted" style={{ marginBottom: 0 }}>
-            {stats.excluded_other_currency} item(s) in other currencies are excluded from totals.
+            {stats.converted_other_currency > 0 &&
+              `${stats.converted_other_currency} amount(s) converted to ${cur} at daily rates. `}
+            {stats.excluded_other_currency > 0 &&
+              `${stats.excluded_other_currency} amount(s) excluded (no exchange rate).`}
           </p>
         )}
       </div>
+
+      {history && history.points.length > 0 && (
+        <div className="card">
+          <h2>Collection value over time</h2>
+          <LineChart
+            data={history.points.map((p) => ({ key: p.date.slice(0, 7), value: p.value }))}
+            format={(v) => money(v, cur)}
+          />
+        </div>
+      )}
 
       <div className="chart-grid">
         <div className="card">

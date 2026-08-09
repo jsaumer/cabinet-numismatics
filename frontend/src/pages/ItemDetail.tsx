@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Angle, api, ItemDetail as ItemDetailData, money, photoUrl } from "../api";
+import { LineChart } from "../components/charts";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
 
@@ -235,6 +236,17 @@ export default function ItemDetail() {
           <p className="muted">
             No value recorded yet — add one you researched, or try an automatic estimate.
           </p>
+        )}
+        {item.estimates.length >= 2 && (
+          <LineChart
+            data={[...item.estimates].reverse().map((est) => ({
+              key: new Date(est.fetched_at).toLocaleDateString(undefined, {
+                month: "short", day: "numeric",
+              }),
+              value: est.estimated_value,
+            }))}
+            format={(v) => money(v, item.estimates[0].currency)}
+          />
         )}
         {item.estimates.length > 0 && (
           <table className="estimates">

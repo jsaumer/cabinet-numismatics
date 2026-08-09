@@ -226,4 +226,22 @@ class CollectionStats(BaseModel):
     unrealized_gain: float  # over owned items having BOTH price and estimate
     realized_gain: float  # sold items: sold_price - acquisition_price
     estimated_items: int  # owned items contributing to estimated_value
-    excluded_other_currency: int  # rows skipped from any total (currency mismatch)
+    converted_other_currency: int  # amounts converted into the display currency
+    excluded_other_currency: int  # amounts skipped (no exchange rate obtainable)
+
+
+class ValuePoint(BaseModel):
+    date: date
+    value: float
+    estimated_items: int
+
+
+class ValueHistory(BaseModel):
+    currency: str
+    points: list[ValuePoint]
+
+
+class RefreshResult(BaseModel):
+    updated: int
+    skipped: int
+    failed: int
