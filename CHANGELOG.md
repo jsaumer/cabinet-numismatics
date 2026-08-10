@@ -13,6 +13,25 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.9.1] — 2026-08-10
+
+No user-facing changes: no schema change (still revision `0008`), no API
+change, and identical application behavior. This release exists mainly
+because the test suite could not be run from a fresh checkout of 0.9.0.
+
+### Fixed
+- `pytest` failed on a clean clone with nine collection errors
+  (`ModuleNotFoundError: No module named 'tests'`). The suite needs the
+  project root on `sys.path`; that only happened by accident under legacy
+  editable installs, which add the whole directory, while modern setuptools
+  exposes just the configured `app*` packages. Fixed with
+  `pythonpath = ["."]` in the pytest config.
+- Committed `frontend/package-lock.json`. Without it, CI's Node setup had no
+  lock file to cache from, and every build floated to the newest matching
+  dependency versions. CI and the container build now use `npm ci`.
+
 ### Changed
 - Base images updated: backend to Python 3.14, frontend build to Node 26,
   proxy to nginx 1.31. The CI matrix now covers Python 3.10 (the supported
@@ -94,5 +113,6 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
