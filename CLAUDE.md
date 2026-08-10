@@ -93,13 +93,16 @@ via `services/crypto.py` + `SECRET_KEY`, write-only, masked; see
 docs/security.md),
 `/settings` page (display currency, melt cadence + toggle, Numista/PCGS
 credentials ahead of their adapters, cached market data). Display currency
-and melt cadence are DB-backed with env fallback. M2 is done: the Numista
-adapter (`services/numista.py`, migration `0009` adds `source_cache`) prices
-coins and notes by `numista` catalog ref + grade, selected with
-`POST /api/items/{id}/estimate?source=numista`; adapters are resolved through
-`pricing.get_adapter` and share `NotApplicable` (422) / `SourceUnavailable`
-(502). **Next: pricing M3 — PCGS adapter**, then M4 estimate provenance, M5
-pricing reports. Also open: photo-niceties bundle,
+and melt cadence are DB-backed with env fallback. M2 and M3 are done:
+`services/numista.py` prices coins and notes by `numista` catalog ref + grade,
+`services/pcgs.py` prices US coins by PCGS cert (or `pcgs` ref + Sheldon
+grade), preferring realized auction prices over the price guide. Both are
+selected with `POST /api/items/{id}/estimate?source=`, resolved through
+`pricing.get_adapter`, and share `NotApplicable` (422) / `SourceUnavailable`
+(502) plus `pricing.cached_response` over the `source_cache` table (migration
+`0009`). **Next: pricing M4 — estimate provenance** (store each source's
+response summary in `price_estimates.details`), then M5 pricing reports. Also
+open: photo-niceties bundle,
 Phase 6 / homelab deployment (Traefik + Authentik, CI). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)

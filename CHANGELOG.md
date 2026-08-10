@@ -25,10 +25,19 @@ docker compose exec backend alembic upgrade head
   is preferred to a failed request, matching how spot prices and exchange
   rates behave.
 
+- **PCGS price adapter** (pricing program M3) — US coins priced by PCGS cert
+  number, or by `pcgs` catalog reference + Sheldon grade, via
+  `?source=pcgs`. CoinFacts returns both numbers in one request: realized
+  auction prices win when PCGS has any (median of up to the ten most recent
+  lots, confidence 0.85 with five or more sales, 0.75 below), and the price
+  guide is the fallback at 0.60. Coins only — PCGS Banknote responses carry
+  no price fields. Requires a token from pcgs.com/publicapi.
+
 ### Changed
 - Price adapters now share one contract: `NotApplicable` for a missing
   prerequisite (422) and `SourceUnavailable` for an upstream failure (502).
-  `SpotUnavailable` is a subclass, so melt behavior is unchanged.
+  `SpotUnavailable` is a subclass, so melt behavior is unchanged. Response
+  caching is shared too (`pricing.cached_response`).
 
 ## [0.9.1] — 2026-08-10
 

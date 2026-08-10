@@ -118,7 +118,8 @@ hours; a stale row is used if the upstream fetch fails.
 Raw responses from external price sources, so repeated estimates don't spend a
 request against a small free-tier quota (`source` + `cache_key` composite PK,
 `payload` JSON, `fetched_at`). Numista caches catalogue data (a type's issues)
-for 30 days and prices for 7; a stale row is used if the upstream fetch fails.
+for 30 days and prices for 7; PCGS caches CoinFacts responses for 7 days. A
+stale row is used if the upstream fetch fails.
 
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from

@@ -17,6 +17,8 @@ def test_defaults(client):
     numista = next(s for s in body["sources"] if s["key"] == "numista")
     assert numista["configured"] is False and numista["available"] is True
     assert numista["enabled"] is False  # off until a key is configured
+    pcgs = next(s for s in body["sources"] if s["key"] == "pcgs")
+    assert pcgs["configured"] is False and pcgs["available"] is True
 
 
 def test_update_and_persist(client):

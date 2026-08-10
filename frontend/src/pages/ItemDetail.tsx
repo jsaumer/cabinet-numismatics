@@ -13,7 +13,11 @@ import {
 import { LineChart } from "../components/charts";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
-const SOURCE_LABELS: Record<string, string> = { melt: "⚖ Melt value", numista: "🔎 Numista value" };
+const SOURCE_LABELS: Record<string, string> = {
+  melt: "⚖ Melt value",
+  numista: "🔎 Numista value",
+  pcgs: "🏷 PCGS value",
+};
 
 export default function ItemDetail() {
   const { id } = useParams();
