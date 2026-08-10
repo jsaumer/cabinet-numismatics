@@ -51,9 +51,12 @@ autouse fixture fails any unmocked exchange-rate fetch.
 
 ```bash
 cd frontend
-npm install
+npm ci                 # installs exactly what package-lock.json pins
 npm run dev            # proxies /api to localhost:8000
 ```
+
+If you change dependencies, commit the updated `package-lock.json` — CI and
+the container build both use `npm ci` and will fail if it's out of sync.
 
 `docker compose up --build` also type-checks the frontend, so a clean build is
 a valid substitute if you'd rather not install Node.

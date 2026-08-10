@@ -33,6 +33,10 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Put the project root on sys.path so `from tests.conftest import …` resolves.
+# Without this it only works by accident on legacy editable installs, which
+# add the whole directory; modern setuptools exposes just the `app*` packages.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
