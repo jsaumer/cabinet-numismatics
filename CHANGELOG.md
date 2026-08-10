@@ -13,7 +13,18 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+- Base images updated: backend to Python 3.14, frontend build to Node 26,
+  proxy to nginx 1.31. The CI matrix now covers Python 3.10 (the supported
+  floor) and 3.14 (what the container runs).
+- GitHub Actions updated: `checkout` v7, `setup-node` v7, `setup-python` v7.
+- Frontend toolchain updated: Vite 8, `@vitejs/plugin-react` 6, TypeScript 7.
+  Vite 8 and the plugin must move together — their peer ranges don't overlap
+  across the boundary. TypeScript 7 also requires `src/vite-env.d.ts`, which
+  supplies the type declarations for `import './styles.css'`.
+
+### Added
+- `frontend/src/vite-env.d.ts` referencing Vite's client types.
 
 ## [0.9.0] — 2026-08-09
 
