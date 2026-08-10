@@ -338,8 +338,8 @@ export const api = {
     itemId: string,
     payload: { estimated_value: number; currency: string; source: string; confidence: number | null },
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
-  autoEstimate: (itemId: string) =>
-    req<Estimate>(`/api/items/${itemId}/estimate`, { method: "POST" }),
+  autoEstimate: (itemId: string, source = "melt") =>
+    req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),
 
   collectionStats: () => req<CollectionStats>("/api/stats/collection"),
   breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),

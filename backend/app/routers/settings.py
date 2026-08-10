@@ -64,9 +64,10 @@ def _build(db: Session) -> SettingsOut:
             name="Numista price estimates (coins + notes)",
             enabled=bool(store.get_setting(db, "numista_enabled")),
             configured=bool(numista_key),
-            available=False,
+            available=True,
             secret_hint=store.secret_hint(numista_key),
-            note="Adapter arrives with pricing program M2. Free API key at numista.com.",
+            note="Priced by numista catalog ref + grade. Free API key at numista.com "
+            "(2,000 requests/month); responses cached 7–30 days.",
         ),
         SourceStatus(
             key="pcgs",

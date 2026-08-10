@@ -1,11 +1,14 @@
 """Price-source adapters (see docs/price-sources.md).
 
-Phase 3 ships one adapter: melt value — spot price × weight × fineness ×
-quantity. Deterministic and explainable; the estimate's `source` records the
-metal and the spot price used.
+An adapter is `(db, item) -> EstimateResult`; it raises `NotApplicable` when
+the item lacks a prerequisite and `SourceUnavailable` when the upstream fails.
+Melt value lives here — spot price × weight × fineness × quantity,
+deterministic and explainable, with the metal and spot price recorded in the
+estimate's `source`. Other sources live in their own modules and are resolved
+by `get_adapter`.
 
 Money convention: estimates (like acquisition/sold prices) are per row — the
-whole lot — so melt multiplies per-piece value by quantity.
+whole lot — so per-piece values are multiplied by quantity.
 """
 
 import re
@@ -32,7 +35,11 @@ class NotApplicable(Exception):
     """The adapter cannot price this item; the message says what's missing."""
 
 
-class SpotUnavailable(Exception):
+class SourceUnavailable(Exception):
+    """An upstream price source could not be reached."""
+
+
+class SpotUnavailable(SourceUnavailable):
     """No fresh or cached spot price could be obtained."""
 
 
@@ -131,8 +138,20 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
     )
 
 
-# Adapter registry: later sources (sold comps, price guides) append here.
-ADAPTERS = {"melt": melt_estimate}
+# Adapter registry. Sources are resolved lazily so each adapter module can
+# import this one for the shared contract without a circular import.
+ADAPTER_NAMES = ("melt", "numista")
+
+
+def get_adapter(name: str):
+    """The adapter callable for a source name, or None if there isn't one."""
+    if name == "melt":
+        return melt_estimate
+    if name == "numista":
+        from app.services.numista import numista_estimate
+
+        return numista_estimate
+    return None
 
 
 def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:

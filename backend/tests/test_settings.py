@@ -15,7 +15,8 @@ def test_defaults(client):
     melt = next(s for s in body["sources"] if s["key"] == "melt")
     assert melt["enabled"] is True and melt["available"] is True and melt["configured"] is True
     numista = next(s for s in body["sources"] if s["key"] == "numista")
-    assert numista["configured"] is False and numista["available"] is False
+    assert numista["configured"] is False and numista["available"] is True
+    assert numista["enabled"] is False  # off until a key is configured
 
 
 def test_update_and_persist(client):
