@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from sqlalchemy import text
 
+from app import __version__
 from app.db import engine
 
 router = APIRouter(prefix="/api")
@@ -14,4 +15,4 @@ def health() -> dict[str, str]:
         db = "ok"
     except Exception:
         db = "unreachable"
-    return {"status": "ok", "db": db}
+    return {"status": "ok", "db": db, "version": __version__}

@@ -7,8 +7,10 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." Endgame is a polished personal tool that may later be
-open-sourced.
+are "Cabinet." **Public on GitHub under MIT, released as v0.9.0** — treat it as
+an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
+version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
+changelog entry when releasing.
 
 ## Architecture (three services — keep it minimal)
 
@@ -65,7 +67,10 @@ frontend/                React + Vite app (Phase 0 onward)
 Phase 0 so future sessions can run them without asking. -->
 
 - Tests: in `backend/` — `pip install -e .[dev]` once, then `pytest`. Tests do
-  not require a running database.
+  not require a running database. CI (GitHub Actions, `.github/workflows/ci.yml`)
+  runs ruff + pytest on 3.10/3.12, a frontend typecheck, and a compose
+  build/migrate/smoke job on every PR.
+- Demo data: `python scripts/seed_demo.py` against a running stack.
 - Lint/format: in `backend/` — `ruff check .` and `ruff format .`.
 - Migrations: Alembic, run in `backend/` with `DATABASE_URL` set —
   `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`

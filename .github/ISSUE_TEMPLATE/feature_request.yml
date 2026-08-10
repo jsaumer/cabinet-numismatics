@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an addition or improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please skim [docs/roadmap.md](../blob/main/docs/roadmap.md) first — it
+        records what's built, what's planned, and what was deliberately cut
+        (and why). Cabinet stays deliberately small.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the cataloging or collecting situation, not just the feature.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried instead?
+      description: Existing fields, tags, custom fields, or workflows that partly cover it.

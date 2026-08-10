@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jsaumer/cabinet-numismatics/security/advisories/new
+    about: Report privately — please do not open a public issue.
+  - name: Roadmap and design decisions
+    url: https://github.com/jsaumer/cabinet-numismatics/blob/main/docs/roadmap.md
+    about: What's built, what's planned, and what was deliberately cut.

@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor from pyproject and the version the container runs.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install
+        working-directory: backend
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        working-directory: backend
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        working-directory: backend
+        # Tests use in-memory SQLite and mock every outbound call.
+        run: pytest -q
+
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm install
+
+      - name: Typecheck and build
+        working-directory: frontend
+        run: npm run build
+
+  stack:
+    name: Compose stack (build + migrate + health)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write a throwaway .env
+        # Written from scratch rather than copied from .env.example, so there
+        # is exactly one definition of each variable.
+        run: |
+          {
+            echo "DB_USER=cabinet"
+            echo "DB_PASSWORD=ci-$(openssl rand -hex 12)"
+            echo "DB_NAME=cabinet"
+            echo "SECRET_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+          } > .env
+
+      - name: Build and start
+        run: docker compose up --build -d
+
+      - name: Wait for the backend to report healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost/api/health | grep -q '"db":"ok"'; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "backend never became healthy"; docker compose logs; exit 1
+
+      - name: Apply migrations
+        run: docker compose exec -T backend alembic upgrade head
+
+      - name: Smoke-test the API through the proxy
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost/api/docs > /dev/null
+          # create → read → delete an item end to end
+          id=$(curl -fsS -X POST http://localhost/api/items \
+                 -H 'Content-Type: application/json' \
+                 -d '{"type":"coin","country":"CI","denomination":"1 test","year":2026}' \
+               | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -fsS "http://localhost/api/items/$id" > /dev/null
+          curl -fsS -X DELETE "http://localhost/api/items/$id" -o /dev/null
+          curl -fsS http://localhost/api/settings > /dev/null
+          echo "smoke test passed"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,67 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please don't include API keys, passwords, or the
+        contents of your `.env` — see SECURITY.md for reporting vulnerabilities
+        privately instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From `GET /api/health`, or the release tag / commit you're on.
+      placeholder: "0.9.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Cataloging (items, search, filters)
+        - Photos
+        - Valuation / estimates
+        - Dashboard / reports
+        - Import / export
+        - Settings
+        - Deployment / containers
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "Output of `docker compose logs backend` around the failure. Redact secrets."
+      render: shell
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Docker Compose on Debian 12 / Docker Desktop on Windows 11"

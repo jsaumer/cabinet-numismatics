@@ -14,4 +14,5 @@ def test_health_ok():
     body = resp.json()
     assert body["status"] == "ok"
     assert body["db"] in ("ok", "unreachable")  # no postgres required for tests
+    assert body["version"]  # reported for support/upgrade checks
     assert os.path.isdir(get_settings().photo_dir)

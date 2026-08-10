@@ -2,16 +2,24 @@
 
 **Numismatics — Coin & Paper Money Collection Manager**
 
+[![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Version](https://img.shields.io/badge/version-0.9.0-informational)
+
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status:** phases 0–5 of the [roadmap](docs/roadmap.md) are built and in
-daily-use shape — full cataloging, photos, valuation, insights, and quality-
-of-life polish. Remaining work is optional: a photo-niceties bundle
-(lightbox, drag-and-drop upload, webcam), a sold-listings price source, and
-the open-source/deployment hardening track.
+**Status: v0.9.0 — feature-complete and in daily use.** Pre-1.0 signals that
+the HTTP API may still change; the data model and migration path are stable.
+Deliberately open: a photo-niceties bundle (lightbox, drag-and-drop upload),
+sold-listing comparables, and the Numista/PCGS price adapters (their
+credentials are already configurable). See the
+[roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
+
+> **Deploying it?** Cabinet has no built-in login by design — put it behind an
+> authenticating reverse proxy. See [docs/deployment.md](docs/deployment.md).
 
 ## Features
 
@@ -103,6 +111,16 @@ proxy image. Once running: the app is at http://localhost/, API docs at
 http://localhost/api/docs. After pulling a new version, re-run the two
 commands above (rebuild, then migrate).
 
+**Want something to look at first?** Load a small demo collection — 13 items
+across several countries, decades, and grades, with value history:
+
+```bash
+python scripts/seed_demo.py
+```
+
+It uses only the standard library and refuses to run if you already have
+items. To start clean afterwards: `docker compose down -v`.
+
 ## Configuration
 
 All configuration is via environment variables in `.env` (gitignored; start
@@ -133,6 +151,7 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 
 ## Documentation
 
+- [Deployment](docs/deployment.md) — durable install: secrets, reverse proxy + auth, backups, upgrades
 - [Architecture](docs/architecture.md) — services, data flow, configuration
 - [Data model](docs/data-model.md) — database schema and relationships
 - [API](docs/api.md) — REST endpoints (mirrors the OpenAPI spec)
@@ -140,6 +159,7 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 - [Backup & restore](docs/backup-restore.md) — what a backup contains and how to drill it
 - [Security](docs/security.md) — secrets at rest, key management, exposure guidance
 - [Roadmap](docs/roadmap.md) — full feature list, what's done, what remains
+- [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 - [Developing with Claude Code](docs/claude-code.md) — how the project is built from Phase 0 on
 
 ## Development
@@ -152,10 +172,24 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 - **Frontend:** in `frontend/` — `npm run dev` proxies `/api` to
   localhost:8000.
 
+CI runs ruff, the backend test suite on Python 3.10 and 3.12, a frontend
+typecheck, and a full compose build with migrations and an API smoke test on
+every pull request.
+
 From Phase 0 onward the project is built with Claude Code, which reads the
 repo-root `CLAUDE.md` for persistent context. See
 [docs/claude-code.md](docs/claude-code.md).
 
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+for setup, conventions, and what's in scope. Cabinet stays deliberately small;
+[docs/roadmap.md](docs/roadmap.md) records what was cut and why. Security
+issues should be reported privately per [SECURITY.md](SECURITY.md).
+
 ## License
 
-TBD — chosen at open-source release, if that happens (see roadmap Phase 6).
+[MIT](LICENSE) © 2026 Jayson Saumer.
+
+Value estimates produced by Cabinet are guidance, not appraisals. For
+insurance or sale, get a professional appraisal or grading-service valuation.

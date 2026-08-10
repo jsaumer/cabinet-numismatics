@@ -7,11 +7,13 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (August 2026): Phases 0–5 are built** (Phase 5 minus the
-photo-niceties bundle). A ✔ marks shipped items below. What remains, all
-optional: the photo-niceties bundle, the sold-listing comps price source,
-import mappings for other collection tools, and the deployment/OSS track
-(Phase 6 — auth at the proxy, CI, packaging).
+**Status (August 2026): released as v0.9.0.** Phases 0–5 are built (Phase 5
+minus the photo-niceties bundle), pricing-program M1 is done, and the
+open-source readiness track (Phase 6) is complete apart from application-level
+login — deliberately deferred in favour of proxy-level auth — and screenshots.
+A ✔ marks shipped items below. What remains, all optional: the photo-niceties
+bundle, the sold-listing comps price source, the Numista/PCGS adapters
+(pricing M2–M5), and import mappings for other collection tools.
 
 Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
 tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
@@ -162,15 +164,22 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 
 Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 
-- **[OSS]** LICENSE chosen and applied.
-- **[OSS]** CONTRIBUTING guide, issue/PR templates, code of conduct.
-- **[OSS]** Setup docs good enough for a stranger to self-host in one sitting.
-- **[OSS]** Seed/demo data and screenshots.
-- **[OSS]** Automated tests and CI on pull requests. *(The tests exist — 54
-  backend tests run without a database; CI wiring is the missing piece.)*
-- **[OSS]** Versioned releases and a changelog.
+- ✔ **[OSS]** LICENSE chosen and applied — MIT.
+- ✔ **[OSS]** CONTRIBUTING guide, issue/PR templates, code of conduct,
+  security policy.
+- ✔ **[OSS]** Setup docs good enough for a stranger to self-host in one
+  sitting — README quick start plus `deployment.md` (secrets, reverse proxy +
+  auth, storage, scheduled backups, upgrades).
+- ◐ **[OSS]** Seed/demo data and screenshots — `scripts/seed_demo.py` seeds a
+  13-item demo collection with value history; screenshots still to be
+  captured (see `docs/screenshots/README.md`).
+- ✔ **[OSS]** Automated tests and CI on pull requests — GitHub Actions runs
+  ruff, 69 backend tests on Python 3.10 and 3.12, a frontend typecheck, and a
+  full compose build with migrations and an API smoke test.
+- ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
+  reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0007`.
+  upgrades — Alembic since Phase 0, revisions `0001`–`0008`.
 
 ---
 
@@ -282,14 +291,16 @@ reports. Staged so each milestone is independently useful.
 *Exit: every priceable item has a sourced, explainable, configurable
 estimate — and you can see where pricing is thin.*
 
-### Phase 6 — Open-source release [OSS]
-Only if/when you decide to publish. Precursor for homelab use: push to the
-Forgejo, add CI, deploy behind Traefik + Authentik (no app-level auth
-needed).
-- Authentication (for true public exposure), license, contributing docs,
-  seed data, screenshots.
-- Hardened setup docs, CI on PRs, versioned releases + changelog.
-- Migration story for upgrades (already in place — Alembic end to end).
+### Phase 6 — Open-source release [OSS] ✔ (v0.9.0)
+- ✔ MIT license, contributing guide, code of conduct, security policy, issue
+  and PR templates, Dependabot.
+- ✔ Hardened setup docs (`deployment.md`), CI on PRs, changelog + versioned
+  release, demo seed data.
+- ✔ Migration story for upgrades (Alembic end to end).
+- Application-level authentication remains **deliberately unbuilt**: proxy-level
+  forward-auth (Traefik + Authentik) is the documented path, and app login is
+  only required for direct public exposure. Revisit if that changes.
+- Screenshots outstanding — the one item still to capture.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
 
 ---

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from app import __version__
 from app.config import get_settings
 from app.routers import checklists, estimates, health, items, photos, reference, settings, stats
 
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Cabinet API",
+    version=__version__,
     lifespan=lifespan,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
