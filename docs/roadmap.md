@@ -10,7 +10,7 @@ rather than assumed.
 **Status (August 2026): released as v0.9.0.** Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1 is done, and the
 open-source readiness track (Phase 6) is complete apart from application-level
-login — deliberately deferred in favour of proxy-level auth — and screenshots.
+login, deliberately deferred in favour of proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
 bundle, the sold-listing comps price source, the Numista/PCGS adapters
 (pricing M2–M5), and import mappings for other collection tools.
@@ -170,9 +170,10 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Setup docs good enough for a stranger to self-host in one
   sitting — README quick start plus `deployment.md` (secrets, reverse proxy +
   auth, storage, scheduled backups, upgrades).
-- ◐ **[OSS]** Seed/demo data and screenshots — `scripts/seed_demo.py` seeds a
-  13-item demo collection with value history; screenshots still to be
-  captured (see `docs/screenshots/README.md`).
+- ✔ **[OSS]** Seed/demo data and screenshots — `scripts/seed_demo.py` seeds a
+  13-item demo collection; screenshots are captured headlessly at a fixed
+  viewport, with the exact command recorded in `docs/screenshots/README.md`
+  so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests — GitHub Actions runs
   ruff, 69 backend tests on Python 3.10 and 3.12, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
@@ -295,12 +296,12 @@ estimate — and you can see where pricing is thin.*
 - ✔ MIT license, contributing guide, code of conduct, security policy, issue
   and PR templates, Dependabot.
 - ✔ Hardened setup docs (`deployment.md`), CI on PRs, changelog + versioned
-  release, demo seed data.
+  release, demo seed data, screenshots.
 - ✔ Migration story for upgrades (Alembic end to end).
 - Application-level authentication remains **deliberately unbuilt**: proxy-level
   forward-auth (Traefik + Authentik) is the documented path, and app login is
   only required for direct public exposure. Revisit if that changes.
-- Screenshots outstanding — the one item still to capture.
+- The repository itself is still private — publishing is a separate decision.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
 
 ---

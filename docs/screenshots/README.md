@@ -1,32 +1,54 @@
 # Screenshots
 
-These illustrate the README and the GitHub project page. They are not used by
-the application.
+These illustrate the README. They are not used by the application.
 
-## Capturing or refreshing them
+| File | Page | Theme |
+|------|------|-------|
+| `collection.png` | `/` | light |
+| `dashboard.png` | `/dashboard` | light |
+| `item-detail.png` | `/items/<id>` | light |
+| `dark-mode.png` | `/dashboard` | dark |
 
-1. Start a clean stack and load the demo collection, so no real holdings are
-   shown:
+## Regenerating them
 
-   ```bash
-   docker compose down -v && docker compose up --build -d
-   docker compose exec backend alembic upgrade head
-   python scripts/seed_demo.py
-   ```
+Captured headlessly so the result doesn't depend on your desktop theme, OS
+font rendering, or window chrome. Start a clean stack with demo data:
 
-2. Set the browser window to **1280×800** and capture the viewport (not the
-   full page) for consistent framing.
+```bash
+docker compose down -v && docker compose up --build -d
+docker compose exec backend alembic upgrade head
+python scripts/seed_demo.py
+```
 
-3. Save as PNG with these names, which the README expects:
+Then capture at a fixed 1280×800 with Playwright, joining the compose network
+so the proxy is reachable as `proxy`:
 
-   | File | Page | Notes |
-   |------|------|-------|
-   | `collection.png` | `/` | The list with the stats strip and a couple of filters set |
-   | `dashboard.png` | `/dashboard` | Scrolled to show the hero value, tiles, and charts |
-   | `item-detail.png` | `/items/<id>` | Pick an item with photos, a grade, and value history |
-   | `dark-mode.png` | `/dashboard` | Same view with the theme toggle on |
+```bash
+ITEM=$(curl -s 'http://localhost/api/items?limit=100' \
+  | python3 -c 'import json,sys; print(next(i["id"] for i in json.load(sys.stdin)["items"] if i["grade"] and i["latest_value"]))')
 
-4. Keep each file under ~400 KB (PNG, 8-bit palette is usually enough).
+docker run --rm --network cabinet-numismatics_default \
+  -v "$PWD/docs/screenshots:/out" \
+  mcr.microsoft.com/playwright:v1.49.0-jammy sh -c "
+    P='npx -y playwright@1.49.0 screenshot --viewport-size=1280,800 --wait-for-timeout=4000'
+    \$P --color-scheme=light http://proxy/                 /out/collection.png
+    \$P --color-scheme=light http://proxy/dashboard        /out/dashboard.png
+    \$P --color-scheme=light http://proxy/items/$ITEM      /out/item-detail.png
+    \$P --color-scheme=dark  http://proxy/dashboard        /out/dark-mode.png
+  "
+```
 
-Upload a couple of real photos to one demo item before capturing
-`item-detail.png` — the empty photo grid undersells the feature.
+Pin the `playwright@` version to match the image tag — `npx` otherwise
+installs the newest release, which then can't find the image's browsers.
+
+## Notes
+
+- Playwright's `--color-scheme` is what makes the light/dark pair reliable.
+  Chromium's command line has no equivalent flag, so plain headless Chrome
+  silently inherits the host's theme and both captures come out identical.
+- The demo items have no photos, so `item-detail.png` shows an empty photo
+  section. Upload two images to that item before capturing if you want the
+  photo grid represented.
+- The value-over-time chart needs estimates recorded on different days;
+  freshly seeded demo data is all one day, so that card shows its
+  single-data-point message.

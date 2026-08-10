@@ -21,6 +21,16 @@ credentials are already configurable). See the
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
 > authenticating reverse proxy. See [docs/deployment.md](docs/deployment.md).
 
+## Screenshots
+
+Shown with the bundled demo collection (`python scripts/seed_demo.py`).
+
+| Collection list | Dashboard |
+|---|---|
+| [![Collection list](docs/screenshots/collection.png)](docs/screenshots/collection.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) |
+| **Item detail** | **Dark mode** |
+| [![Item detail](docs/screenshots/item-detail.png)](docs/screenshots/item-detail.png) | [![Dark mode](docs/screenshots/dark-mode.png)](docs/screenshots/dark-mode.png) |
+
 ## Features
 
 ### Cataloging
