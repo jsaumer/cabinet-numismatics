@@ -246,6 +246,19 @@ class SpotPrice(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class SourceCache(Base):
+    """Cached raw responses from external price sources, keyed by source and
+    request. Free-tier quotas are small (Numista: 2,000/month), so repeated
+    estimates for the same item must not cost a request."""
+
+    __tablename__ = "source_cache"
+
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    cache_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSON)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PriceEstimate(Base):
     __tablename__ = "price_estimates"
 

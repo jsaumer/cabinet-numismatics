@@ -1,10 +1,19 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { Angle, api, ItemDetail as ItemDetailData, ItemEvent, money, photoUrl } from "../api";
+import {
+  Angle,
+  api,
+  ItemDetail as ItemDetailData,
+  ItemEvent,
+  money,
+  photoUrl,
+  SourceStatus,
+} from "../api";
 import { LineChart } from "../components/charts";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
+const SOURCE_LABELS: Record<string, string> = { melt: "⚖ Melt value", numista: "🔎 Numista value" };
 
 export default function ItemDetail() {
   const { id } = useParams();
@@ -17,9 +26,15 @@ export default function ItemDetail() {
   const [estCurrency, setEstCurrency] = useState("USD");
   const [estSource, setEstSource] = useState("manual");
   const [estConfidence, setEstConfidence] = useState("");
-  const [estimating, setEstimating] = useState(false);
+  const [estimating, setEstimating] = useState<string | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
+  const [sources, setSources] = useState<SourceStatus[]>([]);
+
+  // Which automatic sources this build offers, and whether they're switched on.
+  useEffect(() => {
+    api.getSettings().then((s) => setSources(s.sources)).catch(() => setSources([]));
+  }, []);
 
   const loadHistory = () => {
     if (!id) return;
@@ -90,17 +105,17 @@ export default function ItemDetail() {
     }
   }
 
-  async function autoEstimate() {
+  async function autoEstimate(source: string) {
     if (!id) return;
-    setEstimating(true);
+    setEstimating(source);
     setEstimateError(null);
     try {
-      await api.autoEstimate(id);
+      await api.autoEstimate(id, source);
       reload();
     } catch (err) {
       setEstimateError((err as Error).message);
     } finally {
-      setEstimating(false);
+      setEstimating(null);
     }
   }
 
@@ -306,9 +321,18 @@ export default function ItemDetail() {
           </table>
         )}
         <div className="estimate-form">
-          <button onClick={autoEstimate} disabled={estimating}>
-            {estimating ? "Estimating…" : "⚖ Melt value"}
-          </button>
+          {sources
+            .filter((s) => s.available)
+            .map((s) => (
+              <button
+                key={s.key}
+                onClick={() => autoEstimate(s.key)}
+                disabled={estimating !== null || !s.enabled}
+                title={s.enabled ? s.note ?? undefined : `${s.name} is switched off in Settings`}
+              >
+                {estimating === s.key ? "Estimating…" : SOURCE_LABELS[s.key] ?? s.name}
+              </button>
+            ))}
           {estimateError && <span className="error">{estimateError}</span>}
         </div>
         <form className="estimate-form" onSubmit={addEstimate}>

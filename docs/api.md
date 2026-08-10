@@ -71,10 +71,12 @@ include the file keys; the files themselves are served by nginx at
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1), never
-overwriting history. `POST .../estimate` runs the automatic adapters —
-currently melt value (spot × weight × fineness × quantity, metal detected
-from `composition`); it answers 422 with the missing prerequisite when an item
-can't be melt-priced and 502 when no spot price is obtainable. See
+overwriting history. `POST .../estimate` runs one automatic adapter, chosen
+with `?source=` — `melt` (the default: spot × weight × fineness × quantity,
+metal detected from `composition`) or `numista` (priced by the item's
+`numista` catalog ref and grade; needs an API key in Settings). Either answers
+422 with the missing prerequisite when the item can't be priced by that source
+or the source is switched off, and 502 when the upstream is unreachable. See
 [price-sources.md](price-sources.md). An in-process scheduler re-runs stale
 melt estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7;
 `0` disables); a melt refresh never supersedes an item whose latest estimate

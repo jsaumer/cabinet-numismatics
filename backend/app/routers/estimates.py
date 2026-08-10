@@ -50,17 +50,22 @@ def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = D
 
 
 @router.post("/estimate", response_model=EstimateOut, status_code=201)
-def auto_estimate(item_id: uuid.UUID, db: Session = Depends(get_db)):
-    """Produce an automatic estimate. Phase 3 ships the melt-value adapter;
-    further sources join the registry later."""
+def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depends(get_db)):
+    """Produce an automatic estimate from one price source: `melt` (default)
+    or `numista`."""
     item = get_item_or_404(db, item_id)
-    if not get_setting(db, "melt_enabled"):
-        raise HTTPException(status_code=422, detail="Melt estimation is disabled in Settings")
+    adapter = pricing.get_adapter(source)
+    if adapter is None:
+        raise HTTPException(status_code=422, detail=f"Unknown price source {source!r}")
+    if not get_setting(db, f"{source}_enabled"):
+        raise HTTPException(
+            status_code=422, detail=f"{source.capitalize()} estimation is disabled in Settings"
+        )
     try:
-        result = pricing.melt_estimate(db, item)
+        result = adapter(db, item)
     except pricing.NotApplicable as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    except pricing.SpotUnavailable as exc:
+    except pricing.SourceUnavailable as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from None
     estimate = PriceEstimate(
         item_id=item_id,

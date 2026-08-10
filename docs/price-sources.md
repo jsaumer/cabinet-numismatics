@@ -34,6 +34,44 @@ stale cached price is used if the upstream is down. Estimates record the spot
 price used in their `source` (e.g. `melt:silver @ 1.0562/g`) and carry
 confidence 0.95.
 
+### Numista (implemented — pricing program M2)
+Numista catalogues coins, banknotes, and exonumia and quotes collector-swap
+estimates per grade. Implemented in `app/services/numista.py`.
+
+The chain an estimate follows:
+
+1. The item's `numista` catalog reference gives the **type** id (`N#1234`,
+   `N# 1234`, and a bare `1234` all parse).
+2. `GET /types/{type}/issues` gives the type's issues; the one matching the
+   item's **year** is chosen, preferring a matching mint letter when the item
+   has a mint mark.
+3. `GET /types/{type}/issues/{issue}/prices` gives prices per grade bucket, in
+   the app's display currency.
+4. The item's grade is mapped onto Numista's seven buckets by rank — Sheldon
+   and PMG share the 1–70 scale, so one mapping serves coins and notes:
+   `<8 → g`, `<12 → vg`, `<20 → f`, `<40 → vf`, `<50 → xf`, `<60 → au`,
+   `≥60 → unc`.
+
+If the exact bucket isn't priced, the nearest one is used — the lower of two
+equally close buckets, so a substitution errs low. The estimate's `source`
+always names the grade actually used (`numista:N#1234 XF (for UNC)`), and
+confidence drops from 0.60 to 0.45 when a substitution happened. Prices are
+per piece, so the value is multiplied by the item's quantity.
+
+Requirements and limits:
+
+- A free API key (numista.com), stored encrypted in Settings; the source is
+  disabled until you switch it on.
+- 2,000 requests a month, so every response is cached in `source_cache` —
+  issues for 30 days, prices for 7 — and a stale entry is used when the
+  upstream fails. An item missing its prerequisites (no ref, no grade) costs
+  no request at all.
+- Confidence is medium by design: these are collector estimates, not realized
+  auction prices. Melt remains the higher-confidence floor for bullion.
+
+A missing prerequisite answers 422 with what to fix; an upstream failure or an
+exhausted quota answers 502.
+
 ### Sold-listing comparables
 Marketplaces that expose *sold* prices give the closest thing to real market
 value. Filter by catalog reference and grade, then aggregate (e.g. median of

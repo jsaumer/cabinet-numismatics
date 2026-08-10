@@ -114,6 +114,12 @@ Per-metal spot price cache for melt estimates (`metal` PK, `price_per_gram`,
 `currency`, `source`, `fetched_at`). Refreshed on demand when older than 12
 hours; a stale row is used if the upstream fetch fails.
 
+### source_cache (cache)
+Raw responses from external price sources, so repeated estimates don't spend a
+request against a small free-tier quota (`source` + `cache_key` composite PK,
+`payload` JSON, `fetched_at`). Numista caches catalogue data (a type's issues)
+for 30 days and prices for 7; a stale row is used if the upstream fetch fails.
+
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from
 `app/models/grades_seed.py`: `sheldon` (PO-1 through MS-70) and `pmg`

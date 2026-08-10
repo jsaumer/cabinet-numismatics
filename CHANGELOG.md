@@ -13,7 +13,22 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+- **Numista price adapter** (pricing program M2) — coins *and* notes priced by
+  their `numista` catalog reference and grade. `POST /api/items/{id}/estimate`
+  takes a `?source=` parameter (`melt`, the default, or `numista`), and the
+  item page shows a button per configured source. Requires a free Numista API
+  key in Settings; the source stays off until you switch it on.
+- New `source_cache` table (revision `0009`) caching upstream price-source
+  responses — Numista catalogue data for 30 days, prices for 7 — so repeated
+  estimates don't burn the free tier's 2,000 requests a month. A stale entry
+  is preferred to a failed request, matching how spot prices and exchange
+  rates behave.
+
+### Changed
+- Price adapters now share one contract: `NotApplicable` for a missing
+  prerequisite (422) and `SourceUnavailable` for an upstream failure (502).
+  `SpotUnavailable` is a subclass, so melt behavior is unchanged.
 
 ## [0.9.1] — 2026-08-10
 
