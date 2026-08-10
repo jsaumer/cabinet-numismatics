@@ -1,6 +1,6 @@
 # Build the static frontend, then serve it from nginx.
 # This image IS the compose `proxy` service; nginx.conf is mounted by compose.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
