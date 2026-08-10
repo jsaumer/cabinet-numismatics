@@ -74,9 +74,11 @@ def _build(db: Session) -> SettingsOut:
             name="PCGS price guide + auction prices (US coins)",
             enabled=bool(store.get_setting(db, "pcgs_enabled")),
             configured=bool(pcgs_token),
-            available=False,
+            available=True,
             secret_hint=store.secret_hint(pcgs_token),
-            note="Adapter arrives with pricing program M3. Token from pcgs.com/publicapi.",
+            note="US coins by cert number, or PCGS number + grade. Auction sales when "
+            "PCGS has them, price guide otherwise. Token from pcgs.com/publicapi "
+            "(1,000 calls/day); responses cached 7 days.",
         ),
     ]
 

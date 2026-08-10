@@ -16,15 +16,20 @@ auction prices. Money is per row, so the per-piece price is multiplied by the
 item's quantity.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Item, SourceCache
+from app.models import Item
 from app.services import app_settings
-from app.services.pricing import EstimateResult, NotApplicable, SourceUnavailable
+from app.services.pricing import (
+    EstimateResult,
+    NotApplicable,
+    SourceUnavailable,
+    cached_response,
+)
 
 API_ROOT = "https://api.numista.com/api/v3"
 CATALOG_TTL = timedelta(days=30)  # issues barely change
@@ -38,10 +43,6 @@ _RANK_CUTOFFS = ((8, "g"), (12, "vg"), (20, "f"), (40, "vf"), (50, "xf"), (60, "
 
 class _NotFound(Exception):
     """Upstream 404 — the catalogue has no such type or issue."""
-
-
-def _as_utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
 def bucket_for_rank(rank: int) -> str:
@@ -89,27 +90,7 @@ def _request(api_key: str, path: str, params: dict | None = None) -> dict:
 
 
 def _cached(db: Session, cache_key: str, ttl: timedelta, api_key: str, path: str, params=None):
-    """Fetch through the `source_cache` table. A stale entry beats spending a
-    request; a stale entry also beats a failed one."""
-    row = db.get(SourceCache, ("numista", cache_key))
-    now = datetime.now(timezone.utc)
-    if row is not None and now - _as_utc(row.fetched_at) < ttl:
-        return row.payload
-    try:
-        payload = _request(api_key, path, params)
-    except SourceUnavailable:
-        if row is not None:
-            return row.payload
-        raise
-    if row is None:
-        row = SourceCache(source="numista", cache_key=cache_key)
-        db.add(row)
-    row.payload = payload
-    row.fetched_at = now
-    # Commit now so a request already spent survives an estimate that later
-    # fails (no matching issue, no price for the grade).
-    db.commit()
-    return payload
+    return cached_response(db, "numista", cache_key, ttl, lambda: _request(api_key, path, params))
 
 
 def pick_issue(issues: list[dict], item: Item) -> dict | None:

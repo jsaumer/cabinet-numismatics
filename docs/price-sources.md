@@ -72,6 +72,37 @@ Requirements and limits:
 A missing prerequisite answers 422 with what to fix; an upstream failure or an
 exhausted quota answers 502.
 
+### PCGS (implemented — pricing program M3)
+PCGS CoinFacts returns a price-guide value *and* a list of auction sales in one
+response, so a single request yields both numbers. Implemented in
+`app/services/pcgs.py`.
+
+Lookup is by **cert number** when the item has one and `cert_service` is PCGS —
+that identifies the individual slab — and otherwise by **PCGS number + grade**
+from a `pcgs` catalog reference (`GET /coindetail/GetCoinFactsByCertNo/{cert}`
+or `GET /coindetail/GetCoinFactsByGrade`). PCGS grade numbers *are* Sheldon
+numbers, so the grade's rank passes straight through; an item graded on the PMG
+scale is refused rather than mistranslated.
+
+Realized auction prices win when PCGS has any: the median of up to the ten most
+recent lots, confidence 0.85 with five or more sales and 0.75 below that, with
+`sample_size` recording how many informed it. With no sales, the price-guide
+value is used at confidence 0.60. The estimate's `source` says which
+(`pcgs:apr cert 12345678`, `pcgs:guide #5960 MS-65`). Values are USD.
+
+**Coins only.** PCGS Banknote has its own endpoints, but their responses carry
+no price fields, so there is nothing for notes to read.
+
+Requirements and limits:
+
+- An access token (pcgs.com/publicapi, OAuth against your PCGS login), stored
+  encrypted in Settings; the source is disabled until you switch it on.
+- 1,000 calls a day; responses are cached in `source_cache` for 7 days.
+- PCGS signals failure in the body, not the status: `IsValidRequest: false`
+  means the request values were malformed, and `"No data found"` means no such
+  coin. Both surface as 422 with the reason. A 500 usually means the token has
+  expired — that surfaces as 502 saying so.
+
 ### Sold-listing comparables
 Marketplaces that expose *sold* prices give the closest thing to real market
 value. Filter by catalog reference and grade, then aggregate (e.g. median of

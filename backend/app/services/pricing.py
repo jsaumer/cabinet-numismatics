@@ -19,7 +19,7 @@ from decimal import Decimal
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Item, SpotPrice
+from app.models import Item, SourceCache, SpotPrice
 
 TROY_OUNCE_G = Decimal("31.1034768")
 CACHE_TTL = timedelta(hours=12)
@@ -50,6 +50,34 @@ class EstimateResult:
     currency: str
     confidence: Decimal
     sample_size: int | None = None
+
+
+def cached_response(db: Session, source: str, cache_key: str, ttl: timedelta, loader) -> dict:
+    """Fetch an upstream response through the `source_cache` table. External
+    sources have small free-tier quotas, so a cached entry within `ttl` beats
+    spending a request, and a stale entry beats a failed one.
+
+    `loader` is a zero-argument callable raising SourceUnavailable on failure.
+    """
+    row = db.get(SourceCache, (source, cache_key))
+    now = datetime.now(timezone.utc)
+    if row is not None and now - _as_utc(row.fetched_at) < ttl:
+        return row.payload
+    try:
+        payload = loader()
+    except SourceUnavailable:
+        if row is not None:
+            return row.payload
+        raise
+    if row is None:
+        row = SourceCache(source=source, cache_key=cache_key)
+        db.add(row)
+    row.payload = payload
+    row.fetched_at = now
+    # Commit now so a request already spent survives an estimate that later
+    # fails for a reason the response itself revealed.
+    db.commit()
+    return payload
 
 
 def detect_metal(composition: str | None) -> str | None:
@@ -140,7 +168,7 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
 
 # Adapter registry. Sources are resolved lazily so each adapter module can
 # import this one for the shared contract without a circular import.
-ADAPTER_NAMES = ("melt", "numista")
+ADAPTER_NAMES = ("melt", "numista", "pcgs")
 
 
 def get_adapter(name: str):
@@ -151,6 +179,10 @@ def get_adapter(name: str):
         from app.services.numista import numista_estimate
 
         return numista_estimate
+    if name == "pcgs":
+        from app.services.pcgs import pcgs_estimate
+
+        return pcgs_estimate
     return None
 
 

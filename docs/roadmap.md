@@ -12,9 +12,9 @@ minus the photo-niceties bundle), pricing-program M1 is done, and the
 open-source readiness track (Phase 6) is complete apart from application-level
 login, deliberately deferred in favour of proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
-bundle, the sold-listing comps price source, the PCGS adapter and the pricing
-program's remaining milestones (M3–M5), and import mappings for other
-collection tools.
+bundle, the sold-listing comps price source, the pricing program's last two
+milestones (M4 estimate provenance, M5 pricing reports), and import mappings
+for other collection tools.
 
 Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
 tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
@@ -97,12 +97,12 @@ guidance, not appraisals.
 - **[Core]** On-demand estimate from comparables by catalog ref + grade with
   a confidence score — *the sold-listings integration; not yet built
   (deferred stretch goal; the adapter registry it plugs into exists).*
-- ◐ **[Nice]** Pluggable price-source adapters: the registry and adapter
-  interface carry melt and **Numista** (free key, coins + notes, prices by
-  grade — shipped with pricing M2); **PCGS Public API** (free, US price guide
-  + Auction Prices Realized) is researched and next. eBay Marketplace
-  Insights is closed to new applicants, so eBay comps stay a manual-entry
-  path. See the Pricing program phase below.
+- ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
+  **Numista** (free key, coins + notes, prices by grade — pricing M2) and
+  **PCGS** (free token, US coins, price guide + Auction Prices Realized —
+  pricing M3), all sharing one contract. eBay Marketplace Insights is closed
+  to new applicants, so eBay comps stay a manual-entry path. See the Pricing
+  program phase below.
 - ✔ **[Nice]** Scheduled / periodic re-estimation: stale melt estimates
   refresh every 12h (window set by `REESTIMATE_DAYS`; manual values are never
   superseded); on-demand refresh from the dashboard.
@@ -175,7 +175,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests — GitHub Actions runs
-  ruff, 81 backend tests on Python 3.10 and 3.14, a frontend typecheck, and a
+  ruff, 94 backend tests on Python 3.10 and 3.14, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -281,9 +281,13 @@ reports. Staged so each milestone is independently useful.
   (collector-swap-derived estimates, 0.60 — 0.45 when the exact grade bucket
   isn't priced and the nearest lower one stands in). `POST
   /api/items/{id}/estimate?source=numista`.
-- **M3 — PCGS adapter.** US coins by PCGS number/cert: price-guide values
-  (medium confidence) and Auction Prices Realized (high confidence — real
-  sales); OAuth token from the PCGS public API program, 1,000 calls/day.
+- **M3 — PCGS adapter.** ✔ US coins by PCGS cert number, or PCGS number +
+  Sheldon grade. CoinFacts returns both numbers in one response: Auction
+  Prices Realized win when present (median of up to ten recent lots, 0.75 —
+  0.85 with five or more sales), price guide otherwise (0.60). Token from the
+  PCGS public API program, 1,000 calls/day, cached 7 days. Coins only —
+  PCGS Banknote responses carry no price fields.
+  `POST /api/items/{id}/estimate?source=pcgs`.
 - **M4 — Estimate provenance.** Store each source's response summary
   alongside the estimate (`price_estimates.details`) so a value can be
   explained, not just asserted; filter value history by source.

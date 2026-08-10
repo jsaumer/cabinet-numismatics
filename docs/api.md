@@ -73,8 +73,10 @@ Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1), never
 overwriting history. `POST .../estimate` runs one automatic adapter, chosen
 with `?source=` — `melt` (the default: spot × weight × fineness × quantity,
-metal detected from `composition`) or `numista` (priced by the item's
-`numista` catalog ref and grade; needs an API key in Settings). Either answers
+metal detected from `composition`), `numista` (by the item's `numista` catalog
+ref and grade), or `pcgs` (US coins by PCGS cert number, or `pcgs` catalog ref
++ grade; auction sales when PCGS has them, price guide otherwise). The two
+external sources need a credential in Settings. Any of them answers
 422 with the missing prerequisite when the item can't be priced by that source
 or the source is switched off, and 502 when the upstream is unreachable. See
 [price-sources.md](price-sources.md). An in-process scheduler re-runs stale
