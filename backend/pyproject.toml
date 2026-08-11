@@ -1,6 +1,6 @@
 [project]
 name = "cabinet-backend"
-version = "0.9.1"
+version = "0.10.0"
 description = "Cabinet API — coin & paper money collection manager backend"
 requires-python = ">=3.10"
 dependencies = [
