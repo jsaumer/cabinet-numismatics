@@ -13,6 +13,21 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+### Added
+- A `SOURCE` column on the collection list, next to `VALUE` — the blended
+  value shown there was giving no indication of which price source (or
+  "average") it came from. Backed by a real schema change: `GET /api/items`
+  entries now carry `latest_value_source`, resolved by the same
+  `pricing.resolve_display_value` used for the value itself, not guessed
+  separately on the frontend.
+
+### Fixed
+- The item page's per-source value chips could wrap mid-pill (value on one
+  line, the "time since" label pushed to a second) once a source's key or
+  timestamp made a chip too wide for its grid cell. Chips now lay out in a
+  wrapping flex row spanning the full card width, each pinned to a single
+  line.
+
 ## [0.10.0] — 2026-08-11
 
 ### Added

@@ -203,7 +203,7 @@ def resolve_display_value(
     strategy: str,
     preferred_source: str | None,
     converter: Converter | None = None,
-) -> tuple[Decimal | float, str] | None:
+) -> tuple[Decimal | float, str, str] | None:
     """The one blended value for an item's estimates (newest-first), per the
     `value_strategy` setting.
 
@@ -218,16 +218,21 @@ def resolve_display_value(
     "latest"/"preferred_source" return the chosen estimate's own
     value/currency unconverted — this keeps the default "latest" path a true
     no-op. "average" always returns (mean, converter.display).
+
+    Returns (value, currency, source_label): source_label is the winning
+    estimate's source_key (e.g. "numista", "melt", or a manual entry's raw
+    source string), or the literal "average" when blended across sources —
+    lets callers show where a displayed value actually came from.
     """
     if not estimates:
         return None
     latest = estimates[0]
-    fallback = (latest.estimated_value, latest.currency)
+    fallback = (latest.estimated_value, latest.currency, source_key(latest.source))
 
     if strategy == "preferred_source" and preferred_source:
         for est in estimates:
             if source_key(est.source) == preferred_source:
-                return (est.estimated_value, est.currency)
+                return (est.estimated_value, est.currency, source_key(est.source))
         return fallback
 
     if strategy == "average" and converter is not None:
@@ -244,7 +249,7 @@ def resolve_display_value(
                 total += converted
                 count += 1
         if count:
-            return (total / count, converter.display)
+            return (total / count, converter.display, "average")
         return fallback
 
     return fallback

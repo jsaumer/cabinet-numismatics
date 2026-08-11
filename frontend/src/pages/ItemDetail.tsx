@@ -217,7 +217,7 @@ export default function ItemDetail() {
           {fact("Storage", item.storage_location)}
           {item.status === "sold" && fact("Sold on", item.sold_date)}
           {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <dt>Latest value</dt>
             <dd>
               {sourceValues.length === 0 && "—"}
@@ -227,13 +227,16 @@ export default function ItemDetail() {
                   <span className="muted">({timeSince(sourceValues[0][1].fetched_at)})</span>
                 </>
               )}
-              {sourceValues.length > 1 &&
-                sourceValues.map(([key, est]) => (
-                  <span key={key} className="chip">
-                    {key}: {money(est.estimated_value, est.currency)}{" "}
-                    <span className="muted">({timeSince(est.fetched_at)})</span>
-                  </span>
-                ))}
+              {sourceValues.length > 1 && (
+                <div className="chip-row">
+                  {sourceValues.map(([key, est]) => (
+                    <span key={key} className="chip">
+                      {key}: {money(est.estimated_value, est.currency)}{" "}
+                      <span className="muted">({timeSince(est.fetched_at)})</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </dd>
           </div>
           {Object.entries(item.custom_fields ?? {}).map(([key, value]) => (

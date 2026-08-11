@@ -65,6 +65,7 @@ export interface ItemListEntry extends Item {
   primary_thumb_key: string | null;
   latest_value: number | null;
   latest_value_currency: string | null;
+  latest_value_source: string | null;
 }
 
 export interface Photo {

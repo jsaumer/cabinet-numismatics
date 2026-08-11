@@ -49,6 +49,24 @@ def test_list_shows_latest_value(client, coin):
     entry = client.get("/api/items").json()["items"][0]
     assert entry["latest_value"] == 150.0
     assert entry["latest_value_currency"] == "USD"
+    assert entry["latest_value_source"] == "manual"
+
+
+def test_list_shows_latest_value_source_for_preferred_strategy(client, coin):
+    client.post(
+        f"/api/items/{coin['id']}/estimates",
+        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
+    )
+    client.post(
+        f"/api/items/{coin['id']}/estimates",
+        json={"estimated_value": 150.0, "source": "manual"},  # newer, but not preferred
+    )
+    client.put(
+        "/api/settings", json={"value_strategy": "preferred_source", "preferred_source": "numista"}
+    )
+    entry = client.get("/api/items").json()["items"][0]
+    assert entry["latest_value"] == 100.0
+    assert entry["latest_value_source"] == "numista"
 
 
 def test_csv_export(client, coin):
