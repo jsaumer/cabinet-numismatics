@@ -34,8 +34,12 @@ described without an auth layer; add one before exposing the app publicly.
 `value_min`/`value_max` (latest estimate), `q` (substring match over
 notes/series/country/denomination/cert numbers/catalog refs/tags), `limit`,
 `offset`, `sort` (field name or `grade`, `-` prefix for descending). The list
-response includes each item's primary photo/thumbnail keys and latest
-estimated value.
+response includes each item's primary photo/thumbnail keys and its latest
+estimated value: `latest_value` + `latest_value_currency`, plus
+`latest_value_source` naming which source produced it (an adapter key, a
+manual entry's own source text, or `average`) — resolved by the app-wide
+`value_strategy` setting (see Settings, below), not simply "whichever
+estimate is newest."
 
 Item payloads accept `tags` (list of names, get-or-create) and `catalog_refs`
 (list of `{catalog, ref_code}`). CSV import consumes the export format;
@@ -82,7 +86,11 @@ or the source is switched off, and 502 when the upstream is unreachable. See
 [price-sources.md](price-sources.md). An in-process scheduler re-runs stale
 melt estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7;
 `0` disables); a melt refresh never supersedes an item whose latest estimate
-is manual.
+is manual. The same 12h loop also refreshes Numista and/or PCGS when their
+own cadence is switched on in Settings (each off by default) — independently
+of melt and of whichever source currently wins an item's overall-latest
+estimate, since `value_strategy` may prefer or average a source that isn't
+"latest" right now.
 
 ## Stats
 
@@ -132,6 +140,17 @@ source credentials (Numista API key, PCGS token). **Secrets are write-only and
 encrypted at rest**: reads return only a configured flag and a last-4 hint,
 never the value, and stored credentials are Fernet-encrypted before they reach
 the database. See [security.md](security.md).
+
+Also covered: `value_strategy` (`latest` / `preferred_source` / `average`)
+and `preferred_source`, which together control the single blended value used
+by the items list, CSV/XLSX export, and dashboard totals (the item page
+itself always shows every source's own latest value, unaffected by this
+setting); and each source's scheduled-refresh cadence —
+`numista_refresh_days` (`null` for off, else `7`/`14`/`30`) and
+`pcgs_auto_refresh` (bool, fixed weekly when on). The response also reports
+`numista_priceable_items`/`pcgs_priceable_items` — owned items eligible for
+each source — so the UI can show the real projected monthly call count
+before you turn Numista's cadence on.
 
 ## Checklists (completeness tracking)
 

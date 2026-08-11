@@ -11,8 +11,11 @@ plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
 `checklists` + `checklist_slots`.
 
 Revision `0008` (pricing program M1) added `app_settings` — key/value JSON
-settings (display currency, source toggles, API credentials, melt cadence),
-read through `app/services/app_settings.py` with defaults and env fallbacks.
+settings (display currency, source toggles, API credentials, melt cadence;
+later grew `value_strategy`/`preferred_source` for the blended-value display
+and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh — no
+migration needed, since it's a generic key/value table), read through
+`app/services/app_settings.py` with defaults and env fallbacks.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
