@@ -19,6 +19,14 @@ bundle, the sold-listing comps price source, the pricing program's last two
 milestones (M4 estimate provenance, M5 pricing reports), in-app backup
 (Phase 5.6), and import mappings for other collection tools.
 
+**Target versions** on the unshipped items below assume each ships alone,
+following how this project actually bumps versions — new capability = minor,
+small fix/addition = patch. In practice several often land together in one
+release rather than one each: M2 (Numista), M3 (PCGS), the live price-source
+probe script, value differentiation/strategy, and scheduled refresh were all
+separate chunks of work but shipped together as v0.10.0. Treat these as
+illustrative sequencing, not a commitment.
+
 Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
 tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
 released publicly · **✔** shipped.
@@ -79,7 +87,7 @@ The heart of the app: describing what you own, accurately and flexibly.
 - **[Nice]** Webcam capture for direct photographing.
 
 *(The unshipped [Nice] items above are the remaining "photo niceties"
-bundle.)*
+bundle. **Target: v0.14.0.**)*
 
 ## 3. Market price / valuation
 
@@ -100,6 +108,7 @@ guidance, not appraisals.
 - **[Core]** On-demand estimate from comparables by catalog ref + grade with
   a confidence score — *the sold-listings integration; not yet built
   (deferred stretch goal; the adapter registry it plugs into exists).*
+  **Target: v0.15.0.**
 - ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
   **Numista** (free key, coins + notes, prices by grade — pricing M2) and
   **PCGS** (free token, US coins, price guide + Auction Prices Realized —
@@ -159,6 +168,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - **[Nice]** Backup from inside the app: download the collection as one
   `.zip` from Settings, then scheduled local backups with retention. The
   scripts stay as the disaster-recovery path. See Phase 5.6.
+  **Target: v0.13.0** (B1 download + B2 scheduled/retention; B3 restore is
+  blocked on the auth decision below, no target yet).
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
@@ -169,11 +180,15 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   reverse proxy (e.g. Traefik + Authentik forward-auth), no application code
   is needed — that is the intended path for private networked use.
   Application-level login only becomes necessary for direct public exposure
-  or the OSS release.
+  or the OSS release. **Target: v1.0.0** — unlike everything else on this
+  list, auth changes the security model of every endpoint rather than adding
+  a capability, and this repo's README already treats 1.0 as the "HTTP API
+  is now stable" marker; auth landing is the natural trigger for declaring
+  that.
 - **[Nice]** CI (ruff + pytest + image build) once the repo is pushed to the
   homelab Forgejo; promote to required for the OSS release.
 - **[Nice]** Import mappings for common formats (OpenNumismat, Colnect,
-  generic spreadsheets).
+  generic spreadsheets). **Target: v0.16.0.**
 - ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
   diffs).
 - ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
@@ -258,6 +273,7 @@ comps are the hardest integration, so they come last, not first.
 - Adapter interface for further sources; confidence scoring.
 - Sold-listing comps integration as the stretch goal — **deferred**; still
   the natural next valuation feature (subject to terms of service).
+  **Target: v0.15.0.**
 *Exit: the collection has trackable, sourced value estimates.*
 
 ### Phase 4 — Insights & reporting ✔
@@ -277,7 +293,7 @@ Pull from the **[Nice]** items as desired, roughly in value order:
   bulk edit. (Wishlist is covered by item status from Phase 2.)
 - ✔ **5C — polish:** completeness checklists, dark mode, edit history.
 - **Photo niceties — not pulled yet:** in-browser image editing, lightbox,
-  clipboard/drag-drop/URL upload, webcam capture.
+  clipboard/drag-drop/URL upload, webcam capture. **Target: v0.14.0.**
 
 ### Phase 5.5 — Pricing program: settings, sources, reports
 Fully enable configurable price estimation: a settings surface, the two
@@ -310,15 +326,19 @@ reports. Staged so each milestone is independently useful.
 - **M4 — Estimate provenance.** Store each source's response summary
   alongside the estimate (`price_estimates.details`) so a value can be
   explained, not just asserted; filter value history by source.
+  **Target: v0.11.0.**
 - **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
   why — no ref, source unconfigured, fetch failed), stale-estimates view,
   per-source breakdown, and estimate-vs-reality accuracy (last estimate
-  against realized price on sold items).
+  against realized price on sold items). **Target: v0.12.0.**
 
 *Exit: every priceable item has a sourced, explainable, configurable
 estimate — and you can see where pricing is thin.*
 
 ### Phase 5.6 — Backup from inside the app
+
+**Target: v0.13.0** for B1 + B2 (B3 restore is blocked on the auth decision
+in Phase 6/section 5, no target yet).
 
 `scripts/backup.sh` needs a shell, the host, and Docker. That is the right
 tool for disaster recovery and the wrong one for "I just entered forty items
@@ -376,6 +396,8 @@ trusted before it is restored.*
 - Application-level authentication remains **deliberately unbuilt**: proxy-level
   forward-auth (Traefik + Authentik) is the documented path, and app login is
   only required for direct public exposure. Revisit if that changes.
+  **Target: v1.0.0** — see section 5's Authentication entry for why this one
+  gets the major bump instead of a minor.
 - The repository itself is still private — publishing is a separate decision.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
 
