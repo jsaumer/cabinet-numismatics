@@ -13,6 +13,8 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-11
+
 ### Added
 - **Numista price adapter** (pricing program M2) — coins *and* notes priced by
   their `numista` catalog reference and grade. `POST /api/items/{id}/estimate`
