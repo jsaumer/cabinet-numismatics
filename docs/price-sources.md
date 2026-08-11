@@ -103,6 +103,23 @@ Requirements and limits:
   coin. Both surface as 422 with the reason. A 500 usually means the token has
   expired — that surfaces as 502 saying so.
 
+### Checking a source against the live API
+
+Unit tests use canned responses, so they prove the parsing but not the
+contract. `backend/scripts/check_sources.py` covers the other half: it runs one
+adapter for one item and prints the upstream calls, the raw payload, and the
+estimate parsed out of it, without writing anything to `price_estimates`.
+
+```bash
+docker compose exec backend python scripts/check_sources.py --list
+docker compose exec backend python scripts/check_sources.py -s numista -i <item-id> --fresh
+```
+
+`--list` shows which items carry a handle a source could use. `--fresh`
+ignores the cache TTL to force a real request (and so spends quota); without
+it a cached response is reused and the run is free. `--full` prints untrimmed
+payloads. Credentials come from Settings and are never printed.
+
 ### Sold-listing comparables
 Marketplaces that expose *sold* prices give the closest thing to real market
 value. Filter by catalog reference and grade, then aggregate (e.g. median of
