@@ -68,6 +68,15 @@ Requirements and limits:
   no request at all.
 - Confidence is medium by design: these are collector estimates, not realized
   auction prices. Melt remains the higher-confidence floor for bullion.
+- **Scheduled refresh** (off by default): a cadence of every 7, 14, or 30
+  days in Settings, alongside the same 12h loop that refreshes melt. Each
+  estimate costs 2 calls (issues + prices), so Settings shows the real
+  projected monthly count for your collection's priceable-item count against
+  the 2,000/month quota — weekly refresh only stays under budget for roughly
+  the first ~230 priceable items. Refresh keeps Numista's own data current
+  independent of whichever source currently wins an item's overall-latest
+  estimate, since `value_strategy` (see [api.md](api.md)) may prefer or
+  average a source that isn't "latest" right now.
 
 A missing prerequisite answers 422 with what to fix; an upstream failure or an
 exhausted quota answers 502.
@@ -102,6 +111,10 @@ Requirements and limits:
   means the request values were malformed, and `"No data found"` means no such
   coin. Both surface as 422 with the reason. A 500 usually means the token has
   expired — that surfaces as 502 saying so.
+- **Scheduled refresh** (off by default): a simple weekly on/off toggle in
+  Settings, no cadence choice needed — 1 call per estimate against a
+  1,000/day quota comfortably covers weekly refresh at any realistic
+  collection size, so Settings shows no quota caveat here (unlike Numista's).
 
 ### Checking a source against the live API
 

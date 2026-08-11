@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **On GitHub (private for now) under MIT, released as v0.9.1** — treat it as
+are "Cabinet." **On GitHub (private for now) under MIT, released as v0.10.1** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
 changelog entry when releasing.
@@ -103,9 +103,21 @@ grade), preferring realized auction prices over the price guide. Both are
 selected with `POST /api/items/{id}/estimate?source=`, resolved through
 `pricing.get_adapter`, and share `NotApplicable` (422) / `SourceUnavailable`
 (502) plus `pricing.cached_response` over the `source_cache` table (migration
-`0009`). **Next: pricing M4 — estimate provenance** (store each source's
-response summary in `price_estimates.details`), then M5 pricing reports. Also
-open: photo-niceties bundle,
+`0009`). Value differentiation + strategy: the item page shows every
+configured source's own latest value as a chip (with a "time since" label),
+never blending them; a `value_strategy` setting (latest / preferred source /
+average, Settings → General) controls the single blended number used
+everywhere else — items list (with a `SOURCE` column showing which source or
+"average" produced it), CSV/XLSX export, dashboard totals — via one shared
+`pricing.resolve_display_value`. Scheduled refresh now covers Numista
+(7/14/30-day cadence with projected monthly-call-count shown against its
+2,000/month quota) and PCGS (fixed weekly; generous 1,000/day quota) in
+addition to melt, off by default, each kept fresh independent of whichever
+source currently wins an item — necessary since `value_strategy` may prefer
+or average a source that isn't "latest." Manual per-item refresh shows a
+success message. **Next: pricing M4 — estimate provenance** (store each
+source's response summary in `price_estimates.details`), then M5 pricing
+reports. Also open: photo-niceties bundle,
 Phase 6 / homelab deployment (Traefik + Authentik, CI). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)

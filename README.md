@@ -4,18 +4,17 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.9.1-informational)
+![Version](https://img.shields.io/badge/version-0.10.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.9.1 — feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.10.1 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Deliberately open: a photo-niceties bundle (lightbox, drag-and-drop upload),
-sold-listing comparables, and the Numista/PCGS price adapters (their
-credentials are already configurable). See the
+Deliberately open: a photo-niceties bundle (lightbox, drag-and-drop upload)
+and sold-listing comparables. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -28,8 +27,10 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 | Collection list | Dashboard |
 |---|---|
 | [![Collection list](docs/screenshots/collection.png)](docs/screenshots/collection.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) |
-| **Item detail** | **Dark mode** |
-| [![Item detail](docs/screenshots/item-detail.png)](docs/screenshots/item-detail.png) | [![Dark mode](docs/screenshots/dark-mode.png)](docs/screenshots/dark-mode.png) |
+| **Item detail** | **Settings** |
+| [![Item detail](docs/screenshots/item-detail.png)](docs/screenshots/item-detail.png) | [![Settings](docs/screenshots/settings.png)](docs/screenshots/settings.png) |
+| **Dark mode** | |
+| [![Dark mode](docs/screenshots/dark-mode.png)](docs/screenshots/dark-mode.png) | |
 
 ## Features
 
@@ -63,10 +64,18 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - **Manual estimates**: record researched values (dealer quote, auction
   result, price guide) with source and optional confidence — kept as
   append-only history, never overwritten.
-- **Melt value**: one-click and scheduled automatic estimates for
-  precious-metal items (spot price × weight × fineness × quantity), using
-  free keyless spot data with a 12-hour cache. A melt refresh never
-  supersedes a manual value.
+- **Pluggable price sources**: melt value (spot price × weight × fineness ×
+  quantity, keyless), Numista (coins and notes, priced by catalog ref +
+  grade), and PCGS (US coins, by cert number or catalog ref + grade,
+  preferring realized auction prices over the price guide). One-click and
+  scheduled refresh for all three — Numista and PCGS off by default, with
+  Numista's cadence (7/14/30 days) shown against its 2,000/month quota.
+- **Value differentiation**: the item page shows every configured source's
+  own latest value side by side (never blended), each with a "time since"
+  label. A `value_strategy` setting picks the single blended number shown
+  in the items list, export, and dashboard totals: latest estimate,
+  a preferred source, or an average — with a `SOURCE` column on the list
+  showing which one produced it.
 - **Multi-currency**: totals are shown in one display currency; other
   currencies convert at cached daily ECB rates, and anything unconvertible
   is excluded and counted — never silently mixed.
@@ -88,10 +97,10 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - **Backup/restore**: one script captures the database dump and photo archive
   together, with a rehearsed restore path — see
   [docs/backup-restore.md](docs/backup-restore.md).
-- **Configurable pricing**: a Settings page for display currency, melt
-  cadence, and price-source credentials — stored **encrypted at rest** and
-  never readable back through the API
-  (see [docs/security.md](docs/security.md)).
+- **Configurable pricing**: a Settings page for display currency, the
+  blended-value strategy, per-source refresh cadence, and price-source
+  credentials — stored **encrypted at rest** and never readable back
+  through the API (see [docs/security.md](docs/security.md)).
 
 ## Architecture
 

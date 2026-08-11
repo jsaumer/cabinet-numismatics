@@ -7,10 +7,13 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (August 2026): released as v0.9.1.** Phases 0–5 are built (Phase 5
-minus the photo-niceties bundle), pricing-program M1 is done, and the
-open-source readiness track (Phase 6) is complete apart from application-level
-login, deliberately deferred in favour of proxy-level auth.
+**Status (August 2026): released as v0.10.1.** Phases 0–5 are built (Phase 5
+minus the photo-niceties bundle), pricing-program M1–M3 are done — settings
+backbone, the Numista and PCGS adapters, per-source value display with a
+configurable blended-value strategy, and scheduled auto-refresh for both
+sources — and the open-source readiness track (Phase 6) is complete apart
+from application-level login, deliberately deferred in favour of
+proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
 bundle, the sold-listing comps price source, the pricing program's last two
 milestones (M4 estimate provenance, M5 pricing reports), in-app backup
