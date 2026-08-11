@@ -1,13 +1,15 @@
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
-from app.models import ExchangeRate, SpotPrice
+from app.models import ExchangeRate, Item, SpotPrice
 from app.services import app_settings as store
+from app.services import numista, pcgs
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -33,6 +35,12 @@ class SettingsOut(BaseModel):
     display_currency: str
     reestimate_days: int  # effective value (DB override or env default)
     reestimate_days_overridden: bool
+    value_strategy: Literal["latest", "preferred_source", "average"]
+    preferred_source: Literal["melt", "numista", "pcgs"] | None
+    numista_refresh_days: int | None
+    pcgs_auto_refresh: bool
+    numista_priceable_items: int
+    pcgs_priceable_items: int
     sources: list[SourceStatus]
     cached: list[CachedValue]
 
@@ -45,6 +53,29 @@ class SettingsUpdate(BaseModel):
     numista_api_key: str | None = Field(default=None, max_length=200)  # "" clears
     pcgs_enabled: bool | None = None
     pcgs_api_token: str | None = Field(default=None, max_length=500)  # "" clears
+    value_strategy: Literal["latest", "preferred_source", "average"] | None = None
+    preferred_source: Literal["melt", "numista", "pcgs"] | None = None
+    numista_refresh_days: Literal[7, 14, 30] | None = None
+    pcgs_auto_refresh: bool | None = None
+
+
+def _priceable_counts(db: Session) -> tuple[int, int]:
+    """Owned items eligible for Numista / PCGS pricing, reusing each
+    adapter's own eligibility check rather than re-deriving it."""
+    items = (
+        db.execute(
+            select(Item).where(Item.status == "owned").options(selectinload(Item.catalog_refs))
+        )
+        .scalars()
+        .all()
+    )
+    numista_count = sum(1 for item in items if numista.type_id_for(item) is not None)
+    pcgs_count = sum(
+        1
+        for item in items
+        if pcgs.cert_number(item) is not None or pcgs.pcgs_number(item) is not None
+    )
+    return numista_count, pcgs_count
 
 
 def _build(db: Session) -> SettingsOut:
@@ -102,10 +133,17 @@ def _build(db: Session) -> SettingsOut:
         ).scalars()
     ]
 
+    numista_priceable, pcgs_priceable = _priceable_counts(db)
     return SettingsOut(
         display_currency=store.display_currency(db),
         reestimate_days=store.effective_reestimate_days(db),
         reestimate_days_overridden=store.get_setting(db, "reestimate_days") is not None,
+        value_strategy=str(store.get_setting(db, "value_strategy")),
+        preferred_source=store.get_setting(db, "preferred_source"),
+        numista_refresh_days=store.get_setting(db, "numista_refresh_days"),
+        pcgs_auto_refresh=bool(store.get_setting(db, "pcgs_auto_refresh")),
+        numista_priceable_items=numista_priceable,
+        pcgs_priceable_items=pcgs_priceable,
         sources=sources,
         cached=cached,
     )

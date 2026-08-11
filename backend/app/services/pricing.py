@@ -12,6 +12,7 @@ whole lot — so per-piece values are multiplied by quantity.
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -19,7 +20,8 @@ from decimal import Decimal
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Item, SourceCache, SpotPrice
+from app.models import Item, PriceEstimate, SourceCache, SpotPrice
+from app.services.currency import Converter
 
 TROY_OUNCE_G = Decimal("31.1034768")
 CACHE_TTL = timedelta(hours=12)
@@ -186,6 +188,68 @@ def get_adapter(name: str):
     return None
 
 
+AVERAGEABLE_SOURCES = ("melt", "numista", "pcgs")  # pluggable sources only;
+# to include a manual source later, add its exact source string here.
+
+
+def source_key(source: str) -> str:
+    """Reduce a free-text estimate `source` (e.g. "numista:N#123 XF") to its
+    adapter key ("numista"). Manual entries with no ":" pass through as-is."""
+    return source.split(":", 1)[0]
+
+
+def resolve_display_value(
+    estimates: Sequence[PriceEstimate],
+    strategy: str,
+    preferred_source: str | None,
+    converter: Converter | None = None,
+) -> tuple[Decimal | float, str] | None:
+    """The one blended value for an item's estimates (newest-first), per the
+    `value_strategy` setting.
+
+    - "latest": the most recent estimate overall (today's behavior).
+    - "preferred_source": the most recent estimate from `preferred_source`;
+      falls back to "latest" if the item has none from that source.
+    - "average": the mean of the latest estimate from each distinct
+      AVERAGEABLE_SOURCES key present, each converted via `converter` first
+      (sources that fail to convert are skipped). Falls back to "latest" if
+      `converter` is None or nothing converts.
+
+    "latest"/"preferred_source" return the chosen estimate's own
+    value/currency unconverted — this keeps the default "latest" path a true
+    no-op. "average" always returns (mean, converter.display).
+    """
+    if not estimates:
+        return None
+    latest = estimates[0]
+    fallback = (latest.estimated_value, latest.currency)
+
+    if strategy == "preferred_source" and preferred_source:
+        for est in estimates:
+            if source_key(est.source) == preferred_source:
+                return (est.estimated_value, est.currency)
+        return fallback
+
+    if strategy == "average" and converter is not None:
+        seen: set[str] = set()
+        total = 0.0
+        count = 0
+        for est in estimates:
+            key = source_key(est.source)
+            if key not in AVERAGEABLE_SOURCES or key in seen:
+                continue
+            seen.add(key)
+            converted = converter.convert(est.estimated_value, est.currency)
+            if converted is not None:
+                total += converted
+                count += 1
+        if count:
+            return (total / count, converter.display)
+        return fallback
+
+    return fallback
+
+
 def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     """Re-run melt estimates for owned items whose LATEST estimate is a melt
     estimate older than max_age_days. Items whose latest estimate is manual are
@@ -193,8 +257,6 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     Returns {"updated": n, "skipped": n, "failed": n}."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-
-    from app.models import PriceEstimate
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     updated = skipped = failed = 0
@@ -224,6 +286,59 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
                 estimated_value=result.estimated_value,
                 currency=result.currency,
                 confidence=result.confidence,
+            )
+        )
+        updated += 1
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "failed": failed}
+
+
+def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) -> dict:
+    """Re-run `source`'s own estimate for owned items whose most recent
+    estimate FROM THIS SOURCE (not the item's overall-latest, which may
+    belong to a different source or be manual) is missing or older than
+    max_age_days. Keeps each source's own data current independent of what
+    currently wins — needed because value_strategy can be "preferred_source"
+    or "average". NotApplicable (not eligible) counts as skipped, not
+    failed. Never called for "melt" — that keeps its own separate,
+    conservative behavior in refresh_melt_estimates.
+    Returns {"updated": n, "skipped": n, "failed": n}."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    adapter = get_adapter(source)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    updated = skipped = failed = 0
+    items = (
+        db.execute(
+            select(Item)
+            .where(Item.status == "owned")
+            .options(selectinload(Item.estimates), selectinload(Item.catalog_refs))
+        )
+        .scalars()
+        .all()
+    )
+    for item in items:
+        own_latest = next((e for e in item.estimates if source_key(e.source) == source), None)
+        if own_latest is not None and _as_utc(own_latest.fetched_at) > cutoff:
+            skipped += 1
+            continue
+        try:
+            result = adapter(db, item)
+        except NotApplicable:
+            skipped += 1
+            continue
+        except SourceUnavailable:
+            failed += 1
+            continue
+        db.add(
+            PriceEstimate(
+                item_id=item.id,
+                source=result.source,
+                estimated_value=result.estimated_value,
+                currency=result.currency,
+                confidence=result.confidence,
+                sample_size=result.sample_size,
             )
         )
         updated += 1

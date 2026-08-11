@@ -19,6 +19,18 @@ const SOURCE_LABELS: Record<string, string> = {
   pcgs: "🏷 PCGS value",
 };
 
+function timeSince(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 export default function ItemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -32,6 +44,7 @@ export default function ItemDetail() {
   const [estConfidence, setEstConfidence] = useState("");
   const [estimating, setEstimating] = useState<string | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
+  const [estimateSuccess, setEstimateSuccess] = useState<string | null>(null);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
 
@@ -113,8 +126,10 @@ export default function ItemDetail() {
     if (!id) return;
     setEstimating(source);
     setEstimateError(null);
+    setEstimateSuccess(null);
     try {
       await api.autoEstimate(id, source);
+      setEstimateSuccess(`${SOURCE_LABELS[source] ?? source} updated.`);
       reload();
     } catch (err) {
       setEstimateError((err as Error).message);
@@ -143,7 +158,16 @@ export default function ItemDetail() {
     }
   }
 
-  const latest = item.estimates[0];
+  const sourceKey = (source: string) => {
+    const i = source.indexOf(":");
+    return i === -1 ? source : source.slice(0, i);
+  };
+  const bySource = new Map<string, (typeof item.estimates)[number]>();
+  for (const est of item.estimates) {
+    const key = sourceKey(est.source);
+    if (!bySource.has(key)) bySource.set(key, est);
+  }
+  const sourceValues = [...bySource.entries()];
   const fact = (label: string, value: string | number | null | undefined) => (
     <div>
       <dt>{label}</dt>
@@ -193,7 +217,25 @@ export default function ItemDetail() {
           {fact("Storage", item.storage_location)}
           {item.status === "sold" && fact("Sold on", item.sold_date)}
           {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
-          {fact("Latest value", latest ? money(latest.estimated_value, latest.currency) : null)}
+          <div>
+            <dt>Latest value</dt>
+            <dd>
+              {sourceValues.length === 0 && "—"}
+              {sourceValues.length === 1 && (
+                <>
+                  {money(sourceValues[0][1].estimated_value, sourceValues[0][1].currency)}{" "}
+                  <span className="muted">({timeSince(sourceValues[0][1].fetched_at)})</span>
+                </>
+              )}
+              {sourceValues.length > 1 &&
+                sourceValues.map(([key, est]) => (
+                  <span key={key} className="chip">
+                    {key}: {money(est.estimated_value, est.currency)}{" "}
+                    <span className="muted">({timeSince(est.fetched_at)})</span>
+                  </span>
+                ))}
+            </dd>
+          </div>
           {Object.entries(item.custom_fields ?? {}).map(([key, value]) => (
             <div key={key}><dt>{key}</dt><dd>{value}</dd></div>
           ))}
@@ -338,6 +380,7 @@ export default function ItemDetail() {
               </button>
             ))}
           {estimateError && <span className="error">{estimateError}</span>}
+          {estimateSuccess && <span className="gain">{estimateSuccess}</span>}
         </div>
         <form className="estimate-form" onSubmit={addEstimate}>
           <label className="field">

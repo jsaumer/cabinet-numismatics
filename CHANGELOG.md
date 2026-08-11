@@ -38,6 +38,36 @@ docker compose exec backend alembic upgrade head
   estimate, without saving anything. The unit tests prove the parsing; this
   checks the contract. Ships in the backend image, so
   `docker compose exec backend python scripts/check_sources.py --list` works.
+  Long string fields in a payload (e.g. PCGS's `CoinFactsNotes` essays) are
+  now trimmed like long lists already were.
+
+- **Per-source value display and a configurable value strategy.** With more
+  than one price source configured, they don't agree — the item page now
+  shows each source's own latest value as a chip instead of collapsing to
+  whichever is newest. A new `value_strategy` setting (Settings → General)
+  controls the single blended number used everywhere else (items list,
+  CSV/XLSX export, dashboard totals): latest estimate (default, unchanged
+  behavior), a preferred source (falling back to latest if that source
+  hasn't priced the item yet), or an average across melt/Numista/PCGS
+  (currency-converted; manual entries excluded from the average for now).
+
+- **Scheduled auto-refresh for Numista and PCGS, and item-level freshness.**
+  The existing 12h melt-refresh loop now also refreshes each owned item's own
+  Numista and/or PCGS estimate independently of whichever source currently
+  wins the item — needed since `value_strategy` can be "preferred source" or
+  "average," where a non-winning source still needs its own data current.
+  Both are off by default: Numista offers 7/14/30-day cadences (Settings
+  shows the real projected monthly call count against the free tier's
+  2,000/month, since Numista costs 2 calls per estimate against PCGS's 1),
+  PCGS is a simple weekly on/off (its 1,000 calls/day quota comfortably
+  covers weekly refresh at any realistic collection size). `GET /api/settings`
+  now reports `numista_priceable_items`/`pcgs_priceable_items` to drive that
+  math. The item page's per-source value chips now show a relative
+  "time since" next to each value, and manual per-item refresh buttons now
+  show a success message, not just silence on success / an error on failure.
+  The blended value shown in the items list/export/dashboard has no single
+  "since" timestamp when averaging sources, so this freshness label is
+  deliberately scoped to the item detail page only.
 
 ### Changed
 - Price adapters now share one contract: `NotApplicable` for a missing

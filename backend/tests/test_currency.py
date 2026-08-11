@@ -99,6 +99,25 @@ def test_value_history(client):
     assert last["estimated_items"] == 2
 
 
+def test_value_history_strategy_aware(client):
+    a = _create(client, COIN)
+    client.post(
+        f"/api/items/{a['id']}/estimates",
+        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
+    )
+    client.post(
+        f"/api/items/{a['id']}/estimates",
+        json={"estimated_value": 200.0, "source": "manual"},  # newer, but not preferred
+    )
+    client.put(
+        "/api/settings", json={"value_strategy": "preferred_source", "preferred_source": "numista"}
+    )
+
+    body = client.get("/api/stats/value-history", params={"months": 6}).json()
+    last = body["points"][-1]
+    assert last["value"] == 100.0  # preferred source, not the newer manual entry
+
+
 def test_refresh_melt_updates_only_stale_melt_estimates(client, monkeypatch):
     monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
 

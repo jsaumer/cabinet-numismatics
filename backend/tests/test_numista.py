@@ -1,13 +1,23 @@
 """Pricing program M2: the Numista adapter."""
 
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
 
-from app.services import numista
+from app.db import get_db
+from app.main import app
+from app.models import PriceEstimate
+from app.services import numista, pricing
 from app.services.pricing import SourceUnavailable
 from tests.conftest import COIN
+
+
+def _session():
+    """A DB session on the test engine (via the client's dependency override)."""
+    return next(app.dependency_overrides[get_db]())
+
 
 # COIN is a 1932-D quarter; the canned catalogue matches it.
 ISSUES = {"items": [{"id": 55, "year": 1932, "mint_letter": "D"}, {"id": 56, "year": 1933}]}
@@ -177,6 +187,52 @@ def test_grade_buckets_cover_both_scales():
     assert numista.bucket_for_rank(8) == "vg"
     assert numista.bucket_for_rank(12) == "f"
     assert numista.bucket_for_rank(20) == "vf"
+
+
+def test_refresh_source_estimates_ignores_a_fresher_manual_estimate(client, upstream):
+    configure(client)
+    item = make_item(client)
+    assert estimate(client, item).status_code == 201  # item's only estimate: numista, fresh
+
+    # a fresh manual entry becomes the item's overall-latest
+    client.post(f"/api/items/{item['id']}/estimates", json={"estimated_value": 999.0})
+
+    # backdate only the numista estimate past the refresh window
+    db = _session()
+    for est in (
+        db.query(PriceEstimate)
+        .filter(
+            PriceEstimate.item_id == uuid.UUID(item["id"]),
+            PriceEstimate.source.like("numista:%"),
+        )
+        .all()
+    ):
+        est.fetched_at = datetime.now(timezone.utc) - timedelta(days=30)
+    db.commit()
+    db.close()
+
+    result = pricing.refresh_source_estimates(_session(), "numista", 7)
+    assert result == {"updated": 1, "skipped": 0, "failed": 0}
+
+    history = client.get(f"/api/items/{item['id']}/estimates").json()
+    numista_entries = [h for h in history if h["source"].startswith("numista:")]
+    assert len(numista_entries) == 2  # refreshed despite manual being the overall-latest
+
+
+def test_refresh_source_estimates_skips_ineligible_and_counts_failures(
+    client, upstream, monkeypatch
+):
+    configure(client)
+    client.post("/api/items", json=COIN)  # no numista ref -> NotApplicable -> skipped
+    make_item(client)  # eligible, never estimated -> attempted
+
+    def fail(api_key, path, params=None):
+        raise SourceUnavailable("boom")
+
+    monkeypatch.setattr(numista, "_request", fail)
+
+    result = pricing.refresh_source_estimates(_session(), "numista", 7)
+    assert result == {"updated": 0, "skipped": 1, "failed": 1}
     assert numista.bucket_for_rank(40) == "xf"
     assert numista.bucket_for_rank(50) == "au"
     assert numista.bucket_for_rank(65) == "unc"

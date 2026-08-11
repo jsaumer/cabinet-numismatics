@@ -244,10 +244,18 @@ export interface CachedValue {
   fetched_at: string;
 }
 
+export type ValueStrategy = "latest" | "preferred_source" | "average";
+
 export interface AppSettings {
   display_currency: string;
   reestimate_days: number;
   reestimate_days_overridden: boolean;
+  value_strategy: ValueStrategy;
+  preferred_source: string | null;
+  numista_refresh_days: number | null;
+  pcgs_auto_refresh: boolean;
+  numista_priceable_items: number;
+  pcgs_priceable_items: number;
   sources: SourceStatus[];
   cached: CachedValue[];
 }
@@ -260,6 +268,10 @@ export interface AppSettingsUpdate {
   numista_api_key?: string;
   pcgs_enabled?: boolean;
   pcgs_api_token?: string;
+  value_strategy?: ValueStrategy;
+  preferred_source?: string | null;
+  numista_refresh_days?: number | null;
+  pcgs_auto_refresh?: boolean;
 }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {

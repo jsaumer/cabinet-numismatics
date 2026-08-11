@@ -33,6 +33,7 @@ from app.services import app_settings, pricing
 
 SOURCES = ("melt", "numista", "pcgs")
 LIST_LIMIT = 3  # long lists (auction lots, price rows) are trimmed to this
+STRING_LIMIT = 500  # long strings (e.g. PCGS CoinFactsNotes essays) are trimmed to this
 
 
 def adapter_module(source: str):
@@ -50,7 +51,7 @@ def adapter_module(source: str):
 
 
 def trim(value, full: bool):
-    """Shorten long lists so one payload fits on a screen."""
+    """Shorten long lists and strings so one payload fits on a screen."""
     if full:
         return value
     if isinstance(value, list):
@@ -59,6 +60,8 @@ def trim(value, full: bool):
         return head + [f"… {extra} more"] if extra > 0 else head
     if isinstance(value, dict):
         return {k: trim(v, full) for k, v in value.items()}
+    if isinstance(value, str) and len(value) > STRING_LIMIT:
+        return value[:STRING_LIMIT] + f"... ({len(value) - STRING_LIMIT} more chars)"
     return value
 
 

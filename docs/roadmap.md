@@ -103,12 +103,25 @@ guidance, not appraisals.
   pricing M3), all sharing one contract. eBay Marketplace Insights is closed
   to new applicants, so eBay comps stay a manual-entry path. See the Pricing
   program phase below.
-- ✔ **[Nice]** Scheduled / periodic re-estimation: stale melt estimates
-  refresh every 12h (window set by `REESTIMATE_DAYS`; manual values are never
-  superseded); on-demand refresh from the dashboard.
+- ✔ **[Nice]** Scheduled / periodic re-estimation: the same 12h loop refreshes
+  stale melt estimates (window set by `REESTIMATE_DAYS`; manual values are
+  never superseded), and — independently, per source, off by default —
+  Numista (7/14/30-day cadence, with the projected monthly call count shown
+  against its 2,000/month free tier) and PCGS (fixed weekly; its 1,000/day
+  quota needs no such caveat) once switched on in Settings. Each source keeps
+  its own data current regardless of which source is currently an item's
+  overall-latest estimate, since `value_strategy` may prefer or average a
+  source that isn't "winning" right now. On-demand refresh from the
+  dashboard (melt) and per item (any source), with a success message and a
+  "time since" label on the item page.
 - ✔ **[Nice]** Currency conversion for multi-currency collections (daily ECB
   rates, 24h cache, stale fallback).
 - ✔ **[Nice]** Value-over-time chart per item and per collection.
+- ✔ **[Nice]** Configurable blended-value strategy: a `value_strategy`
+  setting (latest / preferred source / average of sources) controls the
+  single value shown in the items list, CSV/XLSX export, and dashboard
+  totals — separate from the item page, which always shows every source's
+  own latest value as a chip.
 
 ## 4. Stats, reports & insights
 
