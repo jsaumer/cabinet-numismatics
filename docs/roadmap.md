@@ -13,8 +13,8 @@ open-source readiness track (Phase 6) is complete apart from application-level
 login, deliberately deferred in favour of proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
 bundle, the sold-listing comps price source, the pricing program's last two
-milestones (M4 estimate provenance, M5 pricing reports), and import mappings
-for other collection tools.
+milestones (M4 estimate provenance, M5 pricing reports), in-app backup
+(Phase 5.6), and import mappings for other collection tools.
 
 Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
 tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
@@ -140,6 +140,9 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   per-row error reporting.
 - ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive
   together, documented **and rehearsed** (see backup-restore.md).
+- **[Nice]** Backup from inside the app: download the collection as one
+  `.zip` from Settings, then scheduled local backups with retention. The
+  scripts stay as the disaster-recovery path. See Phase 5.6.
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
@@ -298,6 +301,55 @@ reports. Staged so each milestone is independently useful.
 
 *Exit: every priceable item has a sourced, explainable, configurable
 estimate — and you can see where pricing is thin.*
+
+### Phase 5.6 — Backup from inside the app
+
+`scripts/backup.sh` needs a shell, the host, and Docker. That is the right
+tool for disaster recovery and the wrong one for "I just entered forty items
+and want a copy." Move the common case into the app; the scripts stay, and
+stay the documented recovery path.
+
+- **B1 — Download a backup.** `GET /api/backup.zip` streams one archive
+  holding `db.dump`, `photos.tar.gz`, and a `manifest.json` — app version,
+  Alembic revision, item/photo counts, created-at, and a SHA-256 per member.
+  A button in Settings. The manifest is what makes an archive *checkable*
+  rather than merely present, and it is what B3 validates against.
+  `?photos=false` gives a small data-only archive for moving between machines.
+- **B2 — Scheduled backups + retention.** Settings gains cadence (off /
+  daily / weekly), a destination directory on a mounted volume, and how many
+  to keep. The same in-process scheduler that refreshes melt estimates runs
+  it and prunes the oldest; Settings reports last run, size, and outcome.
+  Pointing the destination at a NAS bind mount gets backups off the box with
+  no new service — see the "no cut services" rule in CLAUDE.md.
+- **B3 — Restore from an upload.** Upload an archive, validate the manifest
+  (schema revision compatible, checksums intact), show what would change,
+  then restore behind an explicit typed confirmation. **Blocked on a
+  decision:** restore is destructive and the app has no auth, so this either
+  waits for authentication or stays CLI-only. B1 and B2 do not depend on it.
+
+Implementation notes:
+
+- The backend image has no postgres client today, so B1 needs
+  `postgresql-client` added, pinned to at least the `db` service's major
+  version (pg_dump refuses a newer server). That is the one real cost here:
+  roughly 15–20 MB on an image the project deliberately keeps small. The
+  alternative — dumping logically through SQLAlchemy to JSON — adds no
+  dependency but produces an archive `restore.sh` and `pg_restore` can't
+  read, which splits the format in two. One format is worth the megabytes.
+- **An unauthenticated `/api/backup.zip` hands the whole collection to
+  anyone who can reach the port.** That is acceptable behind the documented
+  deployment (trusted LAN, or Traefik + Authentik) and not acceptable if the
+  stack is ever exposed directly. Same caveat as the rest of the API, but
+  this endpoint concentrates everything into one request.
+- Archives are written to a temp file on the private `backend_state` volume
+  and streamed, not built in memory — photo volumes get large.
+
+Deferred unless wanted: passphrase-encrypted archives, and push targets
+(S3/WebDAV/SFTP). A mounted path covers the homelab case without new
+dependencies.
+
+*Exit: a backup is one click, happens on a schedule, and an archive can be
+trusted before it is restored.*
 
 ### Phase 6 — Open-source release [OSS] ✔ (v0.9.0)
 - ✔ MIT license, contributing guide, code of conduct, security policy, issue

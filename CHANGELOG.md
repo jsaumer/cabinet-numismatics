@@ -33,6 +33,12 @@ docker compose exec backend alembic upgrade head
   guide is the fallback at 0.60. Coins only — PCGS Banknote responses carry
   no price fields. Requires a token from pcgs.com/publicapi.
 
+- `backend/scripts/check_sources.py` — runs one price adapter against one real
+  item and prints the upstream calls, the raw payload, and the parsed
+  estimate, without saving anything. The unit tests prove the parsing; this
+  checks the contract. Ships in the backend image, so
+  `docker compose exec backend python scripts/check_sources.py --list` works.
+
 ### Changed
 - Price adapters now share one contract: `NotApplicable` for a missing
   prerequisite (422) and `SourceUnavailable` for an upstream failure (502).

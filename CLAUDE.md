@@ -71,6 +71,9 @@ Phase 0 so future sessions can run them without asking. -->
   runs ruff + pytest on 3.10/3.12, a frontend typecheck, and a compose
   build/migrate/smoke job on every PR.
 - Demo data: `python scripts/seed_demo.py` against a running stack.
+- Price sources: `docker compose exec backend python scripts/check_sources.py
+  --list` (then `-s <source> -i <item-id>`) probes a live price API and dumps
+  the raw response; `--fresh` bypasses the cache and spends quota.
 - Lint/format: in `backend/` — `ruff check .` and `ruff format .`.
 - Migrations: Alembic, run in `backend/` with `DATABASE_URL` set —
   `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
