@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { api, AppSettings, AppSettingsUpdate, SourceStatus } from "../api";
+import { api, AppSettings, AppSettingsUpdate, SourceStatus, ValueStrategy } from "../api";
 
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -9,6 +9,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [currency, setCurrency] = useState("");
   const [cadence, setCadence] = useState("");
+  const [valueStrategy, setValueStrategy] = useState<ValueStrategy>("latest");
+  const [preferredSource, setPreferredSource] = useState("");
   const [keys, setKeys] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -18,6 +20,8 @@ export default function Settings() {
         setSettings(s);
         setCurrency(s.display_currency);
         setCadence(String(s.reestimate_days));
+        setValueStrategy(s.value_strategy);
+        setPreferredSource(s.preferred_source ?? "");
       })
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -31,6 +35,8 @@ export default function Settings() {
       setSettings(updated);
       setCurrency(updated.display_currency);
       setCadence(String(updated.reestimate_days));
+      setValueStrategy(updated.value_strategy);
+      setPreferredSource(updated.preferred_source ?? "");
       setNote(message);
     } catch (e) {
       setError((e as Error).message);
@@ -101,6 +107,68 @@ export default function Settings() {
             )}
           </div>
         )}
+        {source.key === "numista" && (
+          <div className="estimate-form" style={{ marginTop: "0.4rem" }}>
+            <label className="field">
+              Scheduled refresh
+              <select
+                value={settings.numista_refresh_days ?? ""}
+                disabled={saving}
+                onChange={(e) => {
+                  const days = e.target.value ? Number(e.target.value) : null;
+                  apply(
+                    { numista_refresh_days: days },
+                    days
+                      ? `Numista scheduled refresh set to every ${days} days.`
+                      : "Numista scheduled refresh turned off.",
+                  );
+                }}
+              >
+                <option value="">Off</option>
+                <option value="7">Every 7 days</option>
+                <option value="14">Every 14 days</option>
+                <option value="30">Every 30 days</option>
+              </select>
+            </label>
+            {settings.numista_refresh_days &&
+              (() => {
+                const monthlyCalls = Math.ceil(
+                  settings.numista_priceable_items * 2 * (30 / settings.numista_refresh_days!),
+                );
+                const overBudget = monthlyCalls > 2000;
+                return (
+                  <p className={overBudget ? "error" : "muted"} style={{ margin: 0 }}>
+                    ~{monthlyCalls} Numista calls/month at this cadence across{" "}
+                    {settings.numista_priceable_items} priceable item(s) — 2 calls per estimate,
+                    free-tier cap is 2,000/month.
+                    {overBudget && " This exceeds the free tier; expect 429s before the month is out."}
+                  </p>
+                );
+              })()}
+          </div>
+        )}
+        {source.key === "pcgs" && (
+          <div className="estimate-form" style={{ marginTop: "0.4rem" }}>
+            <label className="slot">
+              <input
+                type="checkbox"
+                checked={settings.pcgs_auto_refresh}
+                disabled={saving}
+                onChange={(e) =>
+                  apply(
+                    { pcgs_auto_refresh: e.target.checked },
+                    `PCGS auto-refresh ${e.target.checked ? "enabled" : "disabled"} (weekly).`,
+                  )
+                }
+              />
+              Auto-refresh weekly
+            </label>
+            <p className="muted" style={{ margin: 0 }}>
+              {settings.pcgs_priceable_items} priceable item(s) — comfortably within the 1,000
+              calls/day quota at any realistic collection size.
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -126,6 +194,31 @@ export default function Settings() {
             <input type="number" min={0} max={365} value={cadence} style={{ width: "6rem" }}
               onChange={(e) => setCadence(e.target.value)} />
           </label>
+          <label className="field">
+            Value shown in list / dashboard / export
+            <select
+              value={valueStrategy}
+              onChange={(e) => setValueStrategy(e.target.value as ValueStrategy)}
+            >
+              <option value="latest">Latest estimate (any source)</option>
+              <option value="preferred_source">Preferred source (falls back to latest)</option>
+              <option value="average">Average of sources</option>
+            </select>
+          </label>
+          {valueStrategy === "preferred_source" && (
+            <label className="field">
+              Preferred source
+              <select
+                value={preferredSource}
+                onChange={(e) => setPreferredSource(e.target.value)}
+              >
+                <option value="" disabled>choose…</option>
+                {settings.sources.map((s: SourceStatus) => (
+                  <option key={s.key} value={s.key}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             className="primary"
             disabled={saving}
@@ -134,6 +227,8 @@ export default function Settings() {
                 {
                   display_currency: currency.trim().toUpperCase(),
                   reestimate_days: Number(cadence),
+                  value_strategy: valueStrategy,
+                  preferred_source: valueStrategy === "preferred_source" ? (preferredSource || null) : null,
                 },
                 "General settings saved.",
               )
@@ -144,7 +239,9 @@ export default function Settings() {
         </div>
         <p className="muted" style={{ marginBottom: 0 }}>
           Amounts in other currencies convert at cached daily ECB rates; anything
-          unconvertible is excluded from totals and counted, never guessed.
+          unconvertible is excluded from totals and counted, never guessed. The value
+          strategy controls this single blended number — the item page always shows
+          every source's own latest value.
         </p>
       </div>
 

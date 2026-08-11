@@ -16,13 +16,18 @@ from app.schemas import (
     ValueHistory,
     ValuePoint,
 )
-from app.services.app_settings import display_currency
+from app.services.app_settings import display_currency, get_setting
 from app.services.currency import Converter
+from app.services.pricing import resolve_display_value
 
 
 def _resolve_currency(db: Session, currency: str | None) -> str:
     """Explicit ?currency= wins; otherwise the app-wide display currency."""
     return currency.upper() if currency else display_currency(db)
+
+
+def _resolve_strategy(db: Session) -> tuple[str, str | None]:
+    return str(get_setting(db, "value_strategy")), get_setting(db, "preferred_source")
 
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -53,6 +58,7 @@ def collection_stats(
     amounts with no obtainable rate are excluded and counted, never guessed."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
     items = _load_items(db)
 
     counts = {"total": len(items), "owned": 0, "sold": 0, "wishlist": 0, "coins": 0, "notes": 0}
@@ -66,11 +72,11 @@ def collection_stats(
         counts[item.status] += 1
         if item.status == "owned":  # coins/notes split describes the current holdings
             counts["coins" if item.type == "coin" else "notes"] += 1
-        latest = item.estimates[0] if item.estimates else None
+        resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
 
         if item.status == "owned":
             price = conv.convert(item.acquisition_price, item.currency)
-            est = conv.convert(latest.estimated_value, latest.currency) if latest else None
+            est = conv.convert(resolved[0], resolved[1]) if resolved else None
             if price is not None:
                 cost_basis += price
             if est is not None:
@@ -122,6 +128,7 @@ def breakdowns(
     converted into the display currency (unconvertible amounts excluded)."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
     dims: dict[str, dict[str, _Bucket]] = {
         d: defaultdict(_Bucket) for d in ("country", "type", "decade", "grade", "tag", "acq_year")
     }
@@ -129,9 +136,9 @@ def breakdowns(
     for item in _load_items(db):
         if item.status != "owned":
             continue
-        latest = item.estimates[0] if item.estimates else None
+        resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
         cost = conv.convert(item.acquisition_price, item.currency) or 0.0
-        value = (conv.convert(latest.estimated_value, latest.currency) if latest else None) or 0.0
+        value = (conv.convert(resolved[0], resolved[1]) if resolved else None) or 0.0
 
         keys = {
             "country": [item.country],
@@ -170,6 +177,7 @@ def gains(
     sold items."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
     unrealized: list[GainEntry] = []
     realized: list[GainEntry] = []
 
@@ -178,8 +186,8 @@ def gains(
         if cost is None:
             continue
         if item.status == "owned":
-            latest = item.estimates[0] if item.estimates else None
-            value = conv.convert(latest.estimated_value, latest.currency) if latest else None
+            resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
+            value = conv.convert(resolved[0], resolved[1]) if resolved else None
         elif item.status == "sold":
             value = conv.convert(item.sold_price, item.currency)
         else:
@@ -227,32 +235,21 @@ def value_history(
     rates are out of scope for a personal tool)."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
     items = [i for i in _load_items(db) if i.status == "owned"]
-
-    # per item: estimates as (date, converted value), oldest first
-    series: list[list[tuple[date, float]]] = []
-    for item in items:
-        entries = []
-        for est in reversed(item.estimates):  # relationship is newest-first
-            value = conv.convert(est.estimated_value, est.currency)
-            if value is not None:
-                entries.append((est.fetched_at.date(), value))
-        if entries:
-            series.append(entries)
 
     points = []
     for point in _month_ends(months):
         total = 0.0
         count = 0
-        for entries in series:
-            current = None
-            for est_date, value in entries:
-                if est_date <= point:
-                    current = value
-                else:
-                    break
-            if current is not None:
-                total += current
+        for item in items:
+            # estimates are newest-first; keep only what existed as of this point,
+            # then resolve the same way "now" is resolved elsewhere.
+            asof = [e for e in item.estimates if e.fetched_at.date() <= point]
+            resolved = resolve_display_value(asof, strategy, preferred_source, conv)
+            value = conv.convert(resolved[0], resolved[1]) if resolved else None
+            if value is not None:
+                total += value
                 count += 1
         points.append(ValuePoint(date=point, value=round(total, 2), estimated_items=count))
 

@@ -24,6 +24,10 @@ DEFAULTS: dict = {
     "numista_api_key": "",
     "pcgs_enabled": False,
     "pcgs_api_token": "",
+    "value_strategy": "latest",
+    "preferred_source": None,
+    "numista_refresh_days": None,  # None = off; else 7 | 14 | 30
+    "pcgs_auto_refresh": False,
 }
 
 SECRET_KEYS = {"numista_api_key", "pcgs_api_token"}

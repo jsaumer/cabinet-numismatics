@@ -26,7 +26,9 @@ from app.schemas import (
     ItemOut,
     ItemUpdate,
 )
+from app.services import app_settings, pricing
 from app.services import photos as photo_store
+from app.services.currency import Converter
 
 router = APIRouter(prefix="/api/items", tags=["items"])
 
@@ -220,18 +222,33 @@ def _filtered(
     return stmt
 
 
-def _list_entry(item: Item) -> ItemListEntry:
+def _list_entry(
+    item: Item,
+    strategy: str,
+    preferred_source: str | None,
+    converter: Converter | None,
+) -> ItemListEntry:
     primary = next((p for p in item.photos if p.is_primary), None)
     if primary is None and item.photos:
         primary = item.photos[0]
-    latest = item.estimates[0] if item.estimates else None
+    resolved = pricing.resolve_display_value(item.estimates, strategy, preferred_source, converter)
     return ItemListEntry(
         **ItemOut.model_validate(item).model_dump(),
         primary_photo_key=primary.file_key if primary else None,
         primary_thumb_key=(primary.thumb_key or primary.file_key) if primary else None,
-        latest_value=float(latest.estimated_value) if latest else None,
-        latest_value_currency=latest.currency if latest else None,
+        latest_value=float(resolved[0]) if resolved else None,
+        latest_value_currency=resolved[1] if resolved else None,
     )
+
+
+def _value_settings(db: Session) -> tuple[str, str | None, Converter | None]:
+    """The value-resolution strategy, plus a Converter only when the
+    strategy needs one — "latest"/"preferred_source" never build one, so the
+    default path costs no extra currency lookups."""
+    strategy = str(app_settings.get_setting(db, "value_strategy"))
+    preferred_source = app_settings.get_setting(db, "preferred_source")
+    converter = Converter(db, app_settings.display_currency(db)) if strategy == "average" else None
+    return strategy, preferred_source, converter
 
 
 def filter_query(
@@ -293,7 +310,9 @@ def list_items(
         .scalars()
         .all()
     )
-    return ItemList(items=[_list_entry(i) for i in rows], total=total, limit=limit, offset=offset)
+    strategy, preferred_source, converter = _value_settings(db)
+    items = [_list_entry(i, strategy, preferred_source, converter) for i in rows]
+    return ItemList(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/export.csv")
@@ -303,13 +322,14 @@ def export_csv(filters: dict = Depends(filter_query), db: Session = Depends(get_
         .scalars()
         .all()
     )
+    strategy, preferred_source, converter = _value_settings(db)
 
     def generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
         writer.writerow(CSV_COLUMNS)
         for item in rows:
-            writer.writerow(_export_row(item))
+            writer.writerow(_export_row(item, strategy, preferred_source, converter))
             yield buf.getvalue()
             buf.seek(0)
             buf.truncate(0)
@@ -329,6 +349,7 @@ def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get
         .all()
     )
 
+    strategy, preferred_source, converter = _value_settings(db)
     wb = Workbook()
     ws = wb.active
     ws.title = "Collection"
@@ -337,7 +358,8 @@ def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get
         cell.font = Font(bold=True)
     ws.freeze_panes = "A2"
     for item in rows:
-        ws.append([str(v) if isinstance(v, uuid.UUID) else v for v in _export_row(item)])
+        row = _export_row(item, strategy, preferred_source, converter)
+        ws.append([str(v) if isinstance(v, uuid.UUID) else v for v in row])
     for column, header in zip(ws.columns, CSV_COLUMNS, strict=True):
         width = max(len(header), *(len(str(c.value or "")) for c in column))
         ws.column_dimensions[column[0].column_letter].width = min(width + 2, 40)
@@ -352,8 +374,13 @@ def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get
     )
 
 
-def _export_row(item: Item) -> list:
-    latest = item.estimates[0] if item.estimates else None
+def _export_row(
+    item: Item,
+    strategy: str,
+    preferred_source: str | None,
+    converter: Converter | None,
+) -> list:
+    resolved = pricing.resolve_display_value(item.estimates, strategy, preferred_source, converter)
     return [
         item.id,
         item.type,
@@ -384,8 +411,8 @@ def _export_row(item: Item) -> list:
         "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
         item.set.name if item.set else "",
         json.dumps(item.custom_fields) if item.custom_fields else "",
-        latest.estimated_value if latest else "",
-        latest.currency if latest else "",
+        resolved[0] if resolved else "",
+        resolved[1] if resolved else "",
         item.created_at.isoformat(),
     ]
 

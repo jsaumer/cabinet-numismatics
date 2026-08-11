@@ -102,6 +102,29 @@ def test_gains(client):
     assert body["realized"][0]["value"] == 130.0
 
 
+def test_breakdowns_and_gains_respect_value_strategy(client):
+    item = _create(client, {**COIN, "acquisition_price": 100.0, "tags": ["silver"]})
+    client.post(
+        f"/api/items/{item['id']}/estimates",
+        json={"estimated_value": 130.0, "source": "numista:N#1 XF"},
+    )
+    client.post(
+        f"/api/items/{item['id']}/estimates",
+        json={"estimated_value": 200.0, "source": "manual"},  # newer, but not preferred
+    )
+    client.put(
+        "/api/settings", json={"value_strategy": "preferred_source", "preferred_source": "numista"}
+    )
+
+    breakdowns = client.get("/api/stats/breakdowns").json()
+    us = next(e for e in breakdowns["by_country"] if e["key"] == "United States")
+    assert us["estimated_value"] == 130.0  # preferred source, not the newer manual entry
+
+    gains = client.get("/api/stats/gains").json()
+    assert gains["unrealized"][0]["value"] == 130.0
+    assert gains["unrealized"][0]["gain"] == 30.0
+
+
 def test_xlsx_export(client, coin):
     client.post(f"/api/items/{coin['id']}/estimates", json={"estimated_value": 150.0})
 
