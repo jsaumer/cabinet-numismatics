@@ -13,6 +13,8 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-08-11
+
 ### Added
 - A `SOURCE` column on the collection list, next to `VALUE` — the blended
   value shown there was giving no indication of which price source (or
