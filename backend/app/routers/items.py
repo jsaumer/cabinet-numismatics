@@ -238,6 +238,7 @@ def _list_entry(
         primary_thumb_key=(primary.thumb_key or primary.file_key) if primary else None,
         latest_value=float(resolved[0]) if resolved else None,
         latest_value_currency=resolved[1] if resolved else None,
+        latest_value_source=resolved[2] if resolved else None,
     )
 
 

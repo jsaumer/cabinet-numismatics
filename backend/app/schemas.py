@@ -251,6 +251,7 @@ class ItemListEntry(ItemOut):
     primary_thumb_key: str | None = None
     latest_value: float | None = None
     latest_value_currency: str | None = None
+    latest_value_source: str | None = None
 
 
 class ItemDetail(ItemOut):

@@ -369,6 +369,7 @@ export default function ItemList() {
               <th className="hide-sm">Series</th>
               <th className="num hide-sm">Qty</th>
               <th className="num hide-sm">Paid</th>
+              <th className="hide-sm">Source</th>
               <th className="num">Value</th>
             </tr>
           </thead>
@@ -402,6 +403,7 @@ export default function ItemList() {
                 <td className="muted hide-sm">{item.series ?? ""}</td>
                 <td className="num hide-sm">{item.quantity}</td>
                 <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>
+                <td className="muted hide-sm">{item.latest_value_source ?? "—"}</td>
                 <td className="num">{money(item.latest_value, item.latest_value_currency)}</td>
               </tr>
             ))}

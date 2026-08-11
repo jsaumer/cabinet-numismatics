@@ -362,9 +362,15 @@ dl.facts dd {
   border: 1px solid var(--border);
   font-size: 0.78rem;
   color: var(--ink);
+  white-space: nowrap;
 }
 .chip.ref {
   background: var(--chip-ref-bg);
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
 .photo-grid {
