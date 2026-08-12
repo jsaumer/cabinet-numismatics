@@ -179,6 +179,14 @@ exist in a registry it can pull from. `docker-compose.yaml` carries both
 `build:` (for local dev) and `image:` (for Swarm) on the `backend` and
 `proxy` services, pinned to `${TAG:-latest}`.
 
+**The `publish` job itself didn't exist before v0.10.2.** Every earlier tag —
+`v0.10.1`, `v0.10.0`, `v0.9.1`, `v0.9.0` — was released before any CI job
+ever pushed an image anywhere, so none of them have anything published on
+GHCR, regardless of what any compose file or `TAG=` points at (confirmed:
+`docker pull ghcr.io/jsaumer/cabinet-numismatics-backend:0.10.1` fails with
+"not found"). If you're pinning `TAG=` explicitly rather than using
+`latest`, `0.10.2` is the floor.
+
 Both images publish as **public** automatically, inheriting the repo's own
 visibility — confirmed by pulling `cabinet-numismatics-backend:0.10.2` after
 an explicit `docker logout ghcr.io`, with no credential involved at any
