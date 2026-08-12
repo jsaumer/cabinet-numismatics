@@ -179,12 +179,13 @@ exist in a registry it can pull from. `docker-compose.yaml` carries both
 `build:` (for local dev) and `image:` (for Swarm) on the `backend` and
 `proxy` services, pinned to `${TAG:-latest}`.
 
-**One-time step after the first publish:** GHCR packages pushed via GitHub
-Actions default to *private*, independent of the repo's own visibility. Until
-you flip that, every Swarm node needs `docker login ghcr.io` with a PAT
-carrying `read:packages`. Easier: on GitHub, go to the package's own page
-(from your profile's Packages tab, or the repo sidebar) → **Package
-settings** → **Change visibility** → **Public**, once per image.
+Both images publish as **public** automatically, inheriting the repo's own
+visibility — confirmed by pulling `cabinet-numismatics-backend:0.10.2` after
+an explicit `docker logout ghcr.io`, with no credential involved at any
+point. No Swarm node needs to authenticate to pull them. (If a fork or a
+differently-configured repo ever publishes these as private instead, each
+node would need `docker login ghcr.io` with a PAT carrying `read:packages`
+before `docker stack deploy` could pull — but that's not the case here.)
 
 **Deploy:**
 
