@@ -1,0 +1,16 @@
+# Applies to builds whose context is the repo root (the proxy image, so it
+# can also COPY proxy/nginx.conf in). backend/.dockerignore and
+# frontend/.dockerignore still apply to their own narrower build contexts.
+.git
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
+backend/.pytest_cache
+backend/**/*.egg-info
+frontend/node_modules
+frontend/dist
+frontend/.vite
+docs
+scripts
+.env
+.ruff_cache

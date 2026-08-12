@@ -13,6 +13,26 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+### Added
+- **Published images.** Tagged releases now build and push
+  `ghcr.io/jsaumer/cabinet-numismatics-backend` and `...-proxy` to GHCR
+  (`.github/workflows/ci.yml`, `publish` job), tagged with both the release
+  version and `latest`. `docker-compose.yaml` gained matching `image:`
+  entries alongside its existing `build:` blocks — local dev keeps building
+  from source with `docker compose up --build`, while `docker stack deploy`
+  (which cannot build at all) now has something to pull. Documented in
+  `docs/deployment.md` §7, including the two Compose keys (`depends_on`,
+  `restart`) that Swarm doesn't honor and what that actually means in
+  practice for this stack.
+
+### Changed
+- `nginx.conf` is now baked into the proxy image at build time instead of
+  bind-mounted from the host — a bind mount can't be relied on to exist
+  across every node in a multi-host deployment. The proxy image's build
+  context moved from `frontend/` to the repo root so its Dockerfile can
+  reach `proxy/nginx.conf`; a new root `.dockerignore` keeps that context
+  from also picking up `backend/`, `.git`, and other irrelevant content.
+
 ## [0.10.1] — 2026-08-11
 
 ### Added

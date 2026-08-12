@@ -2,6 +2,10 @@ services:
   backend:
     build:
       context: ./backend
+    # Published on release (see .github/workflows/ci.yml). `--build` always
+    # rebuilds locally regardless of this tag; `docker stack deploy` (which
+    # cannot build) pulls it. Pin a specific release with `TAG=0.10.1`.
+    image: ghcr.io/jsaumer/cabinet-numismatics-backend:${TAG:-latest}
     env_file:
       - ./.env
     environment:
@@ -26,11 +30,12 @@ services:
 
   proxy:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: ghcr.io/jsaumer/cabinet-numismatics-proxy:${TAG:-latest}
     ports:
       - "80:80"
     volumes:
-      - ./proxy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - photo_data:/usr/share/nginx/photos:ro
     depends_on:
       - backend

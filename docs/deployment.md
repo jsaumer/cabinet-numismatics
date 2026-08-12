@@ -163,3 +163,59 @@ docker compose build --pull && docker compose up -d
   metal symbol or a currency pair.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
+
+## 7. Swarm / multi-host deployment
+
+A single host running `docker compose up` (sections 1–5) is the primary,
+best-tested path — this section is for running Cabinet as a stack across a
+Swarm instead.
+
+**Images are published to GHCR on every tagged release** (`.github/workflows/
+ci.yml`, `publish` job): `ghcr.io/jsaumer/cabinet-numismatics-backend` and
+`...-proxy`, tagged both with the release version and `latest`. Swarm mode
+can't build images the way `docker compose up --build` does — `docker stack
+deploy` silently ignores the `build:` key — so it needs these to already
+exist in a registry it can pull from. `docker-compose.yaml` carries both
+`build:` (for local dev) and `image:` (for Swarm) on the `backend` and
+`proxy` services, pinned to `${TAG:-latest}`.
+
+**One-time step after the first publish:** GHCR packages pushed via GitHub
+Actions default to *private*, independent of the repo's own visibility. Until
+you flip that, every Swarm node needs `docker login ghcr.io` with a PAT
+carrying `read:packages`. Easier: on GitHub, go to the package's own page
+(from your profile's Packages tab, or the repo sidebar) → **Package
+settings** → **Change visibility** → **Public**, once per image.
+
+**Deploy:**
+
+```bash
+git clone https://github.com/jsaumer/cabinet-numismatics.git
+cd cabinet-numismatics
+cp .env.example .env        # edit secrets
+docker stack deploy -c docker-compose.yaml cabinet
+docker exec $(docker ps -q -f name=cabinet_backend) alembic upgrade head
+```
+
+Pin a specific release instead of always pulling `latest`:
+`TAG=0.10.1 docker stack deploy -c docker-compose.yaml cabinet`.
+
+**Known gaps versus single-host Compose** — this file hasn't been hardened
+beyond making it *pullable*; two Compose keys it relies on have no effect
+under `docker stack deploy`:
+
+- `depends_on` (with the `service_healthy` condition gating `backend` on
+  `db`) is one of the keys `docker stack deploy` documents as unsupported —
+  Swarm gives no startup-order guarantee. In practice this is self-healing
+  here: the backend container starts regardless, `/api/health` reports
+  `db: "error"` until Postgres is reachable, and it recovers on its own once
+  Postgres finishes initializing — but expect a transient unhealthy window
+  on first deploy, not an instant clean start.
+- `restart: unless-stopped` is also unsupported; Swarm uses its own default
+  restart policy (equivalent to "always restart, regardless of exit code")
+  instead, which happens to match the intended behavior here, so this is
+  cosmetic rather than a functional gap.
+
+Neither has been exercised against a real multi-node Swarm as part of this
+change — only confirmed locally that the images build, tag, and run
+correctly end to end via plain `docker compose up`. If you hit something
+beyond these two, it's worth a closer look rather than assuming it's covered.
