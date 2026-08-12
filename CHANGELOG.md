@@ -13,6 +13,8 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-08-12
+
 ### Added
 - **Published images.** Tagged releases now build and push
   `ghcr.io/jsaumer/cabinet-numismatics-backend` and `...-proxy` to GHCR
