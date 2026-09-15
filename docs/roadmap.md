@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.10.2**, with versioned images
+**Status (September 2026): released as v0.11.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -333,7 +333,7 @@ reports. Staged so each milestone is independently useful.
   price, Numista's matched issue and per-grade prices, PCGS's auction lots
   and guide value, plus data age and a stale flag. The item page shows it
   per value-history row and filters that history by source; manual entries
-  take an optional note. **Target: v0.11.0.**
+  take an optional note. **Shipped in v0.11.0.**
 - **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
   why — no ref, source unconfigured, fetch failed), stale-estimates view,
   per-source breakdown, and estimate-vs-reality accuracy (last estimate
