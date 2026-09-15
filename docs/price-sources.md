@@ -200,3 +200,28 @@ A simple, transparent heuristic works better than false precision:
   Adapters build it as JSON-safe values (floats, strings, ISO dates; never
   `Decimal`), and every row goes through `pricing.estimate_row` so the
   on-demand and scheduled paths can't drift apart.
+
+## Pricing reports
+
+The Pricing page (`/api/pricing/*`, see [api.md](api.md#pricing-reports))
+reports on estimate quality rather than producing estimates: coverage, stale
+estimates, a per-source breakdown, and accuracy against realized sale prices.
+
+Two pieces of the adapter contract exist for it:
+
+- **Prerequisites.** Each source's local checks — credentials, catalog ref,
+  grade, weight and fineness, coin vs note — are a `prerequisite(db, item)`
+  function returning the reason or `None`. The adapter runs it first and
+  raises `NotApplicable` with that reason; the coverage report runs it
+  directly, so explaining a gap never spends a request. New adapters should
+  follow the same split: anything decidable without the network goes in the
+  prerequisite.
+- **Attempts.** `pricing.run_adapter` wraps every automatic estimate — item
+  page and scheduled refresh alike — and records the outcome per item and
+  source in `estimate_attempts`: `ok`, `not_applicable` (with what the source
+  said, e.g. "Numista lists no 1955 issue"), or `unavailable` (the fetch
+  error). Only the latest attempt is kept.
+
+Accuracy compares the estimates that stood on the sale date — recorded on or
+before `sold_date` — with the sold price, so an estimate added after marking
+an item sold never counts as a prediction.

@@ -115,7 +115,8 @@ export default function Dashboard() {
           <span className="hero-value">{money(stats.estimated_value, cur)}</span>
           {stats.estimated_items < stats.counts.owned && (
             <span className="muted">
-              based on {stats.estimated_items} of {stats.counts.owned} owned items
+              based on {stats.estimated_items} of {stats.counts.owned} owned items —{" "}
+              <Link to="/pricing">see pricing coverage</Link>
             </span>
           )}
         </div>

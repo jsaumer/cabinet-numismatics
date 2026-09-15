@@ -284,6 +284,99 @@ export interface AppSettingsUpdate {
 
 export type BackupSchedule = "daily" | "weekly";
 
+export type CoverageStatus = "priced" | "not_applicable" | "failed" | "not_tried" | "disabled";
+
+export interface SourceCoverage {
+  source: string;
+  status: CoverageStatus;
+  reason: string | null;
+  estimated_at: string | null;
+  attempted_at: string | null;
+}
+
+export interface PricingCoverage {
+  owned_items: number;
+  estimated_items: number;
+  manual_only_items: number;
+  sources: {
+    source: string;
+    enabled: boolean;
+    priced: number;
+    not_applicable: number;
+    failed: number;
+    not_tried: number;
+  }[];
+  items: { item_id: string; label: string; has_estimate: boolean; sources: SourceCoverage[] }[];
+}
+
+export interface StaleReport {
+  days: number;
+  checked: number;
+  stale: {
+    item_id: string;
+    label: string;
+    source: string;
+    source_label: string;
+    estimated_value: number;
+    currency: string;
+    fetched_at: string;
+    age_days: number;
+    upstream_stale: boolean;
+    in_totals: boolean;
+  }[];
+}
+
+export interface SourcesReport {
+  currency: string;
+  strategy: string;
+  preferred_source: string | null;
+  sources: {
+    source: string;
+    items: number;
+    total_value: number;
+    avg_confidence: number | null;
+    median_age_days: number | null;
+    in_totals: number;
+  }[];
+  averaged_items: number;
+  disagreements: {
+    item_id: string;
+    label: string;
+    values: Record<string, number>;
+    spread_pct: number;
+  }[];
+  excluded_other_currency: number;
+}
+
+export interface AccuracyEstimate {
+  source: string;
+  value: number;
+  error_pct: number;
+  estimated_at: string | null;
+}
+
+export interface AccuracyReport {
+  currency: string;
+  sold_items: number;
+  compared_items: number;
+  summary: {
+    source: string;
+    sales: number;
+    median_abs_error_pct: number;
+    mean_error_pct: number;
+    within_20_pct: number;
+  }[];
+  items: {
+    item_id: string;
+    label: string;
+    sold_date: string | null;
+    sold_price: number;
+    blended: AccuracyEstimate | null;
+    by_source: AccuracyEstimate[];
+  }[];
+  excluded_other_currency: number;
+}
+
 export interface BackupRun {
   at: string;
   ok: boolean;
@@ -422,6 +515,11 @@ export const api = {
     req<AppSettings>("/api/settings", json("PUT", payload)),
   listBackups: () => req<BackupList>("/api/backups"),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
+
+  pricingCoverage: () => req<PricingCoverage>("/api/pricing/coverage"),
+  pricingStale: (days: number) => req<StaleReport>(`/api/pricing/stale?days=${days}`),
+  pricingSources: () => req<SourcesReport>("/api/pricing/sources"),
+  pricingAccuracy: () => req<AccuracyReport>("/api/pricing/accuracy"),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];

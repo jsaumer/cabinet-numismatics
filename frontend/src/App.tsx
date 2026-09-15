@@ -8,6 +8,7 @@ import Settings from "./pages/Settings";
 import ItemDetail from "./pages/ItemDetail";
 import ItemForm from "./pages/ItemForm";
 import ItemList from "./pages/ItemList";
+import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
         <nav>
           <NavLink to="/" end>Collection</NavLink>
           <NavLink to="/dashboard">Dashboard</NavLink>
+          <NavLink to="/pricing">Pricing</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/settings" title="Settings">⚙</NavLink>
           <button
@@ -40,6 +42,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<ItemList />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/pricing" element={<Pricing />} />
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />
           <Route path="/settings" element={<Settings />} />

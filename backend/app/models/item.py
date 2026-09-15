@@ -141,6 +141,14 @@ class Item(Base):
         order_by="PriceEstimate.fetched_at.desc()",
     )
 
+    @property
+    def label(self) -> str:
+        """Short display label, e.g. `United States 25 cents 1932 "D"`."""
+        parts = [self.country, self.denomination, str(self.year)]
+        if self.mint_mark:
+            parts.append(f'"{self.mint_mark}"')
+        return " ".join(parts)
+
 
 class ItemPhoto(Base):
     __tablename__ = "item_photos"
@@ -276,3 +284,19 @@ class PriceEstimate(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped[Item] = relationship(back_populates="estimates")
+
+
+class EstimateAttempt(Base):
+    """The latest attempt to price an item from each automatic source. A
+    failed fetch or an upstream "can't price this" leaves no estimate behind,
+    so this is what lets the coverage report say why an item has none."""
+
+    __tablename__ = "estimate_attempts"
+
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("items.id", ondelete="CASCADE"), primary_key=True
+    )
+    source: Mapped[str] = mapped_column(String(20), primary_key=True)
+    outcome: Mapped[str] = mapped_column(String(20))  # ok | not_applicable | unavailable
+    message: Mapped[str | None] = mapped_column(Text)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -18,7 +18,12 @@ and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh, and
 for in-app backups — no
 migration needed, since it's a generic key/value table), read through
 `app/services/app_settings.py` with defaults and env fallbacks. Revision
-`0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`.
+`0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`;
+`0011` (M5) added `estimate_attempts` — the latest automatic pricing attempt
+per item and source (`item_id` + `source` primary key, cascade with the item;
+`outcome` `ok` / `not_applicable` / `unavailable`, `message`,
+`attempted_at`), which the coverage report reads to explain gaps a failed
+attempt leaves no estimate for.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);

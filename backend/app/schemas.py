@@ -339,6 +339,119 @@ class ValueHistory(BaseModel):
     points: list[ValuePoint]
 
 
+CoverageStatusName = Literal["priced", "not_applicable", "failed", "not_tried", "disabled"]
+
+
+class SourceCoverage(BaseModel):
+    source: str
+    status: CoverageStatusName
+    reason: str | None = None  # why it isn't priced (or a later attempt's outcome)
+    estimated_at: datetime | None = None  # this source's latest estimate
+    attempted_at: datetime | None = None  # this source's latest recorded attempt
+
+
+class CoverageItem(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    has_estimate: bool
+    sources: list[SourceCoverage]
+
+
+class SourceCoverageSummary(BaseModel):
+    source: str
+    enabled: bool
+    priced: int
+    not_applicable: int
+    failed: int
+    not_tried: int
+
+
+class PricingCoverage(BaseModel):
+    owned_items: int
+    estimated_items: int  # at least one estimate from any source
+    manual_only_items: int
+    sources: list[SourceCoverageSummary]
+    items: list[CoverageItem]  # owned items needing attention
+
+
+class StaleEstimate(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    source: str  # melt | numista | pcgs | manual
+    source_label: str  # the estimate's own source text
+    estimated_value: float
+    currency: str
+    fetched_at: datetime
+    age_days: int
+    upstream_stale: bool  # built from source data past its cache window
+    in_totals: bool  # feeds the item's shown value
+
+
+class StaleReport(BaseModel):
+    days: int
+    checked: int  # latest estimates examined, one per item and source
+    stale: list[StaleEstimate]
+
+
+class SourceBreakdown(BaseModel):
+    source: str
+    items: int
+    total_value: float
+    avg_confidence: float | None
+    median_age_days: float | None
+    in_totals: int  # items whose shown value comes from this source
+
+
+class Disagreement(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    values: dict[str, float]
+    spread_pct: float  # (highest - lowest) / lowest
+
+
+class SourcesReport(BaseModel):
+    currency: str
+    strategy: str
+    preferred_source: str | None
+    sources: list[SourceBreakdown]
+    averaged_items: int
+    disagreements: list[Disagreement]
+    excluded_other_currency: int
+
+
+class AccuracyEstimate(BaseModel):
+    source: str
+    value: float
+    error_pct: float  # (estimate - sold) / sold; positive = estimate was high
+    estimated_at: datetime | None = None
+
+
+class AccuracyItem(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    sold_date: date | None
+    sold_price: float
+    blended: AccuracyEstimate | None  # the shown value as of the sale
+    by_source: list[AccuracyEstimate]
+
+
+class AccuracySummary(BaseModel):
+    source: str  # "blended" or a source key
+    sales: int
+    median_abs_error_pct: float
+    mean_error_pct: float
+    within_20_pct: int
+
+
+class AccuracyReport(BaseModel):
+    currency: str
+    sold_items: int  # sold items with a sold price
+    compared_items: int
+    summary: list[AccuracySummary]
+    items: list[AccuracyItem]
+    excluded_other_currency: int
+
+
 class RefreshResult(BaseModel):
     updated: int
     skipped: int

@@ -56,18 +56,17 @@ def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = D
 
 @router.post("/estimate", response_model=EstimateOut, status_code=201)
 def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depends(get_db)):
-    """Produce an automatic estimate from one price source: `melt` (default)
-    or `numista`."""
+    """Produce an automatic estimate from one price source: `melt` (default),
+    `numista`, or `pcgs`. The outcome is recorded for the coverage report."""
     item = get_item_or_404(db, item_id)
-    adapter = pricing.get_adapter(source)
-    if adapter is None:
+    if pricing.get_adapter(source) is None:
         raise HTTPException(status_code=422, detail=f"Unknown price source {source!r}")
     if not get_setting(db, f"{source}_enabled"):
         raise HTTPException(
             status_code=422, detail=f"{source.capitalize()} estimation is disabled in Settings"
         )
     try:
-        result = adapter(db, item)
+        result = pricing.run_adapter(db, item, source)
     except pricing.NotApplicable as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     except pricing.SourceUnavailable as exc:
