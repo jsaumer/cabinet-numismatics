@@ -7,7 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (August 2026): released as v0.10.1.** Phases 0–5 are built (Phase 5
+**Status (September 2026): released as v0.10.2**, with versioned images
+published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1–M3 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, and scheduled auto-refresh for both
@@ -185,8 +186,11 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   a capability, and this repo's README already treats 1.0 as the "HTTP API
   is now stable" marker; auth landing is the natural trigger for declaring
   that.
-- **[Nice]** CI (ruff + pytest + image build) once the repo is pushed to the
-  homelab Forgejo; promote to required for the OSS release.
+- ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
+  frontend typecheck, and a compose build/migrate/smoke test on every push and
+  PR; a `v*` tag push additionally publishes the backend and proxy images to
+  GHCR (from v0.10.2). This landed on GitHub rather than the homelab Forgejo
+  originally planned.
 - **[Nice]** Import mappings for common formats (OpenNumismat, Colnect,
   generic spreadsheets). **Target: v0.16.0.**
 - ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
@@ -231,8 +235,8 @@ early so every session starts with full context.
 - Establish and record the test, lint, and migration commands in `CLAUDE.md`.
 - Frontend app skeleton (React + Vite) wired to the API.
 - Compose stack running end to end with the nginx proxy.
-- Health check. (CI was deferred — see the Platform section; it arrives with
-  the Forgejo push.)
+- Health check. (CI was deferred at the time — it arrived later on GitHub
+  Actions; see the Platform section.)
 *Exit: `docker compose up` serves an empty but working app.*
 
 ### Phase 1 — Usable catalog (MVP) ✔
@@ -398,7 +402,8 @@ trusted before it is restored.*
   only required for direct public exposure. Revisit if that changes.
   **Target: v1.0.0** — see section 5's Authentication entry for why this one
   gets the major bump instead of a minor.
-- The repository itself is still private — publishing is a separate decision.
+- ✔ The repository is public on GitHub (since v0.10.1); versioned images are
+  published to GHCR from v0.10.2.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
 
 ---
