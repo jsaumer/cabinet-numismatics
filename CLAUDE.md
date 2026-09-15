@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.13.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.14.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -152,7 +152,7 @@ reason messages there, not duplicated in the adapter. Reports group
 estimates as melt / numista / pcgs / manual (any other source text).
 `Item.label` is the shared short display label. Tests on SQLite: timestamps
 have one-second resolution, so backdate estimates when order matters.
-Catalog depth (roadmap Phase 5.7 C1–C4) is built for v0.14.0, migration
+Catalog depth (roadmap Phase 5.7 C1–C4) shipped in v0.14.0, migration
 `0012`: `items.strike` (business/proof/specimen — a Sheldon grade row is
 reused and `Item.grade_code` prints PR-/SP- plus "+"), `grade_plus`,
 `grade_star`, `designations` (JSON list validated against

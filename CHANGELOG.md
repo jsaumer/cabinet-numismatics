@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-09-15
+
 ### Added
 - **Grading depth.** A strike type on every item (business, proof, specimen):
   a proof or specimen on the Sheldon scale reads PR-/SP- with the same grade
