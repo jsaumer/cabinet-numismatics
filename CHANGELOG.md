@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-09-14
+
 ### Added
 - **Backups from inside the app** (Settings → Backups). **Download backup**
   builds one `.zip` holding the database dump, the photos, a

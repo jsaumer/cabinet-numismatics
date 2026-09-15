@@ -7,13 +7,13 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.11.1**, with versioned images
+**Status (September 2026): released as v0.12.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
-sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) is
-built for v0.12.0, and the open-source readiness track (Phase 6) is complete apart
+sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
+in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
@@ -169,7 +169,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   together, documented **and rehearsed** (see backup-restore.md).
 - ✔ **[Nice]** Backup from inside the app: download the collection as one
   `.zip` from Settings, and scheduled backups with retention. The scripts
-  stay as the disaster-recovery path. See Phase 5.6. **Target: v0.12.0**
+  stay as the disaster-recovery path. See Phase 5.6. **Shipped in v0.12.0**
   (B1 download + B2 scheduled/retention; B3 restore is blocked on the auth
   decision below, no target yet).
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
@@ -347,7 +347,7 @@ estimate — and you can see where pricing is thin.*
 
 ### Phase 5.6 — Backup from inside the app
 
-B1 + B2 ✔ — **target v0.12.0**, pulled ahead of pricing M5 once real data
+B1 + B2 ✔ — **shipped in v0.12.0**, pulled ahead of pricing M5 once real data
 started going into the live instance. B3 restore is blocked on the auth
 decision in Phase 6/section 5, no target yet.
 
