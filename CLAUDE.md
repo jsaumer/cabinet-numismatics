@@ -7,7 +7,8 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **On GitHub (private for now) under MIT, released as v0.10.1** — treat it as
+are "Cabinet." **Public on GitHub under MIT, released as v0.10.2, and deployed on the owner's
+homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
 changelog entry when releasing.
@@ -117,8 +118,12 @@ source currently wins an item — necessary since `value_strategy` may prefer
 or average a source that isn't "latest." Manual per-item refresh shows a
 success message. **Next: pricing M4 — estimate provenance** (store each
 source's response summary in `price_estimates.details`), then M5 pricing
-reports. Also open: photo-niceties bundle,
-Phase 6 / homelab deployment (Traefik + Authentik, CI). See docs/roadmap.md.
+reports. Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+`ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
+nothing before v0.10.2 is published). The live homelab instance pins those
+tags, so a release reaches it only once the tag's images exist. Also open:
+photo-niceties bundle, a Swarm-ready stack file/backup path in this repo
+(the running stack file lives in the homelab setup). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)
 
