@@ -83,6 +83,16 @@ def test_auction_prices_preferred_over_the_guide(client, upstream):
     assert body["sample_size"] == 3
     assert body["source"] == "pcgs:apr #5960 MS-65"
 
+    details = body["details"]
+    assert details["lookup"] == "grade"
+    assert details["pcgs_number"] == "5960" and details["grade"] == "MS-65"
+    assert details["basis"] == "apr"
+    assert [lot["date"] for lot in details["lots"]] == ["2026-03-14", "2025-11-02", "2019-01-09"]
+    assert details["lots"][0]["auctioneer"] == "Heritage"
+    assert details["median"] == 480.0
+    assert details["price_guide_value"] == 400.0  # recorded even though sales won
+    assert details["stale"] is False
+
     path, params = upstream[0]
     assert path == "coindetail/GetCoinFactsByGrade"
     assert params == {"PCGSNo": "5960", "GradeNo": 65, "PlusGrade": "false"}
@@ -97,6 +107,8 @@ def test_price_guide_used_when_there_are_no_sales(client, upstream):
     assert body["confidence"] == 0.6
     assert body["sample_size"] is None
     assert body["source"] == "pcgs:guide #5960 MS-65"
+    assert body["details"]["basis"] == "guide"
+    assert body["details"]["lots"] == [] and body["details"]["median"] is None
 
 
 def test_cert_number_looked_up_directly(client, upstream):
@@ -105,6 +117,7 @@ def test_cert_number_looked_up_directly(client, upstream):
 
     body = estimate(client, item).json()
     assert body["source"] == "pcgs:apr cert 12345678"
+    assert body["details"]["lookup"] == "cert" and body["details"]["cert"] == "12345678"
     assert upstream[0][0] == "coindetail/GetCoinFactsByCertNo/12345678"
 
 

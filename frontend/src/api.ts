@@ -89,6 +89,7 @@ export interface Estimate {
   currency: string;
   confidence: number | null;
   sample_size: number | null;
+  details: Record<string, unknown> | null;
   fetched_at: string;
 }
 
@@ -349,7 +350,13 @@ export const api = {
 
   addEstimate: (
     itemId: string,
-    payload: { estimated_value: number; currency: string; source: string; confidence: number | null },
+    payload: {
+      estimated_value: number;
+      currency: string;
+      source: string;
+      confidence: number | null;
+      note: string | null;
+    },
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
   autoEstimate: (itemId: string, source = "melt") =>
     req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),

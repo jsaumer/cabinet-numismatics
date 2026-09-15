@@ -13,6 +13,28 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+### Added
+- **Estimate provenance** (pricing program M4). Automatic estimates now keep
+  what produced them in a new `price_estimates.details` column (revision
+  `0010`) instead of just a value and a terse source string: melt records the
+  weight, fineness (and whether it came from the field or the composition
+  text) and spot price; Numista the matched issue, the grade wanted versus
+  priced, and the full per-grade price list; PCGS the lookup, the auction lots
+  behind the median, the price-guide value, and the CoinFacts link. Each also
+  records when the upstream data was fetched and whether a stale cached copy
+  was served because a refresh failed. On the item page, a "details" toggle
+  under each value-history row shows it.
+- Value history on the item page can be filtered by source; the chart then
+  plots one source at a time instead of zig-zagging between them.
+- Manual values take an optional note (up to 500 characters), kept and shown
+  the same way.
+
+### Changed
+- On-demand and scheduled estimates now build their rows through one helper
+  (`pricing.estimate_row`); the scheduled melt refresh had been dropping
+  `sample_size`. `pricing.cached_response` became `cached_fetch`, which also
+  returns when the payload was fetched.
+
 ## [0.10.2] — 2026-08-12
 
 ### Added

@@ -67,7 +67,7 @@ read-only under `/photos/`. The database stores only the relative file keys.
 1. Client POSTs to `/api/items/{id}/estimate`.
 2. Backend looks up comparables by catalog reference + grade.
 3. Backend computes an estimate + confidence and writes a `price_estimates`
-   row.
+   row, with a `details` summary of what the source returned (provenance).
 4. Client refetches the item to see the new estimate.
 
 ## Configuration

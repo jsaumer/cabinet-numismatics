@@ -116,9 +116,14 @@ everywhere else — items list (with a `SOURCE` column showing which source or
 addition to melt, off by default, each kept fresh independent of whichever
 source currently wins an item — necessary since `value_strategy` may prefer
 or average a source that isn't "latest." Manual per-item refresh shows a
-success message. **Next: pricing M4 — estimate provenance** (store each
-source's response summary in `price_estimates.details`), then M5 pricing
-reports. Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+success message. M4 (estimate provenance) is done: `price_estimates.details`
+(migration `0010`) holds what each adapter's `EstimateResult.details`
+recorded — JSON-safe values only, never `Decimal` — built into rows by
+`pricing.estimate_row` on every path, with `pricing.freshness` supplying
+`data_as_of`/`stale` from `cached_fetch`'s fetch time; manual entries take an
+optional `note`. The item page renders it per value-history row and filters
+that history by source. **Next: pricing M5 — pricing reports** (coverage,
+stale estimates, per-source breakdown, accuracy against sold prices). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist. Also open:

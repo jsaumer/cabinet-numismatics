@@ -12,6 +12,7 @@ whole lot — so per-piece values are multiplied by quantity.
 """
 
 import re
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -52,24 +53,52 @@ class EstimateResult:
     currency: str
     confidence: Decimal
     sample_size: int | None = None
+    # Provenance: what the source returned that produced this value. Must be
+    # JSON-safe (floats, strings, ISO dates) — the column rejects Decimal.
+    details: dict | None = None
 
 
-def cached_response(db: Session, source: str, cache_key: str, ttl: timedelta, loader) -> dict:
+def estimate_row(item_id: uuid.UUID, result: EstimateResult) -> PriceEstimate:
+    return PriceEstimate(
+        item_id=item_id,
+        source=result.source,
+        estimated_value=result.estimated_value,
+        currency=result.currency,
+        confidence=result.confidence,
+        sample_size=result.sample_size,
+        details=result.details,
+    )
+
+
+def freshness(fetched_at: datetime, ttl: timedelta) -> dict:
+    """When upstream data was fetched, and whether it was already past its
+    cache window — which is what gets served when a refresh fails."""
+    fetched = _as_utc(fetched_at)
+    return {
+        "data_as_of": fetched.isoformat(),
+        "stale": datetime.now(timezone.utc) - fetched >= ttl,
+    }
+
+
+def cached_fetch(
+    db: Session, source: str, cache_key: str, ttl: timedelta, loader
+) -> tuple[dict, datetime]:
     """Fetch an upstream response through the `source_cache` table. External
     sources have small free-tier quotas, so a cached entry within `ttl` beats
     spending a request, and a stale entry beats a failed one.
 
     `loader` is a zero-argument callable raising SourceUnavailable on failure.
+    Returns the payload and when it was actually fetched.
     """
     row = db.get(SourceCache, (source, cache_key))
     now = datetime.now(timezone.utc)
     if row is not None and now - _as_utc(row.fetched_at) < ttl:
-        return row.payload
+        return row.payload, row.fetched_at
     try:
         payload = loader()
     except SourceUnavailable:
         if row is not None:
-            return row.payload
+            return row.payload, row.fetched_at
         raise
     if row is None:
         row = SourceCache(source=source, cache_key=cache_key)
@@ -79,7 +108,7 @@ def cached_response(db: Session, source: str, cache_key: str, ttl: timedelta, lo
     # Commit now so a request already spent survives an estimate that later
     # fails for a reason the response itself revealed.
     db.commit()
-    return payload
+    return payload, now
 
 
 def detect_metal(composition: str | None) -> str | None:
@@ -165,6 +194,17 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
         estimated_value=value,
         currency=spot.currency,
         confidence=Decimal("0.95"),
+        details={
+            "metal": metal,
+            "weight_g": float(item.weight_g),
+            "fineness": float(fineness),
+            "fineness_from": "field" if item.fineness is not None else "composition",
+            "quantity": item.quantity,
+            "spot_per_gram": float(spot.price_per_gram),
+            "spot_currency": spot.currency,
+            "spot_source": spot.source,
+            **freshness(spot.fetched_at, CACHE_TTL),
+        },
     )
 
 
@@ -284,15 +324,7 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
         except (NotApplicable, SpotUnavailable):
             failed += 1
             continue
-        db.add(
-            PriceEstimate(
-                item_id=item.id,
-                source=result.source,
-                estimated_value=result.estimated_value,
-                currency=result.currency,
-                confidence=result.confidence,
-            )
-        )
+        db.add(estimate_row(item.id, result))
         updated += 1
     db.commit()
     return {"updated": updated, "skipped": skipped, "failed": failed}
@@ -336,16 +368,7 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
         except SourceUnavailable:
             failed += 1
             continue
-        db.add(
-            PriceEstimate(
-                item_id=item.id,
-                source=result.source,
-                estimated_value=result.estimated_value,
-                currency=result.currency,
-                confidence=result.confidence,
-                sample_size=result.sample_size,
-            )
-        )
+        db.add(estimate_row(item.id, result))
         updated += 1
     db.commit()
     return {"updated": updated, "skipped": skipped, "failed": failed}

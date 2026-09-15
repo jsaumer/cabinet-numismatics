@@ -1,9 +1,10 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, Fragment, useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   Angle,
   api,
+  Estimate,
   ItemDetail as ItemDetailData,
   ItemEvent,
   money,
@@ -31,6 +32,155 @@ function timeSince(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function sourceKey(source: string): string {
+  const i = source.indexOf(":");
+  return i === -1 ? source : source.slice(0, i);
+}
+
+type Details = Record<string, unknown>;
+const num = (value: unknown) => (typeof value === "number" ? value : null);
+const text = (value: unknown) => (typeof value === "string" && value ? value : null);
+const externalUrl = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+function DataAge({ details }: { details: Details }) {
+  const asOf = text(details.data_as_of);
+  if (!asOf) return null;
+  return details.stale ? (
+    <span className="error"> · served from cache, fetched {timeSince(asOf)} (refresh failed)</span>
+  ) : (
+    <span className="muted"> · data fetched {timeSince(asOf)}</span>
+  );
+}
+
+// What the source returned that produced an estimate — or the note left on a
+// manual one. Unknown shapes fall back to a plain field list.
+function Provenance({ estimate }: { estimate: Estimate }) {
+  const d: Details = estimate.details ?? {};
+  const key = sourceKey(estimate.source);
+
+  if (key === "melt") {
+    const quantity = num(d.quantity) ?? 1;
+    return (
+      <div className="provenance">
+        {num(d.weight_g)} g × {num(d.fineness)?.toFixed(3)} fine
+        {d.fineness_from === "composition" && <span className="muted"> (from composition)</span>}
+        {" × "}
+        {num(d.spot_per_gram)?.toFixed(4)} {text(d.spot_currency)}/g {text(d.metal)} spot
+        {quantity !== 1 && ` × ${quantity} pieces`}
+        {text(d.spot_source) && <span className="muted"> · {text(d.spot_source)}</span>}
+        <DataAge details={d} />
+      </div>
+    );
+  }
+
+  if (key === "numista") {
+    const prices = (d.prices && typeof d.prices === "object" ? d.prices : {}) as Record<
+      string,
+      number
+    >;
+    const used = text(d.grade_used);
+    const wanted = text(d.grade_wanted);
+    const currency = text(d.currency) ?? estimate.currency;
+    const quantity = num(d.quantity) ?? 1;
+    return (
+      <div className="provenance">
+        <div>
+          <a
+            href={`https://en.numista.com/catalogue/pieces${String(d.type_id)}.html`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            N#{String(d.type_id)}
+          </a>
+          {num(d.issue_year) != null && ` · ${num(d.issue_year)} issue`}
+          {text(d.mint_letter) && ` (${text(d.mint_letter)})`}
+          {used && (
+            <>
+              {" · priced at "}
+              <b>{used.toUpperCase()}</b>
+            </>
+          )}
+          {wanted && used && wanted !== used && (
+            <span className="muted"> — no {wanted.toUpperCase()} price, nearest bucket used</span>
+          )}
+          {quantity !== 1 && <span className="muted"> · per piece, × {quantity}</span>}
+          <DataAge details={d} />
+        </div>
+        <div className="chip-row">
+          {Object.entries(prices).map(([grade, price]) => (
+            <span key={grade} className={grade === used ? "chip active" : "chip"}>
+              {grade.toUpperCase()} {money(price, currency)}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (key === "pcgs") {
+    const lots = Array.isArray(d.lots) ? (d.lots as Details[]) : [];
+    const guide = num(d.price_guide_value);
+    const coinfacts = text(d.coinfacts_url);
+    return (
+      <div className="provenance">
+        <div>
+          {d.lookup === "cert"
+            ? `Cert ${String(d.cert)}`
+            : `PCGS #${String(d.pcgs_number)} ${String(d.grade ?? "")}`}
+          {" · "}
+          {d.basis === "apr"
+            ? `median of ${lots.length} recent auction sale${lots.length === 1 ? "" : "s"}`
+            : "price guide (no recent auction sales)"}
+          {guide != null && <span className="muted"> · guide {money(guide, "USD")}</span>}
+          {coinfacts && (
+            <>
+              {" · "}
+              <a href={externalUrl(coinfacts)} target="_blank" rel="noreferrer">
+                CoinFacts
+              </a>
+            </>
+          )}
+          <DataAge details={d} />
+        </div>
+        {lots.length > 0 && (
+          <ul className="provenance-lots">
+            {lots.map((lot, index) => {
+              const url = text(lot.url);
+              return (
+                <li key={index}>
+                  {text(lot.date) ?? "undated"} — {money(num(lot.price), "USD")}
+                  {text(lot.auctioneer) && <span className="muted"> · {text(lot.auctioneer)}</span>}
+                  {url && (
+                    <>
+                      {" · "}
+                      <a href={externalUrl(url)} target="_blank" rel="noreferrer">
+                        lot
+                      </a>
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  const note = text(d.note);
+  if (note) return <div className="provenance note">{note}</div>;
+
+  return (
+    <div className="provenance">
+      {Object.entries(d).map(([field, value]) => (
+        <span key={field}>
+          <code>{field}</code> <span className="muted">{JSON.stringify(value)}</span>{" "}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function ItemDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -47,6 +197,9 @@ export default function ItemDetail() {
   const [estimateSuccess, setEstimateSuccess] = useState<string | null>(null);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
+  const [estNote, setEstNote] = useState("");
+  const [historySource, setHistorySource] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Which automatic sources this build offers, and whether they're switched on.
   useEffect(() => {
@@ -114,8 +267,10 @@ export default function ItemDetail() {
         currency: estCurrency.trim().toUpperCase(),
         source: estSource.trim() || "manual",
         confidence: estConfidence === "" ? null : Number(estConfidence),
+        note: estNote.trim() || null,
       });
       setEstValue("");
+      setEstNote("");
       reload();
     } catch (err) {
       setError((err as Error).message);
@@ -158,16 +313,23 @@ export default function ItemDetail() {
     }
   }
 
-  const sourceKey = (source: string) => {
-    const i = source.indexOf(":");
-    return i === -1 ? source : source.slice(0, i);
-  };
   const bySource = new Map<string, (typeof item.estimates)[number]>();
   for (const est of item.estimates) {
     const key = sourceKey(est.source);
     if (!bySource.has(key)) bySource.set(key, est);
   }
   const sourceValues = [...bySource.entries()];
+  const activeSource = historySource && bySource.has(historySource) ? historySource : null;
+  const history = activeSource
+    ? item.estimates.filter((est) => sourceKey(est.source) === activeSource)
+    : item.estimates;
+  const toggleExpanded = (estId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(estId)) next.delete(estId);
+      else next.add(estId);
+      return next;
+    });
   const fact = (label: string, value: string | number | null | undefined) => (
     <div>
       <dt>{label}</dt>
@@ -339,33 +501,78 @@ export default function ItemDetail() {
             No value recorded yet — add one you researched, or try an automatic estimate.
           </p>
         )}
-        {item.estimates.length >= 2 && (
+        {sourceValues.length >= 2 && (
+          <div className="chip-row history-filter">
+            <button
+              type="button"
+              className={activeSource === null ? "chip active" : "chip"}
+              onClick={() => setHistorySource(null)}
+            >
+              All
+            </button>
+            {sourceValues.map(([key]) => (
+              <button
+                key={key}
+                type="button"
+                className={activeSource === key ? "chip active" : "chip"}
+                onClick={() => setHistorySource(key)}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+        )}
+        {history.length >= 2 && (
           <LineChart
-            data={[...item.estimates].reverse().map((est) => ({
+            data={[...history].reverse().map((est) => ({
               key: new Date(est.fetched_at).toLocaleDateString(undefined, {
                 month: "short", day: "numeric",
               }),
               value: est.estimated_value,
             }))}
-            format={(v) => money(v, item.estimates[0].currency)}
+            format={(v) => money(v, history[0].currency)}
           />
         )}
-        {item.estimates.length > 0 && (
+        {history.length > 0 && (
           <table className="estimates">
             <thead>
-              <tr><th>Date</th><th>Value</th><th>Source</th><th>Confidence</th></tr>
+              <tr><th>Date</th><th>Value</th><th>Source</th><th>Confidence</th><th></th></tr>
             </thead>
             <tbody>
-              {item.estimates.map((est) => (
-                <tr key={est.id}>
-                  <td>{new Date(est.fetched_at).toLocaleDateString()}</td>
-                  <td>{money(est.estimated_value, est.currency)}</td>
-                  <td className="muted">{est.source}</td>
-                  <td className="muted">
-                    {est.confidence == null ? "—" : `${Math.round(est.confidence * 100)}%`}
-                  </td>
-                </tr>
-              ))}
+              {history.map((est) => {
+                const open = expanded.has(est.id);
+                return (
+                  <Fragment key={est.id}>
+                    <tr>
+                      <td>{new Date(est.fetched_at).toLocaleDateString()}</td>
+                      <td>{money(est.estimated_value, est.currency)}</td>
+                      <td className="muted">{est.source}</td>
+                      <td className="muted">
+                        {est.confidence == null ? "—" : `${Math.round(est.confidence * 100)}%`}
+                      </td>
+                      <td className="provenance-toggle">
+                        {est.details && (
+                          <button
+                            type="button"
+                            className="link-button"
+                            aria-expanded={open}
+                            onClick={() => toggleExpanded(est.id)}
+                          >
+                            {open ? "▾ details" : "▸ details"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {est.details && open && (
+                      <tr className="provenance-row">
+                        <td colSpan={5}>
+                          <Provenance estimate={est} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -406,6 +613,12 @@ export default function ItemDetail() {
             <input type="number" step="0.05" min="0" max="1" value={estConfidence}
               placeholder="optional" style={{ width: "6rem" }}
               onChange={(e) => setEstConfidence(e.target.value)} />
+          </label>
+          <label className="field">
+            Note
+            <input value={estNote} maxLength={500}
+              placeholder="optional — e.g. eBay lot, sold 2026-08-01, raw"
+              onChange={(e) => setEstNote(e.target.value)} />
           </label>
           <button className="primary" type="submit">Record value</button>
         </form>

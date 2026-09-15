@@ -37,6 +37,16 @@ def test_manual_estimate_and_history(client, coin):
     assert len(detail["estimates"]) == 2
 
 
+def test_manual_estimate_note(client, coin):
+    url = f"/api/items/{coin['id']}/estimates"
+    body = client.post(url, json={"estimated_value": 150.0, "note": "  eBay lot 123, raw  "}).json()
+    assert body["details"] == {"note": "eBay lot 123, raw"}
+    assert client.post(url, json={"estimated_value": 150.0}).json()["details"] is None
+    blank = client.post(url, json={"estimated_value": 150.0, "note": "   "}).json()
+    assert blank["details"] is None
+    assert client.post(url, json={"estimated_value": 150.0, "note": "x" * 501}).status_code == 422
+
+
 def test_estimate_validation(client, coin):
     assert (
         client.post(f"/api/items/{coin['id']}/estimates", json={"estimated_value": 0}).status_code

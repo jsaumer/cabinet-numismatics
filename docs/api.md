@@ -74,8 +74,11 @@ include the file keys; the files themselves are served by nginx at
 | `POST` | `/api/estimates/refresh-melt` | Re-run stale melt estimates now          |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
-(`estimated_value`, `currency`, `source`, optional `confidence` 0–1), never
-overwriting history. `POST .../estimate` runs one automatic adapter, chosen
+(`estimated_value`, `currency`, `source`, optional `confidence` 0–1, optional
+`note` up to 500 characters), never overwriting history. Every estimate in a
+response carries `details`: the provenance an automatic source recorded (see
+[price-sources.md](price-sources.md)), `{"note": …}` for a manual entry given
+a note, or `null`. `POST .../estimate` runs one automatic adapter, chosen
 with `?source=` — `melt` (the default: spot × weight × fineness × quantity,
 metal detected from `composition`), `numista` (by the item's `numista` catalog
 ref and grade), or `pcgs` (US coins by PCGS cert number, or `pcgs` catalog ref

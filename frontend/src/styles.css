@@ -438,6 +438,45 @@ table.estimates td {
   text-align: left;
   border-bottom: 1px solid var(--border-soft);
 }
+table.estimates td.provenance-toggle {
+  text-align: right;
+  white-space: nowrap;
+}
+tr.provenance-row td {
+  background: var(--surface-alt);
+  font-size: 0.82rem;
+}
+.provenance .chip-row {
+  margin-top: 0.35rem;
+}
+.provenance-lots {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}
+.provenance.note {
+  white-space: pre-wrap;
+}
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.history-filter {
+  margin-bottom: 0.6rem;
+}
+button.chip {
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
 .estimate-form {
   display: flex;
   gap: 0.5rem;

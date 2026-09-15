@@ -16,6 +16,24 @@ Each estimate records:
 - `estimated_value` + `currency`
 - `confidence` — 0.0–1.0, reflecting sample size and match quality
 - `sample_size` — how many comparables informed the estimate
+- `details` — provenance, so a value can be explained rather than just
+  asserted (pricing program M4). Each automatic source records what produced
+  its number, plus `data_as_of` (when the upstream data was actually
+  fetched) and `stale` (true when a cached copy was served because a refresh
+  failed):
+  - **melt** — metal, weight, fineness and whether it came from the field or
+    the composition text, quantity, the spot price per gram, its currency and
+    source.
+  - **numista** — type and matched issue (id, year, mint letter), the grade
+    bucket wanted and the one actually priced, and the full per-grade price
+    list.
+  - **pcgs** — lookup (cert, or PCGS number + grade), basis (`apr` or
+    `guide`), the auction lots behind the median (date, price, auctioneer,
+    sale, lot URL), the median, the price-guide value (recorded even when
+    sales won), and the CoinFacts link.
+
+  The item page shows this under each value-history row. Rows recorded before
+  it existed have no details.
 
 ## Candidate sources
 
@@ -149,6 +167,9 @@ The app should always allow manually recording a value the user researched
 themselves — their own comps, a dealer quote, or an auction result. Manual
 entries are first-class `price_estimates` rows with `source = "manual"` and a
 confidence the user sets (optional — omitted confidence is stored as null).
+An optional note (up to 500 characters — the lot, the dealer, raw or slabbed)
+is kept in `details` and shown the same way as an automatic source's
+provenance.
 
 ## Confidence scoring
 
@@ -175,4 +196,7 @@ A simple, transparent heuristic works better than false precision:
   independently.
 - Rate-limit and cache upstream calls; respect each source's limits.
 - Store raw comparables (or a summary) alongside the estimate where possible so
-  a value can be explained, not just asserted.
+  a value can be explained, not just asserted — done as `details` (above).
+  Adapters build it as JSON-safe values (floats, strings, ISO dates; never
+  `Decimal`), and every row goes through `pricing.estimate_row` so the
+  on-demand and scheduled paths can't drift apart.
