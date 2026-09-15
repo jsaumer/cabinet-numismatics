@@ -1,7 +1,8 @@
 """Seed data for the grades reference table.
 
 Used by migration 0003 and by the test fixtures. Treat as append-only: editing
-existing rows here does not change databases that were already migrated.
+existing rows here does not change databases that were already migrated —
+rows added later also need a migration that inserts them (see 0012).
 """
 
 SHELDON = [
@@ -27,6 +28,9 @@ SHELDON = [
 ] + [(f"MS-{n}", f"Mint State {n}", n) for n in range(60, 71)]
 
 PMG = [
+    ("1", "Poor", 1),
+    ("2", "Fair", 2),
+    ("3", "About Good", 3),
     ("4", "Good", 4),
     ("6", "Good+", 6),
     ("8", "Very Good", 8),

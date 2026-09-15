@@ -10,6 +10,47 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Grading depth.** A strike type on every item (business, proof, specimen):
+  a proof or specimen on the Sheldon scale reads PR-/SP- with the same grade
+  number. Plus grades, the NGC/PMG star, designations (PL, DMPL, CAM, DCAM,
+  UCAM, RD, RB, BN, FB, FBL, FH, FS, FT, and PMG's EPQ), CAC stickers, and
+  "details" grades recording the problem (cleaned, damaged…). Items carry a
+  `grade_label` that reads like the holder — `PR-69 DCAM ★`, `MS-64+ RD`,
+  `VF-20 Details (Cleaned)` — shown in the list, item page, and report. PMG's
+  grades 1–3 are now on the scale.
+- **Coin physical fields** — diameter, thickness, edge, shape, mintage — and
+  **banknote fields**: serial number, prefix/block, signatures, issuer, and a
+  replacement/star-note flag. Serial numbers, prefixes, and issuers are
+  searchable.
+- **Fees in gains.** `acquisition_fees` (buyer's premium, shipping, tax) count
+  toward cost basis; `sold_fees` and `sold_to` record the sale. Items expose
+  `cost_basis` and `sale_proceeds`.
+- **Certificate verification links** on the item page: PCGS opens the
+  certificate directly; NGC and PMG open their lookup pages.
+- A **strike filter** on the list (`?strike=`), and all new fields in CSV/XLSX
+  export and CSV import. Import also reads grades written the way holders
+  write them: `PR-65`/`PF-65`/`SP-65` set the strike, and a trailing `+` sets
+  the plus grade.
+
+### Changed
+- **Cost basis, unrealized and realized gain are net of fees** everywhere —
+  dashboard, gains tables, breakdowns, and the insurance report's Cost column.
+  The accuracy report still compares estimates with the gross sold price,
+  since estimates are market prices.
+- **Numista no longer prices proofs, specimens, or details grades** — its
+  prices are for problem-free circulation strikes. **PCGS** passes the plus
+  grade through, labels proofs PR-, and prices a details-graded coin only by
+  its cert number.
+
+### Fixed
+- CSV import no longer loses the rows it had already imported when a later
+  row fails validation.
+
+### Upgrade notes
+- Revision `0012` adds the new item columns and PMG grades 1–3; the backend
+  applies it on startup.
+
 ## [0.13.0] — 2026-09-14
 
 ### Added

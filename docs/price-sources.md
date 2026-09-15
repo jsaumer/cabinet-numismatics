@@ -76,6 +76,10 @@ always names the grade actually used (`numista:N#1234 XF (for UNC)`), and
 confidence drops from 0.60 to 0.45 when a substitution happened. Prices are
 per piece, so the value is multiplied by the item's quantity.
 
+Numista's per-grade prices describe problem-free circulation strikes, so a
+proof, a specimen, or an item with a details grade is refused (422) rather
+than priced as something it isn't.
+
 Requirements and limits:
 
 - A free API key (numista.com), stored encrypted in Settings; the source is
@@ -109,7 +113,12 @@ that identifies the individual slab — and otherwise by **PCGS number + grade**
 from a `pcgs` catalog reference (`GET /coindetail/GetCoinFactsByCertNo/{cert}`
 or `GET /coindetail/GetCoinFactsByGrade`). PCGS grade numbers *are* Sheldon
 numbers, so the grade's rank passes straight through; an item graded on the PMG
-scale is refused rather than mistranslated.
+scale is refused rather than mistranslated. A plus grade is sent as
+`PlusGrade=true`. PCGS numbers are strike-specific — a proof has its own —
+so the `pcgs` reference must be the proof's number for a proof; the grade
+number is the same, and the source reads `PR-65`. A details-graded coin is
+priced only by its cert number, since a grade lookup would return the
+problem-free value.
 
 Realized auction prices win when PCGS has any: the median of up to the ten most
 recent lots, confidence 0.85 with five or more sales and 0.75 below that, with

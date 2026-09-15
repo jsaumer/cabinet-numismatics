@@ -58,21 +58,40 @@ CSV_COLUMNS = [
     "mint_mark",
     "series",
     "variety",
+    "strike",
     "composition",
     "weight_g",
     "fineness",
+    "diameter_mm",
+    "thickness_mm",
+    "edge",
+    "shape",
+    "mintage",
     "grade_scale",
     "grade",
+    "grade_plus",
+    "grade_star",
+    "designations",
+    "grade_details",
+    "cac_sticker",
     "cert_service",
     "cert_number",
+    "serial_number",
+    "prefix_block",
+    "signatures",
+    "issuer",
+    "replacement_note",
     "quantity",
     "acquisition_date",
     "acquisition_price",
+    "acquisition_fees",
     "currency",
     "acquired_from",
     "storage_location",
     "sold_date",
     "sold_price",
+    "sold_fees",
+    "sold_to",
     "notes",
     "tags",
     "catalog_refs",
@@ -85,6 +104,9 @@ CSV_COLUMNS = [
 
 # Import accepts the export format; these columns are derived and ignored on the way in.
 IMPORT_IGNORED = {"id", "latest_value", "latest_value_currency", "created_at"}
+
+# Grade prefixes a label may use for a proof or specimen strike on the Sheldon scale.
+STRIKE_PREFIXES = {"PR": "proof", "PF": "proof", "SP": "specimen"}
 
 
 def get_item_or_404(db: Session, item_id: uuid.UUID, *, load_related: bool = False) -> Item:
@@ -169,6 +191,7 @@ def _filtered(
     *,
     type: str | None,
     status: str | None,
+    strike: str | None,
     country: str | None,
     year: int | None,
     year_min: int | None,
@@ -185,6 +208,8 @@ def _filtered(
         stmt = stmt.where(Item.type == type)
     if status:
         stmt = stmt.where(Item.status == status)
+    if strike:
+        stmt = stmt.where(Item.strike == strike)
     if country:
         stmt = stmt.where(Item.country.ilike(country))
     if year is not None:
@@ -215,6 +240,9 @@ def _filtered(
                 Item.country.ilike(like),
                 Item.denomination.ilike(like),
                 Item.cert_number.ilike(like),
+                Item.serial_number.ilike(like),
+                Item.prefix_block.ilike(like),
+                Item.issuer.ilike(like),
                 Item.catalog_refs.any(CatalogRef.ref_code.ilike(like)),
                 Item.tags.any(Tag.name.ilike(like)),
             )
@@ -255,6 +283,7 @@ def _value_settings(db: Session) -> tuple[str, str | None, Converter | None]:
 def filter_query(
     type: str | None = Query(default=None, pattern="^(coin|note)$"),
     status: str | None = Query(default=None, pattern="^(owned|sold|wishlist)$"),
+    strike: str | None = Query(default=None, pattern="^(business|proof|specimen)$"),
     country: str | None = None,
     year: int | None = None,
     year_min: int | None = None,
@@ -271,6 +300,7 @@ def filter_query(
     return {
         "type": type,
         "status": status,
+        "strike": strike,
         "country": country,
         "year": year,
         "year_min": year_min,
@@ -382,6 +412,7 @@ def _export_row(
     converter: Converter | None,
 ) -> list:
     resolved = pricing.resolve_display_value(item.estimates, strategy, preferred_source, converter)
+    flag = lambda value: "true" if value else ""  # noqa: E731
     return [
         item.id,
         item.type,
@@ -392,21 +423,40 @@ def _export_row(
         item.mint_mark or "",
         item.series or "",
         item.variety or "",
+        item.strike,
         item.composition or "",
         item.weight_g or "",
         item.fineness or "",
+        item.diameter_mm or "",
+        item.thickness_mm or "",
+        item.edge or "",
+        item.shape or "",
+        "" if item.mintage is None else item.mintage,
         item.grade.scale if item.grade else "",
         item.grade.code if item.grade else "",
+        flag(item.grade_plus),
+        flag(item.grade_star),
+        "|".join(item.designations or []),
+        item.grade_details or "",
+        item.cac_sticker or "",
         item.cert_service or "",
         item.cert_number or "",
+        item.serial_number or "",
+        item.prefix_block or "",
+        item.signatures or "",
+        item.issuer or "",
+        flag(item.replacement_note),
         item.quantity,
         item.acquisition_date or "",
         item.acquisition_price or "",
+        item.acquisition_fees or "",
         item.currency,
         item.acquired_from or "",
         item.storage_location or "",
         item.sold_date or "",
         item.sold_price or "",
+        item.sold_fees or "",
+        item.sold_to or "",
         item.notes or "",
         "|".join(t.name for t in item.tags),
         "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
@@ -418,21 +468,42 @@ def _export_row(
     ]
 
 
+def _resolve_grade(db: Session, scale: str, code: str) -> tuple[Grade, str | None, bool]:
+    """A grade code from a CSV, read the way holders write it: a trailing "+"
+    is a plus grade, and on the Sheldon scale PR-/PF-/SP- mean the same number
+    with a proof or specimen strike. Returns (grade, strike or None, plus)."""
+    plus = code.endswith("+")
+    code = code.rstrip("+").strip()
+    strike = None
+    stmt = select(Grade).where(Grade.scale == scale, Grade.code == code)
+    prefix, _, number = code.partition("-")
+    if scale == "sheldon" and prefix.upper() in STRIKE_PREFIXES and number.isdigit():
+        strike = STRIKE_PREFIXES[prefix.upper()]
+        stmt = select(Grade).where(Grade.scale == scale, Grade.rank == int(number))
+    grade = db.execute(stmt).scalars().first()
+    if grade is None:
+        raise ValueError(f"Unknown grade {code!r} on scale {scale!r}")
+    return grade, strike, plus
+
+
 def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
     """Map a CSV row (export format) to an ItemCreate + resolved grade_id."""
     data: dict = {
         k: v for k, v in row.items() if k and k not in IMPORT_IGNORED and v not in (None, "")
     }
     grade_id = None
-    scale = data.pop("grade_scale", "").strip().lower()
+    scale = data.pop("grade_scale", "").strip().lower() or "sheldon"
     code = data.pop("grade", "").strip()
     if code:
-        grade = db.execute(
-            select(Grade).where(Grade.code == code, Grade.scale == (scale or "sheldon"))
-        ).scalar_one_or_none()
-        if grade is None:
-            raise ValueError(f"Unknown grade {code!r} on scale {scale or 'sheldon'!r}")
+        grade, strike, plus = _resolve_grade(db, scale, code)
         grade_id = grade.id
+        if strike:
+            data.setdefault("strike", strike)
+        if plus:
+            data.setdefault("grade_plus", True)
+    designations = [d for d in data.pop("designations", "").split("|") if d.strip()]
+    if designations:
+        data["designations"] = designations
     tags = [t for t in data.pop("tags", "").split("|") if t.strip()]
     refs = []
     for chunk in data.pop("catalog_refs", "").split("|"):
@@ -497,6 +568,8 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
             db.add(item)
             db.flush()
             record_event(db, item.id, "created", {"via": ["import", file.filename]})
+            # Commit each row: a later row's rollback must not discard this one.
+            db.commit()
             created += 1
         except (ValueError, ValidationError) as exc:
             db.rollback()

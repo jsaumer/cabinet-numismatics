@@ -263,3 +263,13 @@ def test_price_map_accepts_both_response_shapes():
 
     # unknown keys, non-numeric and non-positive prices are dropped
     assert numista.price_map({"prices": {"vf": 0, "bogus": 5, "xf": "n/a"}}) == {}
+
+
+def test_proofs_and_details_grades_are_not_priced(client, upstream):
+    configure(client)
+    resp = estimate(client, make_item(client, strike="proof"))
+    assert resp.status_code == 422 and "proofs" in resp.json()["detail"]
+
+    resp = estimate(client, make_item(client, grade_details="Cleaned"))
+    assert resp.status_code == 422 and "details grade" in resp.json()["detail"]
+    assert upstream == []

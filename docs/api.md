@@ -29,10 +29,12 @@ described without an auth layer; add one before exposing the app publicly.
 | `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
 | `DELETE` | `/api/items/{id}`         | Delete an item and its photos       |
 
-**List query parameters** (all optional): `type`, `status`, `country`, `year`,
+**List query parameters** (all optional): `type`, `status`, `strike`
+(`business`/`proof`/`specimen`), `country`, `year`,
 `year_min`/`year_max`, `tag`, `set_id`, `grade_min`/`grade_max` (grade rank 1–70),
 `value_min`/`value_max` (latest estimate), `q` (substring match over
-notes/series/country/denomination/cert numbers/catalog refs/tags), `limit`,
+notes/series/country/denomination/cert and serial numbers/prefix/issuer/catalog
+refs/tags), `limit`,
 `offset`, `sort` (field name or `grade`, `-` prefix for descending). The list
 response includes each item's primary photo/thumbnail keys and its latest
 estimated value: `latest_value` + `latest_value_currency`, plus
@@ -46,6 +48,20 @@ Item payloads accept `tags` (list of names, get-or-create) and `catalog_refs`
 derived columns are ignored, rows whose `id` already exists are skipped (so
 re-importing an export never duplicates the collection), and per-row failures
 are reported without aborting the rest.
+
+Grading fields: `strike` (`business` default, `proof`, `specimen`),
+`grade_plus`, `grade_star`, `designations` (list; `PL`, `DMPL`, `CAM`, `DCAM`,
+`UCAM`, `RD`, `RB`, `BN`, `FB`, `FBL`, `FH`, `FS`, `FT`, `EPQ` — case-insensitive,
+deduplicated), `grade_details` (the problem on a details grade), and
+`cac_sticker` (`green`/`gold`). Physical: `diameter_mm`, `thickness_mm`, `edge`,
+`shape`, `mintage`. Banknotes: `serial_number`, `prefix_block`, `signatures`,
+`issuer`, `replacement_note`. Costs: `acquisition_fees` and, on sale,
+`sold_fees` and `sold_to`. Responses add three derived fields: `grade_label`
+(the grade as a holder reads, e.g. `PR-69 DCAM ★`), `cost_basis` (price plus
+fees), and `sale_proceeds` (sold price less fees) — the figures every gain
+calculation uses. CSV import also reads label-style grades: `PR-65`, `PF-65`,
+or `SP-65` on the Sheldon scale set the strike, and a trailing `+` sets
+`grade_plus`.
 
 ## Photos
 

@@ -53,7 +53,7 @@ export default function Report() {
             <th>Grade / cert</th>
             <th className="num">Qty</th>
             <th>Acquired</th>
-            <th className="num">Paid</th>
+            <th className="num" title="Price paid plus fees">Cost</th>
             <th className="num">Est. value</th>
           </tr>
         </thead>
@@ -80,7 +80,7 @@ export default function Report() {
                 {item.storage_location && <div className="muted">@ {item.storage_location}</div>}
               </td>
               <td>
-                {item.grade?.code ?? "—"}
+                {item.grade_label ?? "—"}
                 {item.cert_service && (
                   <div className="muted">
                     {item.cert_service} {item.cert_number ?? ""}
@@ -92,7 +92,7 @@ export default function Report() {
                 {item.acquisition_date ?? "—"}
                 {item.acquired_from && <div className="muted">{item.acquired_from}</div>}
               </td>
-              <td className="num">{money(item.acquisition_price, item.currency)}</td>
+              <td className="num">{money(item.cost_basis, item.currency)}</td>
               <td className="num">{money(item.latest_value, item.latest_value_currency)}</td>
             </tr>
           ))}

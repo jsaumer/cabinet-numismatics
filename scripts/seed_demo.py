@@ -27,7 +27,7 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
             "type": "coin", "country": "United States", "denomination": "1 dollar",
             "year": 1921, "series": "Morgan Dollar", "composition": "90% silver",
             "weight_g": 26.73, "fineness": 0.9, "grade_code": "MS-63",
-            "acquisition_date": "2023-04-18", "acquisition_price": 62.0,
+            "acquisition_date": "2023-04-18", "acquisition_price": 62.0, "acquisition_fees": 7.5,
             "acquired_from": "regional coin show", "storage_location": "Slab box 1",
             "tags": ["silver", "type set"],
             "catalog_refs": [{"catalog": "krause", "ref_code": "KM#110"}],
@@ -49,7 +49,7 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
         {
             "type": "coin", "country": "United States", "denomination": "1 cent",
             "year": 1955, "series": "Lincoln Wheat", "variety": "1955 Doubled Die Obverse",
-            "grade_code": "XF-40", "acquisition_date": "2024-09-30",
+            "grade_code": "XF-40", "designations": ["BN"], "acquisition_date": "2024-09-30",
             "acquisition_price": 900.0, "acquired_from": "estate sale",
             "storage_location": "Safe", "tags": ["error", "key date"],
             "custom_fields": {"attribution": "FS-101"},
@@ -89,6 +89,8 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
         {
             "type": "note", "country": "Canada", "denomination": "10 dollars",
             "year": 1954, "series": "Devil's Face", "grade_scale": "pmg",
+            "serial_number": "1234567", "prefix_block": "A/D", "signatures": "Coyne–Towers",
+            "issuer": "Bank of Canada",
             "grade_code": "35", "acquisition_date": "2024-01-14",
             "acquisition_price": 205.0, "acquired_from": "paper money show",
             "storage_location": "Album 2", "tags": ["notes", "world"],
@@ -98,7 +100,7 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
     (
         {
             "type": "note", "country": "United States", "denomination": "2 dollars",
-            "year": 1976, "series": "Bicentennial", "grade_scale": "pmg",
+            "year": 1976, "series": "Bicentennial", "grade_scale": "pmg", "designations": ["EPQ"],
             "grade_code": "65", "acquisition_date": "2025-03-08",
             "acquisition_price": 9.0, "storage_location": "Album 2", "tags": ["notes"],
         },

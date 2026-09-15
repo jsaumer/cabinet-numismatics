@@ -1,6 +1,8 @@
 export type ItemType = "coin" | "note";
 export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
+export type Strike = "business" | "proof" | "specimen";
+export type CacSticker = "green" | "gold";
 
 export interface Grade {
   id: number;
@@ -41,6 +43,28 @@ export interface Item {
   weight_g: number | null;
   fineness: number | null;
   grade: Grade | null;
+  grade_label: string | null;
+  strike: Strike;
+  grade_plus: boolean;
+  grade_star: boolean;
+  designations: string[] | null;
+  grade_details: string | null;
+  cac_sticker: CacSticker | null;
+  diameter_mm: number | null;
+  thickness_mm: number | null;
+  edge: string | null;
+  shape: string | null;
+  mintage: number | null;
+  serial_number: string | null;
+  prefix_block: string | null;
+  signatures: string | null;
+  issuer: string | null;
+  replacement_note: boolean;
+  acquisition_fees: number | null;
+  cost_basis: number | null;
+  sold_fees: number | null;
+  sold_to: string | null;
+  sale_proceeds: number | null;
   set: SetInfo | null;
   custom_fields: Record<string, string> | null;
   cert_service: string | null;
@@ -107,6 +131,25 @@ export interface ItemPage {
 
 export interface ItemPayload {
   type: ItemType;
+  strike: Strike;
+  diameter_mm: number | null;
+  thickness_mm: number | null;
+  edge: string | null;
+  shape: string | null;
+  mintage: number | null;
+  grade_plus: boolean;
+  grade_star: boolean;
+  designations: string[] | null;
+  grade_details: string | null;
+  cac_sticker: CacSticker | null;
+  serial_number: string | null;
+  prefix_block: string | null;
+  signatures: string | null;
+  issuer: string | null;
+  replacement_note: boolean;
+  acquisition_fees: number | null;
+  sold_fees: number | null;
+  sold_to: string | null;
   status: ItemStatus;
   country: string;
   denomination: string;
@@ -534,6 +577,22 @@ export const api = {
     }
   },
 };
+
+/** Where to check a slab's certification. PCGS opens the certificate itself;
+ * NGC and PMG open their lookup page, which also asks for the grade. */
+export function certLookupUrl(service: string | null, cert: string | null): string | null {
+  if (!service || !cert?.trim()) return null;
+  switch (service.trim().toUpperCase()) {
+    case "PCGS":
+      return `https://www.pcgs.com/cert/${encodeURIComponent(cert.trim())}`;
+    case "NGC":
+      return "https://www.ngccoin.com/certlookup/";
+    case "PMG":
+      return "https://www.pmgnotes.com/certlookup/";
+    default:
+      return null;
+  }
+}
 
 export const photoUrl = (key: string) => `/photos/${key}`;
 
