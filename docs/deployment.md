@@ -44,13 +44,14 @@ To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 
 ## 2. Storage
 
-Data lives in three named Docker volumes:
+Data lives in four named Docker volumes:
 
 | Volume | Contents |
 |--------|----------|
 | `db_data` | postgres — items, estimates, settings, history |
 | `photo_data` | photo originals and generated thumbnails |
 | `backend_state` | the generated encryption key, when `SECRET_KEY` is unset |
+| `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
 
 If you'd rather keep data in a directory you manage (common when a host has a
 established layout, or a NAS mount), replace the volume entries with bind
@@ -62,6 +63,7 @@ services:
     volumes:
       - /srv/cabinet/photos:/data/photos
       - /srv/cabinet/state:/data/state
+      - /mnt/nas/cabinet-backups:/data/backups
   proxy:
     volumes:
       - /srv/cabinet/photos:/usr/share/nginx/photos:ro
@@ -71,7 +73,9 @@ services:
 ```
 
 Keep the photo mount consistent between `backend` and `proxy` — the backend
-writes the files and nginx serves them.
+writes the files and nginx serves them. The backup mount must not sit inside
+the photo mount; the backend refuses to write archives where nginx would
+serve them.
 
 ## 3. Reverse proxy, TLS, and authentication
 
@@ -125,7 +129,13 @@ a body-size limit that permits photo uploads.
 
 ## 4. Scheduled backups
 
-A backup is only real once it's automatic. `scripts/backup.sh` captures the
+A backup is only real once it's automatic. The simplest way: Settings →
+Backups → **Schedule** daily or weekly, set how many to keep, and mount the
+backup directory (`/data/backups`) on storage that isn't this host's disk —
+see section 2. Click **Back up now** once to confirm the directory is
+writable; the last run's outcome stays visible there.
+
+To drive backups from the host instead, `scripts/backup.sh` captures the
 database and photos together:
 
 ```cron
@@ -148,7 +158,8 @@ docker compose up --build -d
 The backend applies any new migrations on startup, before serving, all in one
 transaction. If one fails it rolls back and the backend refuses to start —
 check `docker compose logs backend`. Migrations are forward-only in practice,
-and going back to an older image doesn't undo them; take a backup first. The
+and going back to an older image doesn't undo them; take a backup first
+(Settings → Backups → **Back up now**). The
 [CHANGELOG](../CHANGELOG.md) notes anything that needs attention.
 
 To pick up security fixes in the base images and dependencies without a code
@@ -160,8 +171,8 @@ docker compose build --pull && docker compose up -d
 
 ## 6. Operational notes
 
-- **Run one backend replica.** The melt re-estimation scheduler runs in-process;
-  additional replicas would duplicate refreshes.
+- **Run one backend replica.** The price-refresh and backup schedulers run
+  in-process; additional replicas would duplicate refreshes and backups.
 - **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices) and
   `api.frankfurter.dev` (ECB exchange rates). Both are optional — they degrade
   to cached values — but allow them if your firewall filters egress.
@@ -219,7 +230,7 @@ after each deploy.
 
 **Known gaps versus single-host Compose** — this file hasn't been hardened
 beyond making it *pullable*; two Compose keys it relies on have no effect
-under `docker stack deploy`:
+under `docker stack deploy`, and backups need a mount you choose:
 
 - `depends_on` (with the `service_healthy` condition gating `backend` on
   `db`) is one of the keys `docker stack deploy` documents as unsupported —
@@ -228,6 +239,11 @@ under `docker stack deploy`:
   Postgres takes longer, startup fails and Swarm restarts the backend until
   it succeeds — expect that on a slow first deploy, not an instant clean
   start.
+- **Mount `/data/backups` on the backend.** Without it, scheduled archives
+  are written inside the container and lost when the task is replaced. Point
+  it at NAS storage alongside (not inside) the photo mount. `restore.sh`
+  needs `docker compose`, so restore on a Swarm by hand — see
+  [backup-restore.md](backup-restore.md#on-a-swarm).
 - `restart: unless-stopped` is also unsupported; Swarm uses its own default
   restart policy (equivalent to "always restart, regardless of exit code")
   instead, which happens to match the intended behavior here, so this is

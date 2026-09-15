@@ -118,6 +118,22 @@ jobs:
           curl -fsS http://localhost/api/settings > /dev/null
           echo "smoke test passed"
 
+      - name: Rehearse an in-app backup and restore
+        run: |
+          set -euo pipefail
+          id=$(curl -fsS -X POST http://localhost/api/items \
+                 -H 'Content-Type: application/json' \
+                 -d '{"type":"coin","country":"Backup drill","denomination":"1 test","year":2026}' \
+               | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -fsS -o backup.zip http://localhost/api/backup.zip
+          unzip -l backup.zip
+          curl -fsS -X DELETE "http://localhost/api/items/$id" -o /dev/null
+          ./scripts/restore.sh backup.zip
+          curl -fsS "http://localhost/api/items/$id" > /dev/null
+          echo "item $id is back after restore"
+          curl -fsS -X POST http://localhost/api/backups \
+            | python3 -c 'import json,sys; run = json.load(sys.stdin); print(run); assert run["ok"]'
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

@@ -66,11 +66,18 @@ inspection simple. If the host is untrusted or portable, use full-disk or
 volume-level encryption underneath the stack rather than application-level
 encryption.
 
-Backups (`scripts/backup.sh`) contain the database, so they contain the
-**encrypted** credentials — but not the key, which lives in `.env` or on the
-state volume. A backup restored without the matching key works fine; you just
+Backups (`scripts/backup.sh`, and archives from Settings → Backups) contain
+the database, so they contain the **encrypted** credentials — but not the
+key, which lives in `.env` or on the state volume. A backup restored without the matching key works fine; you just
 re-enter the source API keys. Treat `.env` as sensitive: it holds the database
 password and the encryption key.
+
+The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) are as
+unauthenticated as the rest of the API, but they hand over the entire
+collection — database and photos — in one request. That is acceptable on a
+trusted LAN or behind an authenticating proxy, and a clear reason not to
+expose the stack directly. The backup directory is kept out of the publicly
+served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
 
 ## Authentication & network exposure
 

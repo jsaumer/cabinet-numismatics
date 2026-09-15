@@ -41,6 +41,9 @@ class SettingsOut(BaseModel):
     pcgs_auto_refresh: bool
     numista_priceable_items: int
     pcgs_priceable_items: int
+    backup_schedule: Literal["daily", "weekly"] | None
+    backup_keep: int
+    backup_include_photos: bool
     sources: list[SourceStatus]
     cached: list[CachedValue]
 
@@ -57,6 +60,9 @@ class SettingsUpdate(BaseModel):
     preferred_source: Literal["melt", "numista", "pcgs"] | None = None
     numista_refresh_days: Literal[7, 14, 30] | None = None
     pcgs_auto_refresh: bool | None = None
+    backup_schedule: Literal["daily", "weekly"] | None = None
+    backup_keep: int | None = Field(default=None, ge=1, le=365)
+    backup_include_photos: bool | None = None
 
 
 def _priceable_counts(db: Session) -> tuple[int, int]:
@@ -144,6 +150,9 @@ def _build(db: Session) -> SettingsOut:
         pcgs_auto_refresh=bool(store.get_setting(db, "pcgs_auto_refresh")),
         numista_priceable_items=numista_priceable,
         pcgs_priceable_items=pcgs_priceable,
+        backup_schedule=store.get_setting(db, "backup_schedule"),
+        backup_keep=int(store.get_setting(db, "backup_keep")),
+        backup_include_photos=bool(store.get_setting(db, "backup_include_photos")),
         sources=sources,
         cached=cached,
     )

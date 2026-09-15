@@ -8,7 +8,17 @@ from fastapi import FastAPI
 from app import __version__
 from app.config import get_settings
 from app.db import engine
-from app.routers import checklists, estimates, health, items, photos, reference, settings, stats
+from app.routers import (
+    backup,
+    checklists,
+    estimates,
+    health,
+    items,
+    photos,
+    reference,
+    settings,
+    stats,
+)
 from app.services import schema
 
 logger = logging.getLogger(__name__)
@@ -67,6 +77,34 @@ async def _reestimation_loop() -> None:
             logger.exception("Scheduled refresh failed")
 
 
+def _run_scheduled_backup() -> None:
+    from app.db import SessionLocal
+    from app.services import backup as backups
+
+    db = SessionLocal()
+    try:
+        outcome = backups.run_scheduled(db)
+        if outcome:
+            logger.info("Scheduled backup: %s", outcome)
+    except backups.BackupError as exc:
+        logger.error("Scheduled backup failed: %s", exc)
+    finally:
+        db.close()
+
+
+async def _backup_loop() -> None:
+    # Hourly checks against the last run, so a daily backup survives restarts
+    # and a failed one is retried within the hour. The first check waits a few
+    # minutes so a fresh deploy settles before archiving.
+    await asyncio.sleep(300)
+    while True:
+        try:
+            await asyncio.to_thread(_run_scheduled_backup)
+        except Exception:
+            logger.exception("Scheduled backup failed")
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = get_settings()
@@ -77,9 +115,10 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(schema.upgrade_to_head, engine)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
-    task = asyncio.create_task(_reestimation_loop())
+    tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_backup_loop())]
     yield
-    task.cancel()
+    for task in tasks:
+        task.cancel()
 
 
 app = FastAPI(
@@ -100,3 +139,4 @@ app.include_router(reference.router)
 app.include_router(stats.router)
 app.include_router(checklists.router)
 app.include_router(settings.router)
+app.include_router(backup.router)

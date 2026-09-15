@@ -12,13 +12,14 @@ published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built 
 minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
-sources, and estimate provenance — and the open-source readiness track (Phase 6) is complete apart
+sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) is
+built for v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
 bundle, the sold-listing comps price source, the pricing program's last
-milestone (M5 pricing reports), in-app backup
-(Phase 5.6), and import mappings for other collection tools.
+milestone (M5 pricing reports), in-app restore (Phase 5.6 B3, blocked on
+auth), and import mappings for other collection tools.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions — new capability = minor,
@@ -166,11 +167,11 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   per-row error reporting.
 - ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive
   together, documented **and rehearsed** (see backup-restore.md).
-- **[Nice]** Backup from inside the app: download the collection as one
-  `.zip` from Settings, then scheduled local backups with retention. The
-  scripts stay as the disaster-recovery path. See Phase 5.6.
-  **Target: v0.13.0** (B1 download + B2 scheduled/retention; B3 restore is
-  blocked on the auth decision below, no target yet).
+- ✔ **[Nice]** Backup from inside the app: download the collection as one
+  `.zip` from Settings, and scheduled backups with retention. The scripts
+  stay as the disaster-recovery path. See Phase 5.6. **Target: v0.12.0**
+  (B1 download + B2 scheduled/retention; B3 restore is blocked on the auth
+  decision below, no target yet).
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
@@ -337,30 +338,35 @@ reports. Staged so each milestone is independently useful.
 - **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
   why — no ref, source unconfigured, fetch failed), stale-estimates view,
   per-source breakdown, and estimate-vs-reality accuracy (last estimate
-  against realized price on sold items). **Target: v0.12.0.**
+  against realized price on sold items). **Target: v0.13.0** (moved behind
+  in-app backup, which went first once real data started going into the live
+  instance).
 
 *Exit: every priceable item has a sourced, explainable, configurable
 estimate — and you can see where pricing is thin.*
 
 ### Phase 5.6 — Backup from inside the app
 
-**Target: v0.13.0** for B1 + B2 (B3 restore is blocked on the auth decision
-in Phase 6/section 5, no target yet).
+B1 + B2 ✔ — **target v0.12.0**, pulled ahead of pricing M5 once real data
+started going into the live instance. B3 restore is blocked on the auth
+decision in Phase 6/section 5, no target yet.
 
 `scripts/backup.sh` needs a shell, the host, and Docker. That is the right
 tool for disaster recovery and the wrong one for "I just entered forty items
 and want a copy." Move the common case into the app; the scripts stay, and
 stay the documented recovery path.
 
-- **B1 — Download a backup.** `GET /api/backup.zip` streams one archive
+- ✔ **B1 — Download a backup.** `GET /api/backup.zip` streams one archive
   holding `db.dump`, `photos.tar.gz`, and a `manifest.json` — app version,
   Alembic revision, item/photo counts, created-at, and a SHA-256 per member.
   A button in Settings. The manifest is what makes an archive *checkable*
   rather than merely present, and it is what B3 validates against.
   `?photos=false` gives a small data-only archive for moving between machines.
-- **B2 — Scheduled backups + retention.** Settings gains cadence (off /
-  daily / weekly), a destination directory on a mounted volume, and how many
-  to keep. The same in-process scheduler that refreshes melt estimates runs
+- ✔ **B2 — Scheduled backups + retention.** Settings gains cadence (off /
+  daily / weekly) and how many to keep. The destination is the `BACKUP_DIR`
+  mount (`/data/backups`), set by the deployment rather than in Settings: an
+  unauthenticated page choosing where the backend writes and prunes files
+  was a worse idea than a fixed mount point. The same in-process scheduler that refreshes melt estimates runs
   it and prunes the oldest; Settings reports last run, size, and outcome.
   Pointing the destination at a NAS bind mount gets backups off the box with
   no new service — see the "no cut services" rule in CLAUDE.md.
@@ -372,10 +378,13 @@ stay the documented recovery path.
 
 Implementation notes:
 
-- The backend image has no postgres client today, so B1 needs
-  `postgresql-client` added, pinned to at least the `db` service's major
-  version (pg_dump refuses a newer server). That is the one real cost here:
-  roughly 15–20 MB on an image the project deliberately keeps small. The
+- The backend image had no postgres client, so B1 added one. It carries only
+  `pg_dump`/`pg_restore` for majors 14–18 and libpq, from the PostgreSQL apt
+  repository, and dumps with the client matching the server: pg_dump refuses
+  a newer server, and a *newer* pg_dump writes settings (`transaction_timeout`)
+  an older server rejects on restore — found by the restore drill against
+  Postgres 16. The full `postgresql-client` packages would have pulled in
+  ~50 MB of perl. The
   alternative — dumping logically through SQLAlchemy to JSON — adds no
   dependency but produces an archive `restore.sh` and `pg_restore` can't
   read, which splits the format in two. One format is worth the megabytes.
@@ -384,8 +393,12 @@ Implementation notes:
   deployment (trusted LAN, or Traefik + Authentik) and not acceptable if the
   stack is ever exposed directly. Same caveat as the rest of the API, but
   this endpoint concentrates everything into one request.
-- Archives are written to a temp file on the private `backend_state` volume
-  and streamed, not built in memory — photo volumes get large.
+- Archives are written to a temp file in the backup directory and then
+  sent, never built in memory — photo volumes get large. nginx allows
+  `/api/backup*` 30 minutes, since the download starts only once the archive
+  is complete (which is also what lets a failed `pg_dump` return a clean
+  error instead of a truncated file). `restore.sh` accepts these archives and
+  checks `SHA256SUMS` before touching anything; CI rehearses it.
 
 Deferred unless wanted: passphrase-encrypted archives, and push targets
 (S3/WebDAV/SFTP). A mounted path covers the homelab case without new

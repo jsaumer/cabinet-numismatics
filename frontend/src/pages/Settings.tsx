@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 
-import { api, AppSettings, AppSettingsUpdate, Health, SourceStatus, ValueStrategy } from "../api";
+import {
+  api,
+  AppSettings,
+  AppSettingsUpdate,
+  BackupList,
+  Health,
+  SourceStatus,
+  ValueStrategy,
+} from "../api";
+
+function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 function schemaLabel({ current, expected, status }: Health["schema"]): string {
   if (status === "ok") return `${current} — up to date`;
@@ -20,10 +39,39 @@ export default function Settings() {
   const [preferredSource, setPreferredSource] = useState("");
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [health, setHealth] = useState<Health | null>(null);
+  const [keep, setKeep] = useState("");
+  const [backups, setBackups] = useState<BackupList | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [backupNote, setBackupNote] = useState<string | null>(null);
+  const [backingUp, setBackingUp] = useState(false);
+
+  function loadBackups() {
+    api
+      .listBackups()
+      .then(setBackups)
+      .catch((e: Error) => setBackupError(e.message));
+  }
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null));
+    loadBackups();
   }, []);
+
+  async function backUpNow() {
+    setBackingUp(true);
+    setBackupError(null);
+    setBackupNote(null);
+    try {
+      const run = await api.runBackup();
+      const pruned = run.pruned?.length ? ` Removed ${run.pruned.length} older.` : "";
+      setBackupNote(`Backup written: ${run.file} (${formatBytes(run.size ?? 0)}).${pruned}`);
+    } catch (e) {
+      setBackupError((e as Error).message);
+    } finally {
+      setBackingUp(false);
+      loadBackups();
+    }
+  }
 
   useEffect(() => {
     api
@@ -34,6 +82,7 @@ export default function Settings() {
         setCadence(String(s.reestimate_days));
         setValueStrategy(s.value_strategy);
         setPreferredSource(s.preferred_source ?? "");
+        setKeep(String(s.backup_keep));
       })
       .catch((e: Error) => setError(e.message));
   }, []);
@@ -49,6 +98,7 @@ export default function Settings() {
       setCadence(String(updated.reestimate_days));
       setValueStrategy(updated.value_strategy);
       setPreferredSource(updated.preferred_source ?? "");
+      setKeep(String(updated.backup_keep));
       setNote(message);
     } catch (e) {
       setError((e as Error).message);
@@ -290,6 +340,119 @@ export default function Settings() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Backups</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          An archive holds the database, the photos, and a manifest with checksums. Restore
+          it with <code>scripts/restore.sh</code> (see docs/backup-restore.md). Stored API
+          keys stay encrypted, and the encryption key is not in the archive.
+        </p>
+        <div className="estimate-form" style={{ marginTop: 0 }}>
+          <a className="button primary" href="/api/backup.zip" download>
+            Download backup
+          </a>
+          <a className="button" href="/api/backup.zip?photos=false" download>
+            Data only (no photos)
+          </a>
+        </div>
+        <p className="muted">
+          The download starts once the archive is built — allow a minute for a large photo
+          collection.
+        </p>
+
+        <h3>Scheduled backups</h3>
+        <div className="estimate-form" style={{ marginTop: 0 }}>
+          <label className="field">
+            Schedule
+            <select
+              value={settings.backup_schedule ?? ""}
+              disabled={saving}
+              onChange={(e) => {
+                const schedule = e.target.value ? (e.target.value as "daily" | "weekly") : null;
+                apply(
+                  { backup_schedule: schedule },
+                  schedule ? `Backups scheduled ${schedule}.` : "Scheduled backups turned off.",
+                );
+              }}
+            >
+              <option value="">Off</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </label>
+          <label className="field">
+            Keep newest
+            <input type="number" min={1} max={365} value={keep} style={{ width: "5rem" }}
+              onChange={(e) => setKeep(e.target.value)} />
+          </label>
+          <button
+            disabled={saving || !keep || Number(keep) === settings.backup_keep}
+            onClick={() =>
+              apply({ backup_keep: Number(keep) }, `Keeping the newest ${keep} backups.`)
+            }
+          >
+            Save
+          </button>
+          <label className="slot">
+            <input
+              type="checkbox"
+              checked={settings.backup_include_photos}
+              disabled={saving}
+              onChange={(e) =>
+                apply(
+                  { backup_include_photos: e.target.checked },
+                  e.target.checked
+                    ? "Stored backups include photos."
+                    : "Stored backups are data only.",
+                )
+              }
+            />
+            Include photos
+          </label>
+          <button disabled={backingUp} onClick={backUpNow}>
+            {backingUp ? "Backing up…" : "Back up now"}
+          </button>
+        </div>
+        {backupError && <p className="error">{backupError}</p>}
+        {backupNote && <p className="muted">{backupNote}</p>}
+        {backups && (
+          <>
+            <p className="muted">
+              Stored in <code>{backups.directory}</code>
+              {backups.free_bytes != null && ` (${formatBytes(backups.free_bytes)} free)`}.
+              Mount a volume or NAS path there to keep archives off this host. A schedule
+              counts from the last run; older archives beyond the keep count are removed.
+            </p>
+            {backups.last_run && (
+              <p className={backups.last_run.ok ? "muted" : "error"}>
+                Last run {new Date(backups.last_run.at).toLocaleString()}:{" "}
+                {backups.last_run.ok
+                  ? `${backups.last_run.file} (${formatBytes(backups.last_run.size ?? 0)})`
+                  : `failed — ${backups.last_run.error}`}
+              </p>
+            )}
+            {backups.backups.length > 0 && (
+              <table className="estimates">
+                <thead>
+                  <tr><th>Archive</th><th>Size</th><th>Created</th></tr>
+                </thead>
+                <tbody>
+                  {backups.backups.map((b) => (
+                    <tr key={b.name}>
+                      <td>
+                        <a href={`/api/backups/${b.name}`} download>{b.name}</a>
+                      </td>
+                      <td>{formatBytes(b.size)}</td>
+                      <td className="muted">{new Date(b.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
         )}
       </div>
 

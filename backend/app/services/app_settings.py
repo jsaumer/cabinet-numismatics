@@ -28,6 +28,11 @@ DEFAULTS: dict = {
     "preferred_source": None,
     "numista_refresh_days": None,  # None = off; else 7 | 14 | 30
     "pcgs_auto_refresh": False,
+    "backup_schedule": None,  # None = off; else "daily" | "weekly"
+    "backup_keep": 7,
+    "backup_include_photos": True,
+    # Written by the backup service, not through PUT /api/settings.
+    "backup_last_run": None,
 }
 
 SECRET_KEYS = {"numista_api_key", "pcgs_api_token"}

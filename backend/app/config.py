@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Apply pending database migrations when the backend starts. Set false to
     # run `alembic upgrade head` yourself instead.
     auto_migrate: bool = True
+    # Where scheduled and on-demand backups are written. Mount a volume (or a
+    # NAS path) here to get archives off the container.
+    backup_dir: str = "/data/backups"
 
     @property
     def sqlalchemy_url(self) -> str:

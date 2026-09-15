@@ -13,7 +13,9 @@ plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
 Revision `0008` (pricing program M1) added `app_settings` — key/value JSON
 settings (display currency, source toggles, API credentials, melt cadence;
 later grew `value_strategy`/`preferred_source` for the blended-value display
-and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh — no
+and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh, and
+`backup_schedule`/`backup_keep`/`backup_include_photos`/`backup_last_run`
+for in-app backups — no
 migration needed, since it's a generic key/value table), read through
 `app/services/app_settings.py` with defaults and env fallbacks. Revision
 `0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`.
