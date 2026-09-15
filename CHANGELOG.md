@@ -13,6 +13,10 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-09-14
+
+After upgrading, run `alembic upgrade head` (revision `0010`).
+
 ### Added
 - **Estimate provenance** (pricing program M4). Automatic estimates now keep
   what produced them in a new `price_estimates.details` column (revision
