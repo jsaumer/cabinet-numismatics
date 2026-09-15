@@ -312,6 +312,38 @@ class ChecklistDetail(BaseModel):
     slots: list[SlotOut]
 
 
+class NumistaSearchResult(BaseModel):
+    type_id: int
+    title: str
+    category: str | None = None
+    issuer: str | None = None
+    min_year: int | None = None
+    max_year: int | None = None
+    thumbnail: str | None = None
+
+
+class NumistaSearch(BaseModel):
+    count: int
+    results: list[NumistaSearchResult]
+
+
+class NumistaIssue(BaseModel):
+    year: int | None = None
+    mint_letter: str | None = None
+    mintage: int | None = None
+    comment: str | None = None
+
+
+class NumistaType(BaseModel):
+    type_id: int
+    title: str
+    url: str | None = None
+    category: str | None = None
+    fields: dict[str, str | int | float]  # item fields, keyed like ItemCreate
+    catalog_refs: list[CatalogRefIn]
+    issues: list[NumistaIssue]
+
+
 class ItemListEntry(ItemOut):
     """List view: item plus its primary photo and latest estimate, if any."""
 

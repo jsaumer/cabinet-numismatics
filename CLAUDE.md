@@ -165,8 +165,16 @@ reused and `Item.grade_code` prints PR-/SP- plus "+"), `grade_plus`,
 keeps gross `sold_price`. Numista refuses non-business strikes and details
 grades; PCGS sends `PlusGrade` and prices details grades by cert only. PMG
 grades 1–3 were inserted with WHERE NOT EXISTS because `0003` seeds from the
-same list. CSV import now commits per row. **Next: C5, filling items from
-the Numista catalogue** (v0.15.0). Added by a September
+same list. CSV import now commits per row. C5 (filling items from the Numista catalogue) is
+built for v0.15.0: `numista.search_types` / `numista.catalogue_type` behind
+`GET /api/numista/{search,types/{id}}` (`routers/catalogue.py`), cached via
+the same `_cached`/`source_cache` as pricing (type `type:<id>`, search
+`search:<category>:<q>`, issues share `issues:<id>` with estimates).
+`catalogue_fields` maps a type onto item-schema keys, trimmed to schema
+limits, category-aware (notes get `issuer`, never diameter); fineness is
+parsed from composition text only for precious metals. The item form's
+"Fill from Numista" card fills empty fields only. **Next: the photo-niceties
+bundle** (v0.16.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

@@ -16,8 +16,7 @@ sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: filling items in from the Numista catalogue (Phase 5.7 C5,
-v0.15.0, from the September 2026 feature review), the photo-niceties bundle, the sold-listing comps price source,
+A ✔ marks shipped items below. What remains, all optional: the photo-niceties bundle, the sold-listing comps price source,
 import mappings for other collection tools, the operations and
 quality-of-life additions from the same review (Phase 5.8), and in-app restore
 (Phase 5.6 B3, blocked on auth).
@@ -84,7 +83,7 @@ The heart of the app: describing what you own, accurately and flexibly.
   **Target: v0.14.0.**
 - ✔ **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
   Phase 5.7 C4. **Target: v0.14.0.**
-- **[Core]** Fill in an item from the Numista catalogue by catalogue number or
+- ✔ **[Core]** Fill in an item from the Numista catalogue by catalogue number or
   name search. Phase 5.7 C5. **Target: v0.15.0.**
 - **[Nice]** Wish-list target price and priority, flagged when an estimate
   drops below the target. Phase 5.8. **Target: v0.22.0.**
@@ -454,7 +453,7 @@ trusted before it is restored.*
 
 ### Phase 5.7 — Catalog depth II and faster data entry
 
-**C1–C4 ✔ shipped in v0.14.0; C5 targets v0.15.0.** Added by the September 2026
+**C1–C4 ✔ shipped in v0.14.0; C5 ✔ built for v0.15.0.** Added by the September 2026
 feature review and placed ahead of the photo niceties. The live collection is
 still empty, and the schema-complete-before-data-complete rule (see Notes on
 sequencing) says fields are cheap to add now and tedious once hundreds of
@@ -483,12 +482,14 @@ items need revisiting.
   own cert lookup (PCGS, NGC, PMG), built from the cert service and number
   already stored. PCGS opens the certificate itself; NGC's and PMG's lookups
   also ask for the grade, so those open the lookup page. No API involved.
-- **C5 — Fill in an item from Numista.** Enter a Numista catalogue number, or
+- ✔ **C5 — Fill in an item from Numista.** Enter a Numista catalogue number, or
   search by name, and pre-fill country, denomination, years, composition,
   weight, and diameter on the item form. Uses the configured key and the same
   cache as pricing (catalogue data 30 days), and fills exactly the fields melt
   pricing needs. The biggest single time-saver when entering a real
-  collection by hand.
+  collection by hand. It also adds the type's other catalogue references and
+  lists its issues, so choosing one sets year, mint mark, and mintage; only
+  empty fields are filled.
 
 *Exit: an item record can describe any coin or note accurately — proofs,
 problem coins, and notes' own details included — gains are net of costs, and

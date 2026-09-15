@@ -178,6 +178,33 @@ export interface ItemPayload {
   catalog_refs: CatalogRef[];
 }
 
+export interface NumistaSearchResult {
+  type_id: number;
+  title: string;
+  category: string | null;
+  issuer: string | null;
+  min_year: number | null;
+  max_year: number | null;
+  thumbnail: string | null;
+}
+
+export interface NumistaIssue {
+  year: number | null;
+  mint_letter: string | null;
+  mintage: number | null;
+  comment: string | null;
+}
+
+export interface NumistaType {
+  type_id: number;
+  title: string;
+  url: string | null;
+  category: string | null;
+  fields: Record<string, string | number | null>;
+  catalog_refs: CatalogRef[];
+  issues: NumistaIssue[];
+}
+
 export interface ImportResult {
   created: number;
   skipped: number;
@@ -556,6 +583,11 @@ export const api = {
   getSettings: () => req<AppSettings>("/api/settings"),
   updateSettings: (payload: AppSettingsUpdate) =>
     req<AppSettings>("/api/settings", json("PUT", payload)),
+  numistaSearch: (q: string, category: "coin" | "banknote") =>
+    req<{ count: number; results: NumistaSearchResult[] }>(
+      `/api/numista/search?${new URLSearchParams({ q, category })}`,
+    ),
+  numistaType: (typeId: number) => req<NumistaType>(`/api/numista/types/${typeId}`),
   listBackups: () => req<BackupList>("/api/backups"),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
 

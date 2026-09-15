@@ -103,6 +103,14 @@ Requirements and limits:
 A missing prerequisite answers 422 with what to fix; an upstream failure or an
 exhausted quota answers 502.
 
+**Catalogue lookup.** The same key also fills items in: the item form looks a
+type up by Numista number or name search (`GET /types/{id}` and
+`GET /types?q=`) and pre-fills identity, composition, and physical fields,
+catalogue references, and the issue list with mintages. It needs only the
+key, not the pricing toggle, and spends from the same quota — one request per
+search or type, cached 30 days; a type's issues are the same cache entry the
+estimates use, so pricing an item you just filled in costs one request fewer.
+
 ### PCGS (implemented — pricing program M3)
 PCGS CoinFacts returns a price-guide value *and* a list of auction sales in one
 response, so a single request yields both numbers. Implemented in

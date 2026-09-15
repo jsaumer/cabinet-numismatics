@@ -427,6 +427,25 @@ dl.facts dd {
   gap: 0.5rem;
 }
 
+.numista-results {
+  list-style: none;
+  margin: 0.6rem 0;
+  padding: 0;
+}
+.numista-results li {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 0.7rem;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.numista-results img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
 .table-scroll {
   overflow-x: auto;
 }
