@@ -78,8 +78,13 @@ Phase 0 so future sessions can run them without asking. -->
 - Lint/format: in `backend/` — `ruff check .` and `ruff format .`.
 - Migrations: Alembic, run in `backend/` with `DATABASE_URL` set —
   `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
-  to create. Inside the compose stack:
-  `docker compose exec backend alembic upgrade head`. The baseline revision
+  to create. The backend also applies pending migrations itself on startup
+  (`AUTO_MIGRATE`, default true; `app/services/schema.py`, under a Postgres
+  advisory lock), so a deploy needs no manual step;
+  `docker compose exec backend alembic upgrade head` still works. Tests set
+  `AUTO_MIGRATE=false` (conftest) and build the schema with `create_all` on
+  SQLite. `/api/health` reports `schema` (current vs expected revision), shown
+  in Settings → About. The baseline revision
   (`0001`) is empty; the first real tables arrive with Phase 1 models.
 
 ## Current status & next step
@@ -126,7 +131,8 @@ that history by source. **Next: pricing M5 — pricing reports** (coverage,
 stale estimates, per-source breakdown, accuracy against sold prices). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
-tags, so a release reaches it only once the tag's images exist. Also open:
+tags, so a release reaches it only once the tag's images exist; from v0.11.1
+the backend migrates on startup, so an upgrade there is just a tag bump. Also open:
 photo-niceties bundle, a Swarm-ready stack file/backup path in this repo
 (the running stack file lives in the homelab setup). See docs/roadmap.md.
 

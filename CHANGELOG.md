@@ -13,6 +13,28 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+### Added
+- **Settings → About** shows the running version (linked to its release) and
+  the database schema: current revision, and whether it's up to date, waiting
+  on a migration, or ahead of this build. `GET /api/health` reports the same
+  under a new `schema` field.
+
+### Changed
+- **The backend applies database migrations itself on startup**, before it
+  serves anything — upgrading is now just deploying the new image, with no
+  separate `alembic upgrade head`. All pending migrations run in one
+  transaction under a Postgres advisory lock; a failure rolls back and stops
+  startup instead of leaving new code running on an old schema. On Swarm,
+  where there's no startup ordering, the backend waits up to 60 seconds for
+  Postgres first. Set `AUTO_MIGRATE=false` to keep running migrations by hand.
+  Going back to an older image still doesn't undo a migration.
+
+### Fixed
+- The backend's own INFO logs never reached the container log — uvicorn only
+  configures its own loggers — so scheduled price refreshes ran silently. The
+  `app` and `alembic` loggers now log at INFO, which also shows migrations
+  applied at startup.
+
 ## [0.11.0] — 2026-09-14
 
 After upgrading, run `alembic upgrade head` (revision `0010`).

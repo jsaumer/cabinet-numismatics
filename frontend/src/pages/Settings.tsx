@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 
-import { api, AppSettings, AppSettingsUpdate, SourceStatus, ValueStrategy } from "../api";
+import { api, AppSettings, AppSettingsUpdate, Health, SourceStatus, ValueStrategy } from "../api";
+
+function schemaLabel({ current, expected, status }: Health["schema"]): string {
+  if (status === "ok") return `${current} — up to date`;
+  if (status === "pending") return `${current ?? "empty"} — migration pending (expects ${expected})`;
+  if (status === "ahead") return `${current} — newer than this build (expects ${expected})`;
+  return "unknown — database unreachable";
+}
 
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
@@ -12,6 +19,11 @@ export default function Settings() {
   const [valueStrategy, setValueStrategy] = useState<ValueStrategy>("latest");
   const [preferredSource, setPreferredSource] = useState("");
   const [keys, setKeys] = useState<Record<string, string>>({});
+  const [health, setHealth] = useState<Health | null>(null);
+
+  useEffect(() => {
+    api.health().then(setHealth).catch(() => setHealth(null));
+  }, []);
 
   useEffect(() => {
     api
@@ -278,6 +290,42 @@ export default function Settings() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>About</h2>
+        {health === null ? (
+          <p className="muted">Version information unavailable.</p>
+        ) : (
+          <dl className="facts">
+            <div>
+              <dt>Version</dt>
+              <dd>
+                <a
+                  href={`https://github.com/jsaumer/cabinet-numismatics/releases/tag/v${health.version}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {health.version}
+                </a>
+              </dd>
+            </div>
+            <div>
+              <dt>Database schema</dt>
+              <dd
+                className={
+                  health.schema.status === "ok"
+                    ? undefined
+                    : health.schema.status === "unknown"
+                      ? "muted"
+                      : "error"
+                }
+              >
+                {schemaLabel(health.schema)}
+              </dd>
+            </div>
+          </dl>
         )}
       </div>
     </>

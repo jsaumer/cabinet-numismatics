@@ -6,6 +6,8 @@ import tempfile
 # Point PHOTO_DIR somewhere disposable before app.config is imported,
 # so the lifespan hook doesn't create a photos/ dir in the repo.
 os.environ.setdefault("PHOTO_DIR", os.path.join(tempfile.gettempdir(), "cabinet-test-photos"))
+# Tests build their schema with create_all on SQLite; never migrate at startup.
+os.environ.setdefault("AUTO_MIGRATE", "false")
 # Deterministic encryption key so tests never generate or read a key file.
 os.environ.setdefault(
     "SECRET_KEY", base64.urlsafe_b64encode(b"cabinet-test-key-32-bytes-long!!").decode()

@@ -171,6 +171,12 @@ before you turn Numista's cadence on.
 |--------|----------------|-------------------------------------|
 | `GET`  | `/api/health`  | Liveness/readiness probe            |
 
+Returns `status`, `db` (`ok` / `unreachable`), the app `version`, and
+`schema`: the database's `current` Alembic revision, the `expected` one this
+build ships, and a `status` — `ok`, `pending` (migrations not yet applied),
+`ahead` (the database was migrated by a newer build), or `unknown` (database
+unreachable). Settings → About displays it.
+
 ## Conventions
 
 - **Timestamps** are ISO 8601 UTC (`timestamptz`).

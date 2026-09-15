@@ -7,9 +7,29 @@ from fastapi import FastAPI
 
 from app import __version__
 from app.config import get_settings
+from app.db import engine
 from app.routers import checklists, estimates, health, items, photos, reference, settings, stats
+from app.services import schema
 
 logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """uvicorn only configures its own loggers, so without this the app's INFO
+    lines (migrations, scheduled refreshes) never reach the container log.
+    Scoped to `app` and `alembic` — the root logger at INFO would also dump
+    every SQL statement and outbound HTTP request."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s - %(message)s"))
+    for name in ("app", "alembic"):
+        named = logging.getLogger(name)
+        if not named.handlers:
+            named.addHandler(handler)
+            named.setLevel(logging.INFO)
+            named.propagate = False
+
+
+_configure_logging()
 
 
 def _run_scheduled_refresh() -> None:
@@ -49,7 +69,12 @@ async def _reestimation_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Path(get_settings().photo_dir).mkdir(parents=True, exist_ok=True)
+    config = get_settings()
+    Path(config.photo_dir).mkdir(parents=True, exist_ok=True)
+    if config.auto_migrate:
+        # Before serving anything: new code must not run against an old schema.
+        # A failure raises here and stops startup rather than limping along.
+        await asyncio.to_thread(schema.upgrade_to_head, engine)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     task = asyncio.create_task(_reestimation_loop())

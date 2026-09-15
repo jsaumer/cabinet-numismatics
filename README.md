@@ -122,13 +122,13 @@ git clone <your-repo-url> cabinet-numismatics
 cd cabinet-numismatics
 cp .env.example .env        # then edit secrets in .env
 docker compose up --build
-docker compose exec backend alembic upgrade head
 ```
 
 No host Node or Python install is needed — the frontend is built inside the
 proxy image. Once running: the app is at http://localhost/, API docs at
-http://localhost/api/docs. After pulling a new version, re-run the two
-commands above (rebuild, then migrate).
+http://localhost/api/docs. The backend creates and updates the database schema
+itself on startup. After pulling a new version, run `docker compose up --build`
+again; Settings → About shows the version and whether the schema is current.
 
 **Want something to look at first?** Load a small demo collection — 13 items
 across several countries, decades, and grades, with value history:
@@ -151,6 +151,7 @@ from `.env.example`).
 | `DB_PASSWORD`     | Postgres password                                    |
 | `DB_NAME`         | Postgres database name                               |
 | `REESTIMATE_DAYS` | Optional: default melt re-estimation window in days (Settings overrides it; `0` disables the scheduler) |
+| `AUTO_MIGRATE`    | Optional, default `true`: apply database migrations when the backend starts. Set `false` to run `alembic upgrade head` yourself |
 | `SECRET_KEY`      | Recommended: Fernet key encrypting stored price-source API credentials. Auto-generated onto a private volume if unset. Comma-separated to rotate. See [docs/security.md](docs/security.md) |
 
 External data sources (both free, keyless, and only contacted when needed,

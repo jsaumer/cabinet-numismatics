@@ -35,8 +35,8 @@ running. After a restore, the app reflects the backup immediately — no
 restart needed.
 
 Restoring into a *fresh* deployment works the same way: bring the stack up,
-run `docker compose exec backend alembic upgrade head` once so the database
-exists, then restore.
+wait until `/api/health` reports `schema.status: "ok"` (the backend creates
+the schema on startup), then restore.
 
 ## Secrets in backups
 
