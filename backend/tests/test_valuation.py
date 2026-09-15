@@ -65,6 +65,23 @@ def test_melt_percent_fallback_from_composition(client, spot):
     assert body["estimated_value"] == 24.06  # "90% silver" → 0.90
 
 
+def test_melt_records_provenance(client, spot):
+    item = _create(client, SILVER)
+    details = client.post(f"/api/items/{item['id']}/estimate").json()["details"]
+    assert details["metal"] == "silver"
+    assert details["weight_g"] == 26.73
+    assert details["fineness"] == 0.9
+    assert details["fineness_from"] == "field"
+    assert details["quantity"] == 1
+    assert details["spot_per_gram"] == 1.0
+    assert details["spot_source"] == "gold-api.com"
+    assert details["stale"] is False
+
+    derived = _create(client, {**SILVER, "fineness": None})
+    details = client.post(f"/api/items/{derived['id']}/estimate").json()["details"]
+    assert details["fineness_from"] == "composition"
+
+
 def test_melt_not_applicable_reasons(client, spot):
     no_metal = _create(client, COIN)
     resp = client.post(f"/api/items/{no_metal['id']}/estimate")
@@ -101,6 +118,7 @@ def test_stale_cache_used_when_fetch_fails(client, spot, monkeypatch):
     monkeypatch.setattr(pricing, "fetch_spot_price", broken)
     resp = client.post(f"/api/items/{item['id']}/estimate")
     assert resp.status_code == 201  # stale beats nothing
+    assert resp.json()["details"]["stale"] is True  # ...and says so
 
 
 def test_spot_unavailable_without_cache_is_502(client, monkeypatch):

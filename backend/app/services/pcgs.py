@@ -29,7 +29,8 @@ from app.services.pricing import (
     EstimateResult,
     NotApplicable,
     SourceUnavailable,
-    cached_response,
+    cached_fetch,
+    freshness,
 )
 
 API_ROOT = "https://api.pcgs.com/publicapi"
@@ -114,18 +115,40 @@ def _sale_date(sale: dict) -> datetime | None:
     return None
 
 
-def recent_sales(payload: dict) -> list[Decimal]:
-    """Prices of the most recent auction lots, newest first. Undated lots keep
+def _text(value) -> str | None:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def recent_lots(payload: dict) -> list[dict]:
+    """The most recent priced auction lots, newest first. Undated lots keep
     the order PCGS returned them in, behind everything dated."""
-    lots = payload.get("AuctionList") or payload.get("Auctions") or []
-    priced = [(_sale_date(lot), _amount(lot.get("Price"))) for lot in lots if isinstance(lot, dict)]
+    lots = []
+    for lot in payload.get("AuctionList") or payload.get("Auctions") or []:
+        if not isinstance(lot, dict):
+            continue
+        price = _amount(lot.get("Price"))
+        if price is None:
+            continue
+        lots.append(
+            {
+                "date": _sale_date(lot),
+                "price": price,
+                "auctioneer": _text(lot.get("Auctioneer")),
+                "sale": _text(lot.get("SaleName")),
+                "url": _text(lot.get("AuctionLotUrl")),
+            }
+        )
     dated = sorted(
-        [(d, p) for d, p in priced if d is not None and p is not None],
-        key=lambda pair: pair[0],
-        reverse=True,
+        (lot for lot in lots if lot["date"] is not None), key=lambda lot: lot["date"], reverse=True
     )
-    undated = [p for d, p in priced if d is None and p is not None]
-    return [p for _, p in dated][:APR_WINDOW] + undated[: max(0, APR_WINDOW - len(dated))]
+    undated = [lot for lot in lots if lot["date"] is None]
+    return dated[:APR_WINDOW] + undated[: max(0, APR_WINDOW - len(dated))]
+
+
+def recent_sales(payload: dict) -> list[Decimal]:
+    """Prices of the most recent auction lots, newest first."""
+    return [lot["price"] for lot in recent_lots(payload)]
 
 
 def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
@@ -142,6 +165,7 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
         params = {"retrieveAllData": "true"}
         cache_key = f"certfacts:{cert}"
         matched = f"cert {cert}"
+        lookup = {"lookup": "cert", "cert": cert}
     else:
         number = pcgs_number(item)
         if number is None:
@@ -156,21 +180,23 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
         params = {"PCGSNo": number, "GradeNo": item.grade.rank, "PlusGrade": "false"}
         cache_key = f"gradefacts:{number}:{item.grade.rank}"
         matched = f"#{number} {item.grade.code}"
+        lookup = {"lookup": "grade", "pcgs_number": number, "grade": item.grade.code}
 
-    payload = cached_response(
+    payload, fetched_at = cached_fetch(
         db, "pcgs", cache_key, CACHE_TTL, lambda: _request(token, path, params)
     )
     check_payload(payload)
 
-    sales = recent_sales(payload)
-    if sales:
-        per_piece = Decimal(median(sales))
+    lots = recent_lots(payload)
+    guide = _amount(payload.get("PriceGuideValue"))
+    if lots:
+        per_piece = Decimal(median(lot["price"] for lot in lots))
         # Real sales beat a book value; more of them beat fewer.
-        confidence = Decimal("0.85") if len(sales) >= 5 else Decimal("0.75")
+        confidence = Decimal("0.85") if len(lots) >= 5 else Decimal("0.75")
         source = f"pcgs:apr {matched}"
-        sample_size = len(sales)
+        sample_size = len(lots)
     else:
-        per_piece = _amount(payload.get("PriceGuideValue"))
+        per_piece = guide
         if per_piece is None:
             raise NotApplicable(f"PCGS has no auction sales or price-guide value for {matched}")
         confidence = Decimal("0.60")
@@ -183,4 +209,21 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
         currency="USD",  # PCGS quotes US dollars
         confidence=confidence,
         sample_size=sample_size,
+        details={
+            **lookup,
+            "basis": "apr" if lots else "guide",
+            "lots": [
+                {
+                    **lot,
+                    "date": lot["date"].date().isoformat() if lot["date"] else None,
+                    "price": float(lot["price"]),
+                }
+                for lot in lots
+            ],
+            "median": float(per_piece) if lots else None,
+            "price_guide_value": float(guide) if guide is not None else None,
+            "coinfacts_url": _text(payload.get("CoinFactsLink")),
+            "quantity": item.quantity,
+            **freshness(fetched_at, CACHE_TTL),
+        },
     )

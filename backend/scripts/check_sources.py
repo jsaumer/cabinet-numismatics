@@ -178,6 +178,8 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
         print(f"  source     : {result.source}")
         print(f"  confidence : {result.confidence}")
         print(f"  sample     : {result.sample_size if result.sample_size is not None else '—'}")
+        if result.details:
+            dump("  details", result.details, full)
         if item.quantity != 1:
             per_piece = (Decimal(result.estimated_value) / item.quantity).quantize(Decimal("0.01"))
             print(f"  per piece  : {per_piece} (quantity {item.quantity})")

@@ -42,7 +42,12 @@ def list_estimates(item_id: uuid.UUID, db: Session = Depends(get_db)):
 def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = Depends(get_db)):
     """Record a manually researched value. Append-only: history is never overwritten."""
     get_item_or_404(db, item_id)
-    estimate = PriceEstimate(item_id=item_id, **payload.model_dump())
+    note = (payload.note or "").strip()
+    estimate = PriceEstimate(
+        item_id=item_id,
+        **payload.model_dump(exclude={"note"}),
+        details={"note": note} if note else None,
+    )
     db.add(estimate)
     db.commit()
     db.refresh(estimate)
@@ -67,14 +72,7 @@ def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depend
         raise HTTPException(status_code=422, detail=str(exc)) from None
     except pricing.SourceUnavailable as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from None
-    estimate = PriceEstimate(
-        item_id=item_id,
-        source=result.source,
-        estimated_value=result.estimated_value,
-        currency=result.currency,
-        confidence=result.confidence,
-        sample_size=result.sample_size,
-    )
+    estimate = pricing.estimate_row(item_id, result)
     db.add(estimate)
     db.commit()
     db.refresh(estimate)

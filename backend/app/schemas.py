@@ -157,6 +157,7 @@ class EstimateCreate(BaseModel):
     currency: str = Field(default="USD", min_length=3, max_length=3)
     source: str = Field(default="manual", min_length=1, max_length=100)
     confidence: float | None = Field(default=None, ge=0, le=1)
+    note: str | None = Field(default=None, max_length=500)
 
 
 class EstimateOut(BaseModel):
@@ -169,6 +170,7 @@ class EstimateOut(BaseModel):
     currency: str
     confidence: float | None
     sample_size: int | None
+    details: dict | None = None
     fetched_at: datetime
 
 

@@ -9,15 +9,15 @@ rather than assumed.
 
 **Status (September 2026): released as v0.10.2**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
-minus the photo-niceties bundle), pricing-program M1–M3 are done — settings
+minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
-configurable blended-value strategy, and scheduled auto-refresh for both
-sources — and the open-source readiness track (Phase 6) is complete apart
+configurable blended-value strategy, scheduled auto-refresh for both
+sources, and estimate provenance — and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
-bundle, the sold-listing comps price source, the pricing program's last two
-milestones (M4 estimate provenance, M5 pricing reports), in-app backup
+bundle, the sold-listing comps price source, the pricing program's last
+milestone (M5 pricing reports), in-app backup
 (Phase 5.6), and import mappings for other collection tools.
 
 **Target versions** on the unshipped items below assume each ships alone,
@@ -327,10 +327,13 @@ reports. Staged so each milestone is independently useful.
   PCGS public API program, 1,000 calls/day, cached 7 days. Coins only —
   PCGS Banknote responses carry no price fields.
   `POST /api/items/{id}/estimate?source=pcgs`.
-- **M4 — Estimate provenance.** Store each source's response summary
-  alongside the estimate (`price_estimates.details`) so a value can be
-  explained, not just asserted; filter value history by source.
-  **Target: v0.11.0.**
+- **M4 — Estimate provenance.** ✔ Each source's response summary is stored
+  alongside the estimate (`price_estimates.details`, revision `0010`) so a
+  value can be explained, not just asserted — melt's formula inputs and spot
+  price, Numista's matched issue and per-grade prices, PCGS's auction lots
+  and guide value, plus data age and a stale flag. The item page shows it
+  per value-history row and filters that history by source; manual entries
+  take an optional note. **Target: v0.11.0.**
 - **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
   why — no ref, source unconfigured, fetch failed), stale-estimates view,
   per-source breakdown, and estimate-vs-reality accuracy (last estimate

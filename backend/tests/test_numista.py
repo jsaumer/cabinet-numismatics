@@ -97,6 +97,21 @@ def test_nearest_grade_when_bucket_unpriced(client, upstream):
     assert body["estimated_value"] == 45.0  # nearest priced bucket
     assert body["source"] == "numista:N#1234 XF (for UNC)"
     assert body["confidence"] == 0.45  # substituted grade, lower confidence
+    assert body["details"]["grade_wanted"] == "unc"
+    assert body["details"]["grade_used"] == "xf"
+
+
+def test_estimate_records_provenance(client, upstream):
+    configure(client)
+    details = estimate(client, make_item(client)).json()["details"]
+    assert details["type_id"] == "1234"
+    assert details["issue_id"] == 55
+    assert details["issue_year"] == 1932
+    assert details["mint_letter"] == "D"
+    assert details["grade_wanted"] == details["grade_used"] == "vf"
+    assert details["prices"] == {"vf": 30.0, "xf": 45.0}
+    assert details["currency"] == "USD"
+    assert details["stale"] is False
 
 
 def test_responses_are_cached(client, upstream):
@@ -121,7 +136,9 @@ def test_stale_cache_beats_a_failed_request(client, upstream, monkeypatch):
         raise SourceUnavailable("upstream down")
 
     monkeypatch.setattr(numista, "_request", broken)
-    assert estimate(client, item).status_code == 201
+    resp = estimate(client, item)
+    assert resp.status_code == 201
+    assert resp.json()["details"]["stale"] is True
 
 
 def test_upstream_failure_without_cache_is_502(client, monkeypatch):
@@ -217,6 +234,7 @@ def test_refresh_source_estimates_ignores_a_fresher_manual_estimate(client, upst
     history = client.get(f"/api/items/{item['id']}/estimates").json()
     numista_entries = [h for h in history if h["source"].startswith("numista:")]
     assert len(numista_entries) == 2  # refreshed despite manual being the overall-latest
+    assert numista_entries[0]["details"]["grade_used"] == "vf"  # scheduled rows carry it too
 
 
 def test_refresh_source_estimates_skips_ineligible_and_counts_failures(

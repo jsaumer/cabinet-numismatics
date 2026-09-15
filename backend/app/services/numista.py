@@ -16,7 +16,7 @@ auction prices. Money is per row, so the per-piece price is multiplied by the
 item's quantity.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -28,7 +28,8 @@ from app.services.pricing import (
     EstimateResult,
     NotApplicable,
     SourceUnavailable,
-    cached_response,
+    cached_fetch,
+    freshness,
 )
 
 API_ROOT = "https://api.numista.com/api/v3"
@@ -89,8 +90,10 @@ def _request(api_key: str, path: str, params: dict | None = None) -> dict:
     return data if isinstance(data, dict) else {"items": data}
 
 
-def _cached(db: Session, cache_key: str, ttl: timedelta, api_key: str, path: str, params=None):
-    return cached_response(db, "numista", cache_key, ttl, lambda: _request(api_key, path, params))
+def _cached(
+    db: Session, cache_key: str, ttl: timedelta, api_key: str, path: str, params=None
+) -> tuple[dict, datetime]:
+    return cached_fetch(db, "numista", cache_key, ttl, lambda: _request(api_key, path, params))
 
 
 def pick_issue(issues: list[dict], item: Item) -> dict | None:
@@ -182,7 +185,7 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
     currency = app_settings.display_currency(db)
 
     try:
-        issues_payload = _cached(
+        issues_payload, _ = _cached(
             db, f"issues:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}/issues"
         )
     except _NotFound:
@@ -195,7 +198,7 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
     issue_id = issue["id"]
 
     try:
-        payload = _cached(
+        payload, prices_fetched_at = _cached(
             db,
             f"prices:{type_id}:{issue_id}:{currency}",
             PRICE_TTL,
@@ -218,9 +221,23 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
     source = f"numista:N#{type_id} {used.upper()}"
     if not exact:
         source += f" (for {wanted.upper()})"
+    quoted_currency = _currency_of(payload, currency)
+    mint_letter = issue.get("mint_letter")
     return EstimateResult(
         source=source,
         estimated_value=value,
-        currency=_currency_of(payload, currency),
+        currency=quoted_currency,
         confidence=Decimal("0.60") if exact else Decimal("0.45"),
+        details={
+            "type_id": type_id,
+            "issue_id": issue_id,
+            "issue_year": _issue_year(issue),
+            "mint_letter": str(mint_letter) if mint_letter else None,
+            "grade_wanted": wanted,
+            "grade_used": used,
+            "prices": {g: float(prices[g]) for g in GRADE_BUCKETS if g in prices},
+            "currency": quoted_currency,
+            "quantity": item.quantity,
+            **freshness(prices_fetched_at, PRICE_TTL),
+        },
     )

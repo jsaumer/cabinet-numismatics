@@ -15,7 +15,8 @@ settings (display currency, source toggles, API credentials, melt cadence;
 later grew `value_strategy`/`preferred_source` for the blended-value display
 and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh — no
 migration needed, since it's a generic key/value table), read through
-`app/services/app_settings.py` with defaults and env fallbacks.
+`app/services/app_settings.py` with defaults and env fallbacks. Revision
+`0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -105,6 +106,7 @@ Timestamped estimates so history is retained rather than overwritten.
 | `currency`        | text        | ISO 4217                                 |
 | `confidence`      | numeric null| 0.0–1.0; null for manual entries         |
 | `sample_size`     | int null    | number of comparables used               |
+| `details`         | json null   | provenance: what the source returned (see price-sources.md), or `{"note": …}` on a manual entry; null on rows before `0010` |
 | `fetched_at`      | timestamptz |                                          |
 
 ### tags / item_tags

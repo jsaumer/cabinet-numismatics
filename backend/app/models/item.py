@@ -271,6 +271,8 @@ class PriceEstimate(Base):
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     confidence: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))  # null for manual entries
     sample_size: Mapped[int | None] = mapped_column(Integer)
+    # What the source returned that produced this value (or a manual note).
+    details: Mapped[dict | None] = mapped_column(JSON)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped[Item] = relationship(back_populates="estimates")
