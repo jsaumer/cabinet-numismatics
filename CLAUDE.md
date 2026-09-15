@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.11.1, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.12.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -127,7 +127,7 @@ recorded — JSON-safe values only, never `Decimal` — built into rows by
 `pricing.estimate_row` on every path, with `pricing.freshness` supplying
 `data_as_of`/`stale` from `cached_fetch`'s fetch time; manual entries take an
 optional `note`. The item page renders it per value-history row and filters
-that history by source. In-app backup (roadmap Phase 5.6 B1 + B2) is built, reordered ahead of M5:
+that history by source. In-app backup (roadmap Phase 5.6 B1 + B2) shipped in v0.12.0, reordered ahead of M5:
 `services/backup.py` writes one zip — `db.dump` (pg_dump custom format, the
 same file `scripts/backup.sh` makes), `photos.tar.gz`, `manifest.json`,
 `SHA256SUMS` — for `GET /api/backup.zip` and for scheduled/on-demand archives
