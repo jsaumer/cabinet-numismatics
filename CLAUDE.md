@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.14.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.15.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -165,8 +165,7 @@ reused and `Item.grade_code` prints PR-/SP- plus "+"), `grade_plus`,
 keeps gross `sold_price`. Numista refuses non-business strikes and details
 grades; PCGS sends `PlusGrade` and prices details grades by cert only. PMG
 grades 1–3 were inserted with WHERE NOT EXISTS because `0003` seeds from the
-same list. CSV import now commits per row. C5 (filling items from the Numista catalogue) is
-built for v0.15.0: `numista.search_types` / `numista.catalogue_type` behind
+same list. CSV import now commits per row. C5 (filling items from the Numista catalogue) shipped in v0.15.0: `numista.search_types` / `numista.catalogue_type` behind
 `GET /api/numista/{search,types/{id}}` (`routers/catalogue.py`), cached via
 the same `_cached`/`source_cache` as pricing (type `type:<id>`, search
 `search:<category>:<q>`, issues share `issues:<id>` with estimates).
