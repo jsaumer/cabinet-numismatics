@@ -151,13 +151,29 @@ def recent_sales(payload: dict) -> list[Decimal]:
     return [lot["price"] for lot in recent_lots(payload)]
 
 
+def prerequisite(db: Session, item: Item) -> str | None:
+    """What stops PCGS pricing this item before any request, or None."""
+    if not str(app_settings.get_setting(db, "pcgs_api_token")):
+        return "Add a PCGS API token in Settings to price items from PCGS"
+    if item.type != "coin":
+        return "PCGS prices coins only — its banknote data carries no values"
+    if cert_number(item) is not None:
+        return None
+    if pcgs_number(item) is None:
+        return "Add a PCGS cert number, or a 'pcgs' catalog reference, to price this item"
+    if item.grade is None:
+        return "Set the item's grade — PCGS quotes values per grade"
+    if item.grade.scale != "sheldon":
+        return "PCGS values are quoted on the Sheldon scale — regrade to use it"
+    return None
+
+
 def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
     """Price a coin from PCGS. Raises NotApplicable/SourceUnavailable."""
+    reason = prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
     token = str(app_settings.get_setting(db, "pcgs_api_token"))
-    if not token:
-        raise NotApplicable("Add a PCGS API token in Settings to price items from PCGS")
-    if item.type != "coin":
-        raise NotApplicable("PCGS prices coins only — its banknote data carries no values")
 
     cert = cert_number(item)
     if cert is not None:
@@ -167,15 +183,7 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
         matched = f"cert {cert}"
         lookup = {"lookup": "cert", "cert": cert}
     else:
-        number = pcgs_number(item)
-        if number is None:
-            raise NotApplicable(
-                "Add a PCGS cert number, or a 'pcgs' catalog reference, to price this item"
-            )
-        if item.grade is None:
-            raise NotApplicable("Set the item's grade — PCGS quotes values per grade")
-        if item.grade.scale != "sheldon":
-            raise NotApplicable("PCGS values are quoted on the Sheldon scale — regrade to use it")
+        number = pcgs_number(item)  # present: prerequisite() checked it
         path = "coindetail/GetCoinFactsByGrade"
         params = {"PCGSNo": number, "GradeNo": item.grade.rank, "PlusGrade": "false"}
         cache_key = f"gradefacts:{number}:{item.grade.rank}"

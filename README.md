@@ -81,6 +81,10 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   is excluded and counted — never silently mixed.
 - **Value over time**: month-end collection value and per-item estimate
   charts.
+- **Pricing reports**: a Pricing page showing which items lack estimates and
+  why (source off, missing catalog ref or grade, what the source said, a
+  failed fetch), which estimates are stale, how the sources compare and
+  disagree, and how estimates held up against actual sale prices.
 
 ### Insights & reporting
 - Dashboard: hero collection value, cost basis, unrealized and realized

@@ -15,6 +15,7 @@ from app.routers import (
     health,
     items,
     photos,
+    pricing_reports,
     reference,
     settings,
     stats,
@@ -140,3 +141,4 @@ app.include_router(stats.router)
 app.include_router(checklists.router)
 app.include_router(settings.router)
 app.include_router(backup.router)
+app.include_router(pricing_reports.router)

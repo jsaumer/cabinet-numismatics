@@ -9,7 +9,7 @@ rather than assumed.
 
 **Status (September 2026): released as v0.12.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
-minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
+minus the photo-niceties bundle), pricing-program M1–M4 are done and M5 is built — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
@@ -17,8 +17,7 @@ in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
 A ✔ marks shipped items below. What remains, all optional: the photo-niceties
-bundle, the sold-listing comps price source, the pricing program's last
-milestone (M5 pricing reports), in-app restore (Phase 5.6 B3, blocked on
+bundle, the sold-listing comps price source, in-app restore (Phase 5.6 B3, blocked on
 auth), and import mappings for other collection tools.
 
 **Target versions** on the unshipped items below assume each ships alone,
@@ -335,11 +334,19 @@ reports. Staged so each milestone is independently useful.
   and guide value, plus data age and a stale flag. The item page shows it
   per value-history row and filters that history by source; manual entries
   take an optional note. **Shipped in v0.11.0.**
-- **M5 — Pricing reports.** Estimate coverage (items lacking estimates and
-  why — no ref, source unconfigured, fetch failed), stale-estimates view,
-  per-source breakdown, and estimate-vs-reality accuracy (last estimate
-  against realized price on sold items). **Target: v0.13.0** (moved behind
-  in-app backup, which went first once real data started going into the live
+- **M5 — Pricing reports.** ✔ A Pricing page with estimate coverage (items
+  lacking estimates and why — source off, missing prerequisite, what the
+  source said, fetch failed, or never tried), a stale-estimates view (one
+  age threshold, 7/30/90/365 days, plus estimates built from expired source
+  data), a per-source breakdown (including which source supplies each
+  item's shown value, and where sources disagree most), and
+  estimate-vs-reality accuracy (estimates standing on the sale date against
+  realized prices). "Why" needs history the estimates table can't hold — a
+  failure leaves no estimate — so every automatic attempt now records its
+  outcome per item and source (`estimate_attempts`, revision `0011`), and
+  each adapter's local checks became a `prerequisite()` the report can run
+  without spending a request. **Target: v0.13.0** (moved behind in-app
+  backup, which went first once real data started going into the live
   instance).
 
 *Exit: every priceable item has a sourced, explainable, configurable

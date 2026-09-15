@@ -129,6 +129,46 @@ export to PDF via the browser's print dialog) are built on these endpoints.
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint.
 
+## Pricing reports
+
+| Method | Path                          | Purpose                                            |
+|--------|-------------------------------|----------------------------------------------------|
+| `GET`  | `/api/pricing/coverage`       | Owned items lacking estimates, and per source why  |
+| `GET`  | `/api/pricing/stale`          | Latest estimates `?days=` old (default 30, 1–3650) or built from expired source data |
+| `GET`  | `/api/pricing/sources`        | Per-source breakdown and biggest disagreements (`?currency=`) |
+| `GET`  | `/api/pricing/accuracy`       | Estimates standing on the sale date vs realized prices (`?currency=`) |
+
+All four read existing data and call no upstream source. Estimates are
+grouped by source key: `melt`, `numista`, `pcgs`, and `manual` for any
+hand-entered source text.
+
+- **coverage** — `owned_items`, `estimated_items`, `manual_only_items`; per
+  source a summary (`enabled`, `priced`, `not_applicable`, `failed`,
+  `not_tried`); and `items` needing attention, each with a status per source
+  (`priced`, `not_applicable`, `failed`, `not_tried`, `disabled`), a
+  `reason`, and the latest `estimated_at` / `attempted_at`. An item is listed
+  when it has no estimate, a source failed or was never tried, or a source's
+  last attempt came after its last estimate and didn't succeed. Reasons come
+  from each adapter's local prerequisites, or from the latest recorded
+  attempt — every `POST /api/items/{id}/estimate` and scheduled refresh
+  records one per item and source.
+- **stale** — `days`, `checked` (latest estimates examined, one per item and
+  source), and `stale` entries oldest first: value, `age_days`,
+  `upstream_stale` (built from source data past its cache window), and
+  `in_totals` (it feeds the item's shown value under `value_strategy`).
+- **sources** — per source: `items`, `total_value`, `avg_confidence`,
+  `median_age_days`, `in_totals` (items whose shown value it supplies);
+  `averaged_items` when the strategy is `average`; and up to ten
+  `disagreements` — items with two or more sources, with each value and the
+  `spread_pct` between highest and lowest.
+- **accuracy** — sold items with a sold price. For each, the latest estimate
+  per source recorded on or before `sold_date` (all estimates when there is
+  no date) and the shown value as of then, each with `error_pct` =
+  (estimate − sold) / sold. `summary` rows (`blended` plus each source) give
+  `sales`, `median_abs_error_pct`, `mean_error_pct` (bias; positive means
+  estimates ran high), and `within_20_pct`. Money follows the stats currency
+  rule; unconvertible amounts are skipped and counted.
+
 ## Settings
 
 | Method | Path             | Purpose                                          |

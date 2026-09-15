@@ -33,13 +33,6 @@ def _resolve_strategy(db: Session) -> tuple[str, str | None]:
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 
-def _item_label(item: Item) -> str:
-    parts = [item.country, item.denomination, str(item.year)]
-    if item.mint_mark:
-        parts.append(f'"{item.mint_mark}"')
-    return " ".join(parts)
-
-
 def _load_items(db: Session) -> list[Item]:
     return (
         db.execute(select(Item).options(selectinload(Item.estimates), selectinload(Item.tags)))
@@ -196,7 +189,7 @@ def gains(
             continue
         entry = GainEntry(
             item_id=item.id,
-            label=_item_label(item),
+            label=item.label,
             cost_basis=round(cost, 2),
             value=round(value, 2),
             gain=round(value - cost, 2),

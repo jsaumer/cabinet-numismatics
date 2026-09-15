@@ -427,6 +427,25 @@ dl.facts dd {
   gap: 0.5rem;
 }
 
+.table-scroll {
+  overflow-x: auto;
+}
+.chip.coverage-failed {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+.chip.coverage-not_tried {
+  border-style: dashed;
+}
+.chip.coverage-disabled,
+.chip.coverage-not_applicable {
+  opacity: 0.75;
+}
+.coverage-reason {
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
 table.estimates {
   width: 100%;
   border-collapse: collapse;

@@ -140,9 +140,21 @@ client packages pull ~50 MB of perl) into `/usr/local/lib/pgclient/<major>`,
 and `backup.pg_tool` picks the server's major — pg_dump 18 against a 16
 server writes `SET transaction_timeout`, which 16 rejects on restore. Tests monkeypatch `backup.dump_database` —
 SQLite has no pg_dump; CI's stack job rehearses download → restore.sh on real
-Postgres. B3 (in-app restore) stays blocked on auth. **Next: pricing M5 —
-pricing reports** (coverage, stale estimates, per-source breakdown, accuracy
-against sold prices). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+Postgres. B3 (in-app restore) stays blocked on auth. Pricing M5 (pricing reports) is built for
+v0.13.0: `services/pricing_reports.py` behind `GET /api/pricing/{coverage,
+stale,sources,accuracy}` and a `/pricing` page. Every automatic estimate goes
+through `pricing.run_adapter`, which records the outcome in
+`estimate_attempts` (one row per item + source, migration `0011`; a failure is
+committed before it propagates) — so coverage can report fetch failures and
+upstream "can't price" answers that leave no estimate. Each adapter's local
+checks live in a `prerequisite(db, item)` (`pricing.get_prerequisite`) that
+the adapter calls first and coverage calls without spending a request; keep
+reason messages there, not duplicated in the adapter. Reports group
+estimates as melt / numista / pcgs / manual (any other source text).
+`Item.label` is the shared short display label. Tests on SQLite: timestamps
+have one-second resolution, so backdate estimates when order matters.
+**Next: the photo-niceties bundle** (v0.14.0) — or whatever is pulled from
+the roadmap. Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1

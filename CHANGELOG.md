@@ -10,6 +10,33 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Pricing reports** — a new **Pricing** page (also linked from the
+  dashboard's "based on X of Y owned items" line) with four reports:
+  - **Coverage**: per automatic source, how many owned items are priced,
+    can't be priced, failed, or haven't been tried — and for each item that
+    needs attention, why: the source is off, a prerequisite is missing (no
+    catalog ref, no grade, no weight…), what the source itself said, or the
+    fetch error.
+  - **Stale estimates**: each item's latest estimate per source older than
+    7/30/90/365 days (manual entries included), plus any built from source
+    data already past its cache window, marking which ones feed the shown
+    value.
+  - **By source**: items priced, total, average confidence, and median age
+    per source; how many items' shown value each supplies under the current
+    value strategy; and the items where sources disagree most.
+  - **Accuracy against sales**: for sold items, the estimates standing on
+    the sale date against the realized price — median error, bias, and how
+    many landed within 20%, for the shown value and for each source.
+  API: `GET /api/pricing/coverage`, `/stale?days=`, `/sources`, `/accuracy`.
+
+### Changed
+- Every automatic pricing attempt — from the item page or the scheduled
+  refresh — now records its outcome per item and source (revision `0011`,
+  `estimate_attempts`), so a failed fetch or an upstream "can't price this"
+  is visible later instead of vanishing with the error message. Applied
+  automatically on startup.
+
 ## [0.12.0] — 2026-09-14
 
 ### Added

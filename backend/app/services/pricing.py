@@ -21,7 +21,7 @@ from decimal import Decimal
 import httpx
 from sqlalchemy.orm import Session
 
-from app.models import Item, PriceEstimate, SourceCache, SpotPrice
+from app.models import EstimateAttempt, Item, PriceEstimate, SourceCache, SpotPrice
 from app.services.currency import Converter
 
 TROY_OUNCE_G = Decimal("31.1034768")
@@ -175,16 +175,24 @@ def get_spot_price(db: Session, metal: str) -> SpotPrice:
     return cached
 
 
+def melt_prerequisite(db: Session, item: Item) -> str | None:
+    """What the item lacks for a melt estimate, or None. No network."""
+    if detect_metal(item.composition) is None:
+        return "No precious metal found in composition — set it to e.g. '90% silver'"
+    if item.weight_g is None:
+        return "Set the item's weight to estimate melt value"
+    if effective_fineness(item) is None:
+        return "Set fineness (or a percentage in composition) to estimate melt value"
+    return None
+
+
 def melt_estimate(db: Session, item: Item) -> EstimateResult:
     """Melt value for a precious-metal item. Raises NotApplicable/SpotUnavailable."""
+    reason = melt_prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
     metal = detect_metal(item.composition)
-    if metal is None:
-        raise NotApplicable("No precious metal found in composition — set it to e.g. '90% silver'")
-    if item.weight_g is None:
-        raise NotApplicable("Set the item's weight to estimate melt value")
     fineness = effective_fineness(item)
-    if fineness is None:
-        raise NotApplicable("Set fineness (or a percentage in composition) to estimate melt value")
 
     spot = get_spot_price(db, metal)
     per_piece = Decimal(item.weight_g) * fineness * Decimal(spot.price_per_gram)
@@ -226,6 +234,54 @@ def get_adapter(name: str):
 
         return pcgs_estimate
     return None
+
+
+def get_prerequisite(name: str):
+    """The source's local eligibility check — `(db, item) -> reason | None` —
+    which its adapter runs first. Used to explain gaps without a request."""
+    if name == "melt":
+        return melt_prerequisite
+    if name == "numista":
+        from app.services.numista import prerequisite
+
+        return prerequisite
+    if name == "pcgs":
+        from app.services.pcgs import prerequisite
+
+        return prerequisite
+    return None
+
+
+def run_adapter(db: Session, item: Item, source: str) -> EstimateResult:
+    """Run one source's adapter and record the outcome as the item's latest
+    attempt for that source. A failure is committed before it propagates, so
+    it survives the caller's error handling; a success is committed along with
+    the caller's estimate row."""
+    adapter = get_adapter(source)
+    try:
+        result = adapter(db, item)
+    except NotApplicable as exc:
+        _record_attempt(db, item, source, "not_applicable", str(exc))
+        db.commit()
+        raise
+    except SourceUnavailable as exc:
+        _record_attempt(db, item, source, "unavailable", str(exc))
+        db.commit()
+        raise
+    _record_attempt(db, item, source, "ok", None)
+    return result
+
+
+def _record_attempt(
+    db: Session, item: Item, source: str, outcome: str, message: str | None
+) -> None:
+    row = db.get(EstimateAttempt, (item.id, source))
+    if row is None:
+        row = EstimateAttempt(item_id=item.id, source=source)
+        db.add(row)
+    row.outcome = outcome
+    row.message = message[:500] if message else None
+    row.attempted_at = datetime.now(timezone.utc)
 
 
 AVERAGEABLE_SOURCES = ("melt", "numista", "pcgs")  # pluggable sources only;
@@ -320,7 +376,7 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
             skipped += 1
             continue
         try:
-            result = melt_estimate(db, item)
+            result = run_adapter(db, item, "melt")
         except (NotApplicable, SpotUnavailable):
             failed += 1
             continue
@@ -343,7 +399,6 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
-    adapter = get_adapter(source)
     cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     updated = skipped = failed = 0
     items = (
@@ -361,7 +416,7 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
             skipped += 1
             continue
         try:
-            result = adapter(db, item)
+            result = run_adapter(db, item, source)
         except NotApplicable:
             skipped += 1
             continue

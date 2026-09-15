@@ -169,17 +169,24 @@ def _currency_of(payload: dict, fallback: str) -> str:
     return value.upper() if isinstance(value, str) and len(value) == 3 else fallback
 
 
+def prerequisite(db: Session, item: Item) -> str | None:
+    """What stops Numista pricing this item before any request, or None."""
+    if not str(app_settings.get_setting(db, "numista_api_key")):
+        return "Add a Numista API key in Settings to price items from Numista"
+    if type_id_for(item) is None:
+        return "Add a 'numista' catalog reference (e.g. N#1234) to price this item"
+    if item.grade is None:
+        return "Set the item's grade — Numista quotes prices per grade"
+    return None
+
+
 def numista_estimate(db: Session, item: Item) -> EstimateResult:
     """Price an item from Numista. Raises NotApplicable/SourceUnavailable."""
+    reason = prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
     api_key = str(app_settings.get_setting(db, "numista_api_key"))
-    if not api_key:
-        raise NotApplicable("Add a Numista API key in Settings to price items from Numista")
-
     type_id = type_id_for(item)
-    if type_id is None:
-        raise NotApplicable("Add a 'numista' catalog reference (e.g. N#1234) to price this item")
-    if item.grade is None:
-        raise NotApplicable("Set the item's grade — Numista quotes prices per grade")
 
     wanted = bucket_for_rank(item.grade.rank)
     currency = app_settings.display_currency(db)
