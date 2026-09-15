@@ -13,8 +13,9 @@ or API keys required.
 
 **Status: v0.13.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Deliberately open: a photo-niceties bundle (lightbox, drag-and-drop upload)
-and sold-listing comparables. See the
+Next up: deeper cataloguing (proof and problem-coin grades, banknote details,
+fees in cost basis) and filling in items from the Numista catalogue, then
+photo improvements, sold-listing comparables, and imports from other tools. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an

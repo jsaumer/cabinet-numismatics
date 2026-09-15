@@ -152,8 +152,12 @@ reason messages there, not duplicated in the adapter. Reports group
 estimates as melt / numista / pcgs / manual (any other source text).
 `Item.label` is the shared short display label. Tests on SQLite: timestamps
 have one-second resolution, so backdate estimates when order matters.
-**Next: the photo-niceties bundle** (v0.14.0) — or whatever is pulled from
-the roadmap. Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+**Next: roadmap Phase 5.7 C1–C4, catalog depth** (v0.14.0 — grading depth
+with strike type/designations/details grades, coin physical and banknote
+fields, acquisition and sale costs in gains, cert verification links), then
+C5 filling items from the Numista catalogue (v0.15.0). Added by a September
+2026 feature review, which also moved photo niceties to v0.16.0, comps to
+v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
