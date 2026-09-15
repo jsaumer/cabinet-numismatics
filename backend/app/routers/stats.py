@@ -68,7 +68,7 @@ def collection_stats(
         resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
 
         if item.status == "owned":
-            price = conv.convert(item.acquisition_price, item.currency)
+            price = conv.convert(item.cost_basis, item.currency)
             est = conv.convert(resolved[0], resolved[1]) if resolved else None
             if price is not None:
                 cost_basis += price
@@ -78,8 +78,8 @@ def collection_stats(
             if price is not None and est is not None:
                 unrealized += est - price
         elif item.status == "sold":
-            price = conv.convert(item.acquisition_price, item.currency)
-            sold = conv.convert(item.sold_price, item.currency)
+            price = conv.convert(item.cost_basis, item.currency)
+            sold = conv.convert(item.sale_proceeds, item.currency)
             if price is not None and sold is not None:
                 realized += sold - price
 
@@ -130,7 +130,7 @@ def breakdowns(
         if item.status != "owned":
             continue
         resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
-        cost = conv.convert(item.acquisition_price, item.currency) or 0.0
+        cost = conv.convert(item.cost_basis, item.currency) or 0.0
         value = (conv.convert(resolved[0], resolved[1]) if resolved else None) or 0.0
 
         keys = {
@@ -175,14 +175,14 @@ def gains(
     realized: list[GainEntry] = []
 
     for item in _load_items(db):
-        cost = conv.convert(item.acquisition_price, item.currency)
+        cost = conv.convert(item.cost_basis, item.currency)
         if cost is None:
             continue
         if item.status == "owned":
             resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
             value = conv.convert(resolved[0], resolved[1]) if resolved else None
         elif item.status == "sold":
-            value = conv.convert(item.sold_price, item.currency)
+            value = conv.convert(item.sale_proceeds, item.currency)
         else:
             continue
         if value is None:

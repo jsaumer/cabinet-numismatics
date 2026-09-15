@@ -152,10 +152,21 @@ reason messages there, not duplicated in the adapter. Reports group
 estimates as melt / numista / pcgs / manual (any other source text).
 `Item.label` is the shared short display label. Tests on SQLite: timestamps
 have one-second resolution, so backdate estimates when order matters.
-**Next: roadmap Phase 5.7 C1–C4, catalog depth** (v0.14.0 — grading depth
-with strike type/designations/details grades, coin physical and banknote
-fields, acquisition and sale costs in gains, cert verification links), then
-C5 filling items from the Numista catalogue (v0.15.0). Added by a September
+Catalog depth (roadmap Phase 5.7 C1–C4) is built for v0.14.0, migration
+`0012`: `items.strike` (business/proof/specimen — a Sheldon grade row is
+reused and `Item.grade_code` prints PR-/SP- plus "+"), `grade_plus`,
+`grade_star`, `designations` (JSON list validated against
+`schemas.DESIGNATIONS`), `grade_details`, `cac_sticker`; coin
+`diameter_mm`/`thickness_mm`/`edge`/`shape`/`mintage`; note
+`serial_number`/`prefix_block`/`signatures`/`issuer`/`replacement_note`;
+`acquisition_fees`, `sold_fees`, `sold_to`. `Item.grade_label`,
+`Item.cost_basis`, and `Item.sale_proceeds` are properties exposed on
+`ItemOut`; every gain uses cost_basis/sale_proceeds, while the accuracy report
+keeps gross `sold_price`. Numista refuses non-business strikes and details
+grades; PCGS sends `PlusGrade` and prices details grades by cert only. PMG
+grades 1–3 were inserted with WHERE NOT EXISTS because `0003` seeds from the
+same list. CSV import now commits per row. **Next: C5, filling items from
+the Numista catalogue** (v0.15.0). Added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

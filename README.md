@@ -13,8 +13,7 @@ or API keys required.
 
 **Status: v0.13.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: deeper cataloguing (proof and problem-coin grades, banknote details,
-fees in cost basis) and filling in items from the Numista catalogue, then
+Next up: filling in items from the Numista catalogue, then
 photo improvements, sold-listing comparables, and imports from other tools. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
@@ -37,11 +36,17 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 
 ### Cataloging
 - Coins and notes with full numismatic detail: country, denomination, year,
-  mint mark, series, variety/sub-type, composition, weight, fineness,
-  quantity, and free-text notes — plus up to 20 custom fields per item.
-- **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with
-  certification tracking (service + cert number) for slabbed pieces.
-- **Provenance & location**: acquisition date, price, source (dealer, show,
+  mint mark, series, variety/sub-type, strike (business, proof, specimen),
+  composition, weight, fineness, diameter, thickness, edge, shape, mintage,
+  quantity, and free-text notes — banknotes add serial number, prefix/block,
+  signatures, issuer, and replacement notes — plus up to 20 custom fields per
+  item.
+- **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with proof
+  and specimen strikes, plus grades, stars, designations (CAM/DCAM, PL/DMPL,
+  RD/RB/BN, EPQ…), CAC stickers, and details grades — shown the way the holder
+  reads, e.g. `PR-69 DCAM ★`. Certification tracking (service + cert number)
+  links to the grading service's verification.
+- **Provenance & location**: acquisition date, price and fees, source (dealer, show,
   auction, inheritance), and storage location (album, slab box, safe).
 - **Lifecycle**: `owned` / `sold` / `wishlist` status with sold date and
   realized price; sets/lots for pieces held or sold together; catalog

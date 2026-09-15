@@ -23,7 +23,9 @@ migration needed, since it's a generic key/value table), read through
 per item and source (`item_id` + `source` primary key, cascade with the item;
 `outcome` `ok` / `not_applicable` / `unavailable`, `message`,
 `attempted_at`), which the coverage report reads to explain gaps a failed
-attempt leaves no estimate for.
+attempt leaves no estimate for. `0012` (v0.14.0, catalog depth) added the
+grading, physical, banknote, and cost columns on `items` below, and PMG
+grades 1–3.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -64,20 +66,40 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `year`             | int           | issue year                              |
 | `mint_mark`        | text null     | coins only                              |
 | `series`           | text null     | series / variety name                   |
+| `variety`          | text null     | die variety, overdate…                  |
+| `strike`           | enum          | `business` \| `proof` \| `specimen`     |
 | `composition`      | text null     | e.g. "90% silver"                       |
 | `weight_g`         | numeric null  | grams — enables melt value (Phase 3)    |
 | `fineness`         | numeric null  | 0–1, e.g. 0.9000                        |
+| `diameter_mm`      | numeric null  | coins                                   |
+| `thickness_mm`     | numeric null  | coins                                   |
+| `edge`             | text null     | reeded, plain, lettered…                |
+| `shape`            | text null     | round, polygonal…                       |
+| `mintage`          | bigint null   | mintage, or print run for a note        |
 | `grade_id`         | fk → grades   | null if ungraded                        |
 | `cert_service`     | text null     | PCGS, NGC, PMG…                         |
 | `cert_number`      | text null     | slab certification number               |
+| `grade_plus`       | bool          | a "+" grade                             |
+| `grade_star`       | bool          | NGC/PMG ★ designation                   |
+| `designations`     | json null     | list, e.g. `["DCAM"]`, `["RD"]`, `["EPQ"]` |
+| `grade_details`    | text null     | the problem on a details grade          |
+| `cac_sticker`      | text null     | `green` \| `gold`                        |
+| `serial_number`    | text null     | notes                                   |
+| `prefix_block`     | text null     | notes                                   |
+| `signatures`       | text null     | notes                                   |
+| `issuer`           | text null     | notes: issuing bank or authority        |
+| `replacement_note` | bool          | notes: replacement / star note          |
 | `quantity`         | int           | default 1                               |
 | `acquisition_date` | date null     |                                         |
 | `acquisition_price`| numeric null  | what you paid                           |
+| `acquisition_fees` | numeric null  | premium, shipping, tax — in cost basis  |
 | `currency`         | text          | ISO 4217, for acquisition price         |
 | `acquired_from`    | text null     | dealer, show, auction, inheritance…     |
 | `storage_location` | text null     | album, slab box, safe…                  |
 | `sold_date`        | date null     | when status = `sold`                    |
-| `sold_price`       | numeric null  | realized price, in `currency`           |
+| `sold_price`       | numeric null  | realized price (gross), in `currency`   |
+| `sold_fees`        | numeric null  | commission, listing fees                |
+| `sold_to`          | text null     | buyer or venue                          |
 | `notes`            | text null     | free-form                               |
 | `created_at`       | timestamptz   |                                         |
 | `updated_at`       | timestamptz   |                                         |
@@ -136,13 +158,16 @@ stale row is used if the upstream fetch fails.
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from
 `app/models/grades_seed.py`: `sheldon` (PO-1 through MS-70) and `pmg`
-(4 through 70).
+(1 through 70; 1–3 were added by `0012`, which inserts them only where
+missing). Proofs and specimens reuse the Sheldon rows — the item's `strike`
+turns `MS-65` into `PR-65` or `SP-65` — and designations, plus grades, stars,
+and details grades live on the item, not the grade.
 
 | Column        | Type    | Notes                                        |
 |---------------|---------|----------------------------------------------|
 | `id`          | int PK  |                                              |
 | `scale`       | text    | e.g. `sheldon`, `pmg`                        |
-| `code`        | text    | e.g. `MS-65`, `VF-20`, `64 EPQ`              |
+| `code`        | text    | e.g. `MS-65`, `VF-20`, `64`              |
 | `label`       | text    | human-readable description                   |
 | `rank`        | int     | sortable ordering, low → high                |
 

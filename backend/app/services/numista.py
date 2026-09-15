@@ -177,6 +177,10 @@ def prerequisite(db: Session, item: Item) -> str | None:
         return "Add a 'numista' catalog reference (e.g. N#1234) to price this item"
     if item.grade is None:
         return "Set the item's grade — Numista quotes prices per grade"
+    if item.strike != "business":
+        return "Numista prices circulation strikes by grade — not proofs or specimens"
+    if item.grade_details:
+        return "Numista prices problem-free pieces, and this one has a details grade"
     return None
 
 

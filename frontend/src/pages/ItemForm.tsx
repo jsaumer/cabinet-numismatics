@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   api,
+  CacSticker,
   CatalogRef,
   Grade,
   gradeScaleFor,
@@ -10,6 +11,7 @@ import {
   ItemStatus,
   ItemType,
   SetInfo,
+  Strike,
 } from "../api";
 
 const EMPTY = {
@@ -21,26 +23,80 @@ const EMPTY = {
   mint_mark: "",
   series: "",
   variety: "",
+  strike: "business" as Strike,
   set_id: "",
   composition: "",
   weight_g: "",
   fineness: "",
+  diameter_mm: "",
+  thickness_mm: "",
+  edge: "",
+  shape: "",
+  mintage: "",
   grade_id: "",
+  grade_plus: false,
+  grade_star: false,
+  designations: [] as string[],
+  grade_details: "",
+  cac_sticker: "",
   cert_service: "",
   cert_number: "",
+  serial_number: "",
+  prefix_block: "",
+  signatures: "",
+  issuer: "",
+  replacement_note: false,
   quantity: "1",
   acquisition_date: "",
   acquisition_price: "",
+  acquisition_fees: "",
   currency: "USD",
   acquired_from: "",
   storage_location: "",
   sold_date: "",
   sold_price: "",
+  sold_fees: "",
+  sold_to: "",
   notes: "",
   tags: "",
 };
 
 type FormState = typeof EMPTY;
+type TextField = {
+  [K in keyof FormState]: FormState[K] extends string ? K : never;
+}[keyof FormState];
+type FlagField = "grade_plus" | "grade_star" | "replacement_note";
+
+// Designations as grading services print them, with what each means.
+const DESIGNATIONS: Record<ItemType, [string, string][]> = {
+  coin: [
+    ["PL", "Prooflike"],
+    ["DMPL", "Deep mirror prooflike"],
+    ["CAM", "Cameo"],
+    ["DCAM", "Deep cameo"],
+    ["UCAM", "Ultra cameo (NGC)"],
+    ["RD", "Red — copper"],
+    ["RB", "Red-brown — copper"],
+    ["BN", "Brown — copper"],
+    ["FB", "Full bands — Mercury dime"],
+    ["FBL", "Full bell lines — Franklin half"],
+    ["FH", "Full head — Standing Liberty quarter"],
+    ["FS", "Full steps — Jefferson nickel"],
+    ["FT", "Full torch — Roosevelt dime"],
+  ],
+  note: [["EPQ", "Exceptional paper quality (PMG)"]],
+};
+
+const PROBLEMS: Record<ItemType, string[]> = {
+  coin: [
+    "Cleaned", "Damaged", "Environmental damage", "Scratched", "Holed", "Repaired",
+    "Tooled", "Altered surfaces", "Bent",
+  ],
+  note: ["Restoration", "Tears", "Annotations", "Stains", "Trimmed", "Pinholes"],
+};
+
+const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
+const SHAPES = ["Round", "Square", "Polygonal", "Scalloped", "Holed"];
 
 const opt = (v: string) => v.trim() || null;
 const optNum = (v: string) => (v === "" ? null : Number(v));
@@ -54,6 +110,11 @@ function toPayload(
   for (const f of fields) {
     if (f.key.trim()) custom[f.key.trim()] = f.value;
   }
+  const coin = form.type === "coin";
+  const note = form.type === "note";
+  const allowed = new Set(DESIGNATIONS[form.type].map(([code]) => code));
+  const designations = form.designations.filter((d) => allowed.has(d));
+  const sold = form.status === "sold";
   return {
     type: form.type,
     status: form.status,
@@ -63,27 +124,48 @@ function toPayload(
     mint_mark: opt(form.mint_mark),
     series: opt(form.series),
     variety: opt(form.variety),
+    strike: form.strike,
     set_id: form.set_id === "" ? null : Number(form.set_id),
     custom_fields: Object.keys(custom).length ? custom : null,
     composition: opt(form.composition),
     weight_g: optNum(form.weight_g),
     fineness: optNum(form.fineness),
+    diameter_mm: coin ? optNum(form.diameter_mm) : null,
+    thickness_mm: coin ? optNum(form.thickness_mm) : null,
+    edge: coin ? opt(form.edge) : null,
+    shape: coin ? opt(form.shape) : null,
+    mintage: optNum(form.mintage),
     grade_id: form.grade_id === "" ? null : Number(form.grade_id),
+    grade_plus: form.grade_plus,
+    grade_star: form.grade_star,
+    designations: designations.length ? designations : null,
+    grade_details: opt(form.grade_details),
+    cac_sticker: coin && form.cac_sticker ? (form.cac_sticker as CacSticker) : null,
     cert_service: opt(form.cert_service),
     cert_number: opt(form.cert_number),
+    serial_number: note ? opt(form.serial_number) : null,
+    prefix_block: note ? opt(form.prefix_block) : null,
+    signatures: note ? opt(form.signatures) : null,
+    issuer: note ? opt(form.issuer) : null,
+    replacement_note: note && form.replacement_note,
     quantity: Number(form.quantity),
     acquisition_date: form.acquisition_date || null,
     acquisition_price: optNum(form.acquisition_price),
+    acquisition_fees: optNum(form.acquisition_fees),
     currency: form.currency.trim().toUpperCase(),
     acquired_from: opt(form.acquired_from),
     storage_location: opt(form.storage_location),
-    sold_date: form.status === "sold" ? form.sold_date || null : null,
-    sold_price: form.status === "sold" ? optNum(form.sold_price) : null,
+    sold_date: sold ? form.sold_date || null : null,
+    sold_price: sold ? optNum(form.sold_price) : null,
+    sold_fees: sold ? optNum(form.sold_fees) : null,
+    sold_to: sold ? opt(form.sold_to) : null,
     notes: opt(form.notes),
     tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
     catalog_refs: refs.filter((r) => r.catalog.trim() && r.ref_code.trim()),
   };
 }
+
+const str = (v: string | number | null | undefined) => (v == null ? "" : String(v));
 
 export default function ItemForm() {
   const { id } = useParams();
@@ -133,25 +215,44 @@ export default function ItemForm() {
           country: item.country,
           denomination: item.denomination,
           year: String(item.year),
-          mint_mark: item.mint_mark ?? "",
-          series: item.series ?? "",
-          variety: item.variety ?? "",
+          mint_mark: str(item.mint_mark),
+          series: str(item.series),
+          variety: str(item.variety),
+          strike: item.strike,
           set_id: item.set ? String(item.set.id) : "",
-          composition: item.composition ?? "",
-          weight_g: item.weight_g == null ? "" : String(item.weight_g),
-          fineness: item.fineness == null ? "" : String(item.fineness),
+          composition: str(item.composition),
+          weight_g: str(item.weight_g),
+          fineness: str(item.fineness),
+          diameter_mm: str(item.diameter_mm),
+          thickness_mm: str(item.thickness_mm),
+          edge: str(item.edge),
+          shape: str(item.shape),
+          mintage: str(item.mintage),
           grade_id: item.grade ? String(item.grade.id) : "",
-          cert_service: item.cert_service ?? "",
-          cert_number: item.cert_number ?? "",
+          grade_plus: item.grade_plus,
+          grade_star: item.grade_star,
+          designations: item.designations ?? [],
+          grade_details: str(item.grade_details),
+          cac_sticker: str(item.cac_sticker),
+          cert_service: str(item.cert_service),
+          cert_number: str(item.cert_number),
+          serial_number: str(item.serial_number),
+          prefix_block: str(item.prefix_block),
+          signatures: str(item.signatures),
+          issuer: str(item.issuer),
+          replacement_note: item.replacement_note,
           quantity: String(item.quantity),
-          acquisition_date: item.acquisition_date ?? "",
-          acquisition_price: item.acquisition_price == null ? "" : String(item.acquisition_price),
+          acquisition_date: str(item.acquisition_date),
+          acquisition_price: str(item.acquisition_price),
+          acquisition_fees: str(item.acquisition_fees),
           currency: item.currency,
-          acquired_from: item.acquired_from ?? "",
-          storage_location: item.storage_location ?? "",
-          sold_date: item.sold_date ?? "",
-          sold_price: item.sold_price == null ? "" : String(item.sold_price),
-          notes: item.notes ?? "",
+          acquired_from: str(item.acquired_from),
+          storage_location: str(item.storage_location),
+          sold_date: str(item.sold_date),
+          sold_price: str(item.sold_price),
+          sold_fees: str(item.sold_fees),
+          sold_to: str(item.sold_to),
+          notes: str(item.notes),
           tags: item.tags.join(", "),
         });
         setRefs(item.catalog_refs);
@@ -162,11 +263,19 @@ export default function ItemForm() {
       .catch((e: Error) => setError(e.message));
   }, [id]);
 
-  const set = (field: keyof FormState) => (value: string) =>
+  const set = (field: TextField) => (value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
   const setRef = (index: number, field: keyof CatalogRef, value: string) =>
     setRefs((rs) => rs.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
+
+  const toggleDesignation = (code: string) =>
+    setForm((f) => ({
+      ...f,
+      designations: f.designations.includes(code)
+        ? f.designations.filter((d) => d !== code)
+        : [...f.designations, code],
+    }));
 
   async function save(addAnother: boolean) {
     setSaving(true);
@@ -209,12 +318,31 @@ export default function ItemForm() {
     save(false);
   }
 
-  const text = (field: keyof FormState, label: string, props: object = {}) => (
+  const text = (field: TextField, label: string, props: object = {}) => (
     <label className="field">
       {label}
       <input value={form[field]} onChange={(e) => set(field)(e.target.value)} {...props} />
     </label>
   );
+
+  const flag = (field: FlagField, label: string, title?: string) => (
+    <label className="slot" title={title}>
+      <input
+        type="checkbox"
+        checked={form[field]}
+        onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.checked }))}
+      />
+      {label}
+    </label>
+  );
+
+  // On the Sheldon scale a proof or specimen keeps the grade number and changes the prefix.
+  const gradeCode = (g: Grade) =>
+    g.scale === "sheldon" && form.strike !== "business"
+      ? `${form.strike === "proof" ? "PR" : "SP"}-${g.rank}`
+      : g.code;
+
+  const isCoin = form.type === "coin";
 
   return (
     <>
@@ -231,11 +359,18 @@ export default function ItemForm() {
               Type
               <select
                 value={form.type}
-                onChange={(e) =>
-                  // switching type switches grading scale — a grade from the
-                  // other scale must not survive the switch
-                  setForm((f) => ({ ...f, type: e.target.value as ItemType, grade_id: "" }))
-                }
+                onChange={(e) => {
+                  const type = e.target.value as ItemType;
+                  // Switching type switches grading scale and designations; nothing
+                  // from the other scale may survive the switch.
+                  setForm((f) => ({
+                    ...f,
+                    type,
+                    grade_id: "",
+                    designations: [],
+                    strike: type === "note" && f.strike === "proof" ? "business" : f.strike,
+                  }));
+                }}
               >
                 <option value="coin">Coin</option>
                 <option value="note">Note</option>
@@ -252,6 +387,14 @@ export default function ItemForm() {
             {text("mint_mark", "Mint mark")}
             {text("series", "Series")}
             {text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
+            <label className="field">
+              Strike
+              <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
+                <option value="business">{isCoin ? "Business strike" : "Regular issue"}</option>
+                {isCoin && <option value="proof">Proof</option>}
+                <option value="specimen">Specimen</option>
+              </select>
+            </label>
             {text("quantity", "Quantity", { type: "number", min: 1 })}
             <label className="field">
               Set / lot
@@ -270,7 +413,7 @@ export default function ItemForm() {
         </div>
 
         <div className="card">
-          <h2>Grading &amp; composition</h2>
+          <h2>Grading &amp; certification</h2>
           <div className="item-form">
             <label className="field">
               Grade ({gradeScaleFor(form.type)})
@@ -278,18 +421,97 @@ export default function ItemForm() {
                 <option value="">ungraded</option>
                 {grades.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.code} — {g.label}
+                    {gradeCode(g)} — {g.label}
                   </option>
                 ))}
               </select>
             </label>
+            {text("grade_details", "Details grade (problem)", {
+              list: "problem-options",
+              placeholder: "blank if problem-free",
+            })}
+            <datalist id="problem-options">
+              {PROBLEMS[form.type].map((p) => (
+                <option key={p} value={p} />
+              ))}
+            </datalist>
             {text("cert_service", "Cert service", { placeholder: "PCGS, NGC, PMG…" })}
             {text("cert_number", "Cert number")}
-            {text("composition", "Composition", { placeholder: "e.g. 90% silver" })}
-            {text("weight_g", "Weight (g)", { type: "number", step: "0.001", min: 0 })}
-            {text("fineness", "Fineness", {
-              type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.900",
+            {isCoin && (
+              <label className="field">
+                CAC sticker
+                <select value={form.cac_sticker} onChange={(e) => set("cac_sticker")(e.target.value)}>
+                  <option value="">none</option>
+                  <option value="green">Green</option>
+                  <option value="gold">Gold</option>
+                </select>
+              </label>
+            )}
+            <div className="field full">
+              Grade qualifiers
+              <div className="chip-row">
+                {flag("grade_plus", "Plus grade (+)")}
+                {flag("grade_star", "Star (★)", "NGC or PMG star designation")}
+              </div>
+            </div>
+            <div className="field full">
+              Designations
+              <div className="chip-row">
+                {DESIGNATIONS[form.type].map(([code, meaning]) => (
+                  <button
+                    type="button"
+                    key={code}
+                    title={meaning}
+                    className={form.designations.includes(code) ? "chip active" : "chip"}
+                    onClick={() => toggleDesignation(code)}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h2>{isCoin ? "Composition & physical" : "Note details"}</h2>
+          <div className="item-form">
+            {text("composition", "Composition", {
+              placeholder: isCoin ? "e.g. 90% silver" : "e.g. paper, polymer",
             })}
+            {isCoin && (
+              <>
+                {text("weight_g", "Weight (g)", { type: "number", step: "0.001", min: 0 })}
+                {text("fineness", "Fineness", {
+                  type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.900",
+                })}
+                {text("diameter_mm", "Diameter (mm)", { type: "number", step: "0.01", min: 0 })}
+                {text("thickness_mm", "Thickness (mm)", { type: "number", step: "0.01", min: 0 })}
+                {text("edge", "Edge", { list: "edge-options" })}
+                <datalist id="edge-options">
+                  {EDGES.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                {text("shape", "Shape", { list: "shape-options" })}
+                <datalist id="shape-options">
+                  {SHAPES.map((v) => <option key={v} value={v} />)}
+                </datalist>
+              </>
+            )}
+            {!isCoin && (
+              <>
+                {text("serial_number", "Serial number")}
+                {text("prefix_block", "Prefix / block")}
+                {text("signatures", "Signatures", { placeholder: "e.g. Coyne–Towers" })}
+                {text("issuer", "Issuer", { placeholder: "issuing bank or authority" })}
+              </>
+            )}
+            {text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
+            {!isCoin && (
+              <div className="field">
+                &nbsp;
+                {flag("replacement_note", "Replacement / star note")}
+              </div>
+            )}
           </div>
         </div>
 
@@ -298,6 +520,9 @@ export default function ItemForm() {
           <div className="item-form">
             {text("acquisition_date", "Acquired on", { type: "date" })}
             {text("acquisition_price", "Price paid", { type: "number", step: "0.01", min: 0 })}
+            {text("acquisition_fees", "Fees, shipping & tax", {
+              type: "number", step: "0.01", min: 0, title: "Counted in cost basis and gains",
+            })}
             {text("currency", "Currency", { maxLength: 3 })}
             {text("acquired_from", "Acquired from", { placeholder: "dealer, show, auction…" })}
             {text("storage_location", "Storage location", { placeholder: "album, slab box, safe…" })}
@@ -313,6 +538,10 @@ export default function ItemForm() {
               <>
                 {text("sold_date", "Sold on", { type: "date" })}
                 {text("sold_price", "Sold price", { type: "number", step: "0.01", min: 0 })}
+                {text("sold_fees", "Selling fees", {
+                  type: "number", step: "0.01", min: 0, title: "Commission, listing fees",
+                })}
+                {text("sold_to", "Sold to / venue", { placeholder: "buyer, auction house…" })}
               </>
             )}
           </div>

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     Date,
@@ -25,6 +26,7 @@ from app.db import Base
 
 ItemType = Enum("coin", "note", name="item_type", native_enum=False, length=10)
 ItemStatus = Enum("owned", "sold", "wishlist", name="item_status", native_enum=False, length=10)
+StrikeType = Enum("business", "proof", "specimen", name="strike_type", native_enum=False, length=10)
 PhotoAngle = Enum(
     "obverse", "reverse", "edge", "other", name="photo_angle", native_enum=False, length=10
 )
@@ -102,20 +104,42 @@ class Item(Base):
     mint_mark: Mapped[str | None] = mapped_column(String(20))
     series: Mapped[str | None] = mapped_column(String(200))
     variety: Mapped[str | None] = mapped_column(String(200))  # die variety, overdate…
+    strike: Mapped[str] = mapped_column(StrikeType, default="business")
     composition: Mapped[str | None] = mapped_column(String(100))
     weight_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
     fineness: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))  # e.g. 0.9000
+    diameter_mm: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    thickness_mm: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    edge: Mapped[str | None] = mapped_column(String(100))  # reeded, plain, lettered…
+    shape: Mapped[str | None] = mapped_column(String(50))
+    mintage: Mapped[int | None] = mapped_column(BigInteger)
     grade_id: Mapped[int | None] = mapped_column(ForeignKey("grades.id"))
     cert_service: Mapped[str | None] = mapped_column(String(50))  # PCGS, NGC, PMG…
     cert_number: Mapped[str | None] = mapped_column(String(50))
+    grade_plus: Mapped[bool] = mapped_column(Boolean, default=False)
+    grade_star: Mapped[bool] = mapped_column(Boolean, default=False)  # NGC/PMG ★
+    designations: Mapped[list[str] | None] = mapped_column(JSON)  # DCAM, RD, EPQ…
+    grade_details: Mapped[str | None] = mapped_column(String(100))  # the problem, if any
+    cac_sticker: Mapped[str | None] = mapped_column(String(10))  # green | gold
+    # Banknotes
+    serial_number: Mapped[str | None] = mapped_column(String(50))
+    prefix_block: Mapped[str | None] = mapped_column(String(50))
+    signatures: Mapped[str | None] = mapped_column(String(200))
+    issuer: Mapped[str | None] = mapped_column(String(200))  # issuing bank or authority
+    replacement_note: Mapped[bool] = mapped_column(Boolean, default=False)  # star/replacement
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     acquisition_date: Mapped[date | None] = mapped_column(Date)
     acquisition_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    acquisition_fees: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2)
+    )  # premium, shipping, tax
     currency: Mapped[str] = mapped_column(String(3), default="USD")
     acquired_from: Mapped[str | None] = mapped_column(String(200))
     storage_location: Mapped[str | None] = mapped_column(String(200))
     sold_date: Mapped[date | None] = mapped_column(Date)
-    sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # gross, before fees
+    sold_fees: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # commission, listing fees
+    sold_to: Mapped[str | None] = mapped_column(String(200))  # venue or buyer
     set_id: Mapped[int | None] = mapped_column(ForeignKey("sets.id", ondelete="SET NULL"))
     custom_fields: Mapped[dict | None] = mapped_column(JSON)  # user-defined key→value
     notes: Mapped[str | None] = mapped_column(Text)
@@ -148,6 +172,43 @@ class Item(Base):
         if self.mint_mark:
             parts.append(f'"{self.mint_mark}"')
         return " ".join(parts)
+
+    @property
+    def grade_code(self) -> str | None:
+        """The grade code as a holder shows it: on the Sheldon scale a proof or
+        specimen reads PR-/SP- with the same number, and a plus grade adds "+"."""
+        if self.grade is None:
+            return None
+        code = self.grade.code
+        if self.grade.scale == "sheldon" and self.strike in ("proof", "specimen"):
+            code = f"{'PR' if self.strike == 'proof' else 'SP'}-{self.grade.rank}"
+        return f"{code}+" if self.grade_plus else code
+
+    @property
+    def grade_label(self) -> str | None:
+        """The full grade, e.g. `PR-69 DCAM ★`, `MS-64+ RD`, `VF-20 Details (Cleaned)`."""
+        code = self.grade_code
+        if code is None:
+            return None
+        parts = [code, *(self.designations or [])]
+        if self.grade_star:
+            parts.append("★")
+        label = " ".join(parts)
+        return f"{label} Details ({self.grade_details})" if self.grade_details else label
+
+    @property
+    def cost_basis(self) -> Decimal | None:
+        """Price paid plus fees, shipping, and tax — what gains are measured against."""
+        if self.acquisition_price is None:
+            return None
+        return Decimal(self.acquisition_price) + Decimal(self.acquisition_fees or 0)
+
+    @property
+    def sale_proceeds(self) -> Decimal | None:
+        """Sold price less selling fees."""
+        if self.sold_price is None:
+            return None
+        return Decimal(self.sold_price) - Decimal(self.sold_fees or 0)
 
 
 class ItemPhoto(Base):

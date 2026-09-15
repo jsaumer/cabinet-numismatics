@@ -238,3 +238,21 @@ def test_recent_sales_prefers_newest_and_drops_junk():
 def test_apr_window_caps_the_sample():
     lots = [{"Date": f"01-01-20{10 + n:02d}", "Price": n + 1} for n in range(15)]
     assert len(pcgs.recent_sales({"AuctionList": lots})) == pcgs.APR_WINDOW
+
+
+def test_plus_grade_and_proof_strike_reach_the_lookup(client, upstream):
+    configure(client)
+    body = estimate(client, by_number(client, grade_plus=True)).json()
+    assert upstream[-1][1]["PlusGrade"] == "true"
+    assert body["source"] == "pcgs:apr #5960 MS-65+"
+
+    proof = by_number(client, ref="5961", strike="proof")
+    assert estimate(client, proof).json()["source"] == "pcgs:apr #5961 PR-65"
+
+
+def test_details_grade_needs_a_cert(client, upstream):
+    configure(client)
+    resp = estimate(client, by_number(client, grade_details="Cleaned"))
+    assert resp.status_code == 422 and "details grade" in resp.json()["detail"]
+    assert upstream == []
+    assert estimate(client, by_cert(client, grade_details="Cleaned")).status_code == 201

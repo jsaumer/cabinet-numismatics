@@ -7,6 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 ItemTypeName = Literal["coin", "note"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
 AngleName = Literal["obverse", "reverse", "edge", "other"]
+StrikeName = Literal["business", "proof", "specimen"]
+CacStickerName = Literal["green", "gold"]
+
+# Strike and surface designations as grading services print them. EPQ is PMG's.
+DESIGNATIONS = (
+    "PL", "DMPL", "CAM", "DCAM", "UCAM", "RD", "RB", "BN",
+    "FB", "FBL", "FH", "FS", "FT", "EPQ",
+)  # fmt: skip
 
 
 class GradeOut(BaseModel):
@@ -61,6 +69,21 @@ def _validate_custom_fields(value: dict | None) -> dict | None:
     return {k.strip(): v for k, v in value.items()}
 
 
+def _validate_designations(value: list[str] | None) -> list[str] | None:
+    if value is None:
+        return None
+    cleaned: list[str] = []
+    for raw in value:
+        code = raw.strip().upper()
+        if code not in DESIGNATIONS:
+            raise ValueError(
+                f"Unknown designation {raw!r}; expected one of {', '.join(DESIGNATIONS)}"
+            )
+        if code not in cleaned:
+            cleaned.append(code)
+    return cleaned or None
+
+
 class ItemBase(BaseModel):
     type: ItemTypeName
     status: ItemStatusName = "owned"
@@ -70,23 +93,43 @@ class ItemBase(BaseModel):
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
+    strike: StrikeName = "business"
     composition: str | None = Field(default=None, max_length=100)
     weight_g: float | None = Field(default=None, gt=0)
     fineness: float | None = Field(default=None, gt=0, le=1)
+    diameter_mm: float | None = Field(default=None, gt=0, le=1000)
+    thickness_mm: float | None = Field(default=None, gt=0, le=100)
+    edge: str | None = Field(default=None, max_length=100)
+    shape: str | None = Field(default=None, max_length=50)
+    mintage: int | None = Field(default=None, ge=0)
     cert_service: str | None = Field(default=None, max_length=50)
     cert_number: str | None = Field(default=None, max_length=50)
+    grade_plus: bool = False
+    grade_star: bool = False
+    designations: list[str] | None = None
+    grade_details: str | None = Field(default=None, max_length=100)
+    cac_sticker: CacStickerName | None = None
+    serial_number: str | None = Field(default=None, max_length=50)
+    prefix_block: str | None = Field(default=None, max_length=50)
+    signatures: str | None = Field(default=None, max_length=200)
+    issuer: str | None = Field(default=None, max_length=200)
+    replacement_note: bool = False
     quantity: int = Field(default=1, ge=1)
     acquisition_date: date | None = None
     acquisition_price: float | None = Field(default=None, ge=0)
+    acquisition_fees: float | None = Field(default=None, ge=0)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     acquired_from: str | None = Field(default=None, max_length=200)
     storage_location: str | None = Field(default=None, max_length=200)
     sold_date: date | None = None
     sold_price: float | None = Field(default=None, ge=0)
+    sold_fees: float | None = Field(default=None, ge=0)
+    sold_to: str | None = Field(default=None, max_length=200)
     custom_fields: dict[str, str] | None = None
     notes: str | None = None
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
+    _dz = field_validator("designations")(_validate_designations)
 
 
 class ItemCreate(ItemBase):
@@ -105,9 +148,28 @@ class ItemUpdate(BaseModel):
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
+    strike: StrikeName | None = None
     composition: str | None = Field(default=None, max_length=100)
     weight_g: float | None = Field(default=None, gt=0)
     fineness: float | None = Field(default=None, gt=0, le=1)
+    diameter_mm: float | None = Field(default=None, gt=0, le=1000)
+    thickness_mm: float | None = Field(default=None, gt=0, le=100)
+    edge: str | None = Field(default=None, max_length=100)
+    shape: str | None = Field(default=None, max_length=50)
+    mintage: int | None = Field(default=None, ge=0)
+    grade_plus: bool | None = None
+    grade_star: bool | None = None
+    designations: list[str] | None = None
+    grade_details: str | None = Field(default=None, max_length=100)
+    cac_sticker: CacStickerName | None = None
+    serial_number: str | None = Field(default=None, max_length=50)
+    prefix_block: str | None = Field(default=None, max_length=50)
+    signatures: str | None = Field(default=None, max_length=200)
+    issuer: str | None = Field(default=None, max_length=200)
+    replacement_note: bool | None = None
+    acquisition_fees: float | None = Field(default=None, ge=0)
+    sold_fees: float | None = Field(default=None, ge=0)
+    sold_to: str | None = Field(default=None, max_length=200)
     grade_id: int | None = None
     set_id: int | None = None
     custom_fields: dict[str, str] | None = None
@@ -126,6 +188,7 @@ class ItemUpdate(BaseModel):
     catalog_refs: list[CatalogRefIn] | None = None
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
+    _dz = field_validator("designations")(_validate_designations)
 
 
 class PhotoOut(BaseModel):
@@ -179,6 +242,9 @@ class ItemOut(ItemBase):
 
     id: uuid.UUID
     grade: GradeOut | None = None
+    grade_label: str | None = None  # e.g. "PR-69 DCAM ★"
+    cost_basis: float | None = None  # price paid plus fees
+    sale_proceeds: float | None = None  # sold price less fees
     set: SetOut | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefOut] = []
@@ -319,10 +385,10 @@ class CollectionStats(BaseModel):
 
     currency: str
     counts: dict[str, int]  # owned / sold / wishlist / coins / notes / total
-    cost_basis: float  # owned items with a price in the display currency
+    cost_basis: float  # owned items: price paid plus fees, in the display currency
     estimated_value: float  # owned items' latest estimates in the display currency
     unrealized_gain: float  # over owned items having BOTH price and estimate
-    realized_gain: float  # sold items: sold_price - acquisition_price
+    realized_gain: float  # sold items: (sold price - fees) - (price paid + fees)
     estimated_items: int  # owned items contributing to estimated_value
     converted_other_currency: int  # amounts converted into the display currency
     excluded_other_currency: int  # amounts skipped (no exchange rate obtainable)

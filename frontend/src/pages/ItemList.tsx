@@ -16,7 +16,7 @@ const SORTS = [
 ];
 
 const FILTER_KEYS = [
-  "type", "status", "country", "year", "q", "tag", "set_id",
+  "type", "status", "strike", "country", "year", "q", "tag", "set_id",
   "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
 ] as const;
 
@@ -197,6 +197,15 @@ export default function ItemList() {
           </select>
         </label>
         <label className="field">
+          Strike
+          <select value={get("strike")} onChange={(e) => set("strike", e.target.value)}>
+            <option value="">All</option>
+            <option value="business">Business / regular</option>
+            <option value="proof">Proof</option>
+            <option value="specimen">Specimen</option>
+          </select>
+        </label>
+        <label className="field">
           Country
           <input value={get("country")} placeholder="e.g. Canada"
             onChange={(e) => set("country", e.target.value)} />
@@ -219,7 +228,7 @@ export default function ItemList() {
         )}
         <label className="field">
           Search
-          <input value={get("q")} placeholder="notes, series, cert, ref…"
+          <input value={get("q")} placeholder="notes, series, cert, serial, ref…"
             onChange={(e) => set("q", e.target.value)} />
         </label>
         <label className="field">
@@ -399,7 +408,7 @@ export default function ItemList() {
                   {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}
                 </td>
                 <td>{item.year}</td>
-                <td>{item.grade ? item.grade.code : <span className="muted">—</span>}</td>
+                <td>{item.grade_label ?? <span className="muted">—</span>}</td>
                 <td className="muted hide-sm">{item.series ?? ""}</td>
                 <td className="num hide-sm">{item.quantity}</td>
                 <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>

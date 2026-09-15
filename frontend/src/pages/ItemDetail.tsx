@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Angle,
   api,
+  certLookupUrl,
   Estimate,
   ItemDetail as ItemDetailData,
   ItemEvent,
@@ -330,6 +331,8 @@ export default function ItemDetail() {
       else next.add(estId);
       return next;
     });
+  const certUrl = certLookupUrl(item.cert_service, item.cert_number);
+
   const fact = (label: string, value: string | number | null | undefined) => (
     <div>
       <dt>{label}</dt>
@@ -364,21 +367,57 @@ export default function ItemDetail() {
               {item.set ? <Link to={`/?set_id=${item.set.id}`}>{item.set.name}</Link> : "—"}
             </dd>
           </div>
-          {fact("Grade", item.grade ? `${item.grade.code} (${item.grade.label})` : null)}
-          {fact(
-            "Certification",
-            item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : null,
-          )}
+          {fact("Grade", item.grade ? `${item.grade_label} (${item.grade.label})` : null)}
+          {item.strike !== "business" &&
+            fact("Strike", item.strike === "proof" ? "Proof" : "Specimen")}
+          {item.cac_sticker &&
+            fact("CAC", item.cac_sticker === "gold" ? "Gold sticker" : "Green sticker")}
+          <div>
+            <dt>Certification</dt>
+            <dd>
+              {item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : "—"}
+              {certUrl && (
+                <>
+                  {" "}
+                  <a href={certUrl} target="_blank" rel="noreferrer"
+                    title="Check this certification with the grading service">
+                    verify ↗
+                  </a>
+                </>
+              )}
+            </dd>
+          </div>
           {fact("Composition", item.composition)}
-          {fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}
-          {fact("Fineness", item.fineness)}
+          {item.type === "coin" &&
+            fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}
+          {item.type === "coin" && fact("Fineness", item.fineness)}
+          {item.diameter_mm != null && fact("Diameter", `${item.diameter_mm} mm`)}
+          {item.thickness_mm != null && fact("Thickness", `${item.thickness_mm} mm`)}
+          {item.edge && fact("Edge", item.edge)}
+          {item.shape && fact("Shape", item.shape)}
+          {item.mintage != null &&
+            fact(item.type === "note" ? "Print run" : "Mintage", item.mintage.toLocaleString())}
+          {item.serial_number && fact("Serial number", item.serial_number)}
+          {item.prefix_block && fact("Prefix / block", item.prefix_block)}
+          {item.signatures && fact("Signatures", item.signatures)}
+          {item.issuer && fact("Issuer", item.issuer)}
+          {item.replacement_note && fact("Replacement note", "Yes")}
           {fact("Quantity", item.quantity)}
           {fact("Acquired", item.acquisition_date)}
           {fact("Paid", money(item.acquisition_price, item.currency))}
+          {item.acquisition_fees != null &&
+            fact("Fees, shipping & tax", money(item.acquisition_fees, item.currency))}
+          {item.acquisition_fees != null &&
+            fact("Cost basis", money(item.cost_basis, item.currency))}
           {fact("From", item.acquired_from)}
           {fact("Storage", item.storage_location)}
           {item.status === "sold" && fact("Sold on", item.sold_date)}
           {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
+          {item.status === "sold" && item.sold_fees != null &&
+            fact("Selling fees", money(item.sold_fees, item.currency))}
+          {item.status === "sold" && item.sold_fees != null &&
+            fact("Net proceeds", money(item.sale_proceeds, item.currency))}
+          {item.status === "sold" && item.sold_to && fact("Sold to / venue", item.sold_to)}
           <div style={{ gridColumn: "1 / -1" }}>
             <dt>Latest value</dt>
             <dd>

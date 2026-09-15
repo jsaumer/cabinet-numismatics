@@ -16,9 +16,8 @@ sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: the catalog-depth and
-data-entry work from the September 2026 feature review (Phase 5.7, v0.14.0 and
-v0.15.0), the photo-niceties bundle, the sold-listing comps price source,
+A ✔ marks shipped items below. What remains, all optional: filling items in from the Numista catalogue (Phase 5.7 C5,
+v0.15.0, from the September 2026 feature review), the photo-niceties bundle, the sold-listing comps price source,
 import mappings for other collection tools, the operations and
 quality-of-life additions from the same review (Phase 5.8), and in-app restore
 (Phase 5.6 B3, blocked on auth).
@@ -73,17 +72,17 @@ The heart of the app: describing what you own, accurately and flexibly.
 - ✔ **[Nice]** Storage/location tracking (which album, slab, box, safe).
 - ✔ **[Nice]** Custom user-defined fields (up to 20 per item, validated).
 - ✔ **[Nice]** Bulk edit across selected items (fields + add/remove tags).
-- **[Core]** Grading depth: strike type (business, proof, specimen) with proof
+- ✔ **[Core]** Grading depth: strike type (business, proof, specimen) with proof
   grades; designations (CAM/DCAM, PL/DMPL, RD/RB/BN, "+", star, CAC); "details"
   grades with the problem (cleaned, damaged…); PMG's EPQ and star designations
   and grades 1–3. See Phase 5.7 C1. **Target: v0.14.0.**
-- **[Core]** Physical and type fields — diameter, thickness, edge, shape,
+- ✔ **[Core]** Physical and type fields — diameter, thickness, edge, shape,
   mintage — and banknote fields: serial number, signatures, prefix/block,
   replacement/star note, issuing bank. Phase 5.7 C2. **Target: v0.14.0.**
-- **[Core]** Acquisition and sale costs: fees, shipping, and tax in cost basis;
+- ✔ **[Core]** Acquisition and sale costs: fees, shipping, and tax in cost basis;
   commission and venue on sale, so gains are net. Phase 5.7 C3.
   **Target: v0.14.0.**
-- **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
+- ✔ **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
   Phase 5.7 C4. **Target: v0.14.0.**
 - **[Core]** Fill in an item from the Numista catalogue by catalogue number or
   name search. Phase 5.7 C5. **Target: v0.15.0.**
@@ -455,13 +454,13 @@ trusted before it is restored.*
 
 ### Phase 5.7 — Catalog depth II and faster data entry
 
-**Targets: v0.14.0 (C1–C4) and v0.15.0 (C5).** Added by the September 2026
+**C1–C4 ✔ built for v0.14.0; C5 targets v0.15.0.** Added by the September 2026
 feature review and placed ahead of the photo niceties. The live collection is
 still empty, and the schema-complete-before-data-complete rule (see Notes on
 sequencing) says fields are cheap to add now and tedious once hundreds of
 items need revisiting.
 
-- **C1 — Grading depth.** A strike type on each item (business, proof,
+- ✔ **C1 — Grading depth.** A strike type on each item (business, proof,
   specimen) with proof grades on the Sheldon scale (PR/PF-60 to 70);
   designations — CAM/DCAM, PL/DMPL, copper colour RD/RB/BN, "+" grades, star
   and CAC stickers; a "details" grade recording the problem (cleaned, damaged,
@@ -469,19 +468,21 @@ items need revisiting.
   The price adapters must respect them: PCGS keys proofs to their own numbers
   and takes a `PlusGrade` flag, and a proof must never be priced as a
   business strike.
-- **C2 — Physical and type fields.** Diameter, thickness, edge, shape, and
+- ✔ **C2 — Physical and type fields.** Diameter, thickness, edge, shape, and
   mintage for coins; serial number, signatures, prefix/block,
   replacement/star note, and issuing bank for notes. Searchable where it
   matters (serial numbers especially) and round-tripped by CSV import/export —
   today these end up in custom fields or notes.
-- **C3 — Acquisition and sale costs.** Costs on the way in (buyer's premium,
+- ✔ **C3 — Acquisition and sale costs.** Costs on the way in (buyer's premium,
   shipping, tax) count toward cost basis; costs on the way out (commission,
   listing fees) and the venue or buyer are recorded on sale. Unrealized and
-  realized gain, the dashboard, export, and the accuracy report use net
-  figures — without this, gains read too optimistic.
-- **C4 — Certificate verification links.** A link to the grading service's
+  realized gain, the dashboard, and the insurance report use net figures —
+  without this, gains read too optimistic. The accuracy report keeps the
+  gross sold price, since the estimates it judges are market prices.
+- ✔ **C4 — Certificate verification links.** A link to the grading service's
   own cert lookup (PCGS, NGC, PMG), built from the cert service and number
-  already stored. No API involved; small enough to bundle here.
+  already stored. PCGS opens the certificate itself; NGC's and PMG's lookups
+  also ask for the grade, so those open the lookup page. No API involved.
 - **C5 — Fill in an item from Numista.** Enter a Numista catalogue number, or
   search by name, and pre-fill country, denomination, years, composition,
   weight, and diameter on the item form. Uses the configured key and the same

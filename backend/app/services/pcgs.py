@@ -165,6 +165,11 @@ def prerequisite(db: Session, item: Item) -> str | None:
         return "Set the item's grade — PCGS quotes values per grade"
     if item.grade.scale != "sheldon":
         return "PCGS values are quoted on the Sheldon scale — regrade to use it"
+    if item.grade_details:
+        return (
+            "PCGS prices problem-free coins by grade, and this one has a details grade "
+            "— a PCGS cert number still works"
+        )
     return None
 
 
@@ -185,10 +190,13 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
     else:
         number = pcgs_number(item)  # present: prerequisite() checked it
         path = "coindetail/GetCoinFactsByGrade"
-        params = {"PCGSNo": number, "GradeNo": item.grade.rank, "PlusGrade": "false"}
-        cache_key = f"gradefacts:{number}:{item.grade.rank}"
-        matched = f"#{number} {item.grade.code}"
-        lookup = {"lookup": "grade", "pcgs_number": number, "grade": item.grade.code}
+        # The PCGS number is strike-specific (proofs have their own), so the
+        # grade number is the same one a business strike would use.
+        plus = "true" if item.grade_plus else "false"
+        params = {"PCGSNo": number, "GradeNo": item.grade.rank, "PlusGrade": plus}
+        cache_key = f"gradefacts:{number}:{item.grade.rank}{'+' if item.grade_plus else ''}"
+        matched = f"#{number} {item.grade_code}"
+        lookup = {"lookup": "grade", "pcgs_number": number, "grade": item.grade_code}
 
     payload, fetched_at = cached_fetch(
         db, "pcgs", cache_key, CACHE_TTL, lambda: _request(token, path, params)
