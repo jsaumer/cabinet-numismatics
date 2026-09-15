@@ -7,9 +7,9 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.12.0**, with versioned images
+**Status (September 2026): released as v0.13.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
-minus the photo-niceties bundle), pricing-program M1–M4 are done and M5 is built — settings
+minus the photo-niceties bundle), pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
@@ -345,8 +345,7 @@ reports. Staged so each milestone is independently useful.
   failure leaves no estimate — so every automatic attempt now records its
   outcome per item and source (`estimate_attempts`, revision `0011`), and
   each adapter's local checks became a `prerequisite()` the report can run
-  without spending a request. **Target: v0.13.0** (moved behind in-app
-  backup, which went first once real data started going into the live
+  without spending a request. **Shipped in v0.13.0** (moved behind in-app backup, which went first once real data started going into the live
   instance).
 
 *Exit: every priceable item has a sourced, explainable, configurable

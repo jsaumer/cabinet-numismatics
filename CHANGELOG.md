@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-09-14
+
 ### Added
 - **Pricing reports** — a new **Pricing** page (also linked from the
   dashboard's "based on X of Y owned items" line) with four reports:

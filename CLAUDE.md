@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.12.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.13.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -140,8 +140,7 @@ client packages pull ~50 MB of perl) into `/usr/local/lib/pgclient/<major>`,
 and `backup.pg_tool` picks the server's major — pg_dump 18 against a 16
 server writes `SET transaction_timeout`, which 16 rejects on restore. Tests monkeypatch `backup.dump_database` —
 SQLite has no pg_dump; CI's stack job rehearses download → restore.sh on real
-Postgres. B3 (in-app restore) stays blocked on auth. Pricing M5 (pricing reports) is built for
-v0.13.0: `services/pricing_reports.py` behind `GET /api/pricing/{coverage,
+Postgres. B3 (in-app restore) stays blocked on auth. Pricing M5 (pricing reports) shipped in v0.13.0: `services/pricing_reports.py` behind `GET /api/pricing/{coverage,
 stale,sources,accuracy}` and a `/pricing` page. Every automatic estimate goes
 through `pricing.run_adapter`, which records the outcome in
 `estimate_attempts` (one row per item + source, migration `0011`; a failure is
