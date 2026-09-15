@@ -145,6 +145,27 @@ export to PDF via the browser's print dialog) are built on these endpoints.
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint.
 
+## Numista catalogue lookup
+
+| Method | Path                         | Purpose                                          |
+|--------|------------------------------|--------------------------------------------------|
+| `GET`  | `/api/numista/search`        | Search the catalogue: `q` (2–100 chars), optional `category` (`coin`/`banknote`) |
+| `GET`  | `/api/numista/types/{id}`    | A type as fillable item fields, catalogue refs, and issues |
+
+Both need a Numista API key in Settings (422 without one) and answer 502 when
+Numista is unreachable or the quota is exhausted; an unknown type is 404.
+Search returns `count` and up to 20 `results` (`type_id`, `title`,
+`category`, `issuer`, `min_year`, `max_year`, `thumbnail`). A type returns
+`title`, `url`, `category`, and `fields` keyed like the item payload —
+`type`, `country`, `denomination`, `series`, `composition`, `fineness`, and
+`year` when the type has a single year; coins add `weight_g`, `diameter_mm`,
+`thickness_mm`, `shape`, and `edge`; notes add `issuer` (the issuing bank).
+Only values Numista has are present, trimmed to the item schema's limits.
+`catalog_refs` holds `numista:N#<id>` and the type's other references
+(`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year`, `mint_letter`,
+`mintage`, and `comment`. Responses are cached for 30 days in `source_cache`,
+issues shared with Numista pricing.
+
 ## Pricing reports
 
 | Method | Path                          | Purpose                                            |

@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   api,
@@ -10,6 +10,8 @@ import {
   ItemPayload,
   ItemStatus,
   ItemType,
+  NumistaIssue,
+  NumistaSearchResult,
   SetInfo,
   Strike,
 } from "../api";
@@ -98,6 +100,30 @@ const PROBLEMS: Record<ItemType, string[]> = {
 const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
 const SHAPES = ["Round", "Square", "Polygonal", "Scalloped", "Holed"];
 
+// Fields a Numista lookup can fill, with how the "filled …" message names them.
+const NUMISTA_FIELDS: Partial<Record<TextField, string>> = {
+  country: "country",
+  denomination: "denomination",
+  year: "year",
+  series: "series",
+  composition: "composition",
+  weight_g: "weight",
+  fineness: "fineness",
+  diameter_mm: "diameter",
+  thickness_mm: "thickness",
+  edge: "edge",
+  shape: "shape",
+  issuer: "issuer",
+  mintage: "mintage",
+};
+
+const yearSpan = (r: { min_year: number | null; max_year: number | null }) =>
+  r.min_year == null
+    ? ""
+    : r.max_year == null || r.max_year === r.min_year
+      ? String(r.min_year)
+      : `${r.min_year}–${r.max_year}`;
+
 const opt = (v: string) => v.trim() || null;
 const optNum = (v: string) => (v === "" ? null : Number(v));
 
@@ -179,10 +205,121 @@ export default function ItemForm() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [numistaConfigured, setNumistaConfigured] = useState<boolean | null>(null);
+  const [numistaQuery, setNumistaQuery] = useState("");
+  const [numistaResults, setNumistaResults] = useState<NumistaSearchResult[] | null>(null);
+  const [numistaIssues, setNumistaIssues] = useState<NumistaIssue[]>([]);
+  const [numistaBusy, setNumistaBusy] = useState(false);
+  const [numistaNote, setNumistaNote] = useState<string | null>(null);
+  const [numistaError, setNumistaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((s) => setNumistaConfigured(s.sources.some((x) => x.key === "numista" && x.configured)))
+      .catch(() => setNumistaConfigured(false));
+  }, []);
 
   useEffect(() => {
     api.listGrades(gradeScaleFor(form.type)).then(setGrades).catch(() => setGrades([]));
   }, [form.type]);
+
+  async function lookUpNumista() {
+    const query = numistaQuery.trim();
+    if (!query) return;
+    const direct = query.match(/^(?:n#?\s*)?(\d+)$/i);
+    if (direct) {
+      await applyNumista(Number(direct[1]));
+      return;
+    }
+    setNumistaBusy(true);
+    setNumistaError(null);
+    setNumistaNote(null);
+    try {
+      const found = await api.numistaSearch(query, form.type === "note" ? "banknote" : "coin");
+      setNumistaResults(found.results);
+    } catch (e) {
+      setNumistaError((e as Error).message);
+    } finally {
+      setNumistaBusy(false);
+    }
+  }
+
+  async function applyNumista(typeId: number) {
+    setNumistaBusy(true);
+    setNumistaError(null);
+    setNumistaNote(null);
+    try {
+      const found = await api.numistaType(typeId);
+      const next: FormState = { ...form };
+      const filled: string[] = [];
+      if (found.fields.type && found.fields.type !== form.type) {
+        next.type = found.fields.type as ItemType;
+        next.grade_id = "";
+        next.designations = [];
+        if (next.type === "note" && next.strike === "proof") next.strike = "business";
+        filled.push(`type (${next.type})`);
+      }
+      for (const [field, label] of Object.entries(NUMISTA_FIELDS) as [TextField, string][]) {
+        const value = found.fields[field];
+        if (value == null || value === "" || String(next[field]).trim() !== "") continue;
+        next[field] = String(value) as never;
+        filled.push(label);
+      }
+      // An issue matching a year already entered supplies its mint mark and mintage.
+      const year = Number(next.year);
+      const issue = found.issues.find(
+        (i) =>
+          i.year === year &&
+          (!next.mint_mark || (i.mint_letter ?? "").toLowerCase() === next.mint_mark.toLowerCase()),
+      );
+      if (issue?.mintage != null && next.mintage === "") {
+        next.mintage = String(issue.mintage);
+        filled.push("mintage");
+      }
+      const known = new Set(refs.map((r) => `${r.catalog.trim().toLowerCase()}|${r.ref_code.trim()}`));
+      const newRefs = found.catalog_refs.filter((r) => !known.has(`${r.catalog}|${r.ref_code}`));
+      if (newRefs.length) {
+        setRefs((rs) => [...rs.filter((r) => r.catalog.trim() || r.ref_code.trim()), ...newRefs]);
+        filled.push(`${newRefs.length} catalog reference${newRefs.length > 1 ? "s" : ""}`);
+      }
+      setForm(next);
+      setNumistaResults(null);
+      setNumistaIssues(found.issues);
+      setNumistaNote(
+        filled.length
+          ? `Filled ${filled.join(", ")} from ${found.title} (N#${found.type_id}).`
+          : `Nothing to fill from ${found.title} (N#${found.type_id}) — those fields are already set.`,
+      );
+    } catch (e) {
+      setNumistaError((e as Error).message);
+    } finally {
+      setNumistaBusy(false);
+    }
+  }
+
+  function pickIssue(index: string) {
+    const issue = numistaIssues[Number(index)];
+    if (!issue) return;
+    setForm((f) => ({
+      ...f,
+      year: issue.year != null ? String(issue.year) : f.year,
+      mint_mark: issue.mint_letter ?? "",
+      mintage: issue.mintage != null ? String(issue.mintage) : f.mintage,
+    }));
+    setNumistaNote(
+      `Set the issue: ${[issue.year, issue.mint_letter].filter(Boolean).join(" ")}` +
+        (issue.mintage != null ? `, mintage ${issue.mintage.toLocaleString()}` : "") +
+        ".",
+    );
+  }
+
+  const numistaKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault(); // don't submit the item form
+      lookUpNumista();
+    }
+  };
 
   useEffect(() => {
     api.listSets().then(setSets).catch(() => setSets([]));
@@ -352,6 +489,80 @@ export default function ItemForm() {
       {error && <p className="error">{error}</p>}
       {savedNote && <p className="muted">{savedNote}</p>}
       <form onSubmit={submit}>
+        <div className="card">
+          <h2>Fill from Numista</h2>
+          {numistaConfigured === false ? (
+            <p className="muted" style={{ margin: 0 }}>
+              Add a Numista API key in <Link to="/settings">Settings</Link> to fill items in from
+              the Numista catalogue.
+            </p>
+          ) : (
+            <>
+              <div className="estimate-form" style={{ marginTop: 0 }}>
+                <label className="field">
+                  Numista number or search
+                  <input
+                    value={numistaQuery}
+                    placeholder='e.g. N#1493, or "morgan dollar"'
+                    onChange={(e) => setNumistaQuery(e.target.value)}
+                    onKeyDown={numistaKey}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={numistaBusy || !numistaQuery.trim()}
+                  onClick={lookUpNumista}
+                >
+                  {numistaBusy ? "Looking up…" : "Look up"}
+                </button>
+                {numistaIssues.length > 1 && (
+                  <label className="field">
+                    Issue
+                    <select value="" onChange={(e) => pickIssue(e.target.value)}>
+                      <option value="">choose year / mint…</option>
+                      {numistaIssues.map((issue, i) => (
+                        <option key={i} value={i}>
+                          {[issue.year, issue.mint_letter].filter(Boolean).join(" ") || "undated"}
+                          {issue.mintage != null ? ` — ${issue.mintage.toLocaleString()}` : ""}
+                          {issue.comment ? ` (${issue.comment})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              {numistaError && <p className="error">{numistaError}</p>}
+              {numistaNote && <p className="muted">{numistaNote}</p>}
+              {numistaResults &&
+                (numistaResults.length === 0 ? (
+                  <p className="muted">No matches on Numista.</p>
+                ) : (
+                  <ul className="numista-results">
+                    {numistaResults.map((r) => (
+                      <li key={r.type_id}>
+                        {r.thumbnail ? <img src={r.thumbnail} alt="" loading="lazy" /> : <span />}
+                        <div>
+                          <b>{r.title}</b>
+                          <div className="muted">
+                            {[r.issuer, yearSpan(r), `N#${r.type_id}`].filter(Boolean).join(" · ")}
+                          </div>
+                        </div>
+                        <button type="button" disabled={numistaBusy}
+                          onClick={() => applyNumista(r.type_id)}>
+                          Use
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ))}
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Fills only fields that are still empty, and adds the catalogue references. Each
+                lookup uses Numista requests from your quota; results are cached for 30 days.
+              </p>
+            </>
+          )}
+        </div>
+
         <div className="card">
           <h2>Identity</h2>
           <div className="item-form">

@@ -10,6 +10,23 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Fill an item in from the Numista catalogue.** The item form's new
+  **Fill from Numista** card takes a Numista number (`N#1493`, or just
+  `1493`) or a name search, and fills the fields that are still empty:
+  country, denomination, series, composition, fineness (read from the
+  composition for precious metals), weight, diameter, thickness, edge, and
+  shape for coins; country, denomination, and issuing bank for notes; the
+  year when the type has only one. It adds the Numista number and the type's
+  other catalogue references (KM, Pick…) as catalog refs, and lists the
+  type's issues so picking one sets the year, mint mark, and mintage.
+  API: `GET /api/numista/search?q=&category=` and
+  `GET /api/numista/types/{id}`.
+- Lookups need only a Numista API key, not Numista pricing switched on.
+  They use the same cache and quota as pricing: a search or a type costs one
+  request, cached for 30 days, and a type's issues share their cache entry
+  with Numista estimates.
+
 ## [0.14.0] — 2026-09-15
 
 ### Added

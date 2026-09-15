@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.db import engine
 from app.routers import (
     backup,
+    catalogue,
     checklists,
     estimates,
     health,
@@ -141,4 +142,5 @@ app.include_router(stats.router)
 app.include_router(checklists.router)
 app.include_router(settings.router)
 app.include_router(backup.router)
+app.include_router(catalogue.router)
 app.include_router(pricing_reports.router)

@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.14.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: filling in items from the Numista catalogue, then
+Next up:
 photo improvements, sold-listing comparables, and imports from other tools. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
@@ -58,6 +58,9 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   date/mint run) with progress tracking.
 - List filters and paging persist in the URL, so back-navigation keeps your
   place.
+- **Fill from Numista**: enter a Numista number or search by name, and the
+  item form fills in country, denomination, composition, fineness, weight,
+  dimensions, catalogue references, and the issue's year, mint, and mintage.
 
 ### Photos
 - Multiple photos per item with angle designation (obverse/reverse/edge/

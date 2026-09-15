@@ -16,6 +16,7 @@ auction prices. Money is per row, so the per-piece price is multiplied by the
 item's quantity.
 """
 
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -29,6 +30,7 @@ from app.services.pricing import (
     NotApplicable,
     SourceUnavailable,
     cached_fetch,
+    detect_metal,
     freshness,
 )
 
@@ -252,3 +254,180 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
             **freshness(prices_fetched_at, PRICE_TTL),
         },
     )
+
+
+# ---------------------------------------------------------------- catalogue lookup
+# Filling an item in from the catalogue (roadmap Phase 5.7 C5). Same key, cache,
+# and quota as pricing; a type's issues share their cache entry with pricing.
+
+SEARCH_RESULTS = 20
+
+# Longest values the item schema accepts, so a filled form always saves.
+_LIMITS = {"country": 100, "denomination": 100, "series": 200, "composition": 100,
+           "edge": 100, "shape": 50, "issuer": 200}  # fmt: skip
+
+_FINENESS_PERCENT = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*%")
+_FINENESS_DECIMAL = re.compile(r"(?<![\d.])0?\.(\d{3,4})(?!\d)")
+_FINENESS_MILLESIMAL = re.compile(r"(?<![\d.,])(\d{3}(?:\.\d+)?)(?![\d%])")
+
+
+class CatalogueNotFound(LookupError):
+    """Numista has no such type."""
+
+
+def _lookup_key(db: Session) -> str:
+    api_key = str(app_settings.get_setting(db, "numista_api_key"))
+    if not api_key:
+        raise NotApplicable("Add a Numista API key in Settings to look items up on Numista")
+    return api_key
+
+
+def _clean(value, limit: int | None = None) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = " ".join(value.split())
+    return text[:limit] if limit else text
+
+
+def _number(value, maximum: float) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if 0 < value <= maximum else None
+
+
+def fineness_from_composition(text: str | None) -> float | None:
+    """Fineness written into a composition, for precious metals only: "Silver
+    (.900)", "90% silver", "Gold 916.7", "Silver 999"."""
+    if not text or detect_metal(text) is None:
+        return None
+    candidates = []
+    if match := _FINENESS_PERCENT.search(text):
+        candidates.append(float(match.group(1)) / 100)
+    if match := _FINENESS_DECIMAL.search(text):
+        candidates.append(float(f"0.{match.group(1)}"))
+    if match := _FINENESS_MILLESIMAL.search(text):
+        candidates.append(float(match.group(1)) / 1000)
+    for value in candidates:
+        if 0 < value <= 1:
+            return round(value, 4)
+    return None
+
+
+def search_types(db: Session, query: str, category: str | None = None) -> dict:
+    """Catalogue search: types matching `query`, optionally one category."""
+    api_key = _lookup_key(db)
+    q = " ".join(query.split())
+    params = {"q": q, "count": SEARCH_RESULTS}
+    if category:
+        params["category"] = category
+    payload, _ = _cached(
+        db, f"search:{category or 'all'}:{q.lower()}", CATALOG_TTL, api_key, "types", params
+    )
+    results = []
+    for found in payload.get("types") or []:
+        if not isinstance(found, dict) or not isinstance(found.get("id"), int):
+            continue
+        issuer = found.get("issuer") if isinstance(found.get("issuer"), dict) else {}
+        results.append(
+            {
+                "type_id": found["id"],
+                "title": _clean(found.get("title")) or f"N#{found['id']}",
+                "category": _clean(found.get("category")),
+                "issuer": _clean(issuer.get("name")),
+                "min_year": found.get("min_year")
+                if isinstance(found.get("min_year"), int)
+                else None,
+                "max_year": found.get("max_year")
+                if isinstance(found.get("max_year"), int)
+                else None,
+                "thumbnail": _clean(found.get("obverse_thumbnail")),
+            }
+        )
+    count = payload.get("count")
+    return {"count": int(count) if str(count).isdigit() else len(results), "results": results}
+
+
+def catalogue_fields(payload: dict) -> dict:
+    """Item fields a catalogue type fills in, keyed like the item schema.
+    Only values Numista actually has are included."""
+    note = payload.get("category") == "banknote"
+    issuer = payload.get("issuer") if isinstance(payload.get("issuer"), dict) else {}
+    value = payload.get("value") if isinstance(payload.get("value"), dict) else {}
+    composition = payload.get("composition")
+    composition_text = composition.get("text") if isinstance(composition, dict) else None
+    min_year, max_year = payload.get("min_year"), payload.get("max_year")
+    fields = {
+        "type": "note" if note else "coin",
+        "country": _clean(issuer.get("name"), _LIMITS["country"]),
+        "denomination": _clean(value.get("text"), _LIMITS["denomination"]),
+        "year": min_year if isinstance(min_year, int) and min_year == max_year else None,
+        "series": _clean(payload.get("series"), _LIMITS["series"]),
+        "composition": _clean(composition_text, _LIMITS["composition"]),
+        "fineness": fineness_from_composition(composition_text),
+    }
+    if note:
+        entity = payload.get("issuing_entity")
+        fields["issuer"] = (
+            _clean(entity.get("name"), _LIMITS["issuer"]) if isinstance(entity, dict) else None
+        )
+    else:
+        edge = payload.get("edge")
+        fields.update(
+            weight_g=_number(payload.get("weight"), 100_000),
+            diameter_mm=_number(payload.get("size"), 1000),
+            thickness_mm=_number(payload.get("thickness"), 100),
+            shape=_clean(payload.get("shape"), _LIMITS["shape"]),
+            edge=_clean(edge.get("description"), _LIMITS["edge"])
+            if isinstance(edge, dict)
+            else None,
+        )
+    return {key: value for key, value in fields.items() if value is not None}
+
+
+def catalogue_refs(type_id: int, payload: dict) -> list[dict]:
+    """The Numista number plus the type's references in other catalogues."""
+    refs = [{"catalog": "numista", "ref_code": f"N#{type_id}"}]
+    for ref in payload.get("references") or []:
+        catalogue = ref.get("catalogue") if isinstance(ref, dict) else None
+        code = _clean(catalogue.get("code")) if isinstance(catalogue, dict) else None
+        number = _clean(ref.get("number")) if isinstance(ref, dict) else None
+        if code and number:
+            refs.append({"catalog": code.lower()[:50], "ref_code": f"{code}#{number}"[:100]})
+    return refs
+
+
+def catalogue_type(db: Session, type_id: int) -> dict:
+    """One catalogue type, as fields ready to fill into an item, plus its
+    issues (year, mint letter, mintage) for picking the exact one."""
+    api_key = _lookup_key(db)
+    try:
+        payload, _ = _cached(db, f"type:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}")
+    except _NotFound:
+        raise CatalogueNotFound(f"Numista has no type N#{type_id}") from None
+    try:
+        issues_payload, _ = _cached(
+            db, f"issues:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}/issues"
+        )
+        issues = issues_payload.get("issues") or issues_payload.get("items") or []
+    except (_NotFound, SourceUnavailable):
+        issues = []  # the type alone is enough to fill the form
+    return {
+        "type_id": type_id,
+        "title": _clean(payload.get("title")) or f"N#{type_id}",
+        "url": _clean(payload.get("url")),
+        "category": _clean(payload.get("category")),
+        "fields": catalogue_fields(payload),
+        "catalog_refs": catalogue_refs(type_id, payload),
+        "issues": [
+            {
+                "year": _issue_year(issue),
+                "mint_letter": _clean(issue.get("mint_letter")),
+                "mintage": issue["mintage"]
+                if isinstance(issue.get("mintage"), int) and issue["mintage"] >= 0
+                else None,
+                "comment": _clean(issue.get("comment")),
+            }
+            for issue in issues
+            if isinstance(issue, dict)
+        ],
+    }
