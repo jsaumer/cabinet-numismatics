@@ -32,11 +32,11 @@ The single public entry point. Its image is built from the multi-stage
 baked in), so `docker compose up --build` needs no host Node install. It serves
 the frontend and photo files directly, and proxies `/api/` to the backend. Sets
 `client_max_body_size` high enough for photo uploads. Config lives in
-`proxy/nginx.conf`, mounted into the container.
+`proxy/nginx.conf`, baked into the image.
 
 ### backend (built image)
 FastAPI application exposing the REST API under `/api/`. It also runs
-background work (thumbnail generation, price lookups) in-process — either
+background work (thumbnail generation, price lookups, scheduled backups) in-process — either
 synchronously or via FastAPI background tasks — since the job volume for a
 single user is low. On startup it ensures the photo directory exists.
 
@@ -82,6 +82,7 @@ All configuration is via environment variables, loaded from `.env`
 | `DB_NAME`         | Postgres database name                               |
 | `REESTIMATE_DAYS` | Default melt re-estimation window (Settings overrides)|
 | `AUTO_MIGRATE`    | Apply pending migrations on backend startup (default `true`) |
+| `BACKUP_DIR`      | Where in-app backup archives are written (compose: `/data/backups`) |
 | `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
 
 The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
@@ -106,8 +107,10 @@ at the private `backend_state` volume used when `SECRET_KEY` is unset. See
 - Single-host deployment is the design target. For remote access, terminate
   TLS at the nginx proxy (add a cert and a `443` server block) or place the
   stack behind an existing reverse proxy / tunnel.
-- Back up with `./scripts/backup.sh` (database dump + photo archive together);
-  see [backup-restore.md](backup-restore.md).
+- Back up from Settings → Backups (download, or scheduled archives into
+  `BACKUP_DIR`), or with `./scripts/backup.sh` from the host — database dump
+  and photo archive together either way; see
+  [backup-restore.md](backup-restore.md).
 - There is no application-level auth by design; put the stack behind an
   authenticating proxy with TLS before exposing it beyond a trusted network.
   See [security.md](security.md).

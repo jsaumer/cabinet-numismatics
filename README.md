@@ -94,9 +94,11 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 ### Platform
 - Three-container Compose stack; responsive UI for phone/tablet; full
   **dark mode** with a header toggle; auto-generated OpenAPI docs.
-- **Backup/restore**: one script captures the database dump and photo archive
-  together, with a rehearsed restore path — see
-  [docs/backup-restore.md](docs/backup-restore.md).
+- **Backups from the app**: download the collection as one checksummed
+  `.zip` (database + photos + manifest) from Settings, or schedule daily or
+  weekly archives with retention into a directory you can point at a NAS.
+  `scripts/restore.sh` restores them, and CI rehearses that restore on every
+  push — see [docs/backup-restore.md](docs/backup-restore.md).
 - **Configurable pricing**: a Settings page for display currency, the
   blended-value strategy, per-source refresh cadence, and price-source
   credentials — stored **encrypted at rest** and never readable back
@@ -152,6 +154,7 @@ from `.env.example`).
 | `DB_NAME`         | Postgres database name                               |
 | `REESTIMATE_DAYS` | Optional: default melt re-estimation window in days (Settings overrides it; `0` disables the scheduler) |
 | `AUTO_MIGRATE`    | Optional, default `true`: apply database migrations when the backend starts. Set `false` to run `alembic upgrade head` yourself |
+| `BACKUP_DIR`      | Set by `docker-compose.yaml` to `/data/backups` (the `backup_data` volume): where scheduled and on-demand backups are written |
 | `SECRET_KEY`      | Recommended: Fernet key encrypting stored price-source API credentials. Auto-generated onto a private volume if unset. Comma-separated to rotate. See [docs/security.md](docs/security.md) |
 
 External data sources (both free, keyless, and only contacted when needed,
@@ -161,9 +164,12 @@ the machine.
 
 ## Backup & restore
 
+Settings → Backups downloads an archive or schedules them. From the host:
+
 ```bash
 ./scripts/backup.sh                     # → backups/<timestamp>/{db.dump, photos.tar.gz}
 ./scripts/restore.sh backups/<timestamp>
+./scripts/restore.sh cabinet-backup-20260914-031500.zip   # an in-app archive
 ```
 
 Run from Git Bash on Windows. Copy backups off the machine — see

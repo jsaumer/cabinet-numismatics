@@ -4,14 +4,45 @@ All notable changes to Cabinet are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Database changes always ship as Alembic revisions; after upgrading, run:
-
-```bash
-docker compose up --build -d
-docker compose exec backend alembic upgrade head
-```
+Database changes always ship as Alembic revisions. From 0.11.1 the backend
+applies them itself on startup; for earlier releases, run
+`docker compose exec backend alembic upgrade head` after upgrading.
 
 ## [Unreleased]
+
+### Added
+- **Backups from inside the app** (Settings → Backups). **Download backup**
+  builds one `.zip` holding the database dump, the photos, a
+  `manifest.json` (app version, schema revision, counts, SHA-256 per member),
+  and a `SHA256SUMS` file; **Data only** leaves the photos out. **Scheduled
+  backups** write archives daily or weekly into a backup directory, keep the
+  newest N, retry a failed run within the hour, and show the last outcome.
+  **Back up now** writes one on demand, and stored archives are listed for
+  download. API: `GET /api/backup.zip`, `GET`/`POST /api/backups`,
+  `GET /api/backups/{name}`; settings `backup_schedule`, `backup_keep`,
+  `backup_include_photos`.
+- `scripts/restore.sh` restores an in-app archive directly: it verifies the
+  checksums first, and a data-only archive restores the database without
+  touching photos.
+- CI rehearses a restore on every push: download an archive, delete an item,
+  restore, and check the item is back.
+
+### Changed
+- The backend image carries `pg_dump` and `pg_restore` for PostgreSQL 14–18
+  and dumps with the one matching the server's major version, so archives
+  restore with the server's own `pg_restore`.
+- nginx gives `/api/backup*` up to 30 minutes to respond, since an archive is
+  built before the download starts.
+
+### Upgrade notes
+- `docker-compose.yaml` adds a `backup_data` volume mounted at `/data/backups`
+  (`BACKUP_DIR`). **On a Swarm or custom stack, mount a directory there** —
+  ideally NAS storage — or scheduled archives live inside the container and
+  disappear with it. It must not be inside the photo directory; the backend
+  refuses that, because nginx serves photos publicly.
+- The backup endpoints are unauthenticated, like the rest of the API, and one
+  request returns the whole collection. Keep Cabinet behind an
+  authenticating proxy (see docs/deployment.md).
 
 ## [0.11.1] — 2026-09-14
 

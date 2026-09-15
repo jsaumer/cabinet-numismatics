@@ -1,19 +1,43 @@
 #!/usr/bin/env bash
-# Restore a Cabinet backup created by backup.sh.
+# Restore a Cabinet backup: a directory written by backup.sh, or a .zip archive
+# from Settings → Backups (downloaded or scheduled).
 # DESTRUCTIVE: replaces the current database contents and all photo files.
-# Usage: ./scripts/restore.sh <backup-dir>      e.g. ./scripts/restore.sh backups/20260809-120000
+# A data-only archive (no photos.tar.gz) restores the database and leaves the
+# photos as they are.
+# Usage: ./scripts/restore.sh <backup-dir | archive.zip>
+#   e.g. ./scripts/restore.sh backups/20260809-120000
+#        ./scripts/restore.sh cabinet-backup-20260914-031500.zip
 set -euo pipefail
 cd "$(dirname "$0")/.."
-DIR="${1:?usage: restore.sh <backup-dir>}"
-[ -f "$DIR/db.dump" ] || { echo "No db.dump in $DIR" >&2; exit 1; }
-[ -f "$DIR/photos.tar.gz" ] || { echo "No photos.tar.gz in $DIR" >&2; exit 1; }
+SRC="${1:?usage: restore.sh <backup-dir | archive.zip>}"
 set -a; [ -f .env ] && . ./.env; set +a
+
+if [ -f "$SRC" ] && [[ "$SRC" == *.zip ]]; then
+  DIR=$(mktemp -d)
+  trap 'rm -rf "$DIR"' EXIT
+  unzip -q "$SRC" -d "$DIR"
+  [ -f "$DIR/SHA256SUMS" ] || { echo "$SRC is not a Cabinet backup archive" >&2; exit 1; }
+  (cd "$DIR" && sha256sum -c --quiet SHA256SUMS) \
+    || { echo "Checksum mismatch in $SRC — nothing restored" >&2; exit 1; }
+  echo "Archive checksums OK"
+else
+  DIR="$SRC"
+  [ -f "$DIR/photos.tar.gz" ] || { echo "No photos.tar.gz in $DIR" >&2; exit 1; }
+fi
+[ -f "$DIR/db.dump" ] || { echo "No db.dump in $SRC" >&2; exit 1; }
 
 # Container paths live inside sh -c strings so Git Bash (MSYS) on Windows
 # doesn't rewrite them into host paths.
+# In-app archives are dumped with the client matching the server's major
+# version, so the db image's own pg_restore reads them.
 docker compose exec -T db pg_restore -U "${DB_USER:?set in .env}" -d "${DB_NAME:?set in .env}" \
   --clean --if-exists < "$DIR/db.dump"
-docker compose exec -T backend sh -c 'find /data/photos -mindepth 1 -delete'
-docker compose exec -T backend sh -c 'tar xzf - -C /data/photos' < "$DIR/photos.tar.gz"
 
-echo "Restored from $DIR"
+if [ -f "$DIR/photos.tar.gz" ]; then
+  docker compose exec -T backend sh -c 'find /data/photos -mindepth 1 -delete'
+  docker compose exec -T backend sh -c 'tar xzf - -C /data/photos' < "$DIR/photos.tar.gz"
+else
+  echo "Data-only archive: photos left unchanged"
+fi
+
+echo "Restored from $SRC"

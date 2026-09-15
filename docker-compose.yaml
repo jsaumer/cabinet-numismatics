@@ -12,11 +12,15 @@ services:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       - PHOTO_DIR=/data/photos
       - SECRET_KEY_FILE=/data/state/secret.key
+      - BACKUP_DIR=/data/backups
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the
       # photo volume, which nginx serves publicly.
       - backend_state:/data/state
+      # Scheduled and on-demand backups (Settings → Backups). Point this at a
+      # NAS path to get archives off the host.
+      - backup_data:/data/backups
     depends_on:
       db:
         condition: service_healthy
@@ -62,3 +66,4 @@ volumes:
   db_data:
   photo_data:
   backend_state:
+  backup_data:

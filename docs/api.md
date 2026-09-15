@@ -153,7 +153,27 @@ setting); and each source's scheduled-refresh cadence —
 `pcgs_auto_refresh` (bool, fixed weekly when on). The response also reports
 `numista_priceable_items`/`pcgs_priceable_items` — owned items eligible for
 each source — so the UI can show the real projected monthly call count
-before you turn Numista's cadence on.
+before you turn Numista's cadence on. `backup_schedule` (`null` / `daily` /
+`weekly`), `backup_keep` (1–365), and `backup_include_photos` configure
+scheduled backups (see Backups below).
+
+## Backups
+
+| Method | Path                    | Purpose                                              |
+|--------|-------------------------|------------------------------------------------------|
+| `GET`  | `/api/backup.zip`       | Build and download a fresh archive; `?photos=false` for data only |
+| `GET`  | `/api/backups`          | Backup directory, free space, last run, stored archives (newest first) |
+| `POST` | `/api/backups`          | Write an archive into the backup directory now, then apply retention; `?photos=` overrides the setting |
+| `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
+
+An archive is a zip of `db.dump` (pg_dump custom format), `photos.tar.gz`
+(unless data-only), `manifest.json`, and `SHA256SUMS` — see
+[backup-restore.md](backup-restore.md). A failed backup returns `500` with
+the reason (for example, `pg_dump failed: …`) and is recorded as the last
+run; a second `POST` while one is running returns `409`. Stored archive names
+must match `cabinet-backup-YYYYMMDD-HHMMSS[-data].zip`; anything else is
+`404`. **These endpoints hand over the whole collection and are
+unauthenticated** — see [security.md](security.md).
 
 ## Checklists (completeness tracking)
 

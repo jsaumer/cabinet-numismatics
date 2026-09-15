@@ -127,13 +127,27 @@ recorded — JSON-safe values only, never `Decimal` — built into rows by
 `pricing.estimate_row` on every path, with `pricing.freshness` supplying
 `data_as_of`/`stale` from `cached_fetch`'s fetch time; manual entries take an
 optional `note`. The item page renders it per value-history row and filters
-that history by source. **Next: pricing M5 — pricing reports** (coverage,
-stale estimates, per-source breakdown, accuracy against sold prices). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+that history by source. In-app backup (roadmap Phase 5.6 B1 + B2) is built, reordered ahead of M5:
+`services/backup.py` writes one zip — `db.dump` (pg_dump custom format, the
+same file `scripts/backup.sh` makes), `photos.tar.gz`, `manifest.json`,
+`SHA256SUMS` — for `GET /api/backup.zip` and for scheduled/on-demand archives
+in `BACKUP_DIR` (`/data/backups`, the `backup_data` volume; refused inside
+`PHOTO_DIR` because nginx serves that). An hourly in-process loop runs
+`backup.run_scheduled` against the `backup_schedule`/`backup_keep` settings
+and records `backup_last_run`. The backend image copies only `pg_dump`/
+`pg_restore` for majors 14–18 + libpq from the PGDG repo (multi-stage; the full
+client packages pull ~50 MB of perl) into `/usr/local/lib/pgclient/<major>`,
+and `backup.pg_tool` picks the server's major — pg_dump 18 against a 16
+server writes `SET transaction_timeout`, which 16 rejects on restore. Tests monkeypatch `backup.dump_database` —
+SQLite has no pg_dump; CI's stack job rehearses download → restore.sh on real
+Postgres. B3 (in-app restore) stays blocked on auth. **Next: pricing M5 —
+pricing reports** (coverage, stale estimates, per-source breakdown, accuracy
+against sold prices). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
 the backend migrates on startup, so an upgrade there is just a tag bump. Also open:
-photo-niceties bundle, a Swarm-ready stack file/backup path in this repo
+photo-niceties bundle, a Swarm-ready stack file in this repo
 (the running stack file lives in the homelab setup). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)

@@ -258,6 +258,9 @@ export interface AppSettings {
   pcgs_auto_refresh: boolean;
   numista_priceable_items: number;
   pcgs_priceable_items: number;
+  backup_schedule: BackupSchedule | null;
+  backup_keep: number;
+  backup_include_photos: boolean;
   sources: SourceStatus[];
   cached: CachedValue[];
 }
@@ -274,6 +277,28 @@ export interface AppSettingsUpdate {
   preferred_source?: string | null;
   numista_refresh_days?: number | null;
   pcgs_auto_refresh?: boolean;
+  backup_schedule?: BackupSchedule | null;
+  backup_keep?: number;
+  backup_include_photos?: boolean;
+}
+
+export type BackupSchedule = "daily" | "weekly";
+
+export interface BackupRun {
+  at: string;
+  ok: boolean;
+  file?: string;
+  size?: number;
+  includes_photos?: boolean;
+  pruned?: string[];
+  error?: string;
+}
+
+export interface BackupList {
+  directory: string;
+  free_bytes: number | null;
+  last_run: BackupRun | null;
+  backups: { name: string; size: number; created_at: string }[];
 }
 
 export interface Health {
@@ -395,6 +420,8 @@ export const api = {
   getSettings: () => req<AppSettings>("/api/settings"),
   updateSettings: (payload: AppSettingsUpdate) =>
     req<AppSettings>("/api/settings", json("PUT", payload)),
+  listBackups: () => req<BackupList>("/api/backups"),
+  runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];
