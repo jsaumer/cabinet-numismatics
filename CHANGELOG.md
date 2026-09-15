@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-09-15
+
 ### Added
 - **Fill an item in from the Numista catalogue.** The item form's new
   **Fill from Numista** card takes a Numista number (`N#1493`, or just
