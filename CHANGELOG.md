@@ -13,6 +13,11 @@ docker compose exec backend alembic upgrade head
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-09-14
+
+No manual migration step from this release on: the backend applies pending
+migrations itself when it starts (set `AUTO_MIGRATE=false` to opt out).
+
 ### Added
 - **Settings → About** shows the running version (linked to its release) and
   the database schema: current revision, and whether it's up to date, waiting

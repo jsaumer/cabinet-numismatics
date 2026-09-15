@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.11.0**, with versioned images
+**Status (September 2026): released as v0.11.1**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1–M4 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
