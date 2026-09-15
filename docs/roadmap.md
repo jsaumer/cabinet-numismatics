@@ -16,9 +16,12 @@ sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: the photo-niceties
-bundle, the sold-listing comps price source, in-app restore (Phase 5.6 B3, blocked on
-auth), and import mappings for other collection tools.
+A ✔ marks shipped items below. What remains, all optional: the catalog-depth and
+data-entry work from the September 2026 feature review (Phase 5.7, v0.14.0 and
+v0.15.0), the photo-niceties bundle, the sold-listing comps price source,
+import mappings for other collection tools, the operations and
+quality-of-life additions from the same review (Phase 5.8), and in-app restore
+(Phase 5.6 B3, blocked on auth).
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions — new capability = minor,
@@ -70,6 +73,26 @@ The heart of the app: describing what you own, accurately and flexibly.
 - ✔ **[Nice]** Storage/location tracking (which album, slab, box, safe).
 - ✔ **[Nice]** Custom user-defined fields (up to 20 per item, validated).
 - ✔ **[Nice]** Bulk edit across selected items (fields + add/remove tags).
+- **[Core]** Grading depth: strike type (business, proof, specimen) with proof
+  grades; designations (CAM/DCAM, PL/DMPL, RD/RB/BN, "+", star, CAC); "details"
+  grades with the problem (cleaned, damaged…); PMG's EPQ and star designations
+  and grades 1–3. See Phase 5.7 C1. **Target: v0.14.0.**
+- **[Core]** Physical and type fields — diameter, thickness, edge, shape,
+  mintage — and banknote fields: serial number, signatures, prefix/block,
+  replacement/star note, issuing bank. Phase 5.7 C2. **Target: v0.14.0.**
+- **[Core]** Acquisition and sale costs: fees, shipping, and tax in cost basis;
+  commission and venue on sale, so gains are net. Phase 5.7 C3.
+  **Target: v0.14.0.**
+- **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
+  Phase 5.7 C4. **Target: v0.14.0.**
+- **[Core]** Fill in an item from the Numista catalogue by catalogue number or
+  name search. Phase 5.7 C5. **Target: v0.15.0.**
+- **[Nice]** Wish-list target price and priority, flagged when an estimate
+  drops below the target. Phase 5.8. **Target: v0.22.0.**
+- **[Nice]** Nested storage locations (safe → box → row) and printable QR
+  labels for flips and slab boxes. Phase 5.8. **Target: v0.25.0.**
+- **[Nice]** Saved list views and a choice of list columns. Phase 5.8.
+  **Target: v0.26.0.**
 
 ## 2. Photo management
 
@@ -88,7 +111,10 @@ The heart of the app: describing what you own, accurately and flexibly.
 - **[Nice]** Webcam capture for direct photographing.
 
 *(The unshipped [Nice] items above are the remaining "photo niceties"
-bundle. **Target: v0.14.0.**)*
+bundle. **Target: v0.16.0**, moved from v0.14.0 behind Phase 5.7.)*
+
+- **[Nice]** Documents: receipts, certificates of authenticity, and invoices
+  (PDFs included) attached to an item. Phase 5.8. **Target: v0.19.0.**
 
 ## 3. Market price / valuation
 
@@ -109,7 +135,7 @@ guidance, not appraisals.
 - **[Core]** On-demand estimate from comparables by catalog ref + grade with
   a confidence score — *the sold-listings integration; not yet built
   (deferred stretch goal; the adapter registry it plugs into exists).*
-  **Target: v0.15.0.**
+  **Target: v0.17.0.**
 - ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
   **Numista** (free key, coins + notes, prices by grade — pricing M2) and
   **PCGS** (free token, US coins, price guide + Auction Prices Realized —
@@ -154,6 +180,11 @@ guidance, not appraisals.
   progress, e.g. a date/mint run).
 - ✔ **[Nice]** Insurance report (itemized values, photos, certs, totals,
   disclaimer).
+- **[Nice]** Checklist generation and matching: slots built from a year and
+  mint range, filled automatically by matching owned items. Phase 5.8.
+  **Target: v0.23.0.**
+- **[Nice]** Realized gains by sale year, net of costs, with CSV export.
+  Phase 5.8. **Target: v0.24.0.**
 
 ## 5. Platform, data & operations
 
@@ -192,11 +223,19 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   GHCR (from v0.10.2). This landed on GitHub rather than the homelab Forgejo
   originally planned.
 - **[Nice]** Import mappings for common formats (OpenNumismat, Colnect,
-  generic spreadsheets). **Target: v0.16.0.**
+  generic spreadsheets). **Target: v0.18.0.**
 - ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
   diffs).
 - ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
   dark chart palette).
+- **[Core]** Safer delete: a trash with restore, instead of an item, its
+  photos, and its history disappearing immediately. Phase 5.8.
+  **Target: v0.20.0.**
+- **[Nice]** Alerts and metrics: a webhook for failed backups, rejected or
+  exhausted price-source keys, and failed refreshes; a Prometheus `/metrics`
+  endpoint. Phase 5.8. **Target: v0.21.0.**
+- **[Nice]** Installable mobile web app (PWA) for adding items with the phone
+  camera, e.g. at a coin show. Phase 5.8. **Target: v0.27.0.**
 
 ## 6. Open-source readiness [OSS]
 
@@ -213,12 +252,13 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests — GitHub Actions runs
-  ruff, 94 backend tests on Python 3.10 and 3.14, a frontend typecheck, and a
+  ruff, the backend test suite (134 tests as of v0.13.0) on Python 3.10 and 3.14, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0008`.
+  upgrades — Alembic since Phase 0, revisions `0001`–`0011`, applied by the
+  backend on startup since v0.11.1.
 
 ---
 
@@ -277,7 +317,7 @@ comps are the hardest integration, so they come last, not first.
 - Adapter interface for further sources; confidence scoring.
 - Sold-listing comps integration as the stretch goal — **deferred**; still
   the natural next valuation feature (subject to terms of service).
-  **Target: v0.15.0.**
+  **Target: v0.17.0.**
 *Exit: the collection has trackable, sourced value estimates.*
 
 ### Phase 4 — Insights & reporting ✔
@@ -297,7 +337,7 @@ Pull from the **[Nice]** items as desired, roughly in value order:
   bulk edit. (Wishlist is covered by item status from Phase 2.)
 - ✔ **5C — polish:** completeness checklists, dark mode, edit history.
 - **Photo niceties — not pulled yet:** in-browser image editing, lightbox,
-  clipboard/drag-drop/URL upload, webcam capture. **Target: v0.14.0.**
+  clipboard/drag-drop/URL upload, webcam capture. **Target: v0.16.0.**
 
 ### Phase 5.5 — Pricing program: settings, sources, reports
 Fully enable configurable price estimation: a settings surface, the two
@@ -413,6 +453,84 @@ dependencies.
 *Exit: a backup is one click, happens on a schedule, and an archive can be
 trusted before it is restored.*
 
+### Phase 5.7 — Catalog depth II and faster data entry
+
+**Targets: v0.14.0 (C1–C4) and v0.15.0 (C5).** Added by the September 2026
+feature review and placed ahead of the photo niceties. The live collection is
+still empty, and the schema-complete-before-data-complete rule (see Notes on
+sequencing) says fields are cheap to add now and tedious once hundreds of
+items need revisiting.
+
+- **C1 — Grading depth.** A strike type on each item (business, proof,
+  specimen) with proof grades on the Sheldon scale (PR/PF-60 to 70);
+  designations — CAM/DCAM, PL/DMPL, copper colour RD/RB/BN, "+" grades, star
+  and CAC stickers; a "details" grade recording the problem (cleaned, damaged,
+  environmental…); PMG's EPQ and star designations and its missing grades 1–3.
+  The price adapters must respect them: PCGS keys proofs to their own numbers
+  and takes a `PlusGrade` flag, and a proof must never be priced as a
+  business strike.
+- **C2 — Physical and type fields.** Diameter, thickness, edge, shape, and
+  mintage for coins; serial number, signatures, prefix/block,
+  replacement/star note, and issuing bank for notes. Searchable where it
+  matters (serial numbers especially) and round-tripped by CSV import/export —
+  today these end up in custom fields or notes.
+- **C3 — Acquisition and sale costs.** Costs on the way in (buyer's premium,
+  shipping, tax) count toward cost basis; costs on the way out (commission,
+  listing fees) and the venue or buyer are recorded on sale. Unrealized and
+  realized gain, the dashboard, export, and the accuracy report use net
+  figures — without this, gains read too optimistic.
+- **C4 — Certificate verification links.** A link to the grading service's
+  own cert lookup (PCGS, NGC, PMG), built from the cert service and number
+  already stored. No API involved; small enough to bundle here.
+- **C5 — Fill in an item from Numista.** Enter a Numista catalogue number, or
+  search by name, and pre-fill country, denomination, years, composition,
+  weight, and diameter on the item form. Uses the configured key and the same
+  cache as pricing (catalogue data 30 days), and fills exactly the fields melt
+  pricing needs. The biggest single time-saver when entering a real
+  collection by hand.
+
+*Exit: an item record can describe any coin or note accurately — proofs,
+problem coins, and notes' own details included — gains are net of costs, and
+entering a catalogued piece takes seconds.*
+
+### Phase 5.8 — Operations and quality of life
+
+From the same review. Each targets its own minor release after import
+mappings (v0.18.0); like Phase 5's bundles, they can be pulled in any order.
+
+- **Documents** (v0.19.0) — receipts, certificates of authenticity, and
+  invoices attached to an item, PDFs included. Served through the API rather
+  than the public photo path, and included in backups.
+- **Safer delete** (v0.20.0) — deleting an item moves it, with its photos,
+  estimates, and history, to a trash with restore; emptying the trash is the
+  only permanent step. Today a delete is immediate and final.
+- **Alerts and metrics** (v0.21.0) — a webhook (n8n, ntfy, Uptime Kuma…) for
+  failed backups, a rejected or exhausted price-source key, and failed
+  scheduled refreshes, which today show only in the log or Settings; plus a
+  Prometheus `/metrics` endpoint with item counts, collection value, last
+  backup age, and refresh outcomes.
+- **Wish-list targets** (v0.22.0) — a target price and priority on wish-list
+  items, flagged when an estimate falls below the target.
+- **Checklist generation and matching** (v0.23.0) — slots generated from a
+  year and mint range, and filled automatically by matching owned items;
+  today every slot is typed and ticked by hand.
+- **Realized gains by year** (v0.24.0) — sold items grouped by sale year, net
+  of C3's costs, with CSV export.
+- **Storage locations and labels** (v0.25.0) — nested locations (safe → box →
+  row) and printable QR labels for flips and slab boxes that open the item's
+  page.
+- **Saved views** (v0.26.0) — named list filters and a choice of columns.
+- **Mobile web app** (v0.27.0) — installable (PWA), phone-friendly adding of
+  items with the camera, e.g. at a coin show; pairs with the photo niceties'
+  webcam capture.
+
+Deliberately not planned: multiple users, marketplace or selling
+integrations, social sharing, and AI grading — none of them fit a
+single-user, self-hosted collection manager.
+
+*Exit: the collection's paperwork lives with it, mistakes are recoverable,
+failures reach you instead of a log, and everyday use needs fewer clicks.*
+
 ### Phase 6 — Open-source release [OSS] ✔ (v0.9.0)
 - ✔ MIT license, contributing guide, code of conduct, security policy, issue
   and PR templates, Dependabot.
@@ -446,7 +564,12 @@ trusted before it is restored.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps remain the open valuation item.
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0007`), never create-on-startup.
+  revision (`0001`–`0011`), never create-on-startup.
+- **The September 2026 review reordered what comes next.** Catalog depth
+  (Phase 5.7) went ahead of the photo niceties because the live collection
+  was still empty — the same reasoning that front-loaded Phase 2's fields.
+  That moved photo niceties to v0.16.0, sold-listing comps to v0.17.0, and
+  import mappings to v0.18.0; Phase 5.8's additions follow from v0.19.0.
 - **External APIs get the same treatment:** keyless, cached in the database,
   stale-tolerant, and never trusted with collection data (spot prices via
   gold-api.com, exchange rates via frankfurter.dev).
