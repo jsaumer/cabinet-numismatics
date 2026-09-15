@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # secret_key_file, which must stay off the publicly served photo volume.
     secret_key: str = ""
     secret_key_file: str = "/data/state/secret.key"
+    # Apply pending database migrations when the backend starts. Set false to
+    # run `alembic upgrade head` yourself instead.
+    auto_migrate: bool = True
 
     @property
     def sqlalchemy_url(self) -> str:

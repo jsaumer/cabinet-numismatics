@@ -8,7 +8,9 @@ from app.db import Base
 from app.models import *  # noqa: F401,F403 — register models on Base.metadata
 
 config = context.config
-if config.config_file_name is not None:
+# The app runs migrations itself on startup and turns this off so Alembic's
+# logging config doesn't replace the app's.
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 config.set_main_option("sqlalchemy.url", get_settings().sqlalchemy_url)
@@ -28,6 +30,13 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    connection = config.attributes.get("connection")
+    if connection is not None:  # passed in by app.services.schema.upgrade_to_head
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

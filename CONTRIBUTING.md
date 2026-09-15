@@ -23,8 +23,9 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env          # edit the secrets
 docker compose up --build
-docker compose exec backend alembic upgrade head
 ```
+
+The backend applies database migrations itself on startup.
 
 The app is at http://localhost/ and the API docs at
 http://localhost/api/docs. To load sample data for a populated dashboard:

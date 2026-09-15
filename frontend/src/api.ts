@@ -276,6 +276,17 @@ export interface AppSettingsUpdate {
   pcgs_auto_refresh?: boolean;
 }
 
+export interface Health {
+  status: string;
+  db: string;
+  version: string;
+  schema: {
+    current: string | null;
+    expected: string | null;
+    status: "ok" | "pending" | "ahead" | "unknown";
+  };
+}
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(url, init);
   if (!resp.ok) {
@@ -380,6 +391,7 @@ export const api = {
     ),
   deleteChecklist: (id: number) => req<void>(`/api/checklists/${id}`, { method: "DELETE" }),
 
+  health: () => req<Health>("/api/health"),
   getSettings: () => req<AppSettings>("/api/settings"),
   updateSettings: (payload: AppSettingsUpdate) =>
     req<AppSettings>("/api/settings", json("PUT", payload)),

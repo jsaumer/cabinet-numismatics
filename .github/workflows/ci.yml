@@ -95,8 +95,14 @@ jobs:
           done
           echo "backend never became healthy"; docker compose logs; exit 1
 
-      - name: Apply migrations
-        run: docker compose exec -T backend alembic upgrade head
+      - name: Confirm the schema migrated itself on startup
+        run: |
+          curl -fsS http://localhost/api/health | python3 -c '
+          import json, sys
+          schema = json.load(sys.stdin)["schema"]
+          print(schema)
+          assert schema["status"] == "ok", schema
+          '
 
       - name: Smoke-test the API through the proxy
         run: |

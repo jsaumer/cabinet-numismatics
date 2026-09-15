@@ -28,15 +28,19 @@ Edit `.env`:
   lose the stored API keys if that volume is ever recreated. See
   [security.md](security.md).
 
-Then bring it up and migrate:
+Then bring it up:
 
 ```bash
 docker compose up --build -d
-docker compose exec backend alembic upgrade head
 ```
 
-Check `curl http://localhost/api/health` — it reports database reachability
-and the running version.
+The backend creates the database schema itself before it starts serving.
+Check `curl http://localhost/api/health` — it reports database reachability,
+the running version, and `schema` (`status: "ok"` once migrations are
+applied). Settings → About shows the same.
+
+To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
+`docker compose exec backend alembic upgrade head` after each deploy.
 
 ## 2. Storage
 
@@ -139,10 +143,12 @@ database password and the encryption key. Rehearse a restore at least once;
 ```bash
 git pull
 docker compose up --build -d
-docker compose exec backend alembic upgrade head
 ```
 
-Migrations are forward-only in practice; take a backup first. The
+The backend applies any new migrations on startup, before serving, all in one
+transaction. If one fails it rolls back and the backend refuses to start —
+check `docker compose logs backend`. Migrations are forward-only in practice,
+and going back to an older image doesn't undo them; take a backup first. The
 [CHANGELOG](../CHANGELOG.md) notes anything that needs attention.
 
 To pick up security fixes in the base images and dependencies without a code
@@ -202,11 +208,14 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 docker stack deploy -c docker-compose.yaml cabinet
-docker exec $(docker ps -q -f name=cabinet_backend) alembic upgrade head
 ```
 
 Pin a specific release instead of always pulling `latest`:
-`TAG=0.10.1 docker stack deploy -c docker-compose.yaml cabinet`.
+`TAG=0.11.1 docker stack deploy -c docker-compose.yaml cabinet`. From v0.11.1
+the backend migrates the schema itself on startup, so upgrading is just a tag
+bump; on earlier images run
+`docker exec $(docker ps -q -f name=cabinet_backend) alembic upgrade head`
+after each deploy.
 
 **Known gaps versus single-host Compose** — this file hasn't been hardened
 beyond making it *pullable*; two Compose keys it relies on have no effect
@@ -214,11 +223,11 @@ under `docker stack deploy`:
 
 - `depends_on` (with the `service_healthy` condition gating `backend` on
   `db`) is one of the keys `docker stack deploy` documents as unsupported —
-  Swarm gives no startup-order guarantee. In practice this is self-healing
-  here: the backend container starts regardless, `/api/health` reports
-  `db: "error"` until Postgres is reachable, and it recovers on its own once
-  Postgres finishes initializing — but expect a transient unhealthy window
-  on first deploy, not an instant clean start.
+  Swarm gives no startup-order guarantee. The backend handles it: before
+  migrating it waits up to 60 seconds for Postgres to accept connections. If
+  Postgres takes longer, startup fails and Swarm restarts the backend until
+  it succeeds — expect that on a slow first deploy, not an instant clean
+  start.
 - `restart: unless-stopped` is also unsupported; Swarm uses its own default
   restart policy (equivalent to "always restart, regardless of exit code")
   instead, which happens to match the intended behavior here, so this is

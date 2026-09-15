@@ -81,6 +81,7 @@ All configuration is via environment variables, loaded from `.env`
 | `DB_PASSWORD`     | Postgres password                                    |
 | `DB_NAME`         | Postgres database name                               |
 | `REESTIMATE_DAYS` | Default melt re-estimation window (Settings overrides)|
+| `AUTO_MIGRATE`    | Apply pending migrations on backend startup (default `true`) |
 | `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
 
 The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
