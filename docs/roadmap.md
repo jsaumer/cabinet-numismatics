@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.13.0**, with versioned images
+**Status (September 2026): released as v0.14.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
 minus the photo-niceties bundle), pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -454,7 +454,7 @@ trusted before it is restored.*
 
 ### Phase 5.7 — Catalog depth II and faster data entry
 
-**C1–C4 ✔ built for v0.14.0; C5 targets v0.15.0.** Added by the September 2026
+**C1–C4 ✔ shipped in v0.14.0; C5 targets v0.15.0.** Added by the September 2026
 feature review and placed ahead of the photo niceties. The live collection is
 still empty, and the schema-complete-before-data-complete rule (see Notes on
 sequencing) says fields are cheap to add now and tedious once hundreds of

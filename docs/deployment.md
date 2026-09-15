@@ -222,7 +222,7 @@ docker stack deploy -c docker-compose.yaml cabinet
 ```
 
 Pin a specific release instead of always pulling `latest`:
-`TAG=0.13.0 docker stack deploy -c docker-compose.yaml cabinet`. From v0.11.1
+`TAG=0.14.0 docker stack deploy -c docker-compose.yaml cabinet`. From v0.11.1
 the backend migrates the schema itself on startup, so upgrading is just a tag
 bump; on earlier images run
 `docker exec $(docker ps -q -f name=cabinet_backend) alembic upgrade head`
