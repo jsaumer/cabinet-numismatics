@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.18.2] — 2026-09-18
+
 ### Fixed
 - **Numista imports read titles written with quotes.** Numista titles come as
   `¼ Dollar "Washington Quarter"` as well as `1 Dollar - Eisenhower`; the
