@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.17.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.18.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -190,7 +190,7 @@ converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there means
 no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
 day. Numista catalogue caching dropped to 7 days (licence §8.3).
-PriceCharting/Greysheet were researched and not planned. Import from other tools is built for v0.18.0 (migration `0014`, `items.import_source` +
+PriceCharting/Greysheet were researched and not planned. Import from other tools shipped in v0.18.0 (migration `0014`, `items.import_source` +
 `import_key`, unique together; clone skips them). `services/import_formats.py`
 reads each source into `importing.Candidate`s — `spreadsheet` (field → column
 mapping, `suggest_mapping`, header row found past preambles), `numista_file`
