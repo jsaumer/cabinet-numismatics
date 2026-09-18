@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.18.2, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.19.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -211,7 +211,7 @@ one commit per item via `items._build_item`. Files are staged under
 `/api/imports/numista/*` routes are registered before `/{upload_id}/*`.
 Test fixtures are synthetic (`tests/import_samples.py`, also written to
 `docs/import-samples/`) — OpenNumismat's own demo files are GPL, keep them
-out. Documents are built for v0.19.0 (migration `0015`: `documents` + `item_documents`,
+out. Documents shipped in v0.19.0 (migration `0015`: `documents` + `item_documents`,
 many-to-many; `services/documents.py`, `routers/documents.py`). Files live on
 their own `document_data` volume at `DOCUMENT_DIR` (the user chose a new
 volume over the state volume or Postgres), never `PHOTO_DIR`; uploads are

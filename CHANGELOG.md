@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-09-18
+
 **Upgrading: documents need a volume.** The backend now stores attached
 documents in `/data/documents` (`DOCUMENT_DIR`). Compose adds a
 `document_data` volume for it; a Swarm or bind-mount deployment must add a
