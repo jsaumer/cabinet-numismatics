@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-09-18
+
 ### Fixed
 - **A Cabinet export imports in full from the Import page**, as CSV *or*
   Excel. It's recognised by its columns and read with every field (grades
