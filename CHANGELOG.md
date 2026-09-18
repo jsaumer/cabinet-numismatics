@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-09-18
+
 ### Added
 - **Photo tools on the item page** (the roadmap's "photo niceties" bundle):
   - **Lightbox**: click a photo to view it full size; click or scroll to zoom
