@@ -10,6 +10,35 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Sales log and comps estimates** (sold-listing comparables). Each item has
+  a sales log of what pieces like it actually sold for — date, where (with a
+  link and lot), the grade as sold, price, whether buyer's premium is
+  included, and any fees on top. A new **comps** price source estimates the
+  median of recent logged sales (the last three years, or older ones when
+  fewer than three are that recent), converted into the display currency,
+  with confidence from the number of sales and how far apart they are. The
+  sales behind each estimate show in its value-history details, and a sale
+  can be left out without deleting it. Comps works everywhere a source does:
+  the value strategy (preferred or averaged), the item list's source column,
+  and the Pricing reports. The item page also lists free places to look up
+  sold prices.
+- **Numista auction sales** (Settings → Price sources, off by default): a
+  button on the sales log that copies the auction results Numista records
+  for the item's year and mint into the log. **This needs Numista's paid API
+  plan** — a free key gets "Permission denied", which Cabinet explains
+  rather than reporting a bad key. Runs only when clicked; a repeat the same
+  day is served from cache.
+- `scripts/check_sources.py` probes `comps` and `numista-sales` too.
+- API: `GET/POST /api/items/{id}/comparables`,
+  `PATCH/DELETE /api/comparables/{id}`, `POST /api/items/{id}/comparables/numista`;
+  `?source=comps` on `POST /api/items/{id}/estimate`; item details include
+  `comparables`. Migration `0013` adds the `comparables` table.
+
+### Changed
+- Numista catalogue data (a type, its issues, and searches) is cached for 7
+  days instead of 30 — the longest Numista's API licence allows.
+
 ## [0.16.0] — 2026-09-18
 
 ### Added

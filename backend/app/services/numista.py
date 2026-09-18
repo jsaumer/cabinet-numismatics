@@ -7,9 +7,10 @@ item's year (and mint mark), and the item's grade is mapped onto Numista's
 seven buckets.
 
 Free API keys allow 2,000 requests a month, so every upstream response is
-cached in `source_cache` — catalogue data for 30 days, prices for 7 — and a
-stale entry is preferred over a failed request, the same discipline spot prices
-and exchange rates use.
+cached in `source_cache` — catalogue data and prices for 7 days, the longest
+Numista's API licence (§8.3) allows for catalogue data — and a stale entry is
+preferred over a failed request, the same discipline spot prices and exchange
+rates use.
 
 Confidence is medium: these are collector-swap-derived estimates, not realized
 auction prices. Money is per row, so the per-piece price is multiplied by the
@@ -35,7 +36,7 @@ from app.services.pricing import (
 )
 
 API_ROOT = "https://api.numista.com/api/v3"
-CATALOG_TTL = timedelta(days=30)  # issues barely change
+CATALOG_TTL = timedelta(days=7)  # the licence caps catalogue caching at 7 days
 PRICE_TTL = timedelta(days=7)
 
 # Numista's grade buckets, worst to best.
@@ -67,8 +68,11 @@ def type_id_for(item: Item) -> str | None:
     return None
 
 
-def _request(api_key: str, path: str, params: dict | None = None) -> dict:
-    """One upstream call. Raises _NotFound or SourceUnavailable."""
+def _request(
+    api_key: str, path: str, params: dict | None = None, forbidden: str | None = None
+) -> dict:
+    """One upstream call. Raises _NotFound or SourceUnavailable; a 403 raises
+    `NotApplicable(forbidden)` when given — an endpoint the key's plan lacks."""
     try:
         resp = httpx.get(
             f"{API_ROOT}/{path}",
@@ -78,6 +82,8 @@ def _request(api_key: str, path: str, params: dict | None = None) -> dict:
         )
         if resp.status_code == 404:
             raise _NotFound()
+        if resp.status_code == 403 and forbidden:
+            raise NotApplicable(forbidden)
         if resp.status_code in (401, 403):
             raise SourceUnavailable("Numista rejected the API key — check it in Settings")
         if resp.status_code == 429:
@@ -431,3 +437,116 @@ def catalogue_type(db: Session, type_id: int) -> dict:
             if isinstance(issue, dict)
         ],
     }
+
+
+# ---------------------------------------------------------------- auction sales
+# Numista's record of past auction sales, fed into the item's sales log for the
+# `comps` estimate (v0.17.0). The endpoint is part of Numista's *paid* API plan
+# (€0.01 a request, after an activation fee and a monthly minimum); a free key
+# gets 403 "Permission denied". So it sits behind its own setting, off by
+# default, and runs only when asked — never on the refresh schedule.
+
+SALES_TTL = timedelta(days=1)  # a second click the same day costs nothing
+SALES_COUNT = 100
+PAID_PLAN = (
+    "Numista refused the auction-sales request. Sales records need Numista's paid "
+    'API plan — a free key gets "Permission denied". See Settings → Price sources.'
+)
+
+
+def sales_prerequisite(db: Session, item: Item) -> str | None:
+    """What stops fetching auction sales for this item, or None. No network."""
+    if not app_settings.get_setting(db, "numista_sales_enabled"):
+        return (
+            "Numista auction sales are switched off in Settings (they need Numista's paid API plan)"
+        )
+    if not str(app_settings.get_setting(db, "numista_api_key")):
+        return "Add a Numista API key in Settings to fetch auction sales"
+    if type_id_for(item) is None:
+        return "Add a 'numista' catalog reference (e.g. N#1234) to fetch auction sales"
+    return None
+
+
+def _money(value) -> Decimal | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError):
+        return None
+    return amount if amount > 0 else None
+
+
+def sale_rows(payload: dict) -> list[dict]:
+    """Numista sales records as sales-log fields. Records without a date, a
+    house, or a positive price are skipped; pictures are not kept (they carry
+    the auction house's copyright)."""
+    rows = []
+    for record in payload.get("sales_records") or []:
+        if not isinstance(record, dict):
+            continue
+        house = record.get("auction_house") if isinstance(record.get("auction_house"), dict) else {}
+        price = record.get("price") if isinstance(record.get("price"), dict) else {}
+        amount = _money(price.get("amount"))
+        currency = price.get("currency")
+        venue = _clean(house.get("name"), 200)
+        try:
+            sold_on = datetime.strptime(str(record.get("auction_date")), "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if amount is None or not venue or not isinstance(currency, str) or len(currency) != 3:
+            continue
+        grade = record.get("grade") if record.get("grade") in GRADE_BUCKETS else None
+        lot = _clean(record.get("lot_number"), 50)
+        url = _clean(record.get("lot_url"), 1000)
+        premium = price.get("premium_included")
+        rows.append(
+            {
+                "sold_on": sold_on,
+                "venue": venue,
+                "title": _clean(record.get("auction_title"), 300),
+                "lot": lot,
+                "url": url,
+                "grade": _clean(record.get("grade_details"), 100) or (grade or "").upper() or None,
+                "grade_bucket": grade,
+                "price": amount,
+                "currency": currency.upper(),
+                "premium_included": premium if isinstance(premium, bool) else None,
+                "external_id": (url or f"{house.get('id')}:{sold_on.isoformat()}:{lot}")[:300],
+            }
+        )
+    return rows
+
+
+def fetch_sales(db: Session, item: Item) -> tuple[list[dict], int | None]:
+    """The item's issue's auction sales from Numista, as sales-log fields, and
+    the matched issue id. Raises NotApplicable/SourceUnavailable."""
+    reason = sales_prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
+    api_key = str(app_settings.get_setting(db, "numista_api_key"))
+    type_id = type_id_for(item)
+    try:
+        issues_payload, _ = _cached(
+            db, f"issues:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}/issues"
+        )
+    except _NotFound:
+        raise NotApplicable(f"Numista has no type N#{type_id}") from None
+    issue = pick_issue(issues_payload.get("issues") or issues_payload.get("items") or [], item)
+    if issue is None or issue.get("id") is None:
+        raise NotApplicable(f"Numista lists no {item.year} issue for N#{type_id}")
+    issue_id = issue["id"]
+    params = {"issue_id": issue_id, "count": SALES_COUNT}
+    try:
+        payload, _ = cached_fetch(
+            db,
+            "numista",
+            f"sales:{type_id}:{issue_id}",
+            SALES_TTL,
+            lambda: _request(
+                api_key, f"types/{type_id}/sales_records", params, forbidden=PAID_PLAN
+            ),
+        )
+    except _NotFound:
+        raise NotApplicable(f"Numista has no type N#{type_id}") from None
+    return sale_rows(payload), issue_id

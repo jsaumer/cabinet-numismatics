@@ -4,8 +4,8 @@ An adapter is `(db, item) -> EstimateResult`; it raises `NotApplicable` when
 the item lacks a prerequisite and `SourceUnavailable` when the upstream fails.
 Melt value lives here — spot price × weight × fineness × quantity,
 deterministic and explainable, with the metal and spot price recorded in the
-estimate's `source`. Other sources live in their own modules and are resolved
-by `get_adapter`.
+estimate's `source`. Other sources (numista, pcgs, comps) live in their own
+modules and are resolved by `get_adapter`.
 
 Money convention: estimates (like acquisition/sold prices) are per row — the
 whole lot — so per-piece values are multiplied by quantity.
@@ -218,7 +218,7 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
 
 # Adapter registry. Sources are resolved lazily so each adapter module can
 # import this one for the shared contract without a circular import.
-ADAPTER_NAMES = ("melt", "numista", "pcgs")
+ADAPTER_NAMES = ("melt", "numista", "pcgs", "comps")
 
 
 def get_adapter(name: str):
@@ -233,6 +233,10 @@ def get_adapter(name: str):
         from app.services.pcgs import pcgs_estimate
 
         return pcgs_estimate
+    if name == "comps":
+        from app.services.comps import comps_estimate
+
+        return comps_estimate
     return None
 
 
@@ -247,6 +251,10 @@ def get_prerequisite(name: str):
         return prerequisite
     if name == "pcgs":
         from app.services.pcgs import prerequisite
+
+        return prerequisite
+    if name == "comps":
+        from app.services.comps import prerequisite
 
         return prerequisite
     return None
@@ -284,7 +292,7 @@ def _record_attempt(
     row.attempted_at = datetime.now(timezone.utc)
 
 
-AVERAGEABLE_SOURCES = ("melt", "numista", "pcgs")  # pluggable sources only;
+AVERAGEABLE_SOURCES = ("melt", "numista", "pcgs", "comps")  # pluggable sources only;
 # to include a manual source later, add its exact source string here.
 
 

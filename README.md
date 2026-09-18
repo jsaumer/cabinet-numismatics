@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.16.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: sold-listing comparables and imports from other tools. See the
+Next up: imports from other collection tools. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -80,7 +80,12 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   grade), and PCGS (US coins, by cert number or catalog ref + grade,
   preferring realized auction prices over the price guide). One-click and
   scheduled refresh for all three — Numista and PCGS off by default, with
-  Numista's cadence (7/14/30 days) shown against its 2,000/month quota.
+    Numista's cadence (7/14/30 days) shown against its 2,000/month quota.
+- **Sold comparables**: log what pieces like yours actually sold for (eBay
+  sold listings, auction archives, dealer sales) and get a comps estimate —
+  the median of recent sales in your currency, with confidence from how many
+  there are and how much they agree. Numista's auction records can fill the
+  log automatically on Numista's paid API plan.
 - **Value differentiation**: the item page shows every configured source's
   own latest value side by side (never blended), each with a "time since"
   label. A `value_strategy` setting picks the single blended number shown

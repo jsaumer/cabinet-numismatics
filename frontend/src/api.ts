@@ -117,9 +117,49 @@ export interface Estimate {
   fetched_at: string;
 }
 
+/** One sale in an item's sales log — what the comps estimate is built from. */
+export interface ComparableInput {
+  sold_on: string;
+  venue: string;
+  title?: string | null;
+  lot?: string | null;
+  url?: string | null;
+  grade?: string | null;
+  price: number; // per piece
+  currency: string;
+  premium_included?: boolean | null; // null = unknown
+  fees?: number | null; // buyer's premium or shipping on top of the price
+  included?: boolean;
+  note?: string | null;
+}
+
+export interface Comparable extends ComparableInput {
+  id: number;
+  item_id: string;
+  title: string | null;
+  lot: string | null;
+  url: string | null;
+  grade: string | null;
+  grade_bucket: string | null;
+  premium_included: boolean | null;
+  fees: number | null;
+  included: boolean;
+  note: string | null;
+  source: string; // manual | numista
+  created_at: string;
+}
+
+export interface SalesFetchResult {
+  found: number;
+  added: number;
+  already_logged: number;
+  issue_id: number | null;
+}
+
 export interface ItemDetail extends Item {
   photos: Photo[];
   estimates: Estimate[];
+  comparables: Comparable[];
 }
 
 export interface ItemPage {
@@ -324,6 +364,7 @@ export interface AppSettings {
   reestimate_days_overridden: boolean;
   value_strategy: ValueStrategy;
   preferred_source: string | null;
+  numista_sales_enabled: boolean;
   numista_refresh_days: number | null;
   pcgs_auto_refresh: boolean;
   numista_priceable_items: number;
@@ -343,6 +384,8 @@ export interface AppSettingsUpdate {
   numista_api_key?: string;
   pcgs_enabled?: boolean;
   pcgs_api_token?: string;
+  comps_enabled?: boolean;
+  numista_sales_enabled?: boolean;
   value_strategy?: ValueStrategy;
   preferred_source?: string | null;
   numista_refresh_days?: number | null;
@@ -566,6 +609,14 @@ export const api = {
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
   autoEstimate: (itemId: string, source = "melt") =>
     req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),
+
+  addComparable: (itemId: string, sale: ComparableInput) =>
+    req<Comparable>(`/api/items/${itemId}/comparables`, json("POST", sale)),
+  updateComparable: (id: number, changes: Partial<ComparableInput>) =>
+    req<Comparable>(`/api/comparables/${id}`, json("PATCH", changes)),
+  deleteComparable: (id: number) => req<void>(`/api/comparables/${id}`, { method: "DELETE" }),
+  fetchNumistaSales: (itemId: string) =>
+    req<SalesFetchResult>(`/api/items/${itemId}/comparables/numista`, { method: "POST" }),
 
   collectionStats: () => req<CollectionStats>("/api/stats/collection"),
   breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),

@@ -197,7 +197,7 @@ def test_sources_report(client, spot, numista_api):
     body = client.get("/api/pricing/sources").json()
     assert (body["currency"], body["strategy"], body["averaged_items"]) == ("USD", "latest", 0)
     rows = {r["source"]: r for r in body["sources"]}
-    assert set(rows) == {"melt", "numista", "pcgs", "manual"}
+    assert set(rows) == {"melt", "numista", "pcgs", "comps", "manual"}
     assert (rows["melt"]["items"], rows["melt"]["total_value"]) == (1, 5.67)
     assert (rows["numista"]["avg_confidence"], rows["numista"]["in_totals"]) == (0.6, 1)
     assert (rows["manual"]["total_value"], rows["manual"]["in_totals"]) == (100.0, 1)

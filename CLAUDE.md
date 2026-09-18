@@ -180,8 +180,18 @@ webcam modal; the item page adds drop, paste, and URL import. Backend:
 public addresses only at every redirect hop, 3 redirects, 25 MB) and
 `PUT /api/photos/{id}/image`, which saves under a fresh file stem so cached
 images aren't reused. The dashboard is now the home page (`/`); the list is
-`/collection`, and `/?filters` and `/dashboard` redirect. **Next:
-sold-listing comps** (v0.17.0) — research first. Phase 5.7 was added by a September
+`/collection`, and `/?filters` and `/dashboard` redirect. Sold-listing comps are built for v0.17.0 (migration `0013`): research found no free
+sold-price API for individuals (eBay's is closed, auction houses forbid
+automation, Numista's `sales_records` is paid-plan only), so each item has a
+sales log (`comparables`, `routers/comparables.py`) and `services/comps.py`
+is a fourth adapter (`comps`, keyless, on by default) — median of included,
+grade-bucket-matching sales from the last 3 years (older if fewer than 3),
+converted at daily rates. `numista.fetch_sales` feeds Numista's auction
+records into the log behind `numista_sales_enabled` (off; a 403 there means
+no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
+day. Numista catalogue caching dropped to 7 days (licence §8.3).
+PriceCharting/Greysheet were researched and not planned. **Next: import
+mappings** (v0.18.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

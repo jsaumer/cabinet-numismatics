@@ -242,6 +242,62 @@ class EstimateOut(BaseModel):
     fetched_at: datetime
 
 
+class ComparableBase(BaseModel):
+    sold_on: date
+    venue: str = Field(min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=300)
+    lot: str | None = Field(default=None, max_length=50)
+    url: str | None = Field(default=None, max_length=1000)
+    grade: str | None = Field(default=None, max_length=100)
+    price: float = Field(gt=0, lt=10**10)  # per piece
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    premium_included: bool | None = None  # null = unknown
+    fees: float | None = Field(default=None, ge=0, lt=10**10)
+    included: bool = True
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("currency")
+    @classmethod
+    def _upper(cls, value: str) -> str:
+        return value.upper()
+
+
+class ComparableCreate(ComparableBase):
+    pass
+
+
+class ComparableUpdate(BaseModel):
+    sold_on: date | None = None
+    venue: str | None = Field(default=None, min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=300)
+    lot: str | None = Field(default=None, max_length=50)
+    url: str | None = Field(default=None, max_length=1000)
+    grade: str | None = Field(default=None, max_length=100)
+    price: float | None = Field(default=None, gt=0, lt=10**10)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    premium_included: bool | None = None
+    fees: float | None = Field(default=None, ge=0, lt=10**10)
+    included: bool | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class ComparableOut(ComparableBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    item_id: uuid.UUID
+    grade_bucket: str | None = None
+    source: str
+    created_at: datetime
+
+
+class SalesFetchResult(BaseModel):
+    found: int  # sales Numista returned for the item's issue
+    added: int
+    already_logged: int
+    issue_id: int | None = None
+
+
 class ItemOut(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -362,6 +418,7 @@ class ItemListEntry(ItemOut):
 class ItemDetail(ItemOut):
     photos: list[PhotoOut] = []
     estimates: list[EstimateOut] = []
+    comparables: list[ComparableOut] = []
 
 
 class ItemList(BaseModel):

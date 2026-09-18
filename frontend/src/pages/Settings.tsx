@@ -28,6 +28,9 @@ function schemaLabel({ current, expected, status }: Health["schema"]): string {
   return "unknown — database unreachable";
 }
 
+// Sources with nothing to configure beyond on/off.
+const KEYLESS = new Set(["melt", "comps"]);
+
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +114,13 @@ export default function Settings() {
   if (!settings) return <p className="muted">Loading…</p>;
 
   const sourceCard = (source: SourceStatus) => {
+    const keyless = KEYLESS.has(source.key);
     const keyField = source.key === "numista" ? "numista_api_key" : "pcgs_api_token";
-    const enabledField = source.key === "numista" ? "numista_enabled" : "pcgs_enabled";
+    const enabledField = `${source.key}_enabled` as
+      | "melt_enabled"
+      | "numista_enabled"
+      | "pcgs_enabled"
+      | "comps_enabled";
     return (
       <div className="source-row" key={source.key}>
         <div className="source-head">
@@ -120,12 +128,10 @@ export default function Settings() {
             <input
               type="checkbox"
               checked={source.enabled}
-              disabled={saving || (source.key !== "melt" && !source.configured)}
+              disabled={saving || (!keyless && !source.configured)}
               onChange={(e) =>
                 apply(
-                  source.key === "melt"
-                    ? { melt_enabled: e.target.checked }
-                    : { [enabledField]: e.target.checked },
+                  { [enabledField]: e.target.checked },
                   `${source.name} ${e.target.checked ? "enabled" : "disabled"}.`,
                 )
               }
@@ -135,7 +141,7 @@ export default function Settings() {
           {!source.available && <span className="badge status-wishlist">adapter pending</span>}
         </div>
         {source.note && <p className="muted" style={{ margin: "0.2rem 0 0.4rem" }}>{source.note}</p>}
-        {source.key !== "melt" && (
+        {!keyless && (
           <div className="estimate-form" style={{ marginTop: 0 }}>
             <label className="field">
               {source.key === "numista" ? "API key" : "API token"}
@@ -207,6 +213,38 @@ export default function Settings() {
                   </p>
                 );
               })()}
+          </div>
+        )}
+        {source.key === "numista" && (
+          <div className="paid-option">
+            <label className="slot">
+              <input
+                type="checkbox"
+                checked={settings.numista_sales_enabled}
+                disabled={saving || !source.configured}
+                onChange={(e) =>
+                  apply(
+                    { numista_sales_enabled: e.target.checked },
+                    `Numista auction sales ${e.target.checked ? "enabled" : "disabled"}.`,
+                  )
+                }
+              />
+              <b>Numista auction sales</b>
+              <span className="badge status-wishlist">paid Numista API plan</span>
+            </label>
+            <p className="muted" style={{ margin: "0.3rem 0 0" }}>
+              Adds a <i>Fetch Numista auction sales</i> button to each item's sales log, which
+              copies the auction results Numista has recorded for that year and mint (house,
+              date, lot link, grade, price) into the log for the comps estimate.{" "}
+              <b>This needs Numista's paid API plan</b> — at the time of writing a one-time
+              €100 activation fee, then at least €100 a month (€0.01 a request, before VAT). A
+              free key gets <code>Permission denied</code>, and the button says so. Leave this
+              off unless you have that plan.
+            </p>
+            <p className="muted" style={{ margin: "0.3rem 0 0" }}>
+              Each fetch is one request, made only when you click — never on the refresh
+              schedule — and repeating it the same day is free (cached for a day).
+            </p>
           </div>
         )}
         {source.key === "pcgs" && (

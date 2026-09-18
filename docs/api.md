@@ -108,8 +108,9 @@ response carries `details`: the provenance an automatic source recorded (see
 a note, or `null`. `POST .../estimate` runs one automatic adapter, chosen
 with `?source=` — `melt` (the default: spot × weight × fineness × quantity,
 metal detected from `composition`), `numista` (by the item's `numista` catalog
-ref and grade), or `pcgs` (US coins by PCGS cert number, or `pcgs` catalog ref
-+ grade; auction sales when PCGS has them, price guide otherwise). The two
+ref and grade), `pcgs` (US coins by PCGS cert number, or `pcgs` catalog ref
++ grade; auction sales when PCGS has them, price guide otherwise), or `comps`
+(the median of the item's logged sales — see Sales log below). The two
 external sources need a credential in Settings. Any of them answers
 422 with the missing prerequisite when the item can't be priced by that source
 or the source is switched off, and 502 when the upstream is unreachable. See
@@ -174,8 +175,8 @@ Search returns `count` and up to 20 `results` (`type_id`, `title`,
 Only values Numista has are present, trimmed to the item schema's limits.
 `catalog_refs` holds `numista:N#<id>` and the type's other references
 (`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year`, `mint_letter`,
-`mintage`, and `comment`. Responses are cached for 30 days in `source_cache`,
-issues shared with Numista pricing.
+`mintage`, and `comment`. Responses are cached for 7 days in `source_cache`
+(the longest Numista's API licence allows), issues shared with Numista pricing.
 
 ## Pricing reports
 
@@ -217,6 +218,38 @@ hand-entered source text.
   estimates ran high), and `within_20_pct`. Money follows the stats currency
   rule; unconvertible amounts are skipped and counted.
 
+## Sales log (comparables)
+
+| Method   | Path                                   | Purpose                                   |
+|----------|----------------------------------------|-------------------------------------------|
+| `GET`    | `/api/items/{id}/comparables`          | The item's logged sales, newest first     |
+| `POST`   | `/api/items/{id}/comparables`          | Log a sale                                |
+| `PATCH`  | `/api/comparables/{sale_id}`           | Change a sale, or leave it out (`included`) |
+| `DELETE` | `/api/comparables/{sale_id}`           | Remove a sale                             |
+| `POST`   | `/api/items/{id}/comparables/numista`  | Add Numista's recorded auction sales (paid Numista API plan) |
+
+A sale has `sold_on`, `venue`, and a per-piece `price` with its `currency`
+(required), plus optional `title`, `lot`, `url`, `grade` (as the lot
+described it), `premium_included` (true / false / null for unknown), `fees`
+(premium or shipping on top of the price, added to it), `note`, and
+`included` (default true). Responses add `id`, `item_id`, `source`
+(`manual` or `numista`), `grade_bucket` (Numista's g…unc, on fetched sales),
+and `created_at`; `GET /api/items/{id}` includes them as `comparables`.
+
+`POST /api/items/{id}/estimate?source=comps` takes the median of the included
+sales that match — a sale with a `grade_bucket` counts only when it matches
+the item's grade — from the last three years, or all of them when fewer than
+three are that recent, at most twenty, converted into the display currency.
+Confidence starts at 0.30 for one sale and rises to 0.70 at ten, less 0.08 or
+0.15 when the prices spread more than 25% or 50% from the median, 0.05 with
+no item grade, and 0.10 when older sales were needed. Its `details` list the
+sales used. 422 when no sale counts or none converts.
+
+The Numista fetch needs `numista_sales_enabled`, an API key, and a `numista`
+catalog ref; it answers `found`, `added`, `already_logged` (matched by lot
+URL), and `issue_id`. A key without Numista's paid plan gets 422 with that
+explanation; an unreachable Numista is 502. One request, cached for a day.
+
 ## Settings
 
 | Method | Path             | Purpose                                          |
@@ -243,7 +276,10 @@ setting); and each source's scheduled-refresh cadence —
 each source — so the UI can show the real projected monthly call count
 before you turn Numista's cadence on. `backup_schedule` (`null` / `daily` /
 `weekly`), `backup_keep` (1–365), and `backup_include_photos` configure
-scheduled backups (see Backups below).
+scheduled backups (see Backups below). `comps_enabled` switches the comps
+source (on by default), and `numista_sales_enabled` (off by default) allows
+fetching Numista's auction sales, which needs Numista's paid API plan.
+`preferred_source` accepts `comps`.
 
 ## Backups
 

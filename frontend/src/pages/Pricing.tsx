@@ -15,6 +15,7 @@ const SOURCE_NAMES: Record<string, string> = {
   melt: "Melt",
   numista: "Numista",
   pcgs: "PCGS",
+  comps: "Comps",
   manual: "Manual",
   average: "Average",
   blended: "Shown value",

@@ -164,6 +164,10 @@ class Item(Base):
         cascade="all, delete-orphan",
         order_by="PriceEstimate.fetched_at.desc()",
     )
+    comparables: Mapped[list["Comparable"]] = relationship(
+        cascade="all, delete-orphan",
+        order_by="Comparable.sold_on.desc(), Comparable.id.desc()",
+    )
 
     @property
     def label(self) -> str:
@@ -345,6 +349,41 @@ class PriceEstimate(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped[Item] = relationship(back_populates="estimates")
+
+
+class Comparable(Base):
+    """One sale of a piece like this item — the sales log that the `comps`
+    estimate takes its median from. Logged by hand, or fetched from Numista's
+    auction records (`source = "numista"`, deduplicated by `external_id`)."""
+
+    __tablename__ = "comparables"
+    __table_args__ = (UniqueConstraint("item_id", "external_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("items.id", ondelete="CASCADE"), index=True
+    )
+    sold_on: Mapped[date] = mapped_column(Date)
+    venue: Mapped[str] = mapped_column(String(200))  # eBay, Heritage, a dealer…
+    title: Mapped[str | None] = mapped_column(String(300))  # sale or listing title
+    lot: Mapped[str | None] = mapped_column(String(50))
+    url: Mapped[str | None] = mapped_column(String(1000))
+    grade: Mapped[str | None] = mapped_column(String(100))  # as the lot described it
+    grade_bucket: Mapped[str | None] = mapped_column(String(5))  # Numista's g…unc, if known
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2))  # per piece
+    currency: Mapped[str] = mapped_column(String(3))
+    premium_included: Mapped[bool | None] = mapped_column(Boolean)  # null = unknown
+    fees: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # premium/shipping on top
+    included: Mapped[bool] = mapped_column(Boolean, default=True)  # counts toward comps
+    source: Mapped[str] = mapped_column(String(20), default="manual")  # manual | numista
+    external_id: Mapped[str | None] = mapped_column(String(300))
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    @property
+    def total(self) -> Decimal:
+        """What the buyer paid: the price plus any fees recorded on top."""
+        return Decimal(self.price) + Decimal(self.fees or 0)
 
 
 class EstimateAttempt(Base):

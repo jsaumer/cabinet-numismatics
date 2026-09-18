@@ -15,12 +15,14 @@ import {
 } from "../api";
 import { LineChart } from "../components/charts";
 import { Lightbox, PhotoEditor, WebcamCapture } from "../components/photos";
+import { SalesLog } from "../components/sales";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
 const SOURCE_LABELS: Record<string, string> = {
   melt: "⚖ Melt value",
   numista: "🔎 Numista value",
   pcgs: "🏷 PCGS value",
+  comps: "📈 Comps value",
 };
 
 function timeSince(iso: string): string {
@@ -170,6 +172,56 @@ function Provenance({ estimate }: { estimate: Estimate }) {
     );
   }
 
+  if (key === "comps") {
+    const sales = Array.isArray(d.sales) ? (d.sales as Details[]) : [];
+    const currency = text(d.currency) ?? estimate.currency;
+    const quantity = num(d.quantity) ?? 1;
+    const excluded = num(d.excluded_other_currency) ?? 0;
+    const bucket = text(d.grade_bucket);
+    return (
+      <div className="provenance">
+        <div>
+          Median {money(num(d.median), currency)} of {sales.length} logged sale
+          {sales.length === 1 ? "" : "s"}
+          {bucket && ` in ${bucket.toUpperCase()}`}
+          {num(d.spread_pct) != null && (
+            <span className="muted"> · typical spread ±{num(d.spread_pct)}%</span>
+          )}
+          {quantity !== 1 && <span className="muted"> · per piece, × {quantity}</span>}
+          {d.older_sales_used === true && (
+            <span className="muted"> · includes sales older than {num(d.window_years)} years</span>
+          )}
+          {excluded > 0 && (
+            <span className="muted"> · {excluded} left out (no exchange rate)</span>
+          )}
+        </div>
+        <ul className="provenance-lots">
+          {sales.map((sale, index) => {
+            const url = text(sale.url);
+            return (
+              <li key={index}>
+                {text(sale.date)} — {money(num(sale.converted), currency)}
+                {text(sale.currency) !== currency && (
+                  <span className="muted"> ({money(num(sale.price), text(sale.currency))})</span>
+                )}
+                {" · "}
+                {url ? (
+                  <a href={externalUrl(url)} target="_blank" rel="noreferrer">
+                    {text(sale.venue)}
+                  </a>
+                ) : (
+                  text(sale.venue)
+                )}
+                {text(sale.grade) && <span className="muted"> · {text(sale.grade)}</span>}
+                {sale.source === "numista" && <span className="muted"> · via Numista</span>}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   const note = text(d.note);
   if (note) return <div className="provenance note">{note}</div>;
 
@@ -200,6 +252,7 @@ export default function ItemDetail() {
   const [estimateSuccess, setEstimateSuccess] = useState<string | null>(null);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
+  const [numistaSales, setNumistaSales] = useState(false);
   const [estNote, setEstNote] = useState("");
   const [historySource, setHistorySource] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -213,7 +266,13 @@ export default function ItemDetail() {
 
   // Which automatic sources this build offers, and whether they're switched on.
   useEffect(() => {
-    api.getSettings().then((s) => setSources(s.sources)).catch(() => setSources([]));
+    api
+      .getSettings()
+      .then((s) => {
+        setSources(s.sources);
+        setNumistaSales(s.numista_sales_enabled);
+      })
+      .catch(() => setSources([]));
   }, []);
 
   const loadHistory = () => {
@@ -788,6 +847,13 @@ export default function ItemDetail() {
           <button className="primary" type="submit">Record value</button>
         </form>
       </div>
+
+      <SalesLog
+        item={item}
+        compsEnabled={sources.some((s) => s.key === "comps" && s.enabled)}
+        numistaSales={numistaSales}
+        onChanged={reload}
+      />
 
       <details className="history" onToggle={(e) => e.currentTarget.open && loadHistory()}>
         <summary>Edit history</summary>
