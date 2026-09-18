@@ -25,7 +25,7 @@ per item and source (`item_id` + `source` primary key, cascade with the item;
 `attempted_at`), which the coverage report reads to explain gaps a failed
 attempt leaves no estimate for. `0012` (v0.14.0, catalog depth) added the
 grading, physical, banknote, and cost columns on `items` below, and PMG
-grades 1–3.
+grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -45,6 +45,8 @@ match.
 items ──1:N── item_photos
   │
   ├──1:N── price_estimates
+  │
+  ├──1:N── comparables     (the sales log)
   │
   └──N:1── grades          (reference)
   └──N:M── catalog_refs    (reference, via item_catalog_refs)
@@ -138,6 +140,32 @@ Timestamped estimates so history is retained rather than overwritten.
 | `details`         | json null   | provenance: what the source returned (see price-sources.md), or `{"note": …}` on a manual entry; null on rows before `0010` |
 | `fetched_at`      | timestamptz |                                          |
 
+### comparables
+The item's sales log: sales of comparable pieces, which the `comps` estimate
+takes its median from. Integer PK so same-day sales still order; cascade
+delete with the item. Cloning an item leaves its sales behind.
+
+| Column             | Type          | Notes                                       |
+|--------------------|---------------|---------------------------------------------|
+| `id`               | int PK        |                                             |
+| `item_id`          | fk → items    | cascade delete, indexed                     |
+| `sold_on`          | date          |                                             |
+| `venue`            | text          | eBay, Heritage, a dealer…                   |
+| `title`            | text null     | sale or listing title                       |
+| `lot`              | text null     |                                             |
+| `url`              | text null     | the lot or listing                          |
+| `grade`            | text null     | as the lot described it, e.g. "NGC MS64"    |
+| `grade_bucket`     | text null     | Numista's g…unc when known; must match the item's to count |
+| `price`            | numeric       | per piece                                   |
+| `currency`         | text          | ISO 4217                                    |
+| `premium_included` | bool null     | null = unknown                              |
+| `fees`             | numeric null  | premium or shipping on top, added to price  |
+| `included`         | bool          | counts toward the comps estimate            |
+| `source`           | text          | `manual` \| `numista`                       |
+| `external_id`      | text null     | Numista lot URL; unique per item, so a re-fetch skips known sales |
+| `note`             | text null     |                                             |
+| `created_at`       | timestamptz   |                                             |
+
 ### tags / item_tags
 Free-form labels for arbitrary grouping (`tags.id`, unique `tags.name`;
 `item_tags` joins item ↔ tag, both cascade). Tags are created on first use
@@ -151,8 +179,9 @@ hours; a stale row is used if the upstream fetch fails.
 ### source_cache (cache)
 Raw responses from external price sources, so repeated estimates don't spend a
 request against a small free-tier quota (`source` + `cache_key` composite PK,
-`payload` JSON, `fetched_at`). Numista caches catalogue data (a type's issues)
-for 30 days and prices for 7; PCGS caches CoinFacts responses for 7 days. A
+`payload` JSON, `fetched_at`). Numista caches catalogue data (a type, its
+issues, searches) and prices for 7 days, and auction sales for 1; PCGS caches
+CoinFacts responses for 7 days. A
 stale row is used if the upstream fetch fails.
 
 ### grades (reference)

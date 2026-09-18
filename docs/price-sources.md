@@ -29,8 +29,12 @@ Each estimate records:
     list.
   - **pcgs** — lookup (cert, or PCGS number + grade), basis (`apr` or
     `guide`), the auction lots behind the median (date, price, auctioneer,
-    sale, lot URL), the median, the price-guide value (recorded even when
+        sale, lot URL), the median, the price-guide value (recorded even when
     sales won), and the CoinFacts link.
+  - **comps** — the median and its currency, the sales used (date, venue,
+    grade, price as recorded and converted, link, manual or Numista), the
+    spread, the grade bucket they were matched on, and whether sales older
+    than the window were needed.
 
   The item page shows this under each value-history row. Rows recorded before
   it existed have no details.
@@ -85,8 +89,8 @@ Requirements and limits:
 - A free API key (numista.com), stored encrypted in Settings; the source is
   disabled until you switch it on.
 - 2,000 requests a month, so every response is cached in `source_cache` —
-  issues for 30 days, prices for 7 — and a stale entry is used when the
-  upstream fails. An item missing its prerequisites (no ref, no grade) costs
+  issues and prices for 7 days, the longest the API licence (§8.3) allows for
+  catalogue data — and a stale entry is used when the upstream fails. An item missing its prerequisites (no ref, no grade) costs
   no request at all.
 - Confidence is medium by design: these are collector estimates, not realized
   auction prices. Melt remains the higher-confidence floor for bullion.
@@ -108,7 +112,7 @@ type up by Numista number or name search (`GET /types/{id}` and
 `GET /types?q=`) and pre-fills identity, composition, and physical fields,
 catalogue references, and the issue list with mintages. It needs only the
 key, not the pricing toggle, and spends from the same quota — one request per
-search or type, cached 30 days; a type's issues are the same cache entry the
+search or type, cached 7 days; a type's issues are the same cache entry the
 estimates use, so pricing an item you just filled in costs one request fewer.
 
 ### PCGS (implemented — pricing program M3)
@@ -168,11 +172,52 @@ ignores the cache TTL to force a real request (and so spends quota); without
 it a cached response is reused and the run is free. `--full` prints untrimmed
 payloads. Credentials come from Settings and are never printed.
 
-### Sold-listing comparables
-Marketplaces that expose *sold* prices give the closest thing to real market
-value. Filter by catalog reference and grade, then aggregate (e.g. median of
-recent sales) and derive confidence from the sample size and spread. Prefer an
-official API over scraping where one exists.
+### Sold-listing comparables (implemented — v0.17.0)
+Sold prices are the closest thing to real market value, and almost nobody
+will hand them to a self-hosted app. Research in September 2026 found:
+
+- **eBay** — sold data is only in the Marketplace Insights API, closed to new
+  applicants (2025–26 applications are refused); the Finding API's
+  `findCompletedItems` was decommissioned in February 2025; the open Browse
+  API returns asking prices on active listings only, and eBay's API licence
+  forbids using its content to model prices. Scraping is against the user
+  agreement.
+- **Auction houses and aggregators** (Heritage, GreatCollections, Stack's
+  Bowers, Spink, CoinArchives, acsearch, WorthPoint) — no public API or data
+  licence for individuals, and their terms forbid automated collection.
+  Their archives are free or cheap to *read*.
+- **Price guides with APIs** — Greysheet/CDN needs a dealer subscription plus
+  $95–287 a month and is wholesale guide data, not sales; PriceCharting
+  derives values from eBay sales of US coins for $49 a month. Neither is
+  planned. NGC, PMG, and Colnect offer no usable price API.
+- **Numista** records past auction sales per type and issue
+  (`GET /types/{id}/sales_records`), but only on its paid API plan (€0.01 a
+  request, after a €100 activation fee and a €100 monthly minimum); a free
+  key gets 403 "Permission denied".
+
+So the source is a **sales log per item**, filled by hand from those
+archives, with Numista's sales as an optional paid feed into the same log.
+Implemented in `app/services/comps.py`:
+
+- A sale counts when it's included and, if its grade bucket is known, matches
+  the item's (hand-logged sales carry no bucket — choosing them was the
+  match).
+- Recent sales win: the last three years, falling back to every sale when
+  fewer than three are that recent; at most twenty, newest first.
+- Each sale's price plus any fees on top is converted into the display
+  currency at the cached daily rate (today's rate, not the sale day's);
+  sales that can't convert are left out and counted.
+- The estimate is the median × quantity. Confidence: 0.30 for one sale,
+  0.40 for two, 0.50 for three or four, 0.60 for five to nine, 0.70 for ten or
+  more; less 0.08 when the median absolute deviation exceeds 25% of the
+  median and 0.15 above 50%; less 0.05 with no item grade; less 0.10 when
+  older sales were needed; kept between 0.15 and 0.80.
+- Numista's sales (`numista.fetch_sales`, `POST
+  /api/items/{id}/comparables/numista`) sit behind `numista_sales_enabled`,
+  off by default, and run only on request — never on the refresh schedule,
+  since each one is billed. A same-day repeat comes from `source_cache`
+  (one-day TTL); known lots are skipped by URL. Pictures are not kept (they
+  carry the auction houses' copyright), and Numista is shown as the source.
 
 ### Price-guide references
 Published guides (annual catalogs and grading-service price guides) give

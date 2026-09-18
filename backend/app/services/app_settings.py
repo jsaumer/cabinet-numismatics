@@ -24,6 +24,9 @@ DEFAULTS: dict = {
     "numista_api_key": "",
     "pcgs_enabled": False,
     "pcgs_api_token": "",
+    "comps_enabled": True,
+    # Numista's sales records need its paid API plan; off until the user opts in.
+    "numista_sales_enabled": False,
     "value_strategy": "latest",
     "preferred_source": None,
     "numista_refresh_days": None,  # None = off; else 7 | 14 | 30

@@ -15,8 +15,7 @@ sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: the sold-listing comps price source,
-import mappings for other collection tools, the operations and
+A ✔ marks shipped items below. What remains, all optional: import mappings for other collection tools, the operations and
 quality-of-life additions from the same review (Phase 5.8), and in-app restore
 (Phase 5.6 B3, blocked on auth).
 
@@ -129,15 +128,18 @@ guidance, not appraisals.
 - ✔ **[Core]** Collection total value with cost basis vs. estimate. The
   multi-currency answer: convert at cached daily ECB rates; exclude and count
   anything unconvertible — never silently mix currencies.
-- **[Core]** On-demand estimate from comparables by catalog ref + grade with
-  a confidence score — *the sold-listings integration; not yet built
-  (deferred stretch goal; the adapter registry it plugs into exists).*
+- ✔ **[Core]** On-demand estimate from comparables with a confidence score —
+  a per-item **sales log** (filled by hand from eBay sold listings and
+  auction archives, or from Numista's auction records on its paid API plan)
+  and a `comps` source taking the median of recent matching sales. No free
+  sold-price API exists for individuals — see price-sources.md.
   **Target: v0.17.0.**
 - ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
   **Numista** (free key, coins + notes, prices by grade — pricing M2) and
   **PCGS** (free token, US coins, price guide + Auction Prices Realized —
-  pricing M3), all sharing one contract. eBay Marketplace Insights is closed
-  to new applicants, so eBay comps stay a manual-entry path. See the Pricing
+  pricing M3), all sharing one contract — and comps (v0.17.0). eBay
+  Marketplace Insights is closed to new applicants, so eBay sales are logged
+  by hand into the sales log. See the Pricing
   program phase below.
 - ✔ **[Nice]** Scheduled / periodic re-estimation: the same 12h loop refreshes
   stale melt estimates (window set by `REESTIMATE_DAYS`; manual values are
@@ -254,7 +256,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0011`, applied by the
+  upgrades — Alembic since Phase 0, revisions `0001`–`0013`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -312,9 +314,9 @@ comps are the hardest integration, so they come last, not first.
   decision made explicitly (a declared display currency at Phase 3; upgraded
   to daily-rate conversion in Phase 5A).
 - Adapter interface for further sources; confidence scoring.
-- Sold-listing comps integration as the stretch goal — **deferred**; still
-  the natural next valuation feature (subject to terms of service).
-  **Target: v0.17.0.**
+- Sold-listing comps integration as the stretch goal — deferred, then built
+  for **v0.17.0** as a hand-filled sales log with an optional paid Numista
+  feed, since no sold-price API is open to individuals.
 *Exit: the collection has trackable, sourced value estimates.*
 
 ### Phase 4 — Insights & reporting ✔
@@ -353,7 +355,7 @@ reports. Staged so each milestone is independently useful.
   fallback.
 - **M2 — Numista adapter.** ✔ Coins *and* notes priced by `numista` catalog
   ref + grade (free key, 2,000 req/month); upstream responses cached in
-  `source_cache` (revision `0009`, issues 30d / prices 7d, stale-tolerant);
+  `source_cache` (revision `0009`, issues and prices 7d, stale-tolerant);
   enabled only when a key is configured; medium confidence
   (collector-swap-derived estimates, 0.60 — 0.45 when the exact grade bucket
   isn't priced and the nearest lower one stands in). `POST
@@ -485,7 +487,7 @@ items need revisiting.
 - ✔ **C5 — Fill in an item from Numista.** Enter a Numista catalogue number, or
   search by name, and pre-fill country, denomination, years, composition,
   weight, and diameter on the item form. Uses the configured key and the same
-  cache as pricing (catalogue data 30 days), and fills exactly the fields melt
+  cache as pricing (catalogue data 7 days), and fills exactly the fields melt
   pricing needs. The biggest single time-saver when entering a real
   collection by hand. It also adds the type's other catalogue references and
   lists its issues, so choosing one sets year, mint mark, and mintage; only
@@ -564,9 +566,9 @@ failures reach you instead of a log, and everyday use needs fewer clicks.*
   estimates exist, so Phase 3 preceded Phase 4.
 - **Easiest price source first.** Melt value shipped before sold-listing
   comps: it is deterministic, needs no external agreement, and covers the
-  bullion floor of most collections. Comps remain the open valuation item.
+  bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0011`), never create-on-startup.
+  revision (`0001`–`0013`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty — the same reasoning that front-loaded Phase 2's fields.

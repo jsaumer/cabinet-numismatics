@@ -46,6 +46,7 @@ ITEM_LOAD = (
     selectinload(Item.estimates),
     selectinload(Item.tags),
     selectinload(Item.catalog_refs),
+    selectinload(Item.comparables),
 )
 
 CSV_COLUMNS = [

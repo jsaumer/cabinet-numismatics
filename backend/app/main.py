@@ -12,6 +12,7 @@ from app.routers import (
     backup,
     catalogue,
     checklists,
+    comparables,
     estimates,
     health,
     items,
@@ -144,3 +145,4 @@ app.include_router(settings.router)
 app.include_router(backup.router)
 app.include_router(catalogue.router)
 app.include_router(pricing_reports.router)
+app.include_router(comparables.router)

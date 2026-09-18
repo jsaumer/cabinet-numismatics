@@ -36,7 +36,8 @@ class SettingsOut(BaseModel):
     reestimate_days: int  # effective value (DB override or env default)
     reestimate_days_overridden: bool
     value_strategy: Literal["latest", "preferred_source", "average"]
-    preferred_source: Literal["melt", "numista", "pcgs"] | None
+    preferred_source: Literal["melt", "numista", "pcgs", "comps"] | None
+    numista_sales_enabled: bool
     numista_refresh_days: int | None
     pcgs_auto_refresh: bool
     numista_priceable_items: int
@@ -57,7 +58,9 @@ class SettingsUpdate(BaseModel):
     pcgs_enabled: bool | None = None
     pcgs_api_token: str | None = Field(default=None, max_length=500)  # "" clears
     value_strategy: Literal["latest", "preferred_source", "average"] | None = None
-    preferred_source: Literal["melt", "numista", "pcgs"] | None = None
+    preferred_source: Literal["melt", "numista", "pcgs", "comps"] | None = None
+    comps_enabled: bool | None = None
+    numista_sales_enabled: bool | None = None
     numista_refresh_days: Literal[7, 14, 30] | None = None
     pcgs_auto_refresh: bool | None = None
     backup_schedule: Literal["daily", "weekly"] | None = None
@@ -104,7 +107,7 @@ def _build(db: Session) -> SettingsOut:
             available=True,
             secret_hint=store.secret_hint(numista_key),
             note="Priced by numista catalog ref + grade. Free API key at numista.com "
-            "(2,000 requests/month); responses cached 7–30 days.",
+            "(2,000 requests/month); responses cached 7 days.",
         ),
         SourceStatus(
             key="pcgs",
@@ -116,6 +119,15 @@ def _build(db: Session) -> SettingsOut:
             note="US coins by cert number, or PCGS number + grade. Auction sales when "
             "PCGS has them, price guide otherwise. Token from pcgs.com/publicapi "
             "(1,000 calls/day); responses cached 7 days.",
+        ),
+        SourceStatus(
+            key="comps",
+            name="Sold comparables (your sales log)",
+            enabled=bool(store.get_setting(db, "comps_enabled")),
+            configured=True,
+            available=True,
+            note="Keyless — the median of recent sales you log on each item (eBay sold "
+            "listings, auction archives, dealer sales), converted at daily rates.",
         ),
     ]
 
@@ -146,6 +158,7 @@ def _build(db: Session) -> SettingsOut:
         reestimate_days_overridden=store.get_setting(db, "reestimate_days") is not None,
         value_strategy=str(store.get_setting(db, "value_strategy")),
         preferred_source=store.get_setting(db, "preferred_source"),
+        numista_sales_enabled=bool(store.get_setting(db, "numista_sales_enabled")),
         numista_refresh_days=store.get_setting(db, "numista_refresh_days"),
         pcgs_auto_refresh=bool(store.get_setting(db, "pcgs_auto_refresh")),
         numista_priceable_items=numista_priceable,

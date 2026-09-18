@@ -9,10 +9,13 @@ Nothing is written to `price_estimates`: this only looks.
     docker compose exec backend python scripts/check_sources.py --list
     docker compose exec backend python scripts/check_sources.py -s numista -i <item-id>
     docker compose exec backend python scripts/check_sources.py -s pcgs -i <item-id> --fresh
+    docker compose exec backend python scripts/check_sources.py -s numista-sales -i <item-id>
 
 `--fresh` ignores the `source_cache` TTL to force a real request — each one
 counts against the source's quota (Numista 2,000/month, PCGS 1,000/day).
 Without it, a cached response is reused and the run costs nothing.
+`numista-sales` fetches the item's auction sales without adding them to its
+sales log; on Numista's paid plan each uncached request is billed.
 
 This lives with the backend rather than in the repo-root `scripts/` because it
 imports the application; the scripts up there talk to the API or to Docker.
@@ -31,15 +34,15 @@ from app.db import SessionLocal
 from app.models import Item, SourceCache
 from app.services import app_settings, pricing
 
-SOURCES = ("melt", "numista", "pcgs")
+SOURCES = ("melt", "numista", "pcgs", "comps", "numista-sales")
 LIST_LIMIT = 3  # long lists (auction lots, price rows) are trimmed to this
 STRING_LIMIT = 500  # long strings (e.g. PCGS CoinFactsNotes essays) are trimmed to this
 
 
 def adapter_module(source: str):
     """The module backing a source, for spying on its requests. None for melt,
-    which has no single upstream call to intercept."""
-    if source == "numista":
+    which has no single upstream call to intercept, and comps, which has none."""
+    if source in ("numista", "numista-sales"):
         from app.services import numista
 
         return numista
@@ -98,10 +101,11 @@ def list_candidates(db) -> int:
 
 
 def report_settings(db, source: str) -> None:
-    enabled = bool(app_settings.get_setting(db, f"{source}_enabled"))
+    setting = "numista_sales_enabled" if source == "numista-sales" else f"{source}_enabled"
+    enabled = bool(app_settings.get_setting(db, setting))
     print(f"source     : {source} ({'enabled' if enabled else 'DISABLED in Settings'})")
-    if source != "melt":
-        key = "numista_api_key" if source == "numista" else "pcgs_api_token"
+    if source not in ("melt", "comps"):
+        key = "pcgs_api_token" if source == "pcgs" else "numista_api_key"
         configured = bool(str(app_settings.get_setting(db, key)))
         print(f"credential : {'configured' if configured else 'MISSING — set it in Settings'}")
 
@@ -143,9 +147,12 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
                 if name.endswith("_TTL"):
                     setattr(module, name, timedelta(0))
 
-    adapter = pricing.get_adapter(source)
+    sales = None
     try:
-        result = adapter(db, item)
+        if source == "numista-sales":
+            sales, result = module.fetch_sales(db, item)[0], None
+        else:
+            result = pricing.get_adapter(source)(db, item)
     except pricing.NotApplicable as exc:
         print(f"\nNOT APPLICABLE (the API would answer 422)\n  {exc}")
         status = 1
@@ -164,13 +171,17 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
             dump("  payload", payload, full)
         if not calls:
             for row in db.execute(
-                select(SourceCache).where(SourceCache.source == source)
+                select(SourceCache).where(SourceCache.source == module.__name__.split(".")[-1])
             ).scalars():
                 dump(
                     f"cached {row.cache_key} (fetched {row.fetched_at:%Y-%m-%d %H:%M})",
                     row.payload,
                     full,
                 )
+
+    if sales is not None:
+        print(f"\nSALES (not added to the sales log): {len(sales)}")
+        dump("  sales", sales, full)
 
     if result is not None:
         print("\nESTIMATE (not saved)")

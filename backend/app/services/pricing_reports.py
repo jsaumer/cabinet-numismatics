@@ -51,7 +51,11 @@ def _load(db: Session, status: str) -> list[Item]:
         db.execute(
             select(Item)
             .where(Item.status == status)
-            .options(selectinload(Item.estimates), selectinload(Item.catalog_refs))
+            .options(
+                selectinload(Item.estimates),
+                selectinload(Item.catalog_refs),
+                selectinload(Item.comparables),
+            )
         )
         .scalars()
         .all()
