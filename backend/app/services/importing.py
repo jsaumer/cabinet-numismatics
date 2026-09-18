@@ -206,13 +206,27 @@ def to_date(value) -> date | None:
     return None
 
 
-def title_series(title: str | None) -> str | None:
-    """Numista-style titles read "1 Dollar - Eisenhower Moon Landing"; the part
-    after the denomination is the series."""
+_QUOTED_TITLE = re.compile(r'^(.*?)\s*["“«](.+?)["”»]')
+
+
+def split_title(title: str | None) -> tuple[str | None, str | None]:
+    """(denomination, name) from a Numista-style title, which comes as either
+    `¼ Dollar "Washington Quarter"` or `1 Dollar - Eisenhower Apollo 11`.
+    A title in neither form is all denomination, with no name."""
     text = clean(title)
     if not text:
-        return None
-    return text.split(" - ", 1)[1] if " - " in text else text
+        return None, None
+    if match := _QUOTED_TITLE.match(text):
+        return clean(match.group(1)), clean(match.group(2))
+    if " - " in text:
+        denomination, name = text.split(" - ", 1)
+        return clean(denomination), clean(name)
+    return text, None
+
+
+def title_series(title: str | None) -> str | None:
+    """The name part of a Numista-style title — the series."""
+    return split_title(title)[1]
 
 
 _REF_RE = re.compile(r"([A-Za-zÀ-ÿ][\w.À-ÿ]*)\s*#\s*([\w./\-]+)")

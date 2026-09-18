@@ -288,7 +288,7 @@ NUMISTA_COLLECTION = {
         },
         {
             "id": 90002, "quantity": 1, "for_swap": True, "grade": "unc",
-            "type": {"id": 7777, "title": "1 Dollar - Morgan", "category": "coin",
+            "type": {"id": 7777, "title": "1 Dollar \"Morgan Dollar\"", "category": "coin",
                      "issuer": {"code": "united-states", "name": "United States"}},
             "issue": {"id": 66, "is_dated": True, "year": 1881, "gregorian_year": 1881,
                       "mint_letter": "S"},
@@ -311,8 +311,9 @@ NUMISTA_TYPES = {
     1340: {"id": 1340, "title": "1 Dollar - Eisenhower Apollo 11", "category": "coin",
            "issuer": {"name": "United States"}, "value": {"text": "1 Dollar"},
            "composition": {"text": "Copper-nickel clad copper"}, "weight": 22.68, "size": 38.1,
-           "series": "Eisenhower Dollar"},
-    7777: {"id": 7777, "title": "1 Dollar - Morgan", "category": "coin",
+           "series": "Eisenhower Dollar",
+           "references": [{"catalogue": {"id": 3, "code": "KM"}, "number": "203"}]},
+    7777: {"id": 7777, "title": "1 Dollar \"Morgan Dollar\"", "category": "coin",
            "issuer": {"name": "United States"}, "value": {"text": "1 Dollar"},
            "composition": {"text": "Silver (.900)"}, "weight": 26.73, "size": 38.1},
 }  # fmt: skip

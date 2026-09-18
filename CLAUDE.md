@@ -201,7 +201,9 @@ spaces — header row found past preambles), `numista_file`
 (by header name), `opennumismat` (SQLite; schema ≤10 keeps buy/sell on
 `coins`, 11 moved them to `prices`; photos read lazily via `BlobReader`), and
 `numista_account` (`numista.fetch_collection`: OAuth client-credentials with
-the stored key, collection cached 1h, `type_fields` per type) — and
+the stored key, collection cached 1h, `type_fields` per type — fields plus
+`catalog_refs`; titles split by `importing.split_title`, which handles both
+`X "Name"` and `X - Name`, fixed in v0.18.2) — and
 `services/importing.py` resolves grades (`parse_grade`; Numista buckets → the
 band's lowest grade), validates through `ItemCreate`, previews, and imports
 one commit per item via `items._build_item`. Files are staged under

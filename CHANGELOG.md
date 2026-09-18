@@ -10,6 +10,17 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **Numista imports read titles written with quotes.** Numista titles come as
+  `¼ Dollar "Washington Quarter"` as well as `1 Dollar - Eisenhower`; the
+  quoted form was taken whole as the series. Now the name becomes the series
+  and the rest the denomination, for the account import and the export file.
+- **Importing your Numista collection brings the type's other catalogue
+  numbers** (KM#, Schön#, Pick#…) along with the Numista number, from the same
+  catalogue lookup — as "Fill from Numista" on the item form already did.
+- The preview no longer says a denomination was "taken from the type's title"
+  when the import is about to fill it in from Numista's catalogue; it says so.
+
 ## [0.18.1] — 2026-09-18
 
 ### Fixed

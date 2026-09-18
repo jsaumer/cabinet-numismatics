@@ -68,9 +68,12 @@ def _numista_candidates(db: Session, options: NumistaImportOptions, fetch_types:
     }
     types: dict[int, dict] = {}
     to_fetch = 0
+    pending: set[int] = set()
     if options.catalogue_details:
         types, to_fetch = numista.type_fields(db, type_ids, fetch=fetch_types)
-    candidates = formats.numista_account_candidates(items, types)
+        if not fetch_types:
+            pending = type_ids - set(types)
+    candidates = formats.numista_account_candidates(items, types, pending)
     extra = {"types": len(type_ids), "types_to_fetch": to_fetch, "fetched_at": fetched_at}
     return candidates, extra
 
