@@ -104,7 +104,7 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `sold_fees`        | numeric null  | commission, listing fees                |
 | `sold_to`          | text null     | buyer or venue                          |
 | `notes`            | text null     | free-form                               |
-| `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `spreadsheet` |
+| `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `cabinet`, `spreadsheet` |
 | `import_key`       | text null     | its id there; unique with `import_source`, so a re-import skips it; not copied by clone |
 | `created_at`       | timestamptz   |                                         |
 | `updated_at`       | timestamptz   |                                         |

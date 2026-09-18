@@ -4,6 +4,8 @@
   fields (suggested from the header names, adjustable in the preview). Covers
   tools without a dedicated reader: uCoin, CoinSnap, Colnect (whose export has
   a few lines above the header), PCGS's registry, a hand-kept sheet.
+- `cabinet` — Cabinet's own export (CSV or XLSX), read in full by the same
+  row reader as `POST /api/items/import`.
 - `numista_file` — the CSV/XLSX export from numista.com ("My coins" → export).
   Users choose its columns, so it is read by header name.
 - `opennumismat` — an OpenNumismat collection (`.db`, SQLite). Up to schema
@@ -18,6 +20,7 @@ import io
 import re
 import sqlite3
 import zipfile
+from datetime import date, datetime, time
 from functools import partial
 from pathlib import Path
 
@@ -34,7 +37,9 @@ from app.services.importing import (
     to_year,
 )
 
-FORMATS = ("spreadsheet", "numista_file", "opennumismat")
+FORMATS = ("spreadsheet", "cabinet", "numista_file", "opennumismat")
+# Columns only Cabinet's own export has, together.
+CABINET_HEADERS = {"type", "denomination", "grade_scale", "catalog_refs", "custom_fields"}
 HEADER_SCAN_ROWS = 15
 
 
@@ -129,6 +134,8 @@ def detect(path: Path) -> str:
     except (FormatError, UnicodeDecodeError, csv.Error):
         return "spreadsheet"
     lowered = {h.lower() for h in headers}
+    if CABINET_HEADERS <= lowered:
+        return "cabinet"
     if (
         any(h.startswith("n# number") for h in lowered)
         or {
@@ -190,7 +197,9 @@ _KINDS = {key: kind for key, _, kind, _ in FIELDS}
 
 
 def _norm(header: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[^\w#]+", " ", header.lower())).strip()
+    """Lower case, with underscores and punctuation as spaces ("Cert_Number" →
+    "cert number")."""
+    return re.sub(r"\s+", " ", re.sub(r"[^\w#]+|_", " ", header.lower())).strip()
 
 
 def suggest_mapping(headers: list[str]) -> dict[str, str]:
@@ -349,6 +358,55 @@ def _require(cand: Candidate) -> None:
     missing = [k for k in ("country", "denomination", "year") if cand.fields.get(k) in (None, "")]
     if missing:
         cand.error = "Missing " + ", ".join(m.replace("_", " ") for m in missing)
+
+
+# ---------------------------------------------------------------- Cabinet export
+
+
+def _cell_text(value) -> str:
+    """A cell as the CSV export writes it: Excel's numbers and dates back to text."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else ""
+    if isinstance(value, datetime):
+        return value.date().isoformat() if value.time() == time(0) else value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def cabinet_candidates(rows: list[dict], db) -> list[Candidate]:
+    """Rows of Cabinet's own export, every field included. The exported `id`
+    is the import key, so a second import — here or into another Cabinet —
+    skips what's already there."""
+    from pydantic import ValidationError
+
+    from app.routers.items import _row_to_payload
+
+    out = []
+    for index, raw in enumerate(rows):
+        row = {(k or "").strip(): _cell_text(v) for k, v in raw.items()}
+        cand = Candidate(row=index + 1, key=clean(row.get("id"), 300))
+        for key in ("country", "denomination", "mint_mark"):
+            if value := clean(row.get(key)):
+                cand.fields[key] = value
+        if (year := to_year(row.get("year"))) is not None:
+            cand.fields["year"] = year
+        try:
+            with db.no_autoflush:
+                cand.ready = _row_to_payload(row, db)
+        except (ValueError, ValidationError) as exc:
+            if isinstance(exc, ValidationError):
+                err = exc.errors()[0]
+                where = ".".join(str(p) for p in err.get("loc", ()))
+                cand.error = f"{where}: {err['msg']}" if where else err["msg"]
+            else:
+                cand.error = str(exc)
+        out.append(cand)
+    return out
 
 
 # ---------------------------------------------------------------- numista export file

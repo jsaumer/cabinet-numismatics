@@ -251,7 +251,7 @@ export interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
-export type ImportFormat = "spreadsheet" | "numista_file" | "opennumismat";
+export type ImportFormat = "spreadsheet" | "cabinet" | "numista_file" | "opennumismat";
 
 export interface ImportUpload {
   upload_id: string;

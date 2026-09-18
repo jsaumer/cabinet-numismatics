@@ -440,3 +440,70 @@ def test_numista_account_needs_a_key_and_a_user(client, numista_account):
 
     numista_account["token_status"] = 401
     assert client.post("/api/imports/numista/preview", json={}).status_code == 502
+
+
+# ---------------------------------------------------------------- Cabinet's own export
+
+
+def test_underscored_headers_are_matched():
+    from app.services import import_formats as formats
+
+    mapping = formats.suggest_mapping(["acquisition_date", "cert_number", "Sold_To", "year"])
+    assert mapping == {
+        "year": "year",
+        "cert_number": "cert_number",
+        "acquisition_date": "acquisition_date",
+        "sold_to": "Sold_To",
+    }
+
+
+def test_csv_export_opens_as_utf8_in_excel(client):
+    raw = client.get("/api/items/export.csv").content
+    assert raw.startswith(b"\xef\xbb\xbfid,type,status")  # a BOM, and the header with no items
+
+
+@pytest.mark.parametrize("extension", ["csv", "xlsx"])
+def test_cabinet_export_round_trip(client, tmp_path, extension):
+    grades = client.get("/api/grades", params={"scale": "sheldon"}).json()
+    payload = {
+        "type": "coin", "country": "Germany", "denomination": "5 Mark", "year": 1975,
+        "mint_mark": "J", "grade_id": next(g["id"] for g in grades if g["code"] == "MS-64"),
+        "grade_plus": True, "designations": ["PL"], "acquisition_date": "2025-06-01",
+        "acquisition_price": 12.5, "currency": "EUR", "tags": ["Schön"],
+        "catalog_refs": [{"catalog": "schön", "ref_code": "Schön#204"}],
+        "custom_fields": {"box": "3"}, "notes": "Line one\nline two",
+    }  # fmt: skip
+    item = client.post("/api/items", json=payload).json()
+    export = tmp_path / f"cabinet-items.{extension}"
+    export.write_bytes(client.get(f"/api/items/export.{extension}").content)
+
+    upload = _upload(client, export)
+    assert upload["format"] == "cabinet"
+    body = _preview(client, upload)
+    assert (body["total"], body["new"], body["duplicates"]) == (1, 0, 1)  # it's still here
+
+    client.delete(f"/api/items/{item['id']}")
+    body = _preview(client, upload)
+    assert (body["new"], body["rows"][0]["grade"]) == (1, "MS-64")
+    assert _run(client, upload)["created"] == 1
+    [copy] = _items(client).values()
+    for key in ("mint_mark", "grade_plus", "designations", "acquisition_date",
+                "acquisition_price", "currency", "tags", "custom_fields", "notes"):  # fmt: skip
+        assert copy[key] == item[key], key
+    assert copy["grade"]["code"] == "MS-64"
+    assert copy["catalog_refs"][0]["ref_code"] == "Schön#204"
+    # a second import skips it by the exported id, even though the copy has a new one
+    assert _run(client, upload)["skipped"] == 1
+
+
+def test_cabinet_export_reports_bad_rows(client, tmp_path):
+    export = tmp_path / "cabinet-items.csv"
+    header = client.get("/api/items/export.csv").content.decode("utf-8-sig").strip()
+    columns = header.split(",")
+    bad = dict.fromkeys(columns, "")
+    bad.update(type="coin", country="Nowhere", denomination="1 Unit", year="1990",
+               grade_scale="sheldon", grade="MS-99")  # fmt: skip
+    export.write_text(header + "\n" + ",".join(bad[c] for c in columns) + "\n", encoding="utf-8")
+    body = _preview(client, _upload(client, export))
+    assert body["errors"] == 1
+    assert "Unknown grade" in body["rows"][0]["error"]

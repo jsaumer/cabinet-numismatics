@@ -359,7 +359,13 @@ def export_csv(filters: dict = Depends(filter_query), db: Session = Depends(get_
     def generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
+        # A byte-order mark tells Excel the file is UTF-8 (otherwise "Schön"
+        # opens as "SchÃ¶n"); Cabinet's import reads it either way.
+        buf.write("﻿")
         writer.writerow(CSV_COLUMNS)
+        yield buf.getvalue()  # the header, even when nothing matches
+        buf.seek(0)
+        buf.truncate(0)
         for item in rows:
             writer.writerow(_export_row(item, strategy, preferred_source, converter))
             yield buf.getvalue()

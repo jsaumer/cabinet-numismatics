@@ -192,8 +192,12 @@ no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
 day. Numista catalogue caching dropped to 7 days (licence §8.3).
 PriceCharting/Greysheet were researched and not planned. Import from other tools shipped in v0.18.0 (migration `0014`, `items.import_source` +
 `import_key`, unique together; clone skips them). `services/import_formats.py`
-reads each source into `importing.Candidate`s — `spreadsheet` (field → column
-mapping, `suggest_mapping`, header row found past preambles), `numista_file`
+reads each source into `importing.Candidate`s — `cabinet` (Cabinet's own
+CSV/XLSX export, detected by its columns, rows validated by
+`items._row_to_payload` into `Candidate.ready`, keyed by the exported id; added
+in v0.18.1 after v0.18.0 read it as a plain spreadsheet), `spreadsheet` (field
+→ column mapping, `suggest_mapping` — headers normalized with underscores as
+spaces — header row found past preambles), `numista_file`
 (by header name), `opennumismat` (SQLite; schema ≤10 keeps buy/sell on
 `coins`, 11 moved them to `prices`; photos read lazily via `BlobReader`), and
 `numista_account` (`numista.fetch_collection`: OAuth client-credentials with

@@ -7,13 +7,12 @@ import {
   ImportFormat,
   ImportOptions,
   ImportPreview,
-  ImportResult,
   ImportRunResult,
   ImportUpload,
   money,
 } from "../api";
 
-type Source = "numista" | "file" | "cabinet";
+type Source = "numista" | "file";
 
 const SOURCES: { key: Source; title: string; text: string }[] = [
   {
@@ -25,17 +24,13 @@ const SOURCES: { key: Source; title: string; text: string }[] = [
     key: "file",
     title: "A file from another tool",
     text:
-      "Numista's export (CSV/XLSX), an OpenNumismat collection (.db), or any spreadsheet — " +
-      "uCoin, CoinSnap, Colnect, your own sheet.",
-  },
-  {
-    key: "cabinet",
-    title: "A Cabinet export",
-    text: "The CSV from Collection → CSV, e.g. from another Cabinet.",
+      "A Cabinet export (CSV/XLSX), Numista's export, an OpenNumismat collection (.db), or " +
+      "any spreadsheet — uCoin, CoinSnap, Colnect, your own sheet.",
   },
 ];
 
 const FORMAT_NAMES: Record<ImportFormat, string> = {
+  cabinet: "Cabinet export",
   numista_file: "Numista export",
   opennumismat: "OpenNumismat collection",
   spreadsheet: "Spreadsheet (match its columns)",
@@ -52,7 +47,6 @@ export default function Import() {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportRunResult | null>(null);
-  const [csvResult, setCsvResult] = useState<ImportResult | null>(null);
   const [numistaKey, setNumistaKey] = useState<boolean | null>(null);
   const [displayCurrency, setDisplayCurrency] = useState("USD");
 
@@ -87,7 +81,6 @@ export default function Import() {
     setError(null);
     setPreview(null);
     setResult(null);
-    setCsvResult(null);
   }
 
   function choose(next: Source) {
@@ -174,13 +167,6 @@ export default function Import() {
     const next = await api.previewNumistaImport(options).catch(() => null);
     if (next) setPreview(next);
     setResult(done);
-  }
-
-  async function importCabinet(file: File | undefined) {
-    if (!file) return;
-    reset();
-    const done = await run("import", () => api.importCsv(file));
-    if (done) setCsvResult(done);
   }
 
   const setMapped = (key: string, column: string) =>
@@ -300,6 +286,10 @@ export default function Import() {
             <summary>Where do I get these files?</summary>
             <ul className="sale-help">
               <li>
+                <b>Cabinet</b> — Collection → CSV or Excel, from this Cabinet or another. Every
+                field comes back; items already here are skipped.
+              </li>
+              <li>
                 <b>Numista</b> — on numista.com open your collection ("My coins"), choose
                 <i> Export</i>, and pick CSV or Excel. Tick the columns you want; Cabinet reads
                 them by name. (Or skip the file and use <i>My Numista collection</i>.)
@@ -389,7 +379,7 @@ export default function Import() {
 
           {upload && (
             <div className="estimate-form">
-              {format !== "numista_file" && (
+              {format !== "numista_file" && format !== "cabinet" && (
                 <label className="field">
                   Currency of prices
                   <input
@@ -405,7 +395,7 @@ export default function Import() {
               </button>
             </div>
           )}
-          {upload && format !== "numista_file" && (
+          {upload && format !== "numista_file" && format !== "cabinet" && (
             <p className="muted" style={{ marginBottom: 0 }}>
               Prices in the file are taken to be in this currency unless it names one
               {displayCurrency !== defaults.currency && ` (your display currency is ${displayCurrency})`}.
@@ -414,39 +404,7 @@ export default function Import() {
         </div>
       )}
 
-      {source === "cabinet" && (
-        <div className="card">
-          <h2>A Cabinet export</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Imports the CSV that Collection → CSV writes, with every field. Rows whose item
-            already exists here are skipped. There's no preview for this format.
-          </p>
-          <label className="field">
-            {busy === "import" ? "Importing…" : "CSV file"}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={busy !== null}
-              onChange={(e) => {
-                importCabinet(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          {csvResult && (
-            <p className={csvResult.errors.length ? "error" : "gain"}>
-              Imported {csvResult.created} item{csvResult.created === 1 ? "" : "s"}.
-              {csvResult.skipped > 0 && ` ${csvResult.skipped} already existed (skipped).`}
-              {csvResult.errors.length > 0 &&
-                ` ${csvResult.errors.length} row(s) failed: ` +
-                  csvResult.errors.map((e) => `row ${e.row}: ${e.error}`).join("; ")}{" "}
-              <Link to="/collection">Open the collection</Link>
-            </p>
-          )}
-        </div>
-      )}
-
-      {preview && source !== "cabinet" && (
+      {preview && (
         <div className="card">
           <h2>Preview</h2>
           <div className="chip-row import-summary">

@@ -77,6 +77,8 @@ class Candidate:
     messages: list[str] = field(default_factory=list)
     error: str | None = None
     extra_notes: list[str] = field(default_factory=list)  # appended to notes
+    # Already validated by the source's own reader: (ItemCreate, grade_id).
+    ready: tuple | None = None
 
     @property
     def label(self) -> str:
@@ -291,6 +293,13 @@ class GradeTable:
         for grade in db.execute(select(Grade).order_by(Grade.rank)).scalars():
             self.rows.setdefault(grade.scale, []).append(grade)
 
+    def code(self, grade_id: int | None) -> str | None:
+        for rows in self.rows.values():
+            for grade in rows:
+                if grade.id == grade_id:
+                    return grade.code
+        return None
+
     def find(self, scale: str, rank: int) -> tuple[Grade | None, bool]:
         """(grade, exact) — the grade at `rank`, or the nearest lower one."""
         rows = self.rows.get(scale) or []
@@ -360,10 +369,32 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
                 )
             ).scalars()
         )
+    if source == "cabinet":
+        # An export taken from this very Cabinet: its ids are already here.
+        ids = []
+        for key in keys:
+            try:
+                ids.append(uuid.UUID(key))
+            except ValueError:
+                continue
+        for start in range(0, len(ids), 500):
+            existing.update(
+                str(i)
+                for i in db.execute(
+                    select(Item.id).where(Item.id.in_(ids[start : start + 500]))
+                ).scalars()
+            )
     out = []
     for cand in candidates:
         if cand.error:
             out.append(Prepared(cand, None, None, None, False))
+            continue
+        if cand.ready is not None:
+            payload, grade_id = cand.ready
+            grade_id = grade_id if grade_id is not None else payload.grade_id
+            label = grades.code(grade_id)
+            duplicate = bool(cand.key and cand.key in existing)
+            out.append(Prepared(cand, payload, grade_id, label, duplicate))
             continue
         grade_id, grade_label = resolve_grade(cand, grades)
         f = cand.fields
@@ -446,6 +477,9 @@ def run(
     from app.routers.items import _build_item, record_event
     from app.routers.photos import _create_photo
 
+    # Anything the readers had to create for validation (a Cabinet export's
+    # sets) is kept before the first item, so one failing row can't take it back.
+    db.commit()
     created = skipped = photos_added = photos_failed = 0
     errors: list[dict] = []
     for p in prepared:
