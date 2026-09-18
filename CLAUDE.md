@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.16.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.17.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -180,7 +180,7 @@ webcam modal; the item page adds drop, paste, and URL import. Backend:
 public addresses only at every redirect hop, 3 redirects, 25 MB) and
 `PUT /api/photos/{id}/image`, which saves under a fresh file stem so cached
 images aren't reused. The dashboard is now the home page (`/`); the list is
-`/collection`, and `/?filters` and `/dashboard` redirect. Sold-listing comps are built for v0.17.0 (migration `0013`): research found no free
+`/collection`, and `/?filters` and `/dashboard` redirect. Sold-listing comps shipped in v0.17.0 (migration `0013`): research found no free
 sold-price API for individuals (eBay's is closed, auction houses forbid
 automation, Numista's `sales_records` is paid-plan only), so each item has a
 sales log (`comparables`, `routers/comparables.py`) and `services/comps.py`
