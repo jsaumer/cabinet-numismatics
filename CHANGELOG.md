@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-09-18
+
 ### Added
 - **A trash for deleted items.** Deleting an item — on its page, or several
   selected on the Collection page with the new **Move to trash** — moves it to
