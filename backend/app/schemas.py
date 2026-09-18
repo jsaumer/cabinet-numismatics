@@ -298,7 +298,7 @@ class SalesFetchResult(BaseModel):
     issue_id: int | None = None
 
 
-ImportFormatName = Literal["spreadsheet", "numista_file", "opennumismat"]
+ImportFormatName = Literal["spreadsheet", "cabinet", "numista_file", "opennumismat"]
 
 
 class ImportDefaults(BaseModel):

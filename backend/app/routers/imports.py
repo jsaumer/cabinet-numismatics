@@ -25,10 +25,10 @@ from app.services.pricing import NotApplicable, SourceUnavailable
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
-SOURCES = {"spreadsheet": "spreadsheet", "numista_file": "numista-file",
+SOURCES = {"spreadsheet": "spreadsheet", "cabinet": "cabinet", "numista_file": "numista-file",
            "opennumismat": "opennumismat"}  # fmt: skip
-FORMAT_NAMES = {"spreadsheet": "Spreadsheet", "numista_file": "Numista export",
-                "opennumismat": "OpenNumismat"}  # fmt: skip
+FORMAT_NAMES = {"spreadsheet": "Spreadsheet", "cabinet": "Cabinet export",
+                "numista_file": "Numista export", "opennumismat": "OpenNumismat"}  # fmt: skip
 
 
 @router.post("", response_model=ImportUpload, status_code=201)
@@ -103,7 +103,7 @@ def discard(upload_id: str):
     importing.discard(upload_id)
 
 
-def _read(upload_id: str, options: ImportOptions):
+def _read(upload_id: str, options: ImportOptions, db: Session):
     """Candidates from a staged file, plus what the preview reports about it."""
     try:
         path, filename = importing.staged(upload_id)
@@ -118,7 +118,9 @@ def _read(upload_id: str, options: ImportOptions):
             candidates, reader = formats.opennumismat_candidates(path, defaults)
         else:
             headers, rows, header_row = formats.read_table(path, options.skip_rows)
-            if fmt == "numista_file":
+            if fmt == "cabinet":
+                candidates = formats.cabinet_candidates(rows, db)
+            elif fmt == "numista_file":
                 candidates = formats.numista_file_candidates(rows, defaults)
             else:
                 mapping = (
@@ -149,7 +151,7 @@ def _read(upload_id: str, options: ImportOptions):
 @router.post("/{upload_id}/preview", response_model=ImportPreview)
 def preview(upload_id: str, options: ImportOptions, db: Session = Depends(get_db)):
     """What importing the file would do — nothing is written."""
-    candidates, reader, extra = _read(upload_id, options)
+    candidates, reader, extra = _read(upload_id, options, db)
     if reader is not None:
         reader.close()
     prepared = importing.prepare(db, SOURCES[extra["format"]], candidates)
@@ -159,7 +161,7 @@ def preview(upload_id: str, options: ImportOptions, db: Session = Depends(get_db
 @router.post("/{upload_id}/run", response_model=ImportRunResult)
 def run(upload_id: str, options: ImportOptions, db: Session = Depends(get_db)):
     """Import the file's new items (ones already imported are skipped)."""
-    candidates, reader, extra = _read(upload_id, options)
+    candidates, reader, extra = _read(upload_id, options, db)
     fmt = extra["format"]
     try:
         prepared = importing.prepare(db, SOURCES[fmt], candidates)

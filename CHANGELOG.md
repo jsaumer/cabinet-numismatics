@@ -10,6 +10,25 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **A Cabinet export imports in full from the Import page**, as CSV *or*
+  Excel. It's recognised by its columns and read with every field (grades
+  with designations, sets, custom fields, sale details…), with a preview
+  like the other formats. The export's item id is the import key, so
+  importing the same export twice — into this Cabinet or another — skips
+  what's already there. In v0.18.0 it was read as an ordinary spreadsheet,
+  which left out 27 of its columns.
+- Spreadsheet columns named with underscores (`acquisition_date`,
+  `cert_number`) are matched to their fields.
+- The CSV export starts with a UTF-8 byte-order mark, so Excel shows accented
+  names ("Schön") correctly instead of "SchÃ¶n", and an export with nothing
+  in it still has its header row.
+
+### Changed
+- The Import page's separate "A Cabinet export" choice is folded into "A
+  file from another tool", which detects the format.
+  `POST /api/items/import` still takes the CSV directly.
+
 ## [0.18.0] — 2026-09-18
 
 ### Added

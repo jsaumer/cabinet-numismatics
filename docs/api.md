@@ -261,9 +261,12 @@ explanation; an unreachable Numista is 502. One request, cached for a day.
 | `POST`   | `/api/imports/numista/preview`    | Preview importing your Numista collection        |
 | `POST`   | `/api/imports/numista/run`        | Import it                                        |
 
-File formats: `spreadsheet` (any CSV/XLSX, read through a field → column
-`mapping`), `numista_file` (numista.com's collection export, by column name),
-and `opennumismat` (an OpenNumismat `.db`). Preview and run take the same JSON
+File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field —
+read by the same row reader as `POST /api/items/import`, keyed by the
+exported `id`, and a duplicate when that id is still here), `spreadsheet` (any
+CSV/XLSX, read through a field → column `mapping`), `numista_file`
+(numista.com's collection export, by column name), and `opennumismat` (an
+OpenNumismat `.db`). Preview and run take the same JSON
 options: `format` (default: as detected), `mapping` (spreadsheet; default:
 suggested from the header names), `skip_rows` (lines above the header;
 default: found automatically), and `defaults` — `type`, `status`,
@@ -277,7 +280,7 @@ A preview answers `total`, `new`, `duplicates` (already imported), `errors`,
 `skipped`, `errors` (`row`, `error`), `photos_added`, and `photos_failed`;
 each item commits on its own, so a bad row never undoes others. Imported
 items record `import_source` + `import_key` (a Numista collected-item id,
-an OpenNumismat record, or a row fingerprint), which is how a second import
+an OpenNumismat record, a Cabinet export's id, or a row fingerprint), which is how a second import
 of the same source skips them; their edit history notes the import.
 
 The Numista endpoints take `catalogue_details` (default true: one request per
