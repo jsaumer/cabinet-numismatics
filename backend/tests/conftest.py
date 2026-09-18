@@ -40,6 +40,16 @@ def _no_network_rates(monkeypatch):
     monkeypatch.setattr(currency, "fetch_rate", unavailable)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_monitoring_state():
+    """Alert outcomes and the metrics cache live in memory, per process."""
+    from app.services import alerts, metrics
+
+    alerts.reset_memory()
+    metrics.reset_cache()
+    yield
+
+
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     """TestClient backed by a fresh in-memory SQLite DB (grades seeded) and a

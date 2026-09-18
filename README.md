@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.20.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: alerts and metrics, and wish-list targets. See the
+Next up: wish-list targets, and checklist generation. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -133,7 +133,11 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - **Configurable pricing**: a Settings page for display currency, the
   blended-value strategy, per-source refresh cadence, and price-source
   credentials — stored **encrypted at rest** and never readable back
-  through the API (see [docs/security.md](docs/security.md)).
+    through the API (see [docs/security.md](docs/security.md)).
+- **Alerts and metrics**: a webhook (n8n, ntfy, Discord, Slack, Gotify) when
+  a backup fails, a price source rejects its key or runs out of quota, or a
+  refresh fails — and when it recovers; an Uptime Kuma heartbeat; and
+  Prometheus metrics. See [docs/monitoring.md](docs/monitoring.md).
 
 ## Architecture
 
@@ -214,6 +218,7 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 - [API](docs/api.md) — REST endpoints (mirrors the OpenAPI spec)
 - [Price sources](docs/price-sources.md) — where estimates come from and caveats
 - [Backup & restore](docs/backup-restore.md) — what a backup contains and how to drill it
+- [Monitoring](docs/monitoring.md) — alert webhooks, the heartbeat, and Prometheus metrics
 - [Security](docs/security.md) — secrets at rest, key management, exposure guidance
 - [Roadmap](docs/roadmap.md) — full feature list, what's done, what remains
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)

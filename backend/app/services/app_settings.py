@@ -36,11 +36,19 @@ DEFAULTS: dict = {
     # Days an item stays in the trash before it's deleted for good; 0 = never.
     "trash_retention_days": 30,
     "backup_include_photos": True,
-    # Written by the backup service, not through PUT /api/settings.
+    # Alerts: a webhook URL (secret — it often carries a token) and its format.
+    "alert_webhook_url": "",
+    "alert_webhook_format": "generic",
+    # Uptime Kuma push URL, pinged hourly.
+    "heartbeat_url": "",
+    "metrics_enabled": False,
+    # Written by the services, not through PUT /api/settings.
     "backup_last_run": None,
+    "refresh_last_run": None,  # {source: {at, updated, skipped, failed, ...}}
+    "alert_state": None,  # {condition: {failing, since, message}}
 }
 
-SECRET_KEYS = {"numista_api_key", "pcgs_api_token"}
+SECRET_KEYS = {"numista_api_key", "pcgs_api_token", "alert_webhook_url", "heartbeat_url"}
 
 
 def get_setting(db: Session, key: str):

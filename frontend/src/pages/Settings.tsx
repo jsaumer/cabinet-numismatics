@@ -9,6 +9,7 @@ import {
   SourceStatus,
   ValueStrategy,
 } from "../api";
+import { AlertsCard } from "../components/alerts";
 
 function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -99,7 +100,7 @@ export default function Settings() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  async function apply(payload: AppSettingsUpdate, message: string) {
+  async function apply(payload: AppSettingsUpdate, message: string): Promise<boolean> {
     setSaving(true);
     setError(null);
     setNote(null);
@@ -112,8 +113,10 @@ export default function Settings() {
       setPreferredSource(updated.preferred_source ?? "");
       setKeep(String(updated.backup_keep));
       setNote(message);
+      return true;
     } catch (e) {
       setError((e as Error).message);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -526,6 +529,8 @@ export default function Settings() {
           </>
         )}
       </div>
+
+      <AlertsCard settings={settings} saving={saving} apply={apply} />
 
       <div className="card">
         <h2>About</h2>

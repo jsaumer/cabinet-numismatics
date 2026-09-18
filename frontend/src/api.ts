@@ -486,6 +486,15 @@ export interface AppSettings {
   backup_keep: number;
   backup_include_photos: boolean;
   trash_retention_days: number; // 0 = never emptied automatically
+  // Saved URLs are secrets: only scheme://host/… comes back.
+  alert_webhook_hint: string | null;
+  alert_webhook_format: AlertFormat;
+  heartbeat_hint: string | null;
+  metrics_enabled: boolean;
+  alerts: AlertStatus[];
+  alert_delivery: MonitorOutcome | null;
+  heartbeat: MonitorOutcome | null;
+  refresh_last_run: Record<string, RefreshRun>;
   sources: SourceStatus[];
   cached: CachedValue[];
 }
@@ -508,6 +517,35 @@ export interface AppSettingsUpdate {
   backup_keep?: number;
   backup_include_photos?: boolean;
   trash_retention_days?: number;
+  alert_webhook_url?: string; // "" clears
+  alert_webhook_format?: AlertFormat;
+  heartbeat_url?: string; // "" clears
+  metrics_enabled?: boolean;
+}
+
+export type AlertFormat = "generic" | "ntfy" | "discord" | "slack" | "gotify";
+
+export interface AlertStatus {
+  key: string;
+  label: string;
+  failing: boolean;
+  since: string | null; // when it started failing, or recovered
+  message: string | null;
+}
+
+export interface MonitorOutcome {
+  at: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface RefreshRun {
+  at: string;
+  updated: number;
+  skipped: number;
+  failed: number;
+  error?: string | null;
+  stopped?: string | null; // why the run stopped early (key or quota)
 }
 
 export type BackupSchedule = "daily" | "weekly";
@@ -802,6 +840,8 @@ export const api = {
     ),
   numistaType: (typeId: number) => req<NumistaType>(`/api/numista/types/${typeId}`),
   listBackups: () => req<BackupList>("/api/backups"),
+  testAlert: (target: "webhook" | "heartbeat") =>
+    req<MonitorOutcome>(`/api/alerts/test?target=${target}`, { method: "POST" }),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
 
   pricingCoverage: () => req<PricingCoverage>("/api/pricing/coverage"),

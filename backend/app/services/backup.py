@@ -30,8 +30,8 @@ from sqlalchemy.orm import Session
 from app import __version__
 from app.config import get_settings
 from app.models import Document, Item, ItemPhoto, PriceEstimate
+from app.services import alerts, schema
 from app.services import app_settings as store
-from app.services import schema
 
 logger = logging.getLogger(__name__)
 
@@ -315,6 +315,7 @@ def run_backup(db: Session, include_photos: bool | None = None) -> dict:
         except (BackupError, OSError) as exc:
             db.rollback()
             _record(db, {"at": started.isoformat(), "ok": False, "error": str(exc)})
+            alerts.fail(db, "backup", f"Backup failed: {exc}")
             if isinstance(exc, BackupError):
                 raise
             raise BackupError(str(exc)) from exc
@@ -327,6 +328,7 @@ def run_backup(db: Session, include_photos: bool | None = None) -> dict:
             "pruned": pruned,
         }
         _record(db, outcome)
+        alerts.recover(db, "backup")
         return outcome
     finally:
         _run_lock.release()

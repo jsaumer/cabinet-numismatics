@@ -250,7 +250,7 @@ def test_refresh_source_estimates_skips_ineligible_and_counts_failures(
     monkeypatch.setattr(numista, "_request", fail)
 
     result = pricing.refresh_source_estimates(_session(), "numista", 7)
-    assert result == {"updated": 0, "skipped": 1, "failed": 1}
+    assert result == {"updated": 0, "skipped": 1, "failed": 1, "error": "boom"}
     assert numista.bucket_for_rank(40) == "xf"
     assert numista.bucket_for_rank(50) == "au"
     assert numista.bucket_for_rank(65) == "unc"

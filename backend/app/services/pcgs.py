@@ -27,7 +27,9 @@ from app.models import Item
 from app.services import app_settings
 from app.services.pricing import (
     EstimateResult,
+    KeyRejected,
     NotApplicable,
+    QuotaExhausted,
     SourceUnavailable,
     cached_fetch,
     freshness,
@@ -71,9 +73,13 @@ def _request(token: str, path: str, params: dict | None = None) -> dict:
         )
         if resp.status_code == 204:  # documented as empty request data
             return {"IsValidRequest": False, "ServerMessage": "PCGS received an empty request"}
+        if resp.status_code == 401:
+            raise KeyRejected("PCGS rejected the API token — check it in Settings")
+        if resp.status_code == 429:
+            raise QuotaExhausted("PCGS request quota exhausted — try again tomorrow")
         if resp.status_code == 500:
             # PCGS documents 500 as usually meaning invalid credentials.
-            raise SourceUnavailable(
+            raise KeyRejected(
                 "PCGS returned a server error — usually an expired or invalid token; "
                 "regenerate it and update Settings"
             )

@@ -29,7 +29,9 @@ from app.models import Item
 from app.services import app_settings
 from app.services.pricing import (
     EstimateResult,
+    KeyRejected,
     NotApplicable,
+    QuotaExhausted,
     SourceUnavailable,
     cached_fetch,
     detect_metal,
@@ -86,9 +88,9 @@ def _request(
         if resp.status_code == 403 and forbidden:
             raise NotApplicable(forbidden)
         if resp.status_code in (401, 403):
-            raise SourceUnavailable("Numista rejected the API key — check it in Settings")
+            raise KeyRejected("Numista rejected the API key — check it in Settings")
         if resp.status_code == 429:
-            raise SourceUnavailable("Numista request quota exhausted — try again later")
+            raise QuotaExhausted("Numista request quota exhausted — try again later")
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
@@ -573,11 +575,11 @@ def _account_request(path: str, api_key: str, params: dict, token: str | None = 
         if resp.status_code == 501:
             raise NotApplicable("This Numista API key isn't linked to a Numista account")
         if resp.status_code in (401, 403):
-            raise SourceUnavailable(
+            raise KeyRejected(
                 "Numista refused access to the collection — check the API key in Settings"
             )
         if resp.status_code == 429:
-            raise SourceUnavailable("Numista request quota exhausted — try again later")
+            raise QuotaExhausted("Numista request quota exhausted — try again later")
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:

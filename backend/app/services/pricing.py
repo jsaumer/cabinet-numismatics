@@ -22,6 +22,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models import EstimateAttempt, Item, PriceEstimate, SourceCache, SpotPrice
+from app.services import alerts
 from app.services.currency import Converter
 
 TROY_OUNCE_G = Decimal("31.1034768")
@@ -40,6 +41,16 @@ class NotApplicable(Exception):
 
 class SourceUnavailable(Exception):
     """An upstream price source could not be reached."""
+
+
+class KeyRejected(SourceUnavailable):
+    """The source refused the stored key or token, so every request will fail
+    until it's replaced. Raises an alert, and stops a scheduled refresh."""
+
+
+class QuotaExhausted(SourceUnavailable):
+    """The source's request quota is used up. Raises an alert, and stops a
+    scheduled refresh rather than spending the rest of the run on refusals."""
 
 
 class SpotUnavailable(SourceUnavailable):
@@ -96,10 +107,15 @@ def cached_fetch(
         return row.payload, row.fetched_at
     try:
         payload = loader()
-    except SourceUnavailable:
+    except SourceUnavailable as exc:
+        # A refused key or quota alerts even when stale data covers for it.
+        if isinstance(exc, (KeyRejected, QuotaExhausted)):
+            kind = "key" if isinstance(exc, KeyRejected) else "quota"
+            alerts.source_failed(db, source, kind, str(exc))
         if row is not None:
             return row.payload, row.fetched_at
         raise
+    alerts.source_ok(db, source)
     if row is None:
         row = SourceCache(source=source, cache_key=cache_key)
         db.add(row)
@@ -363,12 +379,15 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     """Re-run melt estimates for owned items whose LATEST estimate is a melt
     estimate older than max_age_days. Items whose latest estimate is manual are
     left alone — a fresh melt value must never bury the user's own number.
-    Returns {"updated": n, "skipped": n, "failed": n}."""
+    An item that no longer qualifies (NotApplicable) counts as skipped.
+    Returns {"updated": n, "skipped": n, "failed": n}, plus "error" (the last
+    failure's message) when anything failed."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     updated = skipped = failed = 0
+    error = None
     items = (
         db.execute(select(Item).where(Item.status == "owned").options(selectinload(Item.estimates)))
         .scalars()
@@ -385,13 +404,28 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
             continue
         try:
             result = run_adapter(db, item, "melt")
-        except (NotApplicable, SpotUnavailable):
+        except NotApplicable:
+            skipped += 1
+            continue
+        except SourceUnavailable as exc:
             failed += 1
+            error = str(exc)
             continue
         db.add(estimate_row(item.id, result))
         updated += 1
     db.commit()
-    return {"updated": updated, "skipped": skipped, "failed": failed}
+    return _refresh_outcome(updated, skipped, failed, error)
+
+
+def _refresh_outcome(
+    updated: int, skipped: int, failed: int, error: str | None, stopped: str | None = None
+) -> dict:
+    outcome = {"updated": updated, "skipped": skipped, "failed": failed}
+    if error:
+        outcome["error"] = error
+    if stopped:
+        outcome["stopped"] = stopped
+    return outcome
 
 
 def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) -> dict:
@@ -401,14 +435,18 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
     max_age_days. Keeps each source's own data current independent of what
     currently wins — needed because value_strategy can be "preferred_source"
     or "average". NotApplicable (not eligible) counts as skipped, not
-    failed. Never called for "melt" — that keeps its own separate,
-    conservative behavior in refresh_melt_estimates.
-    Returns {"updated": n, "skipped": n, "failed": n}."""
+    failed. A rejected key or exhausted quota stops the run (every remaining
+    request would fail the same way) and is returned as "stopped". Never
+    called for "melt" — that keeps its own separate, conservative behavior in
+    refresh_melt_estimates.
+    Returns {"updated": n, "skipped": n, "failed": n}, plus "error" and
+    "stopped" when set."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
     updated = skipped = failed = 0
+    error = stopped = None
     items = (
         db.execute(
             select(Item)
@@ -428,10 +466,15 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
         except NotApplicable:
             skipped += 1
             continue
-        except SourceUnavailable:
+        except (KeyRejected, QuotaExhausted) as exc:
             failed += 1
+            stopped = str(exc)
+            break
+        except SourceUnavailable as exc:
+            failed += 1
+            error = str(exc)
             continue
         db.add(estimate_row(item.id, result))
         updated += 1
     db.commit()
-    return {"updated": updated, "skipped": skipped, "failed": failed}
+    return _refresh_outcome(updated, skipped, failed, error, stopped)

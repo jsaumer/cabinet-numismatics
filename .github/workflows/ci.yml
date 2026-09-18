@@ -122,6 +122,15 @@ jobs:
             echo "the item survived a permanent delete"; exit 1
           fi
           curl -fsS http://localhost/api/settings > /dev/null
+          # metrics: off by default, then served on real Postgres
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/metrics)" = 404
+          curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \
+            -d '{"metrics_enabled": true}' -o /dev/null
+          curl -fsS http://localhost/api/metrics > metrics.txt
+          grep -q '^cabinet_schema_up_to_date 1.0' metrics.txt
+          grep -q '^cabinet_items_in_trash 0.0' metrics.txt
+          # no webhook saved: the test alert says so rather than failing
+          curl -fsS -X POST http://localhost/api/alerts/test | grep -q '"ok":false'
           echo "smoke test passed"
 
       - name: Rehearse an in-app backup and restore
