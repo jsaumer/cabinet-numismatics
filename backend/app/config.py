@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Where scheduled and on-demand backups are written. Mount a volume (or a
     # NAS path) here to get archives off the container.
     backup_dir: str = "/data/backups"
+    # Where uploaded import files wait between preview and import (a day at
+    # most). Empty = a folder in the system temp directory.
+    import_dir: str = ""
 
     @property
     def sqlalchemy_url(self) -> str:

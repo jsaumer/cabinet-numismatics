@@ -25,7 +25,8 @@ per item and source (`item_id` + `source` primary key, cascade with the item;
 `attempted_at`), which the coverage report reads to explain gaps a failed
 attempt leaves no estimate for. `0012` (v0.14.0, catalog depth) added the
 grading, physical, banknote, and cost columns on `items` below, and PMG
-grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log.
+grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log. `0014`
+(v0.18.0) added `items.import_source` / `import_key`.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -103,6 +104,8 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `sold_fees`        | numeric null  | commission, listing fees                |
 | `sold_to`          | text null     | buyer or venue                          |
 | `notes`            | text null     | free-form                               |
+| `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `spreadsheet` |
+| `import_key`       | text null     | its id there; unique with `import_source`, so a re-import skips it; not copied by clone |
 | `created_at`       | timestamptz   |                                         |
 | `updated_at`       | timestamptz   |                                         |
 

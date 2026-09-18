@@ -624,6 +624,53 @@ tr.provenance-row td {
 .paid-option .badge {
   margin-left: 0.4rem;
 }
+.import-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.6rem;
+}
+.import-source {
+  display: block;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+.import-source.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.import-source small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--ink-2);
+  font-weight: normal;
+}
+.import-summary {
+  margin: 0.4rem 0 0.6rem;
+}
+.import-mapping {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.6rem;
+}
+.import-mapping .field select {
+  width: 100%;
+}
+tr.import-error td {
+  color: var(--danger);
+}
+tr.import-duplicate td {
+  opacity: 0.55;
+}
+.import-messages {
+  margin: 0.15rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.78rem;
+}
 .history-filter {
   margin-bottom: 0.6rem;
 }

@@ -15,6 +15,7 @@ from app.routers import (
     comparables,
     estimates,
     health,
+    imports,
     items,
     photos,
     pricing_reports,
@@ -146,3 +147,4 @@ app.include_router(backup.router)
 app.include_router(catalogue.router)
 app.include_router(pricing_reports.router)
 app.include_router(comparables.router)
+app.include_router(imports.router)

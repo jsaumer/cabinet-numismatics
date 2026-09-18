@@ -699,7 +699,7 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
         **{
             col.name: getattr(source, col.name)
             for col in Item.__table__.columns
-            if col.name not in ("id", "created_at", "updated_at")
+            if col.name not in ("id", "created_at", "updated_at", "import_source", "import_key")
         }
     )
     copy.tags = list(source.tags)

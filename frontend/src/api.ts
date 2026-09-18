@@ -251,6 +251,76 @@ export interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
+export type ImportFormat = "spreadsheet" | "numista_file" | "opennumismat";
+
+export interface ImportUpload {
+  upload_id: string;
+  filename: string;
+  size: number;
+  format: ImportFormat;
+}
+
+export interface ImportDefaults {
+  type: ItemType;
+  status: ItemStatus;
+  currency: string;
+  country: string | null;
+}
+
+export interface ImportOptions {
+  format?: ImportFormat | null;
+  mapping?: Record<string, string> | null;
+  skip_rows?: number | null;
+  defaults?: ImportDefaults;
+}
+
+export interface NumistaImportOptions {
+  catalogue_details: boolean;
+  fetch_photos: boolean;
+}
+
+export interface ImportPreviewRow {
+  row: number;
+  status: "new" | "duplicate" | "error";
+  label: string;
+  grade: string | null;
+  status_value: string | null;
+  type: string | null;
+  quantity: number | null;
+  price: number | null;
+  currency: string | null;
+  photos: number;
+  messages: string[];
+  error: string | null;
+}
+
+export interface ImportPreview {
+  format: string;
+  filename: string | null;
+  total: number;
+  new: number;
+  duplicates: number;
+  errors: number;
+  warnings: number;
+  photos: number;
+  rows: ImportPreviewRow[];
+  headers: string[] | null;
+  header_row: number | null;
+  mapping: Record<string, string> | null;
+  fields: { key: string; label: string }[] | null;
+  types: number | null;
+  types_to_fetch: number | null;
+  fetched_at: string | null;
+}
+
+export interface ImportRunResult {
+  created: number;
+  skipped: number;
+  errors: { row: number; error: string }[];
+  photos_added: number;
+  photos_failed: number;
+}
+
 export interface BreakdownEntry {
   key: string;
   count: number;
@@ -559,6 +629,21 @@ export const api = {
   deleteItem: (id: string) => req<void>(`/api/items/${id}`, { method: "DELETE" }),
   cloneItem: (id: string) => req<Item>(`/api/items/${id}/clone`, { method: "POST" }),
 
+  uploadImport: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return req<ImportUpload>("/api/imports", { method: "POST", body: form });
+  },
+  previewImport: (uploadId: string, options: ImportOptions) =>
+    req<ImportPreview>(`/api/imports/${uploadId}/preview`, json("POST", options)),
+  runImport: (uploadId: string, options: ImportOptions) =>
+    req<ImportRunResult>(`/api/imports/${uploadId}/run`, json("POST", options)),
+  discardImport: (uploadId: string) =>
+    req<void>(`/api/imports/${uploadId}`, { method: "DELETE" }),
+  previewNumistaImport: (options: NumistaImportOptions) =>
+    req<ImportPreview>("/api/imports/numista/preview", json("POST", options)),
+  runNumistaImport: (options: NumistaImportOptions) =>
+    req<ImportRunResult>("/api/imports/numista/run", json("POST", options)),
   importCsv: (file: File) => {
     const form = new FormData();
     form.append("file", file);

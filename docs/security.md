@@ -111,6 +111,12 @@ Do not port-forward the stack to the internet as-is.
   filenames, so user-supplied filenames never reach the filesystem or a URL.
 - **Database access** goes exclusively through SQLAlchemy's parameter binding;
   there is no string-built SQL.
+- **Import files** are staged under random ids in a temp folder, capped at
+  1 GB, and deleted after a day. An OpenNumismat file is opened read-only as
+  SQLite and only queried; nothing in it is executed. Imported values pass
+  the same schema validation as the item form, and photos inside it the same
+  image validation as uploads. Pictures linked from a Numista collection are
+  fetched only when asked, through the guarded photo-URL fetch.
 - **Custom fields** are bounded (20 keys, 50-char names, 500-char string
   values) so arbitrary payloads can't be stashed in the JSON column.
 - **Outbound requests** go only to the two documented price/rate APIs, with

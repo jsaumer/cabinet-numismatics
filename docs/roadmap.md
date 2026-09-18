@@ -15,7 +15,7 @@ sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: import mappings for other collection tools, the operations and
+A ✔ marks shipped items below. What remains, all optional: the operations and
 quality-of-life additions from the same review (Phase 5.8), and in-app restore
 (Phase 5.6 B3, blocked on auth).
 
@@ -221,8 +221,12 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   PR; a `v*` tag push additionally publishes the backend and proxy images to
   GHCR (from v0.10.2). This landed on GitHub rather than the homelab Forgejo
   originally planned.
-- **[Nice]** Import mappings for common formats (OpenNumismat, Colnect,
-  generic spreadsheets). **Target: v0.18.0.**
+- ✔ **[Nice]** Import from other tools, with a preview: the user's own
+  Numista collection through the API, Numista's export file, OpenNumismat
+  collections (schema 9–11, photos included), and any spreadsheet through a
+  column mapping (which covers Colnect, uCoin, CoinSnap, and PCGS's registry,
+  whose headers couldn't be confirmed). Re-imports are deduplicated by
+  origin. **Target: v0.18.0.**
 - ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
   diffs).
 - ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
@@ -256,7 +260,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0013`, applied by the
+  upgrades — Alembic since Phase 0, revisions `0001`–`0014`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -568,7 +572,7 @@ failures reach you instead of a log, and everyday use needs fewer clicks.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0013`), never create-on-startup.
+  revision (`0001`–`0014`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty — the same reasoning that front-loaded Phase 2's fields.

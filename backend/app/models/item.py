@@ -94,6 +94,9 @@ class CatalogRef(Base):
 
 class Item(Base):
     __tablename__ = "items"
+    __table_args__ = (
+        UniqueConstraint("import_source", "import_key", name="uq_items_import_origin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     type: Mapped[str] = mapped_column(ItemType, index=True)
@@ -143,6 +146,10 @@ class Item(Base):
     set_id: Mapped[int | None] = mapped_column(ForeignKey("sets.id", ondelete="SET NULL"))
     custom_fields: Mapped[dict | None] = mapped_column(JSON)  # user-defined key→value
     notes: Mapped[str | None] = mapped_column(Text)
+    # Where an imported item came from, so importing the same source again
+    # skips it: e.g. ("numista", "<collected item id>"). Null for items entered here.
+    import_source: Mapped[str | None] = mapped_column(String(30))
+    import_key: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
