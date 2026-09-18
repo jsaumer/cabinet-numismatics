@@ -8,15 +8,14 @@ phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
 **Status (September 2026): released as v0.15.0**, with versioned images
-published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built (Phase 5
-minus the photo-niceties bundle), pricing-program M1–M5 are done — settings
+published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance — in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
 from application-level login, deliberately deferred in favour of
 proxy-level auth.
-A ✔ marks shipped items below. What remains, all optional: the photo-niceties bundle, the sold-listing comps price source,
+A ✔ marks shipped items below. What remains, all optional: the sold-listing comps price source,
 import mappings for other collection tools, the operations and
 quality-of-life additions from the same review (Phase 5.8), and in-app restore
 (Phase 5.6 B3, blocked on auth).
@@ -102,14 +101,14 @@ The heart of the app: describing what you own, accurately and flexibly.
 - ✔ **[Core]** Multiple photos per item (obverse, reverse, edge, other).
 - ✔ **[Core]** Delete / reorder photos; change designation; primary promotion
   on delete.
-- **[Nice]** In-browser crop / rotate / straighten.
-- **[Nice]** Drag-and-drop and paste-from-clipboard upload.
-- **[Nice]** Import a photo from a URL.
-- **[Nice]** Lightbox / zoom for close inspection.
-- **[Nice]** Webcam capture for direct photographing.
+- ✔ **[Nice]** In-browser crop / rotate / straighten.
+- ✔ **[Nice]** Drag-and-drop and paste-from-clipboard upload.
+- ✔ **[Nice]** Import a photo from a URL.
+- ✔ **[Nice]** Lightbox / zoom for close inspection.
+- ✔ **[Nice]** Webcam capture for direct photographing.
 
-*(The unshipped [Nice] items above are the remaining "photo niceties"
-bundle. **Target: v0.16.0**, moved from v0.14.0 behind Phase 5.7.)*
+*(Those five were the "photo niceties" bundle — **shipped in v0.16.0**, with
+the dashboard becoming the home page.)*
 
 - **[Nice]** Documents: receipts, certificates of authenticity, and invoices
   (PDFs included) attached to an item. Phase 5.8. **Target: v0.19.0.**
@@ -327,15 +326,16 @@ comps are the hardest integration, so they come last, not first.
 - Basic charts.
 *Exit: you can understand and report on the collection at a glance.*
 
-### Phase 5 — Depth & niceties (3 of 4 bundles ✔)
+### Phase 5 — Depth & niceties ✔
 Pull from the **[Nice]** items as desired, roughly in value order:
 - ✔ **5A — value depth:** scheduled re-estimation, currency conversion
   (daily ECB rates), value-over-time charts.
 - ✔ **5B — catalog depth:** varieties/sub-types, sets/lots, custom fields,
   bulk edit. (Wishlist is covered by item status from Phase 2.)
 - ✔ **5C — polish:** completeness checklists, dark mode, edit history.
-- **Photo niceties — not pulled yet:** in-browser image editing, lightbox,
-  clipboard/drag-drop/URL upload, webcam capture. **Target: v0.16.0.**
+- ✔ **Photo niceties:** in-browser crop/turn/straighten, a zoomable lightbox,
+  drag-and-drop, clipboard paste, and URL import, and webcam capture.
+  **Shipped in v0.16.0.**
 
 ### Phase 5.5 — Pricing program: settings, sources, reports
 Fully enable configurable price estimation: a settings surface, the two
@@ -576,5 +576,5 @@ failures reach you instead of a log, and everyday use needs fewer clicks.*
   stale-tolerant, and never trusted with collection data (spot prices via
   gold-api.com, exchange rates via frankfurter.dev).
 - **[Nice] items are intentionally unordered within Phase 5** — pulled by
-  preference, since this is a personal tool first. Three of four bundles are
-  in; photo niceties await an itch.
+  preference, since this is a personal tool first. All four bundles are
+  in.

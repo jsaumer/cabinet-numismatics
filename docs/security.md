@@ -79,6 +79,15 @@ trusted LAN or behind an authenticating proxy, and a clear reason not to
 expose the stack directly. The backup directory is kept out of the publicly
 served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
 
+Importing a photo from a URL makes the backend fetch it, so the fetch is
+fenced: only http(s), only hosts that resolve to public addresses — private,
+loopback, link-local (including cloud metadata at 169.254.169.254), and other
+non-global addresses are refused, at every redirect hop — at most three
+redirects, 25 MB, and 15 seconds, and the result must still pass the same
+image validation as an upload. A DNS answer that changes between the check
+and the fetch is not covered; for a single-user app behind its own proxy
+that is an accepted gap.
+
 ## Authentication & network exposure
 
 There is **no application-level authentication**, by design — see the roadmap's

@@ -4,11 +4,11 @@ These illustrate the README. They are not used by the application.
 
 | File | Page | Theme |
 |------|------|-------|
-| `collection.png` | `/` | light |
-| `dashboard.png` | `/dashboard` | light |
+| `collection.png` | `/collection` | light |
+| `dashboard.png` | `/` | light |
 | `item-detail.png` | `/items/<id>` | light |
 | `settings.png` | `/settings` | light |
-| `dark-mode.png` | `/dashboard` | dark |
+| `dark-mode.png` | `/` | dark |
 
 `settings.png` is captured straight off the demo seed with no price-source
 keys configured — both Numista and PCGS show "(not configured)" and no
@@ -39,11 +39,11 @@ MSYS_NO_PATHCONV=1 docker run --rm --network cabinet-numismatics_default \
   -v "$PWD/docs/screenshots:/out" \
   mcr.microsoft.com/playwright:v1.49.0-jammy sh -c "
     P='npx -y playwright@1.49.0 screenshot --viewport-size=1280,800 --wait-for-timeout=4000'
-    \$P --color-scheme=light http://proxy/                 /out/collection.png
-    \$P --color-scheme=light http://proxy/dashboard        /out/dashboard.png
+    \$P --color-scheme=light http://proxy/collection       /out/collection.png
+    \$P --color-scheme=light http://proxy/                 /out/dashboard.png
     \$P --color-scheme=light http://proxy/items/$ITEM      /out/item-detail.png
     \$P --color-scheme=light http://proxy/settings         /out/settings.png
-    \$P --color-scheme=dark  http://proxy/dashboard        /out/dark-mode.png
+    \$P --color-scheme=dark  http://proxy/                 /out/dark-mode.png
   "
 ```
 

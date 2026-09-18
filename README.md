@@ -13,8 +13,7 @@ or API keys required.
 
 **Status: v0.15.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up:
-photo improvements, sold-listing comparables, and imports from other tools. See the
+Next up: sold-listing comparables and imports from other tools. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -68,6 +67,9 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - Uploads are validated as real JPEG/PNG/WebP images, EXIF orientation is
   corrected, and thumbnails are generated automatically. Files live on a
   plain Docker volume served directly by nginx — no object store.
+- Add photos by file picker, drag and drop, pasting an image, a URL, or a
+  webcam or phone camera; view them full size in a zoomable lightbox; and
+  crop, turn, or straighten them in the browser.
 
 ### Valuation
 - **Manual estimates**: record researched values (dealer quote, auction
@@ -96,7 +98,7 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   disagree, and how estimates held up against actual sale prices.
 
 ### Insights & reporting
-- Dashboard: hero collection value, cost basis, unrealized and realized
+- Dashboard (the home page): hero collection value, cost basis, unrealized and realized
   gain/loss, breakdowns by country/decade/grade/tag, acquisitions by year,
   and top-movers tables.
 - Export to CSV or Excel; CSV import round-trips the export format (including

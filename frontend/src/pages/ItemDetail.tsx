@@ -9,10 +9,12 @@ import {
   ItemDetail as ItemDetailData,
   ItemEvent,
   money,
+  Photo,
   photoUrl,
   SourceStatus,
 } from "../api";
 import { LineChart } from "../components/charts";
+import { Lightbox, PhotoEditor, WebcamCapture } from "../components/photos";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
 const SOURCE_LABELS: Record<string, string> = {
@@ -201,6 +203,13 @@ export default function ItemDetail() {
   const [estNote, setEstNote] = useState("");
   const [historySource, setHistorySource] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null);
+  const [photoSource, setPhotoSource] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Photo | null>(null);
+  const [webcam, setWebcam] = useState(false);
 
   // Which automatic sources this build offers, and whether they're switched on.
   useEffect(() => {
@@ -218,6 +227,47 @@ export default function ItemDetail() {
   }, [id]);
 
   useEffect(reload, [reload]);
+
+  // One path for picked, dropped, and pasted files.
+  const uploadFiles = useCallback(
+    async (files: File[], how: string) => {
+      if (!id) return;
+      const images = files.filter((f) => f.type.startsWith("image/"));
+      if (images.length === 0) {
+        setPhotoError("Only image files can be added as photos.");
+        return;
+      }
+      setUploading(true);
+      setPhotoError(null);
+      setPhotoNote(null);
+      let added = 0;
+      try {
+        for (const file of images) {
+          await api.uploadPhoto(id, file, uploadAngle);
+          added++;
+        }
+        setPhotoNote(`${how} ${added} photo${added > 1 ? "s" : ""}.`);
+      } catch (err) {
+        setPhotoError((err as Error).message);
+      } finally {
+        setUploading(false);
+        reload(); // earlier files in the batch may have landed
+      }
+    },
+    [id, uploadAngle, reload],
+  );
+
+  // Paste an image anywhere on the item page to add it.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []);
+      if (!files.some((f) => f.type.startsWith("image/"))) return;
+      e.preventDefault();
+      uploadFiles(files, "Pasted");
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [uploadFiles]);
 
   // default the manual-estimate currency to the item's own currency
   const itemCurrency = item?.currency;
@@ -239,23 +289,48 @@ export default function ItemDetail() {
     act(() => api.reorderPhotos(item.id, order))();
   };
 
-  async function upload(e: FormEvent<HTMLInputElement>) {
+  function upload(e: FormEvent<HTMLInputElement>) {
     const files = Array.from(e.currentTarget.files ?? []);
-    if (files.length === 0 || !id) return;
-    setUploading(true);
-    setError(null);
     e.currentTarget.value = "";
+    if (files.length) uploadFiles(files, "Added");
+  }
+
+  async function importFromUrl() {
+    const url = photoSource.trim();
+    if (!id || !url) return;
+    setUploading(true);
+    setPhotoError(null);
+    setPhotoNote(null);
     try {
-      for (const file of files) {
-        await api.uploadPhoto(id, file, uploadAngle);
-      }
+      await api.importPhoto(id, url, uploadAngle);
+      setPhotoSource("");
+      setPhotoNote("Imported the photo from the URL.");
       reload();
     } catch (err) {
-      setError((err as Error).message);
-      reload(); // earlier files in the batch may have landed
+      setPhotoError((err as Error).message);
     } finally {
       setUploading(false);
     }
+  }
+
+  // Errors propagate to the editor, which shows them and stays open.
+  async function saveEdit(image: Blob, filename: string, asCopy: boolean) {
+    if (!id || !editing) return;
+    if (asCopy) {
+      await api.uploadPhoto(id, new File([image], filename, { type: image.type }), editing.angle ?? "");
+    } else {
+      await api.replacePhotoImage(editing.id, image, filename);
+    }
+    setEditing(null);
+    setPhotoNote(asCopy ? "Saved the edit as a new photo." : "Replaced the photo with the edit.");
+    reload();
+  }
+
+  async function captureWebcam(image: Blob) {
+    if (!id) return;
+    const file = new File([image], `webcam-${Date.now()}.jpg`, { type: "image/jpeg" });
+    await api.uploadPhoto(id, file, uploadAngle);
+    reload();
   }
 
   async function addEstimate(e: FormEvent) {
@@ -308,7 +383,7 @@ export default function ItemDetail() {
     if (!id || !window.confirm("Delete this item and all its photos?")) return;
     try {
       await api.deleteItem(id);
-      navigate("/");
+      navigate("/collection");
     } catch (err) {
       setError((err as Error).message);
     }
@@ -364,7 +439,7 @@ export default function ItemDetail() {
           <div>
             <dt>Set / lot</dt>
             <dd>
-              {item.set ? <Link to={`/?set_id=${item.set.id}`}>{item.set.name}</Link> : "—"}
+              {item.set ? <Link to={`/collection?set_id=${item.set.id}`}>{item.set.name}</Link> : "—"}
             </dd>
           </div>
           {fact("Grade", item.grade ? `${item.grade_label} (${item.grade.label})` : null)}
@@ -447,7 +522,7 @@ export default function ItemDetail() {
         {(item.tags.length > 0 || item.catalog_refs.length > 0) && (
           <p style={{ marginBottom: 0 }}>
             {item.tags.map((t) => (
-              <Link key={t} className="chip" to={`/?tag=${encodeURIComponent(t)}`}>{t}</Link>
+              <Link key={t} className="chip" to={`/collection?tag=${encodeURIComponent(t)}`}>{t}</Link>
             ))}
             {item.catalog_refs.map((r) => (
               <span key={`${r.catalog}:${r.ref_code}`} className="chip ref">
@@ -459,16 +534,37 @@ export default function ItemDetail() {
         {item.notes && <p style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{item.notes}</p>}
       </div>
 
-      <div className="card">
+      <div
+        className={`card photo-drop${dragging ? " dragging" : ""}`}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            setDragging(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          uploadFiles(Array.from(e.dataTransfer.files), "Dropped");
+        }}
+      >
         <h2>Photos</h2>
-        {item.photos.length === 0 && <p className="muted">No photos yet.</p>}
+        {photoError && <p className="error">{photoError}</p>}
+        {photoNote && <p className="muted">{photoNote}</p>}
+        {item.photos.length === 0 && (
+          <p className="muted">No photos yet — drop images here, paste one, or add them below.</p>
+        )}
         <div className="photo-grid">
           {item.photos.map((photo, index) => (
             <div key={photo.id} className={`photo-card${photo.is_primary ? " primary" : ""}`}>
-              <a href={photoUrl(photo.file_key)} target="_blank" rel="noreferrer">
+              <button type="button" className="photo-open" title="View larger"
+                onClick={() => setLightbox(index)}>
                 <img src={photoUrl(photo.thumb_key ?? photo.file_key)}
                   alt={photo.angle ?? "photo"} />
-              </a>
+              </button>
               <div className="row">
                 <button title="Move left" disabled={index === 0}
                   onClick={() => movePhoto(index, -1)}>←</button>
@@ -504,6 +600,9 @@ export default function ItemDetail() {
                     Make primary
                   </button>
                 )}
+                <button title="Crop, turn, or straighten" onClick={() => setEditing(photo)}>
+                  ✎ Edit
+                </button>
               </div>
             </div>
           ))}
@@ -530,7 +629,34 @@ export default function ItemDetail() {
             <input type="file" accept="image/jpeg,image/png,image/webp"
               capture="environment" disabled={uploading} onChange={upload} />
           </label>
+          <button type="button" disabled={uploading} onClick={() => setWebcam(true)}
+            title="Take photos with a webcam">
+            🎥 Webcam
+          </button>
+          <label className="field">
+            Import from URL
+            <input type="url" value={photoSource} placeholder="https://…"
+              onChange={(e) => setPhotoSource(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") importFromUrl();
+              }} />
+          </label>
+          <button type="button" disabled={uploading || !photoSource.trim()} onClick={importFromUrl}>
+            Import
+          </button>
         </div>
+        <p className="muted" style={{ marginBottom: 0 }}>
+          You can also drop image files onto this card, or paste an image anywhere on the page.
+          New photos get the angle chosen above.
+        </p>
+        {lightbox !== null && item.photos[lightbox] && (
+          <Lightbox photos={item.photos} index={lightbox} onIndex={setLightbox}
+            onClose={() => setLightbox(null)} />
+        )}
+        {editing && (
+          <PhotoEditor photo={editing} onCancel={() => setEditing(null)} onSave={saveEdit} />
+        )}
+        {webcam && <WebcamCapture onCancel={() => setWebcam(false)} onCapture={captureWebcam} />}
       </div>
 
       <div className="card">

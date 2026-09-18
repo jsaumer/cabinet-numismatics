@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { applyTheme, initialTheme } from "./components/theme";
 import Checklists from "./pages/Checklists";
@@ -10,6 +10,13 @@ import ItemForm from "./pages/ItemForm";
 import ItemList from "./pages/ItemList";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
+
+/** The dashboard is the home page. Before v0.16.0 the collection list lived at
+ * "/", so a "/" link carrying list filters or paging still opens the list. */
+function Home() {
+  const { search } = useLocation();
+  return search ? <Navigate to={`/collection${search}`} replace /> : <Dashboard />;
+}
 
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
@@ -24,8 +31,8 @@ export default function App() {
         <Link to="/">Cabinet</Link>
         <span className="subtitle">Numismatics — Coin &amp; Paper Money Collection Manager</span>
         <nav>
-          <NavLink to="/" end>Collection</NavLink>
-          <NavLink to="/dashboard">Dashboard</NavLink>
+          <NavLink to="/" end>Dashboard</NavLink>
+          <NavLink to="/collection">Collection</NavLink>
           <NavLink to="/pricing">Pricing</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/settings" title="Settings">⚙</NavLink>
@@ -40,8 +47,9 @@ export default function App() {
       </header>
       <main>
         <Routes>
-          <Route path="/" element={<ItemList />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/" element={<Home />} />
+          <Route path="/collection" element={<ItemList />} />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />

@@ -544,6 +544,13 @@ export const api = {
   updatePhoto: (photoId: string, payload: { angle?: Angle; is_primary?: boolean }) =>
     req<Photo>(`/api/photos/${photoId}`, json("PATCH", payload)),
   deletePhoto: (photoId: string) => req<void>(`/api/photos/${photoId}`, { method: "DELETE" }),
+  importPhoto: (itemId: string, url: string, angle: Angle | "") =>
+    req<Photo>(`/api/items/${itemId}/photos/url`, json("POST", { url, angle: angle || null })),
+  replacePhotoImage: (photoId: string, image: Blob, filename: string) => {
+    const form = new FormData();
+    form.append("file", image, filename);
+    return req<Photo>(`/api/photos/${photoId}/image`, { method: "PUT", body: form });
+  },
   reorderPhotos: (itemId: string, order: string[]) =>
     req<Photo[]>(`/api/items/${itemId}/photos/order`, json("POST", { order })),
 
