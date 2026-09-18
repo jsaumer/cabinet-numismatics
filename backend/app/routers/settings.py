@@ -45,6 +45,7 @@ class SettingsOut(BaseModel):
     backup_schedule: Literal["daily", "weekly"] | None
     backup_keep: int
     backup_include_photos: bool
+    trash_retention_days: Literal[0, 7, 30, 90, 365]
     sources: list[SourceStatus]
     cached: list[CachedValue]
 
@@ -66,6 +67,7 @@ class SettingsUpdate(BaseModel):
     backup_schedule: Literal["daily", "weekly"] | None = None
     backup_keep: int | None = Field(default=None, ge=1, le=365)
     backup_include_photos: bool | None = None
+    trash_retention_days: Literal[0, 7, 30, 90, 365] | None = None
 
 
 def _priceable_counts(db: Session) -> tuple[int, int]:
@@ -166,6 +168,7 @@ def _build(db: Session) -> SettingsOut:
         backup_schedule=store.get_setting(db, "backup_schedule"),
         backup_keep=int(store.get_setting(db, "backup_keep")),
         backup_include_photos=bool(store.get_setting(db, "backup_include_photos")),
+        trash_retention_days=int(store.get_setting(db, "trash_retention_days") or 0),
         sources=sources,
         cached=cached,
     )

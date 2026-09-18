@@ -145,7 +145,7 @@ def test_share_a_document_between_items(client):
     assert again.status_code == 404
 
     # deleting an item keeps a document another item still holds…
-    assert client.delete(f"/api/items/{second['id']}").status_code == 204
+    assert client.delete(f"/api/items/{second['id']}?permanent=true").status_code == 204
     assert client.get(f"/api/documents/{doc['id']}/file").status_code == 200
     # …and removing it from its last item deletes the file
     assert client.delete(f"/api/items/{third['id']}/documents/{doc['id']}").status_code == 204
@@ -156,7 +156,7 @@ def test_share_a_document_between_items(client):
 def test_deleting_an_item_deletes_documents_only_it_held(client):
     item = _item(client)
     doc = _upload(client, item, pdf_bytes()).json()
-    assert client.delete(f"/api/items/{item['id']}").status_code == 204
+    assert client.delete(f"/api/items/{item['id']}?permanent=true").status_code == 204
     assert client.get(f"/api/documents/{doc['id']}/file").status_code == 404
     assert not (store.root() / doc["id"]).exists()
 

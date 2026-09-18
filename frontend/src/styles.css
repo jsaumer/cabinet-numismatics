@@ -725,6 +725,22 @@ tr.import-duplicate td {
   padding-left: 1.1rem;
   font-size: 0.85rem;
 }
+.plain-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.plain-fieldset:disabled .card {
+  opacity: 0.85;
+}
+.trash-banner {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  color: var(--danger);
+}
 .history-filter {
   margin-bottom: 0.6rem;
 }

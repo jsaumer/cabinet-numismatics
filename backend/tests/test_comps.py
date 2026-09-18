@@ -93,7 +93,7 @@ def test_sales_log_validation(client):
 def test_deleting_an_item_deletes_its_sales(client):
     item = _item(client)
     sale = _sale(client, item, 10)
-    assert client.delete(f"/api/items/{item['id']}").status_code == 204
+    assert client.delete(f"/api/items/{item['id']}?permanent=true").status_code == 204
     assert client.delete(f"/api/comparables/{sale['id']}").status_code == 404
 
 

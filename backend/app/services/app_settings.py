@@ -33,6 +33,8 @@ DEFAULTS: dict = {
     "pcgs_auto_refresh": False,
     "backup_schedule": None,  # None = off; else "daily" | "weekly"
     "backup_keep": 7,
+    # Days an item stays in the trash before it's deleted for good; 0 = never.
+    "trash_retention_days": 30,
     "backup_include_photos": True,
     # Written by the backup service, not through PUT /api/settings.
     "backup_last_run": None,

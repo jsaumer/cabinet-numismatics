@@ -242,6 +242,31 @@ class DocumentUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
 
+class TrashEntry(BaseModel):
+    id: uuid.UUID
+    label: str
+    type: ItemTypeName
+    status: ItemStatusName
+    grade_label: str | None = None
+    series: str | None = None
+    thumb_key: str | None = None
+    deleted_at: datetime
+    purge_at: datetime | None = None  # deleted for good then, when auto-empty is on
+
+
+class TrashList(BaseModel):
+    retention_days: int  # 0 = never emptied automatically
+    items: list[TrashEntry]
+
+
+class ItemIds(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=5000)
+
+
+class TrashResult(BaseModel):
+    count: int
+
+
 class DocumentLink(BaseModel):
     item_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
 
@@ -441,6 +466,7 @@ class ItemOut(ItemBase):
     catalog_refs: list[CatalogRefOut] = []
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None  # in the trash since
 
     @field_validator("tags", mode="before")
     @classmethod

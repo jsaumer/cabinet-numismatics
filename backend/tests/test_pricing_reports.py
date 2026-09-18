@@ -153,7 +153,7 @@ def test_scheduled_refresh_records_attempts_and_deleting_the_item_clears_them(cl
     assert attempt.outcome == "not_applicable" and "catalog reference" in attempt.message
     db.close()
 
-    assert client.delete(f"/api/items/{item['id']}").status_code == 204
+    assert client.delete(f"/api/items/{item['id']}?permanent=true").status_code == 204
     db = _session()
     assert db.query(EstimateAttempt).count() == 0
     db.close()

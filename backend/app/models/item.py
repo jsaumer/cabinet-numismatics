@@ -18,9 +18,10 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    event,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, with_loader_criteria
 
 from app.db import Base
 
@@ -158,6 +159,9 @@ class Item(Base):
     # skips it: e.g. ("numista", "<collected item id>"). Null for items entered here.
     import_source: Mapped[str | None] = mapped_column(String(30))
     import_key: Mapped[str | None] = mapped_column(String(300))
+    # Set while the item is in the trash. Trashed items are hidden from every
+    # ORM query unless it asks for them (see `_hide_trashed` below).
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -263,6 +267,25 @@ class Document(Base):
     @property
     def has_thumb(self) -> bool:
         return self.thumb_key is not None
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _hide_trashed(state) -> None:
+    """Keep trashed items out of every ORM query — lists, stats, reports,
+    exports, refreshes, relationships — unless the statement opts in with
+    `.execution_options(include_deleted=True)`. One filter here instead of a
+    `deleted_at IS NULL` in every query, where one missed spot would leak
+    trashed items into the totals. (Relationship and column loads inherit the
+    criteria from the statement that loaded their parent.)"""
+    if (
+        state.is_select
+        and not state.is_column_load
+        and not state.is_relationship_load
+        and not state.execution_options.get("include_deleted", False)
+    ):
+        state.statement = state.statement.options(
+            with_loader_criteria(Item, lambda cls: cls.deleted_at.is_(None), include_aliases=True)
+        )
 
 
 class ItemPhoto(Base):

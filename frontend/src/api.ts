@@ -82,6 +82,7 @@ export interface Item {
   catalog_refs: CatalogRef[];
   created_at: string;
   updated_at: string;
+  deleted_at: string | null; // in the trash since
 }
 
 export interface ItemListEntry extends Item {
@@ -346,6 +347,23 @@ export interface ImportRunResult {
   photos_failed: number;
 }
 
+export interface TrashEntry {
+  id: string;
+  label: string;
+  type: ItemType;
+  status: ItemStatus;
+  grade_label: string | null;
+  series: string | null;
+  thumb_key: string | null;
+  deleted_at: string;
+  purge_at: string | null;
+}
+
+export interface TrashList {
+  retention_days: number;
+  items: TrashEntry[];
+}
+
 export interface BreakdownEntry {
   key: string;
   count: number;
@@ -467,6 +485,7 @@ export interface AppSettings {
   backup_schedule: BackupSchedule | null;
   backup_keep: number;
   backup_include_photos: boolean;
+  trash_retention_days: number; // 0 = never emptied automatically
   sources: SourceStatus[];
   cached: CachedValue[];
 }
@@ -488,6 +507,7 @@ export interface AppSettingsUpdate {
   backup_schedule?: BackupSchedule | null;
   backup_keep?: number;
   backup_include_photos?: boolean;
+  trash_retention_days?: number;
 }
 
 export type BackupSchedule = "daily" | "weekly";
@@ -652,7 +672,16 @@ export const api = {
   createItem: (payload: ItemPayload) => req<Item>("/api/items", json("POST", payload)),
   updateItem: (id: string, payload: Partial<ItemPayload>) =>
     req<Item>(`/api/items/${id}`, json("PATCH", payload)),
-  deleteItem: (id: string) => req<void>(`/api/items/${id}`, { method: "DELETE" }),
+  /** Moves the item to the trash; `permanent` deletes it for good. */
+  deleteItem: (id: string, permanent = false) =>
+    req<void>(`/api/items/${id}${permanent ? "?permanent=true" : ""}`, { method: "DELETE" }),
+  restoreItem: (id: string) => req<Item>(`/api/items/${id}/restore`, { method: "POST" }),
+  listTrash: () => req<TrashList>("/api/trash"),
+  trashItems: (ids: string[]) => req<{ count: number }>("/api/trash/items", json("POST", { ids })),
+  restoreItems: (ids: string[]) =>
+    req<{ count: number }>("/api/trash/restore", json("POST", { ids })),
+  purgeItems: (ids: string[]) => req<{ count: number }>("/api/trash/purge", json("POST", { ids })),
+  emptyTrash: () => req<{ count: number }>("/api/trash", { method: "DELETE" }),
   cloneItem: (id: string) => req<Item>(`/api/items/${id}/clone`, { method: "POST" }),
 
   uploadImport: (file: File) => {

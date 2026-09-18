@@ -440,10 +440,36 @@ export default function ItemDetail() {
   }
 
   async function deleteItem() {
-    if (!id || !window.confirm("Delete this item and all its photos?")) return;
+    if (!id || !window.confirm("Move this item to the trash? You can restore it from there.")) return;
     try {
       await api.deleteItem(id);
       navigate("/collection");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function restoreItem() {
+    if (!id) return;
+    try {
+      await api.restoreItem(id);
+      reload();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function purgeItem() {
+    if (
+      !id ||
+      !window.confirm(
+        "Delete this item for good? Its photos, values, and history go too; this can't be undone.",
+      )
+    )
+      return;
+    try {
+      await api.deleteItem(id, true);
+      navigate("/trash");
     } catch (err) {
       setError((err as Error).message);
     }
@@ -486,11 +512,28 @@ export default function ItemDetail() {
         {item.status !== "owned" && (
           <span className={`badge status-${item.status}`}>{item.status}</span>
         )}
+        {item.deleted_at && <span className="badge status-sold">in trash</span>}
         <div className="spacer" />
-        <button onClick={cloneItem}>Clone</button>
-        <Link className="button" to={`/items/${item.id}/edit`}>Edit</Link>
-        <button className="danger" onClick={deleteItem}>Delete</button>
+        {item.deleted_at ? (
+          <>
+            <button className="primary" onClick={restoreItem}>Restore</button>
+            <button className="danger" onClick={purgeItem}>Delete for good</button>
+          </>
+        ) : (
+          <>
+            <button onClick={cloneItem}>Clone</button>
+            <Link className="button" to={`/items/${item.id}/edit`}>Edit</Link>
+            <button className="danger" onClick={deleteItem}>Delete</button>
+          </>
+        )}
       </div>
+      {item.deleted_at && (
+        <p className="trash-banner">
+          This item is in the <Link to="/trash">trash</Link> since{" "}
+          {new Date(item.deleted_at).toLocaleDateString()}. Restore it to edit it again.
+        </p>
+      )}
+      <fieldset className="plain-fieldset" disabled={item.deleted_at !== null}>
 
       <div className="card">
         <dl className="facts">
@@ -881,6 +924,7 @@ export default function ItemDetail() {
           </div>
         ))}
       </details>
+      </fieldset>
     </>
   );
 }

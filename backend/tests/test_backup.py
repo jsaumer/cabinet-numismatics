@@ -67,7 +67,13 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
 
     manifest = backup.verify_archive(archive)
     assert manifest["format"] == "cabinet-backup"
-    assert manifest["counts"] == {"items": 1, "photos": 1, "documents": 1, "estimates": 0}
+    assert manifest["counts"] == {
+        "items": 1,
+        "in_trash": 0,
+        "photos": 1,
+        "documents": 1,
+        "estimates": 0,
+    }
     assert manifest["includes_photos"] is manifest["includes_documents"] is True
     assert manifest["app_version"] == client.get("/api/health").json()["version"]
     with zipfile.ZipFile(archive) as zf:

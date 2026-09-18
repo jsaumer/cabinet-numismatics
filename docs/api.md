@@ -27,7 +27,8 @@ described without an auth layer; add one before exposing the app publicly.
 | `POST`   | `/api/items/{id}/clone`   | Duplicate an item (not its photos)  |
 | `GET`    | `/api/items/{id}/history` | Edit history (created/updated diffs)|
 | `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
-| `DELETE` | `/api/items/{id}`         | Delete an item and its photos       |
+| `DELETE` | `/api/items/{id}`         | Move an item to the trash; `?permanent=true` (or an item already there) deletes it for good |
+| `POST`   | `/api/items/{id}/restore` | Take an item out of the trash       |
 
 **List query parameters** (all optional): `type`, `status`, `strike`
 (`business`/`proof`/`specimen`), `country`, `year`,
@@ -218,6 +219,28 @@ hand-entered source text.
   estimates ran high), and `within_20_pct`. Money follows the stats currency
   rule; unconvertible amounts are skipped and counted.
 
+## Trash
+
+| Method   | Path                  | Purpose                                              |
+|----------|-----------------------|------------------------------------------------------|
+| `GET`    | `/api/trash`          | Items in the trash, most recently deleted first      |
+| `POST`   | `/api/trash/items`    | Move several items to the trash (`{"ids": [...]}`)   |
+| `POST`   | `/api/trash/restore`  | Restore several items                                |
+| `POST`   | `/api/trash/purge`    | Delete several trashed items for good                |
+| `DELETE` | `/api/trash`          | Empty the trash                                      |
+
+A trashed item keeps everything — photos, documents, values, sales, history
+— and is hidden from every other endpoint: lists, stats, reports, exports,
+set and tag counts, refreshes. `GET /api/items/{id}` still returns it, with
+`deleted_at` set; every other item endpoint answers 404 until it's restored.
+`GET /api/trash` answers `retention_days` (0 = never emptied automatically)
+and `items` (`id`, `label`, `type`, `status`, `grade_label`, `series`,
+`thumb_key`, `deleted_at`, and `purge_at` — when it will be deleted for good).
+The bulk endpoints answer `{"count": n}`, counting only items that changed.
+Deleting for good removes the item's photos, values, history, sales, and any
+document no other item — trashed or not — holds. Items older than
+`trash_retention_days` are deleted for good by the hourly background task.
+
 ## Documents
 
 | Method   | Path                                     | Purpose                                  |
@@ -350,7 +373,8 @@ before you turn Numista's cadence on. `backup_schedule` (`null` / `daily` /
 scheduled backups (see Backups below). `comps_enabled` switches the comps
 source (on by default), and `numista_sales_enabled` (off by default) allows
 fetching Numista's auction sales, which needs Numista's paid API plan.
-`preferred_source` accepts `comps`.
+`preferred_source` accepts `comps`. `trash_retention_days` (`0` = never, `7`,
+`30` — the default — `90`, or `365`) is how long an item stays in the trash.
 
 ## Backups
 

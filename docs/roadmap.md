@@ -233,9 +233,9 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   diffs).
 - ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
   dark chart palette).
-- **[Core]** Safer delete: a trash with restore, instead of an item, its
-  photos, and its history disappearing immediately. Phase 5.8.
-  **Target: v0.20.0.**
+- ✔ **[Core]** Safer delete: a trash with restore — one item or a selection —
+  keeping photos, documents, values, and history, emptied automatically
+  after 30 days (adjustable, or never). Phase 5.8. **Target: v0.20.0.**
 - **[Nice]** Alerts and metrics: a webhook for failed backups, rejected or
   exhausted price-source keys, and failed refreshes; a Prometheus `/metrics`
   endpoint. Phase 5.8. **Target: v0.21.0.**
@@ -262,7 +262,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0015`, applied by the
+  upgrades — Alembic since Phase 0, revisions `0001`–`0016`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -512,9 +512,10 @@ mappings (v0.18.0); like Phase 5's bundles, they can be pulled in any order.
   invoices attached to items, PDFs included, shareable between items. Served
   through the API rather than the public photo path, on a volume of their own,
   and included in backups.
-- **Safer delete** (v0.20.0) — deleting an item moves it, with its photos,
-  estimates, and history, to a trash with restore; emptying the trash is the
-  only permanent step. Today a delete is immediate and final.
+- ✔ **Safer delete** (v0.20.0) — deleting an item moves it, with its photos,
+  documents, estimates, and history, to a trash with restore; deleting from
+  the trash, emptying it, or its automatic clear-out after the retention
+  period is the only permanent step.
 - **Alerts and metrics** (v0.21.0) — a webhook (n8n, ntfy, Uptime Kuma…) for
   failed backups, a rejected or exhausted price-source key, and failed
   scheduled refreshes, which today show only in the log or Settings; plus a
@@ -575,7 +576,7 @@ failures reach you instead of a log, and everyday use needs fewer clicks.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0015`), never create-on-startup.
+  revision (`0001`–`0016`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty — the same reasoning that front-loaded Phase 2's fields.

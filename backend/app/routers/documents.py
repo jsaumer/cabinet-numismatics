@@ -23,6 +23,7 @@ from app.models import Document, Item
 from app.routers.items import get_item_or_404, record_event
 from app.schemas import DocumentKind, DocumentLink, DocumentOut, DocumentUpdate
 from app.services import documents as store
+from app.services import trash
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -44,14 +45,6 @@ def _delete(db: Session, document: Document) -> None:
     db.delete(document)
     db.commit()
     store.delete_files(document_id)
-
-
-def remove_orphans(db: Session, document_ids: list[uuid.UUID]) -> None:
-    """Delete documents no item holds any more — after an item is deleted."""
-    for document_id in document_ids:
-        document = db.get(Document, document_id)
-        if document is not None and not document.items:
-            _delete(db, document)
 
 
 @router.get("/items/{item_id}/documents", response_model=list[DocumentOut])
@@ -150,9 +143,10 @@ def unlink_document(item_id: uuid.UUID, document_id: uuid.UUID, db: Session = De
         raise HTTPException(status_code=404, detail="That document isn't attached to this item")
     document.items.remove(item)
     record_event(db, item_id, "updated", {"document": [document.title, None]})
-    if document.items:
-        db.commit()
-    else:
+    db.commit()
+    # Count links on the table: an item in the trash still holds the document,
+    # though the relationship above doesn't show it.
+    if trash.links(db, document_id) == 0:
         _delete(db, document)
 
 

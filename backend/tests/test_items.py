@@ -34,8 +34,18 @@ def test_update_item(client, coin):
     assert body["country"] == "United States"  # untouched fields survive
 
 
-def test_delete_item(client, coin):
+def test_delete_item_moves_it_to_the_trash(client, coin):
     assert client.delete(f"/api/items/{coin['id']}").status_code == 204
+    trashed = client.get(f"/api/items/{coin['id']}")
+    assert trashed.status_code == 200 and trashed.json()["deleted_at"] is not None
+    assert client.get("/api/items").json()["total"] == 0
+    # deleting it again (from the trash) is for good
+    assert client.delete(f"/api/items/{coin['id']}").status_code == 204
+    assert client.get(f"/api/items/{coin['id']}").status_code == 404
+
+
+def test_delete_item_permanently(client, coin):
+    assert client.delete(f"/api/items/{coin['id']}?permanent=true").status_code == 204
     assert client.get(f"/api/items/{coin['id']}").status_code == 404
 
 

@@ -26,8 +26,7 @@ from app.schemas import (
     ItemOut,
     ItemUpdate,
 )
-from app.services import app_settings, pricing
-from app.services import photos as photo_store
+from app.services import app_settings, pricing, trash
 from app.services.currency import Converter
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -111,8 +110,14 @@ IMPORT_IGNORED = {"id", "latest_value", "latest_value_currency", "created_at"}
 STRIKE_PREFIXES = {"PR": "proof", "PF": "proof", "SP": "specimen"}
 
 
-def get_item_or_404(db: Session, item_id: uuid.UUID, *, load_related: bool = False) -> Item:
+def get_item_or_404(
+    db: Session, item_id: uuid.UUID, *, load_related: bool = False, include_deleted: bool = False
+) -> Item:
+    """The item, or 404. Items in the trash count as missing — so they can't
+    be edited — unless `include_deleted` (viewing, restoring, purging)."""
     stmt = select(Item).where(Item.id == item_id)
+    if include_deleted:
+        stmt = stmt.execution_options(include_deleted=True)
     if load_related:
         stmt = stmt.options(*ITEM_LOAD)
     item = db.execute(stmt).scalar_one_or_none()
@@ -610,7 +615,9 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
 
 @router.get("/{item_id}", response_model=ItemDetail)
 def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
-    return get_item_or_404(db, item_id, load_related=True)
+    """One item with its photos, values, documents, and sales — including an
+    item in the trash (`deleted_at` set), which is read-only until restored."""
+    return get_item_or_404(db, item_id, load_related=True, include_deleted=True)
 
 
 @router.patch("/{item_id}", response_model=ItemOut)
@@ -706,7 +713,8 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
         **{
             col.name: getattr(source, col.name)
             for col in Item.__table__.columns
-            if col.name not in ("id", "created_at", "updated_at", "import_source", "import_key")
+            if col.name
+            not in ("id", "created_at", "updated_at", "import_source", "import_key", "deleted_at")
         }
     )
     copy.tags = list(source.tags)
@@ -719,12 +727,20 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
-    from app.routers.documents import remove_orphans
+def delete_item(item_id: uuid.UUID, permanent: bool = False, db: Session = Depends(get_db)):
+    """Move the item to the trash, from where it can be restored. With
+    `?permanent=true` — or for an item already in the trash — delete it for
+    good, with its photos, values, history, and documents no other item holds."""
+    item = get_item_or_404(db, item_id, include_deleted=True)
+    if permanent or item.deleted_at is not None:
+        trash.purge(db, item)
+    else:
+        trash.move_to_trash(db, [item])
 
-    item = get_item_or_404(db, item_id, load_related=True)
-    document_ids = [d.id for d in item.documents]
-    photo_store.delete_item_dir(item.id)
-    db.delete(item)
-    db.commit()
-    remove_orphans(db, document_ids)  # documents no other item holds
+
+@router.post("/{item_id}/restore", response_model=ItemOut)
+def restore_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Take an item out of the trash, as it was."""
+    item = get_item_or_404(db, item_id, include_deleted=True)
+    trash.restore(db, [item])
+    return get_item_or_404(db, item_id, load_related=True)
