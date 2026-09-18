@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.19.0**, with versioned images
+**Status (September 2026): released as v0.20.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
@@ -235,7 +235,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   dark chart palette).
 - ✔ **[Core]** Safer delete: a trash with restore — one item or a selection —
   keeping photos, documents, values, and history, emptied automatically
-  after 30 days (adjustable, or never). Phase 5.8. **Target: v0.20.0.**
+  after 30 days (adjustable, or never). Phase 5.8. **Shipped in v0.20.0.**
 - **[Nice]** Alerts and metrics: a webhook for failed backups, rejected or
   exhausted price-source keys, and failed refreshes; a Prometheus `/metrics`
   endpoint. Phase 5.8. **Target: v0.21.0.**

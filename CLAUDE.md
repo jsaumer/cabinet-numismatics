@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.19.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.20.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -69,8 +69,11 @@ Phase 0 so future sessions can run them without asking. -->
 
 - Tests: in `backend/` — `pip install -e .[dev]` once, then `pytest`. Tests do
   not require a running database. CI (GitHub Actions, `.github/workflows/ci.yml`)
-  runs ruff + pytest on 3.10/3.12, a frontend typecheck, and a compose
-  build/migrate/smoke job on every PR.
+  runs ruff + pytest on 3.10/3.14, a frontend typecheck, and a compose
+  build/migrate/smoke job on every PR. The stack job drives the API with curl
+  (smoke test, backup → restore drill) — when an endpoint's behaviour changes,
+  update those steps too; pytest won't catch them (v0.20.0's trash broke the
+  drill's `DELETE`).
 - Demo data: `python scripts/seed_demo.py` against a running stack.
 - Price sources: `docker compose exec backend python scripts/check_sources.py
   --list` (then `-s <source> -i <item-id>`) probes a live price API and dumps
@@ -224,7 +227,7 @@ images only — `sandbox` blanks Chrome's PDF viewer); no bundled pdf.js.
 Unlinking from the last item, or deleting that item (`remove_orphans`),
 deletes the file. Backups add `documents.tar.gz` (follows the photos flag),
 `backup.sh`/`restore.sh` handle it, CI's drill restores a PDF byte for byte.
-The trash is built for v0.20.0 (migration `0016`, `items.deleted_at`):
+The trash shipped in v0.20.0 (migration `0016`, `items.deleted_at`):
 `models.item._hide_trashed` is a `do_orm_execute` listener adding
 `with_loader_criteria(Item, deleted_at IS NULL)` to every ORM select unless
 `.execution_options(include_deleted=True)` — so new queries hide trashed items
