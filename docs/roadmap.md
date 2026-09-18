@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.20.0**, with versioned images
+**Status (September 2026): released as v0.21.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
@@ -239,7 +239,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Nice]** Alerts and metrics: a webhook (generic JSON, ntfy, Discord,
   Slack, Gotify) for failed backups, rejected or exhausted price-source keys,
   and failed refreshes, on change and on recovery; an Uptime Kuma heartbeat;
-  a Prometheus `/api/metrics` endpoint. Phase 5.8. **Target: v0.21.0.**
+  a Prometheus `/api/metrics` endpoint. Phase 5.8. **Shipped in v0.21.0.**
 - **[Nice]** Installable mobile web app (PWA) for adding items with the phone
   camera, e.g. at a coin show. Phase 5.8. **Target: v0.27.0.**
 

@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.20.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.21.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -240,7 +240,7 @@ use it), so every other item endpoint is read-only by default.
 `purge_expired` runs in the hourly backup loop (`trash_retention_days`, 0 =
 never, default 30). `DELETE /api/items/{id}` now trashes; `?permanent=true`
 purges. Imports and Cabinet-export dedupe look into the trash.
-Alerts and metrics are built for v0.21.0 (no migration; state lives in
+Alerts and metrics shipped in v0.21.0 (no migration; state lives in
 `app_settings`): `services/alerts.py` keeps each condition in `CONDITIONS`
 (backup, `<source>_key`/`_quota`, `refresh_<source>`) in the `alert_state`
 setting, and `fail`/`recover` send the webhook only on a change, on a

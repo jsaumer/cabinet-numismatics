@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-09-18
+
 ### Added
 - **Alerts.** Settings → Alerts & metrics takes a webhook URL — generic JSON
   (n8n, Home Assistant, Node-RED), ntfy, Discord, Slack/Mattermost, or Gotify
