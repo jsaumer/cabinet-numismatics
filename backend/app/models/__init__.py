@@ -5,6 +5,7 @@ from app.models.item import (
     Checklist,
     ChecklistSlot,
     Comparable,
+    Document,
     EstimateAttempt,
     ExchangeRate,
     Grade,
@@ -17,6 +18,7 @@ from app.models.item import (
     SpotPrice,
     Tag,
     item_catalog_refs,
+    item_documents,
     item_tags,
 )
 
@@ -26,6 +28,7 @@ __all__ = [
     "Checklist",
     "ChecklistSlot",
     "Comparable",
+    "Document",
     "EstimateAttempt",
     "ExchangeRate",
     "Grade",
@@ -38,5 +41,6 @@ __all__ = [
     "SpotPrice",
     "Tag",
     "item_catalog_refs",
+    "item_documents",
     "item_tags",
 ]

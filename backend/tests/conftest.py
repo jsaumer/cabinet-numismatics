@@ -66,6 +66,8 @@ def client(tmp_path, monkeypatch):
             db.close()
 
     monkeypatch.setenv("PHOTO_DIR", str(tmp_path))
+    monkeypatch.setenv("DOCUMENT_DIR", str(tmp_path.with_name(tmp_path.name + "-documents")))
+    monkeypatch.setenv("REQUIRE_DOCUMENT_MOUNT", "false")
     # Beside the photo dir, never inside it (the backup service refuses that).
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path.with_name(tmp_path.name + "-backups")))
     get_settings.cache_clear()

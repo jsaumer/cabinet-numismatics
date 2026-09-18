@@ -44,7 +44,7 @@ To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 
 ## 2. Storage
 
-Data lives in four named Docker volumes:
+Data lives in five named Docker volumes:
 
 | Volume | Contents |
 |--------|----------|
@@ -52,6 +52,7 @@ Data lives in four named Docker volumes:
 | `photo_data` | photo originals and generated thumbnails |
 | `backend_state` | the generated encryption key, when `SECRET_KEY` is unset |
 | `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
+| `document_data` | attached documents — receipts, certificates, invoices (`DOCUMENT_DIR`); private, served only through the API |
 
 If you'd rather keep data in a directory you manage (common when a host has a
 established layout, or a NAS mount), replace the volume entries with bind
@@ -63,7 +64,8 @@ services:
     volumes:
       - /srv/cabinet/photos:/data/photos
       - /srv/cabinet/state:/data/state
-      - /mnt/nas/cabinet-backups:/data/backups
+            - /mnt/nas/cabinet-backups:/data/backups
+      - /srv/cabinet/documents:/data/documents
   proxy:
     volumes:
       - /srv/cabinet/photos:/usr/share/nginx/photos:ro
@@ -76,6 +78,20 @@ Keep the photo mount consistent between `backend` and `proxy` — the backend
 writes the files and nginx serves them. The backup mount must not sit inside
 the photo mount; the backend refuses to write archives where nginx would
 serve them.
+
+**Documents need their own mount** (from v0.19.0). The backend refuses
+document uploads unless `/data/documents` is a mounted volume — otherwise they
+would sit in the container and vanish on the next redeploy — and Settings →
+About shows the storage status. On a Swarm, add a bind like the others to the
+backend service, after creating the directory:
+
+```yaml
+      - /mnt/nfs/container/cabinet/documents:/data/documents
+```
+
+Don't mount it inside the photo directory, and don't give it to the proxy:
+documents are served only by the backend. `REQUIRE_DOCUMENT_MOUNT=false`
+turns the check off, for local development only.
 
 ## 3. Reverse proxy, TLS, and authentication
 

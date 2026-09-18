@@ -52,6 +52,11 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
         f"/api/items/{coin['id']}/photos", files={"file": ("obv.png", image_bytes(), "image/png")}
     )
     assert upload.status_code == 201
+    receipt = client.post(
+        f"/api/items/{coin['id']}/documents",
+        files={"file": ("receipt.png", image_bytes(), "image/png")},
+    )
+    assert receipt.status_code == 201
 
     resp = client.get("/api/backup.zip")
     assert resp.headers["content-type"] == "application/zip"
@@ -62,11 +67,17 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
 
     manifest = backup.verify_archive(archive)
     assert manifest["format"] == "cabinet-backup"
-    assert manifest["counts"] == {"items": 1, "photos": 1, "estimates": 0}
-    assert manifest["includes_photos"] is True
+    assert manifest["counts"] == {"items": 1, "photos": 1, "documents": 1, "estimates": 0}
+    assert manifest["includes_photos"] is manifest["includes_documents"] is True
     assert manifest["app_version"] == client.get("/api/health").json()["version"]
     with zipfile.ZipFile(archive) as zf:
-        assert set(zf.namelist()) == {"db.dump", "photos.tar.gz", "manifest.json", "SHA256SUMS"}
+        assert set(zf.namelist()) == {
+            "db.dump",
+            "photos.tar.gz",
+            "documents.tar.gz",
+            "manifest.json",
+            "SHA256SUMS",
+        }
         assert zf.read("db.dump") == FAKE_DUMP
         sums = zf.read("SHA256SUMS").decode().splitlines()
         assert sorted(sums) == sorted(
@@ -74,6 +85,8 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
         )
         with tarfile.open(fileobj=io.BytesIO(zf.read("photos.tar.gz"))) as tar:
             assert any(member.isfile() for member in tar.getmembers())
+        with tarfile.open(fileobj=io.BytesIO(zf.read("documents.tar.gz"))) as tar:
+            assert any(m.name.endswith("original.png") for m in tar.getmembers())
 
     # the temp archive behind the download is gone once it has been sent
     assert not list(Path(get_settings().backup_dir).glob(".download-*"))

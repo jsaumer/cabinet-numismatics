@@ -218,6 +218,36 @@ hand-entered source text.
   estimates ran high), and `within_20_pct`. Money follows the stats currency
   rule; unconvertible amounts are skipped and counted.
 
+## Documents
+
+| Method   | Path                                     | Purpose                                  |
+|----------|------------------------------------------|------------------------------------------|
+| `GET`    | `/api/items/{id}/documents`              | The item's documents, newest first       |
+| `POST`   | `/api/items/{id}/documents`              | Attach a file (multipart: `file`, optional `kind`, `title`, `doc_date`, `note`) |
+| `PATCH`  | `/api/documents/{doc_id}`                | Change `kind`, `title`, `doc_date`, `note` |
+| `POST`   | `/api/documents/{doc_id}/items`          | Attach it to more items (`{"item_ids": [...]}`) |
+| `DELETE` | `/api/items/{id}/documents/{doc_id}`     | Remove it from one item; the file goes with its last item |
+| `DELETE` | `/api/documents/{doc_id}`                | Delete it from every item                |
+| `GET`    | `/api/documents/{doc_id}/file`           | The file, inline; `?download=true` to save it |
+| `GET`    | `/api/documents/{doc_id}/thumb`          | A JPEG thumbnail (404 when there's none) |
+
+`kind` is one of `receipt`, `invoice`, `certificate`, `grading_label`,
+`appraisal`, `correspondence`, `other`. Files may be PDF, JPEG, PNG, or WebP,
+25 MB at most (413 above that), detected from their bytes — anything else is
+415, with the reason. A PDF must open in PDFium; one that needs a password is
+kept without a thumbnail or page count. Responses carry `id`, the fields above,
+`filename` (the uploaded name with the detected extension), `content_type`,
+`size`, `pages`, `has_thumb`, `items` (`id`, `label` of every item it's
+attached to), and `created_at`; `GET /api/items/{id}` includes them as
+`documents`. Uploads answer 503 when document storage isn't usable — see
+`documents` in Health.
+
+Files are served with `X-Content-Type-Options: nosniff`, `Cache-Control:
+private`, a `Content-Disposition` carrying the filename (RFC 5987 for non-ASCII
+names), and a content security policy: `default-src 'none'; sandbox` for
+images, `default-src 'none'; frame-ancestors 'self'` for PDFs — `sandbox`
+stops Chrome's built-in PDF viewer rendering at all.
+
 ## Sales log (comparables)
 
 | Method   | Path                                   | Purpose                                   |
@@ -332,7 +362,7 @@ fetching Numista's auction sales, which needs Numista's paid API plan.
 | `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
 
 An archive is a zip of `db.dump` (pg_dump custom format), `photos.tar.gz`
-(unless data-only), `manifest.json`, and `SHA256SUMS` — see
+and `documents.tar.gz` (unless data-only), `manifest.json`, and `SHA256SUMS` — see
 [backup-restore.md](backup-restore.md). A failed backup returns `500` with
 the reason (for example, `pg_dump failed: …`) and is recorded as the last
 run; a second `POST` while one is running returns `409`. Stored archive names
@@ -360,7 +390,9 @@ Returns `status`, `db` (`ok` / `unreachable`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status` — `ok`, `pending` (migrations not yet applied),
 `ahead` (the database was migrated by a newer build), or `unknown` (database
-unreachable). Settings → About displays it.
+unreachable). `documents` says whether attached documents can be stored: `ok`,
+`not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so uploads are refused),
+`unwritable`, or `inside_photos`. Settings → About displays both.
 
 ## Conventions
 

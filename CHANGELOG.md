@@ -10,6 +10,41 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+**Upgrading: documents need a volume.** The backend now stores attached
+documents in `/data/documents` (`DOCUMENT_DIR`). Compose adds a
+`document_data` volume for it; a Swarm or bind-mount deployment must add a
+mount there, as for photos — see
+[deployment.md](docs/deployment.md#2-storage). Until it's mounted, document
+uploads are refused (Settings → About says so) rather than stored inside the
+container, where a redeploy would lose them.
+
+### Added
+- **Documents on items**: receipts, invoices, certificates of authenticity,
+  grading labels, appraisals, correspondence — PDFs, JPEG, PNG, or WebP up to
+  25 MB, dropped onto or picked in the item page's new Documents card, each
+  with a kind, title, date, and note, and a thumbnail (a PDF's first page).
+  They open in the browser's own viewer, or download with their original
+  name.
+- **One document, several items**: "attach to other items…" links a lot's
+  invoice to every coin in it. Removing a document from an item leaves it on
+  the others; the file is deleted with the last item that holds it.
+- Documents are stored on their own volume, never the public photo path,
+  and served only through the API: the type is detected from the file's
+  bytes (PDFs must open in PDFium), SVG, HTML, and everything else are refused,
+  and responses carry `nosniff` and a content security policy. HEIC photos are
+  refused with a note to export them as JPEG.
+- **Backups include documents**: `documents.tar.gz` in the in-app archive
+  (with its checksum in the manifest), in `scripts/backup.sh`, and restored
+  by `scripts/restore.sh`. Data-only archives leave them out, like photos;
+  archives from before this release leave existing documents in place.
+- API: `GET/POST /api/items/{id}/documents`, `PATCH/DELETE
+  /api/documents/{id}`, `POST /api/documents/{id}/items`, `DELETE
+  /api/items/{id}/documents/{doc}`, `GET /api/documents/{id}/file` and
+  `/thumb`; item details include `documents`; `/api/health` reports
+  `documents` storage status. Migration `0015` adds `documents` and
+  `item_documents`. New dependency: pypdfium2 (PDF thumbnails;
+  Apache-2.0/BSD).
+
 ## [0.18.2] — 2026-09-18
 
 ### Fixed

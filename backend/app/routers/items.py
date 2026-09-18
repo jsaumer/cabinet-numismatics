@@ -47,6 +47,7 @@ ITEM_LOAD = (
     selectinload(Item.tags),
     selectinload(Item.catalog_refs),
     selectinload(Item.comparables),
+    selectinload(Item.documents),
 )
 
 CSV_COLUMNS = [
@@ -719,7 +720,11 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
-    item = get_item_or_404(db, item_id)
+    from app.routers.documents import remove_orphans
+
+    item = get_item_or_404(db, item_id, load_related=True)
+    document_ids = [d.id for d in item.documents]
     photo_store.delete_item_dir(item.id)
     db.delete(item)
     db.commit()
+    remove_orphans(db, document_ids)  # documents no other item holds

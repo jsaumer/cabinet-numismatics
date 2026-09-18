@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     # Where scheduled and on-demand backups are written. Mount a volume (or a
     # NAS path) here to get archives off the container.
     backup_dir: str = "/data/backups"
+    # Where attached documents (receipts, certificates…) are stored. Never
+    # inside PHOTO_DIR, which nginx serves publicly.
+    document_dir: str = "/data/documents"
+    # Refuse document uploads unless DOCUMENT_DIR is a mounted volume, so a
+    # deployment that forgot the mount doesn't keep them in the container,
+    # where the next redeploy would lose them. Off for tests and local dev.
+    require_document_mount: bool = True
     # Where uploaded import files wait between preview and import (a day at
     # most). Empty = a folder in the system temp directory.
     import_dir: str = ""

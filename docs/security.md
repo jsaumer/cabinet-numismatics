@@ -111,6 +111,18 @@ Do not port-forward the stack to the internet as-is.
   filenames, so user-supplied filenames never reach the filesystem or a URL.
 - **Database access** goes exclusively through SQLAlchemy's parameter binding;
   there is no string-built SQL.
+- **Documents** are stored on their own volume, never the photo volume nginx
+  serves, and only the API returns them. The type is read from the bytes —
+  a PDF must start with `%PDF-` and open in PDFium, an image must decode in
+  Pillow — and anything else (SVG and HTML, which can run script, above all)
+  is refused. Files are served with the detected `Content-Type`,
+  `X-Content-Type-Options: nosniff`, and a CSP with no sources (`sandbox` too
+  for images; not for PDFs, which it stops Chrome's viewer rendering). PDFs
+  open in the browser's own viewer rather than a bundled pdf.js, so a PDF's
+  scripts never run in Cabinet's origin. Thumbnails render only page one, at
+  a fixed size. Like everything else here, documents are protected by the
+  reverse proxy's authentication, not by Cabinet — and they often carry
+  names and addresses.
 - **Import files** are staged under random ids in a temp folder, capped at
   1 GB, and deleted after a day. An OpenNumismat file is opened read-only as
   SQLite and only queried; nothing in it is executed. Imported values pass

@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.18.2 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: attached documents, a trash with restore, and alerts. See the
+Next up: a trash with restore, and alerts. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -70,6 +70,10 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - Add photos by file picker, drag and drop, pasting an image, a URL, or a
   webcam or phone camera; view them full size in a zoomable lightbox; and
   crop, turn, or straighten them in the browser.
+- Attach documents — receipts, invoices, certificates of authenticity,
+  grading labels (PDF or image) — with a first-page thumbnail; share one
+  lot's invoice across every coin in it. Kept off the public photo path and
+  included in backups.
 
 ### Valuation
 - **Manual estimates**: record researched values (dealer quote, auction

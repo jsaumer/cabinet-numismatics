@@ -125,12 +125,23 @@ jobs:
                  -H 'Content-Type: application/json' \
                  -d '{"type":"coin","country":"Backup drill","denomination":"1 test","year":2026}' \
                | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          # attach a PDF (made by Pillow inside the backend image) as a document
+          docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (200, 280), "white").save(b, "PDF"); sys.stdout.buffer.write(b.getvalue())' > receipt.pdf
+          doc=$(curl -fsS -X POST "http://localhost/api/items/$id/documents" \
+                  -F kind=receipt -F file=@receipt.pdf \
+                | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
           curl -fsS -o backup.zip http://localhost/api/backup.zip
           unzip -l backup.zip
+          unzip -l backup.zip | grep -q documents.tar.gz
           curl -fsS -X DELETE "http://localhost/api/items/$id" -o /dev/null
+          if curl -fsS "http://localhost/api/documents/$doc/file" -o /dev/null; then
+            echo "the document outlived its only item"; exit 1
+          fi
           ./scripts/restore.sh backup.zip
           curl -fsS "http://localhost/api/items/$id" > /dev/null
-          echo "item $id is back after restore"
+          curl -fsS "http://localhost/api/documents/$doc/file" -o restored.pdf
+          cmp receipt.pdf restored.pdf
+          echo "item $id and its document are back after restore"
           curl -fsS -X POST http://localhost/api/backups \
             | python3 -c 'import json,sys; run = json.load(sys.stdin); print(run); assert run["ok"]'
 
