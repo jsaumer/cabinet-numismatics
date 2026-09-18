@@ -1,8 +1,9 @@
-"""In-app backups: one zip holding the database dump, the photo volume, and a
-manifest that makes the archive checkable rather than merely present.
+"""In-app backups: one zip holding the database dump, the photo and document
+volumes, and a manifest that makes the archive checkable rather than merely
+present.
 
-`db.dump` and `photos.tar.gz` are the same two files `scripts/backup.sh`
-writes, so `scripts/restore.sh` restores either kind. `SHA256SUMS` lets a
+`db.dump`, `photos.tar.gz`, and `documents.tar.gz` are the same files
+`scripts/backup.sh` writes, so `scripts/restore.sh` restores either kind. `SHA256SUMS` lets a
 shell verify an archive with `sha256sum -c`; `manifest.json` carries the same
 checksums plus the app version and schema revision for a future in-app
 restore to validate against.
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session
 
 from app import __version__
 from app.config import get_settings
-from app.models import Item, ItemPhoto, PriceEstimate
+from app.models import Document, Item, ItemPhoto, PriceEstimate
 from app.services import app_settings as store
 from app.services import schema
 
@@ -166,6 +167,7 @@ def _counts(db: Session) -> dict:
     return {
         "items": db.scalar(select(func.count()).select_from(Item)),
         "photos": db.scalar(select(func.count()).select_from(ItemPhoto)),
+        "documents": db.scalar(select(func.count()).select_from(Document)),
         "estimates": db.scalar(select(func.count()).select_from(PriceEstimate)),
     }
 
@@ -185,13 +187,19 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
             dump_version = dump_database(writer, server_version[0])
             members["db.dump"] = writer.summary()
         if include_photos:
-            photo_dir = Path(get_settings().photo_dir)
-            with zf.open("photos.tar.gz", "w", force_zip64=True) as raw:
-                writer = _HashingWriter(raw)
-                with tarfile.open(fileobj=writer, mode="w|gz") as tar:
-                    if photo_dir.is_dir():
-                        tar.add(photo_dir, arcname=".")
-                members["photos.tar.gz"] = writer.summary()
+            # Photos and attached documents travel together: "data only"
+            # leaves out every file, keeping the archive small.
+            settings = get_settings()
+            for member, folder in (
+                ("photos.tar.gz", Path(settings.photo_dir)),
+                ("documents.tar.gz", Path(settings.document_dir)),
+            ):
+                with zf.open(member, "w", force_zip64=True) as raw:
+                    writer = _HashingWriter(raw)
+                    with tarfile.open(fileobj=writer, mode="w|gz") as tar:
+                        if folder.is_dir():
+                            tar.add(folder, arcname=".")
+                    members[member] = writer.summary()
         manifest = {
             "format": FORMAT,
             "format_version": FORMAT_VERSION,
@@ -201,6 +209,7 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
             "pg_dump_version": dump_version,
             "created_at": created.isoformat(),
             "includes_photos": include_photos,
+            "includes_documents": include_photos,
             "counts": counts,
             "members": members,
             "restore": "scripts/restore.sh <this archive> — see docs/backup-restore.md",

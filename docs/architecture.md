@@ -52,6 +52,15 @@ object store — simpler to run and back up for a single user. The backend
 writes originals and generated thumbnails into `PHOTO_DIR`; nginx serves them
 read-only under `/photos/`. The database stores only the relative file keys.
 
+## Document storage
+
+Attached documents (receipts, certificates, invoices) are files too, on a
+separate `document_data` volume at `DOCUMENT_DIR` that nginx never sees:
+receipts carry names and addresses, so they're served only through the API,
+with headers set from the type detected at upload. The backend refuses
+uploads unless `DOCUMENT_DIR` is a mounted volume, so a deployment missing the
+mount can't quietly keep documents inside the container.
+
 ## Data flow
 
 **Adding an item with photos**
@@ -84,6 +93,8 @@ All configuration is via environment variables, loaded from `.env`
 | `AUTO_MIGRATE`    | Apply pending migrations on backend startup (default `true`) |
 | `BACKUP_DIR`      | Where in-app backup archives are written (compose: `/data/backups`) |
 | `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
+| `DOCUMENT_DIR`    | Where attached documents are stored (compose: `/data/documents`, its own volume) |
+| `REQUIRE_DOCUMENT_MOUNT` | Refuse document uploads unless `DOCUMENT_DIR` is a mounted volume (default `true`; `false` for local development) |
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 
 The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
@@ -94,8 +105,8 @@ at the private `backend_state` volume used when `SECRET_KEY` is unset. See
 ## Development
 
 - **Backend:** run FastAPI with `uvicorn app.main:app --reload`, with
-  `DATABASE_URL` pointed at a local or containerized postgres and `PHOTO_DIR`
-  set to a local directory.
+  `DATABASE_URL` pointed at a local or containerized postgres, `PHOTO_DIR`
+  and `DOCUMENT_DIR` set to local directories, and `REQUIRE_DOCUMENT_MOUNT=false`.
 - **Frontend:** `npm run dev` runs the Vite dev server, which proxies `/api`
   to localhost:8000. `npm run build` emits static files to `frontend/dist`
   (only needed for local inspection — the container build does this itself).

@@ -61,8 +61,8 @@ frontend/                React + Vite app (Phase 0 onward)
   image (multi-stage `frontend/Dockerfile`), so no host Node install is needed.
 - Frontend dev: `npm run dev` in `frontend/` — the Vite dev server proxies
   `/api` to localhost:8000. Production build output is `frontend/dist`.
-- Backend dev: `uvicorn app.main:app --reload` with `DATABASE_URL` and
-  `PHOTO_DIR` set.
+- Backend dev: `uvicorn app.main:app --reload` with `DATABASE_URL`,
+  `PHOTO_DIR`, and `DOCUMENT_DIR` set, and `REQUIRE_DOCUMENT_MOUNT=false`.
 
 <!-- Fill in exact test/lint/migration commands as they are established in
 Phase 0 so future sessions can run them without asking. -->
@@ -211,7 +211,20 @@ one commit per item via `items._build_item`. Files are staged under
 `/api/imports/numista/*` routes are registered before `/{upload_id}/*`.
 Test fixtures are synthetic (`tests/import_samples.py`, also written to
 `docs/import-samples/`) — OpenNumismat's own demo files are GPL, keep them
-out. **Next: Phase 5.8** (documents, v0.19.0). Phase 5.7 was added by a September
+out. Documents are built for v0.19.0 (migration `0015`: `documents` + `item_documents`,
+many-to-many; `services/documents.py`, `routers/documents.py`). Files live on
+their own `document_data` volume at `DOCUMENT_DIR` (the user chose a new
+volume over the state volume or Postgres), never `PHOTO_DIR`; uploads are
+refused (503) unless it's a mount point (`/proc/self/mountinfo`;
+`REQUIRE_DOCUMENT_MOUNT=false` in tests/dev) — a Swarm needs a new bind.
+Type from bytes: `%PDF-` + PDFium open (pypdfium2, page-one JPEG thumbnail;
+password-protected kept without one) or Pillow JPEG/PNG/WebP; HEIC refused.
+Served by the API with `nosniff` and CSP `default-src 'none'` (+`sandbox` for
+images only — `sandbox` blanks Chrome's PDF viewer); no bundled pdf.js.
+Unlinking from the last item, or deleting that item (`remove_orphans`),
+deletes the file. Backups add `documents.tar.gz` (follows the photos flag),
+`backup.sh`/`restore.sh` handle it, CI's drill restores a PDF byte for byte.
+**Next: safer delete** (v0.20.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

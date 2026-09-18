@@ -38,6 +38,14 @@ item_tags = Table(
     Column("tag_id", Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
+# A document can belong to several items (one invoice for a lot of coins).
+item_documents = Table(
+    "item_documents",
+    Base.metadata,
+    Column("item_id", Uuid, ForeignKey("items.id", ondelete="CASCADE"), primary_key=True),
+    Column("document_id", Uuid, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True),
+)
+
 item_catalog_refs = Table(
     "item_catalog_refs",
     Base.metadata,
@@ -171,6 +179,11 @@ class Item(Base):
         cascade="all, delete-orphan",
         order_by="PriceEstimate.fetched_at.desc()",
     )
+    documents: Mapped[list["Document"]] = relationship(
+        secondary=item_documents,
+        back_populates="items",
+        order_by="Document.created_at.desc()",
+    )
     comparables: Mapped[list["Comparable"]] = relationship(
         cascade="all, delete-orphan",
         order_by="Comparable.sold_on.desc(), Comparable.id.desc()",
@@ -220,6 +233,36 @@ class Item(Base):
         if self.sold_price is None:
             return None
         return Decimal(self.sold_price) - Decimal(self.sold_fees or 0)
+
+
+class Document(Base):
+    """An attached file — a receipt, certificate of authenticity, invoice…
+    Stored under DOCUMENT_DIR (never the public photo volume) and served only
+    through the API. Shared between items via `item_documents`."""
+
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    kind: Mapped[str] = mapped_column(String(30), default="other")
+    title: Mapped[str] = mapped_column(String(200))
+    doc_date: Mapped[date | None] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(Text)
+    filename: Mapped[str] = mapped_column(String(255))  # as uploaded, for downloads
+    content_type: Mapped[str] = mapped_column(String(50))  # detected, never the client's
+    size: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    pages: Mapped[int | None] = mapped_column(Integer)  # PDFs
+    file_key: Mapped[str] = mapped_column(String(300))
+    thumb_key: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    items: Mapped[list[Item]] = relationship(
+        secondary=item_documents, back_populates="documents", order_by=Item.country
+    )
+
+    @property
+    def has_thumb(self) -> bool:
+        return self.thumb_key is not None
 
 
 class ItemPhoto(Base):

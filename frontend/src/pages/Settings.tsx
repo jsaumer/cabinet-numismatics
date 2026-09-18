@@ -31,6 +31,15 @@ function schemaLabel({ current, expected, status }: Health["schema"]): string {
 // Sources with nothing to configure beyond on/off.
 const KEYLESS = new Set(["melt", "comps"]);
 
+const DOCUMENT_STORAGE: Record<string, string> = {
+  ok: "ready",
+  not_mounted:
+    "not a mounted volume — uploads are refused so documents can't be lost with the container " +
+    "(see docs/deployment.md)",
+  unwritable: "not writable — uploads are refused",
+  inside_photos: "inside the public photo folder — uploads are refused",
+};
+
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -524,6 +533,12 @@ export default function Settings() {
                 }
               >
                 {schemaLabel(health.schema)}
+              </dd>
+            </div>
+            <div>
+              <dt>Document storage</dt>
+              <dd className={health.documents === "ok" ? undefined : "error"}>
+                {DOCUMENT_STORAGE[health.documents] ?? health.documents}
               </dd>
             </div>
           </dl>

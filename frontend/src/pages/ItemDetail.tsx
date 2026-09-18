@@ -14,6 +14,7 @@ import {
   SourceStatus,
 } from "../api";
 import { LineChart } from "../components/charts";
+import { DocumentsCard } from "../components/documents";
 import { Lightbox, PhotoEditor, WebcamCapture } from "../components/photos";
 import { SalesLog } from "../components/sales";
 
@@ -717,6 +718,8 @@ export default function ItemDetail() {
         )}
         {webcam && <WebcamCapture onCancel={() => setWebcam(false)} onCapture={captureWebcam} />}
       </div>
+
+      <DocumentsCard item={item} onChanged={reload} />
 
       <div className="card">
         <h2>Value history</h2>

@@ -13,6 +13,7 @@ services:
       - PHOTO_DIR=/data/photos
       - SECRET_KEY_FILE=/data/state/secret.key
       - BACKUP_DIR=/data/backups
+      - DOCUMENT_DIR=/data/documents
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the
@@ -21,6 +22,10 @@ services:
       # Scheduled and on-demand backups (Settings → Backups). Point this at a
       # NAS path to get archives off the host.
       - backup_data:/data/backups
+      # Attached documents (receipts, certificates…). Private: served only
+      # through the API, never by nginx. Uploads are refused if this isn't
+      # mounted, so they can't end up inside the container.
+      - document_data:/data/documents
     depends_on:
       db:
         condition: service_healthy
@@ -67,3 +72,4 @@ volumes:
   photo_data:
   backend_state:
   backup_data:
+  document_data:

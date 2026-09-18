@@ -206,6 +206,46 @@ class PhotoOut(BaseModel):
     uploaded_at: datetime
 
 
+DocumentKind = Literal[
+    "receipt", "invoice", "certificate", "grading_label", "appraisal", "correspondence", "other"
+]
+
+
+class DocumentItemRef(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    label: str
+
+
+class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kind: DocumentKind
+    title: str
+    doc_date: date | None
+    note: str | None
+    filename: str
+    content_type: str
+    size: int
+    pages: int | None
+    has_thumb: bool = False
+    items: list[DocumentItemRef] = []
+    created_at: datetime
+
+
+class DocumentUpdate(BaseModel):
+    kind: DocumentKind | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    doc_date: date | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class DocumentLink(BaseModel):
+    item_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
 class PhotoUpdate(BaseModel):
     angle: AngleName | None = None
     is_primary: bool | None = None
@@ -509,6 +549,7 @@ class ItemDetail(ItemOut):
     photos: list[PhotoOut] = []
     estimates: list[EstimateOut] = []
     comparables: list[ComparableOut] = []
+    documents: list[DocumentOut] = []
 
 
 class ItemList(BaseModel):

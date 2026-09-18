@@ -156,10 +156,35 @@ export interface SalesFetchResult {
   issue_id: number | null;
 }
 
+export type DocumentKind =
+  | "receipt"
+  | "invoice"
+  | "certificate"
+  | "grading_label"
+  | "appraisal"
+  | "correspondence"
+  | "other";
+
+export interface ItemDocument {
+  id: string;
+  kind: DocumentKind;
+  title: string;
+  doc_date: string | null;
+  note: string | null;
+  filename: string;
+  content_type: string;
+  size: number;
+  pages: number | null;
+  has_thumb: boolean;
+  items: { id: string; label: string }[];
+  created_at: string;
+}
+
 export interface ItemDetail extends Item {
   photos: Photo[];
   estimates: Estimate[];
   comparables: Comparable[];
+  documents: ItemDocument[];
 }
 
 export interface ItemPage {
@@ -586,6 +611,7 @@ export interface Health {
     expected: string | null;
     status: "ok" | "pending" | "ahead" | "unknown";
   };
+  documents: "ok" | "not_mounted" | "unwritable" | "inside_photos";
 }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
@@ -694,6 +720,21 @@ export const api = {
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
   autoEstimate: (itemId: string, source = "melt") =>
     req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),
+
+  uploadDocument: (itemId: string, file: File, kind: DocumentKind) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("kind", kind);
+    return req<ItemDocument>(`/api/items/${itemId}/documents`, { method: "POST", body: form });
+  },
+  updateDocument: (
+    id: string,
+    changes: { kind?: DocumentKind; title?: string; doc_date?: string | null; note?: string | null },
+  ) => req<ItemDocument>(`/api/documents/${id}`, json("PATCH", changes)),
+  linkDocument: (id: string, itemIds: string[]) =>
+    req<ItemDocument>(`/api/documents/${id}/items`, json("POST", { item_ids: itemIds })),
+  unlinkDocument: (itemId: string, id: string) =>
+    req<void>(`/api/items/${itemId}/documents/${id}`, { method: "DELETE" }),
 
   addComparable: (itemId: string, sale: ComparableInput) =>
     req<Comparable>(`/api/items/${itemId}/comparables`, json("POST", sale)),

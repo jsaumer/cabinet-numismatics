@@ -109,8 +109,10 @@ The heart of the app: describing what you own, accurately and flexibly.
 *(Those five were the "photo niceties" bundle — **shipped in v0.16.0**, with
 the dashboard becoming the home page.)*
 
-- **[Nice]** Documents: receipts, certificates of authenticity, and invoices
-  (PDFs included) attached to an item. Phase 5.8. **Target: v0.19.0.**
+- ✔ **[Nice]** Documents: receipts, certificates of authenticity, invoices,
+  and grading labels (PDFs included) attached to items — one document can be
+  shared by several — on their own volume, served only through the API, with
+  first-page thumbnails, and in backups. Phase 5.8. **Target: v0.19.0.**
 
 ## 3. Market price / valuation
 
@@ -260,7 +262,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0014`, applied by the
+  upgrades — Alembic since Phase 0, revisions `0001`–`0015`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -506,9 +508,10 @@ entering a catalogued piece takes seconds.*
 From the same review. Each targets its own minor release after import
 mappings (v0.18.0); like Phase 5's bundles, they can be pulled in any order.
 
-- **Documents** (v0.19.0) — receipts, certificates of authenticity, and
-  invoices attached to an item, PDFs included. Served through the API rather
-  than the public photo path, and included in backups.
+- ✔ **Documents** (v0.19.0) — receipts, certificates of authenticity, and
+  invoices attached to items, PDFs included, shareable between items. Served
+  through the API rather than the public photo path, on a volume of their own,
+  and included in backups.
 - **Safer delete** (v0.20.0) — deleting an item moves it, with its photos,
   estimates, and history, to a trash with restore; emptying the trash is the
   only permanent step. Today a delete is immediate and final.
@@ -572,7 +575,7 @@ failures reach you instead of a log, and everyday use needs fewer clicks.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0014`), never create-on-startup.
+  revision (`0001`–`0015`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty — the same reasoning that front-loaded Phase 2's fields.

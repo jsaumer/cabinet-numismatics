@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 from app import __version__
 from app.db import engine
-from app.services import schema
+from app.services import documents, schema
 
 router = APIRouter(prefix="/api")
 
@@ -24,4 +24,6 @@ def health() -> dict:
         "db": db,
         "version": __version__,
         "schema": schema.describe(current, expected, known, reachable=db == "ok"),
+        # ok | not_mounted (uploads refused) | unwritable
+        "documents": documents.storage_status(),
     }

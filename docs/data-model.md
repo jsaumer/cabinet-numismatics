@@ -26,7 +26,8 @@ per item and source (`item_id` + `source` primary key, cascade with the item;
 attempt leaves no estimate for. `0012` (v0.14.0, catalog depth) added the
 grading, physical, banknote, and cost columns on `items` below, and PMG
 grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log. `0014`
-(v0.18.0) added `items.import_source` / `import_key`.
+(v0.18.0) added `items.import_source` / `import_key`. `0015` (v0.19.0) added
+`documents` and `item_documents`.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -47,7 +48,9 @@ items ──1:N── item_photos
   │
   ├──1:N── price_estimates
   │
-  ├──1:N── comparables     (the sales log)
+    ├──1:N── comparables     (the sales log)
+  │
+  ├──N:M── documents       (via item_documents)
   │
   └──N:1── grades          (reference)
   └──N:M── catalog_refs    (reference, via item_catalog_refs)
@@ -168,6 +171,29 @@ delete with the item. Cloning an item leaves its sales behind.
 | `external_id`      | text null     | Numista lot URL; unique per item, so a re-fetch skips known sales |
 | `note`             | text null     |                                             |
 | `created_at`       | timestamptz   |                                             |
+
+### documents / item_documents
+Attached files — receipts, certificates, invoices. The file and its
+thumbnail live under `DOCUMENT_DIR/<id>/` (never the public photo volume);
+the row holds the metadata. `item_documents` links a document to any number
+of items (both keys cascade); the API deletes a document when its last link
+goes.
+
+| Column         | Type         | Notes                                        |
+|----------------|--------------|----------------------------------------------|
+| `id`           | uuid PK      |                                              |
+| `kind`         | text         | receipt, invoice, certificate, grading_label, appraisal, correspondence, other |
+| `title`        | text         | defaults to the file name                    |
+| `doc_date`     | date null    | the document's own date                      |
+| `note`         | text null    |                                              |
+| `filename`     | text         | uploaded name, extension from the detected type |
+| `content_type` | text         | detected from the bytes: `application/pdf`, `image/jpeg`, `image/png`, `image/webp` |
+| `size`         | bigint       | bytes                                        |
+| `sha256`       | text         | indexed                                      |
+| `pages`        | int null     | PDFs; null when password-protected           |
+| `file_key`     | text         | `<id>/original.<ext>` under `DOCUMENT_DIR`   |
+| `thumb_key`    | text null    | `<id>/thumb.jpg`                             |
+| `created_at`   | timestamptz  |                                              |
 
 ### tags / item_tags
 Free-form labels for arbitrary grouping (`tags.id`, unique `tags.name`;

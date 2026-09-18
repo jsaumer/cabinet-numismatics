@@ -21,8 +21,8 @@ There are two ways to make one:
 **Download backup** (`GET /api/backup.zip`) builds a fresh archive and
 downloads it. The download starts once the archive is built, so allow a
 minute for a large photo collection. **Data only** (`?photos=false`) leaves the
-photos out — a small archive for moving a catalog between machines, not a
-full backup.
+photos and documents out — a small archive for moving a catalog between
+machines, not a full backup.
 
 ### Scheduled
 
@@ -53,10 +53,11 @@ photos are left out:
 |--------|----------|
 | `db.dump` | `pg_dump` custom-format dump of the whole database |
 | `photos.tar.gz` | the entire photo volume (absent from data-only archives) |
+| `documents.tar.gz` | the entire document volume (v0.19.0+; absent from data-only archives) |
 | `manifest.json` | format version, app version, schema revision, `pg_dump` version, created-at, item/photo/estimate counts, and size + SHA-256 of each member |
 | `SHA256SUMS` | the same checksums in `sha256sum -c` format |
 
-`db.dump` and `photos.tar.gz` are the same files `backup.sh` writes. To check
+`db.dump`, `photos.tar.gz`, and `documents.tar.gz` are the same files `backup.sh` writes. To check
 an archive by hand:
 
 ```bash
@@ -78,7 +79,8 @@ With the compose stack running:
 ./scripts/backup.sh /mnt/nas   # or write to another root, e.g. a NAS mount
 ```
 
-Each backup directory contains `db.dump` and `photos.tar.gz`, as above.
+Each backup directory contains `db.dump`, `photos.tar.gz`, and
+`documents.tar.gz`, as above.
 
 On Windows run the scripts from Git Bash. `backups/` is gitignored; copy
 backups somewhere off the machine (NAS, cloud) — a backup on the same disk as
@@ -92,13 +94,14 @@ the data protects against mistakes, not disk failure.
 ```
 
 **Destructive**: this replaces the current database contents (`pg_restore
---clean`) and all photo files with the backup's state. The stack must be
+--clean`), all photo files, and all documents with the backup's state. The stack must be
 running. After a restore, the app reflects the backup immediately — no
 restart needed.
 
 For an archive, the script verifies the checksums first and restores nothing
 if any member doesn't match. A data-only archive restores the database and
-leaves the photos as they are.
+leaves the photos and documents as they are; an archive from before v0.19.0,
+which has no `documents.tar.gz`, leaves the documents as they are.
 
 Restoring into a *fresh* deployment works the same way: bring the stack up,
 wait until `/api/health` reports `schema.status: "ok"` (the backend creates
@@ -110,8 +113,8 @@ no login, so it stays a host-side step (roadmap Phase 5.6, B3).
 ### On a Swarm
 
 `restore.sh` drives `docker compose`, so on a Swarm run its steps by hand —
-the database step on the node running the `db` task, the photo steps on the
-node running the `backend` task:
+the database step on the node running the `db` task, the photo and document
+steps on the node running the `backend` task:
 
 ```bash
 unzip cabinet-backup-20260914-031500.zip -d restore
@@ -121,6 +124,8 @@ docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --c
 backend=$(docker ps -q -f name=cabinet_backend)
 docker exec "$backend" sh -c 'find /data/photos -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/photos' < restore/photos.tar.gz
+docker exec "$backend" sh -c 'find /data/documents -mindepth 1 -delete'
+docker exec -i "$backend" sh -c 'tar xzf - -C /data/documents' < restore/documents.tar.gz
 ```
 
 These are the same commands the script runs; they are rehearsed under

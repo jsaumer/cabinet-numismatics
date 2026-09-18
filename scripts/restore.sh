@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Restore a Cabinet backup: a directory written by backup.sh, or a .zip archive
 # from Settings → Backups (downloaded or scheduled).
-# DESTRUCTIVE: replaces the current database contents and all photo files.
-# A data-only archive (no photos.tar.gz) restores the database and leaves the
-# photos as they are.
+# DESTRUCTIVE: replaces the current database contents, all photo files, and
+# all attached documents. A data-only archive (no photos.tar.gz) restores the
+# database and leaves the files as they are; an archive from before v0.19.0
+# (no documents.tar.gz) leaves the documents as they are.
 # Usage: ./scripts/restore.sh <backup-dir | archive.zip>
 #   e.g. ./scripts/restore.sh backups/20260809-120000
 #        ./scripts/restore.sh cabinet-backup-20260914-031500.zip
@@ -38,6 +39,13 @@ if [ -f "$DIR/photos.tar.gz" ]; then
   docker compose exec -T backend sh -c 'tar xzf - -C /data/photos' < "$DIR/photos.tar.gz"
 else
   echo "Data-only archive: photos left unchanged"
+fi
+
+if [ -f "$DIR/documents.tar.gz" ]; then
+  docker compose exec -T backend sh -c 'mkdir -p /data/documents && find /data/documents -mindepth 1 -delete'
+  docker compose exec -T backend sh -c 'tar xzf - -C /data/documents' < "$DIR/documents.tar.gz"
+else
+  echo "No documents.tar.gz: documents left unchanged"
 fi
 
 echo "Restored from $SRC"
