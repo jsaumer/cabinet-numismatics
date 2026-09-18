@@ -172,15 +172,23 @@ the same `_cached`/`source_cache` as pricing (type `type:<id>`, search
 `catalogue_fields` maps a type onto item-schema keys, trimmed to schema
 limits, category-aware (notes get `issuer`, never diameter); fineness is
 parsed from composition text only for precious metals. The item form's
-"Fill from Numista" card fills empty fields only. **Next: the photo-niceties
-bundle** (v0.16.0). Phase 5.7 was added by a September
+"Fill from Numista" card fills empty fields only. The photo-niceties bundle is built for
+v0.16.0: `components/photos.tsx` holds the lightbox, the canvas editor
+(90° turns, ±15° straighten with a cover-scale so no corners show, crop box
+in fractions of the turned frame, exported at full resolution), and the
+webcam modal; the item page adds drop, paste, and URL import. Backend:
+`POST /api/items/{id}/photos/url` (`photos.fetch_remote_image` — http(s),
+public addresses only at every redirect hop, 3 redirects, 25 MB) and
+`PUT /api/photos/{id}/image`, which saves under a fresh file stem so cached
+images aren't reused. The dashboard is now the home page (`/`); the list is
+`/collection`, and `/?filters` and `/dashboard` redirect. **Next:
+sold-listing comps** (v0.17.0) — research first. Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
-the backend migrates on startup, so an upgrade there is just a tag bump. Also open:
-photo-niceties bundle, a Swarm-ready stack file in this repo
+the backend migrates on startup, so an upgrade there is just a tag bump. Also open: a Swarm-ready stack file in this repo
 (the running stack file lives in the homelab setup). See docs/roadmap.md.
 
 ## Notes for working in Claude Code (desktop app)

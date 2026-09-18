@@ -72,6 +72,8 @@ or `SP-65` on the Sheldon scale set the strike, and a trailing `+` sets
 | `POST`   | `/api/items/{id}/photos/order`    | Reorder photos (full id list)  |
 | `PATCH`  | `/api/photos/{photo_id}`          | Set angle / mark primary       |
 | `DELETE` | `/api/photos/{photo_id}`          | Delete a photo                 |
+| `POST`   | `/api/items/{id}/photos/url`      | Import a photo from a URL (JSON `url`, optional `angle`) |
+| `PUT`    | `/api/photos/{photo_id}/image`    | Replace a photo's image (multipart), keeping its angle, primary flag, and position |
 
 Upload accepts a single image file plus optional `angle`. Files are validated
 as real JPEG/PNG/WebP images (the declared content-type is not trusted), EXIF
@@ -79,6 +81,15 @@ orientation is corrected, and a JPEG thumbnail is generated alongside the
 original. The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
+
+URL import fetches the image on the server — http(s) only, public addresses
+only (a host resolving to a private, loopback, or link-local address is
+refused, and so is a redirect to one), up to three redirects, 25 MB at most —
+then validates and stores it exactly like an upload: 422 for a URL that isn't
+allowed or doesn't return a file, 502 when it can't be reached, 415 when the
+file isn't a supported image. Replacing an image (what the in-browser editor
+saves) writes it under a new file name, so cached copies of the old image
+aren't shown, and deletes the old files.
 
 ## Price estimates
 

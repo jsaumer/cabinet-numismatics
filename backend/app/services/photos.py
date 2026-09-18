@@ -2,14 +2,19 @@
 
 Uploads are validated as real images with Pillow (the declared content-type is
 not trusted), EXIF orientation is corrected, and a JPEG thumbnail is generated
-alongside the original.
+alongside the original. Images can also be fetched from a public URL, with
+private and local network addresses refused.
 """
 
 import io
+import ipaddress
 import shutil
+import socket
 import uuid
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
+import httpx
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.config import get_settings
@@ -38,14 +43,19 @@ def open_validated(data: bytes) -> tuple[Image.Image, str]:
     return ImageOps.exif_transpose(img), fmt
 
 
-def save_photo(item_id: uuid.UUID, photo_id: uuid.UUID, data: bytes) -> tuple[str, str, int, int]:
-    """Validate, write original + thumbnail, return (file_key, thumb_key, w, h)."""
+def save_photo(
+    item_id: uuid.UUID, photo_id: uuid.UUID, data: bytes, stem: str | None = None
+) -> tuple[str, str, int, int]:
+    """Validate, write original + thumbnail, return (file_key, thumb_key, w, h).
+    `stem` names the files (default: the photo id) — a replaced image gets a
+    fresh one so browsers don't keep showing the cached old file."""
     img, fmt = open_validated(data)
     ext = FORMATS[fmt]
     width, height = img.width, img.height
 
-    file_key = f"{item_id}/{photo_id}{ext}"
-    thumb_key = f"{item_id}/{photo_id}_thumb.jpg"
+    name = stem or str(photo_id)
+    file_key = f"{item_id}/{name}{ext}"
+    thumb_key = f"{item_id}/{name}_thumb.jpg"
     path = _root() / file_key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
@@ -73,3 +83,62 @@ def delete_item_dir(item_id: uuid.UUID) -> None:
     path = _root() / str(item_id)
     if path.is_dir():
         shutil.rmtree(path, ignore_errors=True)
+
+
+REMOTE_MAX_BYTES = 25 * 1024 * 1024  # the same ceiling nginx puts on uploads
+REMOTE_TIMEOUT = 15.0
+REMOTE_REDIRECTS = 3
+
+
+class RemoteImageUnavailable(Exception):
+    """The URL could not be fetched: network error or timeout."""
+
+
+def _require_public_host(host: str, port: int) -> None:
+    """Refuse hosts resolving to private, loopback, link-local, or other
+    non-public addresses, so an import can't reach the LAN or the stack's own
+    services. (A DNS answer that changes between this check and the fetch
+    isn't covered — acceptable for a single-user app behind its own proxy.)"""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(f"Can't resolve {host}") from exc
+    for info in infos:
+        if not ipaddress.ip_address(info[4][0]).is_global:
+            raise ValueError("Importing from private or local network addresses isn't allowed")
+
+
+def fetch_remote_image(url: str) -> bytes:
+    """Download an image from a public http(s) URL, following up to three
+    redirects (each re-checked) and stopping at 25 MB. ValueError when the URL
+    isn't allowed or doesn't answer with a file; RemoteImageUnavailable when
+    it can't be reached."""
+    for _ in range(REMOTE_REDIRECTS + 1):
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError("Only http:// and https:// URLs can be imported")
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        _require_public_host(parsed.hostname, port)
+        try:
+            with httpx.stream(
+                "GET",
+                url,
+                timeout=REMOTE_TIMEOUT,
+                follow_redirects=False,
+                headers={"User-Agent": "Cabinet"},
+            ) as resp:
+                if resp.is_redirect:
+                    url = urljoin(url, resp.headers.get("location", ""))
+                    continue
+                if resp.status_code != 200:
+                    raise ValueError(f"The URL answered HTTP {resp.status_code}")
+                chunks, size = [], 0
+                for chunk in resp.iter_bytes():
+                    size += len(chunk)
+                    if size > REMOTE_MAX_BYTES:
+                        raise ValueError("The image is larger than 25 MB")
+                    chunks.append(chunk)
+                return b"".join(chunks)
+        except httpx.HTTPError as exc:
+            raise RemoteImageUnavailable(f"Couldn't fetch the image: {exc}") from exc
+    raise ValueError("Too many redirects")

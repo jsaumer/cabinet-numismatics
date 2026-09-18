@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import ItemPhoto
 from app.routers.items import get_item_or_404
-from app.schemas import AngleName, PhotoOrder, PhotoOut, PhotoUpdate
+from app.schemas import AngleName, PhotoFromUrl, PhotoOrder, PhotoOut, PhotoUpdate
 from app.services import photos as photo_store
 
 router = APIRouter(prefix="/api", tags=["photos"])
@@ -38,18 +38,7 @@ def list_photos(item_id: uuid.UUID, db: Session = Depends(get_db)):
     return _item_photos(db, item_id)
 
 
-@router.post("/items/{item_id}/photos", response_model=PhotoOut, status_code=201)
-async def upload_photo(
-    item_id: uuid.UUID,
-    file: UploadFile,
-    angle: AngleName | None = Form(default=None),
-    db: Session = Depends(get_db),
-):
-    get_item_or_404(db, item_id)
-    data = await file.read()
-    if not data:
-        raise HTTPException(status_code=422, detail="Empty file")
-
+def _create_photo(db: Session, item_id: uuid.UUID, data: bytes, angle: str | None) -> ItemPhoto:
     count = db.execute(
         select(func.count()).select_from(ItemPhoto).where(ItemPhoto.item_id == item_id)
     ).scalar_one()
@@ -69,6 +58,55 @@ async def upload_photo(
         raise HTTPException(status_code=415, detail=str(exc)) from None
     db.add(photo)
     db.commit()
+    db.refresh(photo)
+    return photo
+
+
+@router.post("/items/{item_id}/photos", response_model=PhotoOut, status_code=201)
+async def upload_photo(
+    item_id: uuid.UUID,
+    file: UploadFile,
+    angle: AngleName | None = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    get_item_or_404(db, item_id)
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=422, detail="Empty file")
+    return _create_photo(db, item_id, data, angle)
+
+
+@router.post("/items/{item_id}/photos/url", response_model=PhotoOut, status_code=201)
+def import_photo(item_id: uuid.UUID, payload: PhotoFromUrl, db: Session = Depends(get_db)):
+    """Fetch an image from a public URL and add it like an upload."""
+    get_item_or_404(db, item_id)
+    try:
+        data = photo_store.fetch_remote_image(payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except photo_store.RemoteImageUnavailable as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+    return _create_photo(db, item_id, data, payload.angle)
+
+
+@router.put("/photos/{photo_id}/image", response_model=PhotoOut)
+async def replace_photo_image(photo_id: uuid.UUID, file: UploadFile, db: Session = Depends(get_db)):
+    """Swap a photo's image for an edited one, keeping its angle, primary
+    flag, and position. The new file gets a fresh name so cached copies of the
+    old image aren't shown; the old files are deleted."""
+    photo = _get_photo_or_404(db, photo_id)
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=422, detail="Empty file")
+    old_keys = (photo.file_key, photo.thumb_key)
+    try:
+        photo.file_key, photo.thumb_key, photo.width, photo.height = photo_store.save_photo(
+            photo.item_id, photo.id, data, stem=f"{photo.id}-{uuid.uuid4().hex[:8]}"
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from None
+    db.commit()
+    photo_store.delete_photo_files(*old_keys)
     db.refresh(photo)
     return photo
 

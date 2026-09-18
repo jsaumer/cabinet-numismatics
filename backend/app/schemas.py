@@ -211,6 +211,11 @@ class PhotoUpdate(BaseModel):
     is_primary: bool | None = None
 
 
+class PhotoFromUrl(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    angle: AngleName | None = None
+
+
 class PhotoOrder(BaseModel):
     order: list[uuid.UUID] = Field(min_length=1)
 

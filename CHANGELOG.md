@@ -10,6 +10,30 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Photo tools on the item page** (the roadmap's "photo niceties" bundle):
+  - **Lightbox**: click a photo to view it full size; click or scroll to zoom
+    where you point, move the pointer to pan, ←/→ to step through, Esc to
+    close.
+  - **Edit**: crop, turn 90°, and straighten (±15°, scaled so no empty
+    corners appear) in the browser at full resolution, then replace the photo
+    or save the edit as a new photo.
+  - **Drag and drop** image files onto the Photos card, or **paste** an image
+    anywhere on the item page.
+  - **Import from URL**: the backend fetches the image, following up to three
+    redirects and stopping at 25 MB, and refuses private and local network
+    addresses.
+  - **Webcam**: take photos straight into the item from a webcam or a phone's
+    camera (needs HTTPS or localhost).
+  API: `POST /api/items/{id}/photos/url` and `PUT /api/photos/{id}/image`.
+
+### Changed
+- **The dashboard is the home page**, first in the menu; the collection list
+  moved to `/collection`. Old links still work: `/dashboard` and `/` with list
+  filters redirect to the new addresses.
+- Photo upload errors show on the Photos card instead of replacing the whole
+  item page.
+
 ## [0.15.0] — 2026-09-15
 
 ### Added
