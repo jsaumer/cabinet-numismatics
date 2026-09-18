@@ -634,9 +634,10 @@ def cached_type_ids(db: Session, type_ids: set[int]) -> set[int]:
 
 
 def type_fields(db: Session, type_ids: set[int], fetch: bool) -> tuple[dict[int, dict], int]:
-    """Item fields per catalogue type (`catalogue_fields`), from the cache, or
-    fetched when `fetch` — one request per uncached type. Returns the fields
-    found and how many types couldn't be looked up."""
+    """Item fields per catalogue type (`catalogue_fields`, plus the type's
+    references as `catalog_refs`), from the cache, or fetched when `fetch` —
+    one request per uncached type. Returns the fields found and how many
+    types couldn't be looked up."""
     api_key = _lookup_key(db)
     fresh = cached_type_ids(db, type_ids)
     found: dict[int, dict] = {}
@@ -650,5 +651,8 @@ def type_fields(db: Session, type_ids: set[int], fetch: bool) -> tuple[dict[int,
         except (_NotFound, SourceUnavailable):
             missed += 1
             continue
-        found[type_id] = catalogue_fields(payload)
+        found[type_id] = {
+            **catalogue_fields(payload),
+            "catalog_refs": catalogue_refs(type_id, payload),
+        }
     return found, missed

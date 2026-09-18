@@ -87,6 +87,20 @@ def test_to_float(text, expected):
     assert importing.to_float(text) == expected
 
 
+@pytest.mark.parametrize(
+    "title, expected",
+    [
+        ('¼ Dollar "Washington Quarter"', ("¼ Dollar", "Washington Quarter")),
+        ("1 Dollar - Eisenhower Apollo 11", ("1 Dollar", "Eisenhower Apollo 11")),
+        ("5 Francs “Semeuse”", ("5 Francs", "Semeuse")),
+        ("1 Cent", ("1 Cent", None)),
+        ("", (None, None)),
+    ],
+)
+def test_split_title(title, expected):
+    assert importing.split_title(title) == expected
+
+
 def test_to_date():
     assert str(importing.to_date("3/14/2024")) == "2024-03-14"
     assert str(importing.to_date("14/3/2024")) == "2024-03-14"
@@ -368,6 +382,11 @@ def test_numista_account_preview(client, numista_account):
     assert (body["types"], body["types_to_fetch"]) == (2, 2)
     assert body["photos"] == 1
     assert "exonumia" in body["rows"][2]["error"]
+    # types aren't looked up yet: the preview says the import fills them in
+    assert any(
+        "filled in from Numista's catalogue on import" in m for m in body["rows"][0]["messages"]
+    )
+    assert body["rows"][1]["label"] == 'United States 1 Dollar 1881 "S"'
     # the preview spends the token and the collection, never type lookups
     assert numista_account["calls"] == ["oauth_token", "users/42/collected_items"]
     # a second preview within the hour is served from the cache
@@ -393,8 +412,9 @@ def test_numista_account_import(client, numista_account):
         "Coin show",
     )
     assert ike["tags"] == ["Main"]
-    assert [r["ref_code"] for r in ike["catalog_refs"]] == ["N#1340"]
+    assert sorted(r["ref_code"] for r in ike["catalog_refs"]) == ["KM#203", "N#1340"]
     morgan = items["United States 1 Dollar 1881"]
+    assert morgan["series"] == "Morgan Dollar"  # from the quoted title
     assert (morgan["grade_label"], morgan["cert_service"], morgan["cert_number"]) == (
         "MS-64 DMPL",
         "PCGS",

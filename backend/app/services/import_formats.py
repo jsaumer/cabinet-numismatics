@@ -29,6 +29,7 @@ from app.services.importing import (
     clean,
     fingerprint_keys,
     parse_refs,
+    split_title,
     title_series,
     to_date,
     to_decimal,
@@ -724,9 +725,14 @@ def _col(row: sqlite3.Row, name: str):
 # ---------------------------------------------------------------- Numista account
 
 
-def numista_account_candidates(items: list[dict], types: dict[int, dict]) -> list[Candidate]:
+def numista_account_candidates(
+    items: list[dict], types: dict[int, dict], pending: set[int] | None = None
+) -> list[Candidate]:
     """The user's Numista collection (`/users/{id}/collected_items`), with
-    catalogue fields per type where `types` has them (`numista.catalogue_fields`)."""
+    catalogue fields and references per type where `types` has them
+    (`numista.type_fields`). `pending` types will be looked up on import —
+    the preview says so instead of reporting a fallback."""
+    pending = pending or set()
     out = []
     for index, item in enumerate(items):
         if not isinstance(item, dict):
@@ -739,20 +745,25 @@ def numista_account_candidates(items: list[dict], types: dict[int, dict]) -> lis
         category = str(type_.get("category") or "coin")
         if category == "exonumia":
             cand.error = "Skipped: exonumia (tokens, medals) — Cabinet holds coins and notes"
-        details = types.get(type_id, {}) if isinstance(type_id, int) else {}
+        details = dict(types.get(type_id, {})) if isinstance(type_id, int) else {}
+        cand.refs.extend(details.pop("catalog_refs", []))
         f.update({k: v for k, v in details.items() if k not in ("year",)})
         f["type"] = "note" if category == "banknote" else "coin"
         f["status"] = "owned"
         issuer = type_.get("issuer") if isinstance(type_.get("issuer"), dict) else {}
         f.setdefault("country", clean(issuer.get("name"), 100))
+        denomination, name = split_title(type_.get("title"))
         if not f.get("denomination"):
-            title = clean(type_.get("title"))
-            f["denomination"] = (title or "").split(" - ", 1)[0] or None
-            if title and isinstance(type_id, int):
+            f["denomination"] = denomination
+            if type_id in pending:
+                cand.messages.append(
+                    "Denomination, composition, and size are filled in from Numista's "
+                    "catalogue on import"
+                )
+            elif denomination:
                 cand.messages.append("Denomination taken from the type's title")
-        if not f.get("series") and (series := title_series(type_.get("title"))):
-            if series != f.get("denomination"):
-                f["series"] = series
+        if not f.get("series") and name and name != f.get("denomination"):
+            f["series"] = name
         f["year"] = (
             _int(issue.get("gregorian_year"))
             or _int(issue.get("year"))
