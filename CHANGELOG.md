@@ -10,6 +10,37 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Alerts.** Settings → Alerts & metrics takes a webhook URL — generic JSON
+  (n8n, Home Assistant, Node-RED), ntfy, Discord, Slack/Mattermost, or Gotify
+  — and sends an alert when a backup fails, Numista or PCGS rejects its key or
+  runs out of quota, or a scheduled refresh has failures: once when it starts,
+  and once when it's working again, never on every repeat. **Send test** checks
+  the URL. The URL is stored encrypted, like the API keys, and only its host
+  is shown.
+- **Heartbeat** for an Uptime Kuma *Push* monitor: every hour Cabinet pushes
+  `up`, or `down` with what's failing, so Kuma also notices Cabinet not
+  running at all. **Push now** sends one immediately.
+- **Prometheus metrics** at `/api/metrics`, off until turned on in Settings:
+  items by status and type, the trash, photos and documents, collection
+  value, cost basis and gains, backup and refresh outcomes, estimate
+  attempts, and which alerts are failing. Computed when scraped, cached for a
+  minute. See [docs/monitoring.md](docs/monitoring.md).
+- Settings shows each check's state and each source's last scheduled refresh
+  (updated, skipped, failed, and why).
+- API: `POST /api/alerts/test` (`?target=heartbeat` for the heartbeat) and
+  `GET /api/metrics`; settings `alert_webhook_url`, `alert_webhook_format`,
+  `heartbeat_url`, and `metrics_enabled`, and read-only `alerts`,
+  `alert_delivery`, `heartbeat`, and `refresh_last_run`.
+
+### Changed
+- A scheduled Numista or PCGS refresh **stops at the first rejected key or
+  exhausted quota** instead of trying, and failing, every remaining item.
+- The scheduled melt refresh counts an item that no longer qualifies (its
+  weight or metal was removed) as skipped rather than failed.
+- PCGS answering 401 is reported as a rejected token and 429 as an exhausted
+  quota, alongside its existing 500 = bad token.
+
 ## [0.20.0] — 2026-09-18
 
 ### Added

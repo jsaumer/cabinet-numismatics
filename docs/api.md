@@ -376,6 +376,16 @@ fetching Numista's auction sales, which needs Numista's paid API plan.
 `preferred_source` accepts `comps`. `trash_retention_days` (`0` = never, `7`,
 `30` — the default — `90`, or `365`) is how long an item stays in the trash.
 
+Alerts and metrics: `alert_webhook_url` and `heartbeat_url` are secrets like
+the API keys (`""` clears; reads return only `alert_webhook_hint` /
+`heartbeat_hint`, the URL's `scheme://host/…`), `alert_webhook_format` is
+`generic`, `ntfy`, `discord`, `slack`, or `gotify`, and `metrics_enabled`
+serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed —
+`key`, `label`, `failing`, `since`, `message`), `alert_delivery` and
+`heartbeat` (the last attempt since the backend started — `at`, `ok`,
+`detail`), and `refresh_last_run` (per source: `at`, `updated`, `skipped`,
+`failed`, and `error` or `stopped` when set).
+
 ## Backups
 
 | Method | Path                    | Purpose                                              |
@@ -393,6 +403,19 @@ run; a second `POST` while one is running returns `409`. Stored archive names
 must match `cabinet-backup-YYYYMMDD-HHMMSS[-data].zip`; anything else is
 `404`. **These endpoints hand over the whole collection and are
 unauthenticated** — see [security.md](security.md).
+
+## Alerts & metrics
+
+| Method | Path               | Purpose                                                    |
+|--------|--------------------|------------------------------------------------------------|
+| `POST` | `/api/alerts/test` | Send a test alert through the saved webhook; `?target=heartbeat` pushes the heartbeat now |
+| `GET`  | `/api/metrics`     | Prometheus metrics; `404` until `metrics_enabled`          |
+
+The test answers `200` either way, with `at`, `ok`, and `detail` — `HTTP
+404`, a connection error, or `No webhook URL is saved`; a detail never
+repeats the URL. Metrics are cached for a minute. What alerts fire, the
+payload of each format, and every metric are in
+[monitoring.md](monitoring.md).
 
 ## Checklists (completeness tracking)
 

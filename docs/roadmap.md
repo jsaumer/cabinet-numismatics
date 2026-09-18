@@ -236,9 +236,10 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Core]** Safer delete: a trash with restore — one item or a selection —
   keeping photos, documents, values, and history, emptied automatically
   after 30 days (adjustable, or never). Phase 5.8. **Shipped in v0.20.0.**
-- **[Nice]** Alerts and metrics: a webhook for failed backups, rejected or
-  exhausted price-source keys, and failed refreshes; a Prometheus `/metrics`
-  endpoint. Phase 5.8. **Target: v0.21.0.**
+- ✔ **[Nice]** Alerts and metrics: a webhook (generic JSON, ntfy, Discord,
+  Slack, Gotify) for failed backups, rejected or exhausted price-source keys,
+  and failed refreshes, on change and on recovery; an Uptime Kuma heartbeat;
+  a Prometheus `/api/metrics` endpoint. Phase 5.8. **Target: v0.21.0.**
 - **[Nice]** Installable mobile web app (PWA) for adding items with the phone
   camera, e.g. at a coin show. Phase 5.8. **Target: v0.27.0.**
 
@@ -516,11 +517,11 @@ mappings (v0.18.0); like Phase 5's bundles, they can be pulled in any order.
   documents, estimates, and history, to a trash with restore; deleting from
   the trash, emptying it, or its automatic clear-out after the retention
   period is the only permanent step.
-- **Alerts and metrics** (v0.21.0) — a webhook (n8n, ntfy, Uptime Kuma…) for
+- ✔ **Alerts and metrics** (v0.21.0) — a webhook (n8n, ntfy, Discord…) for
   failed backups, a rejected or exhausted price-source key, and failed
-  scheduled refreshes, which today show only in the log or Settings; plus a
-  Prometheus `/metrics` endpoint with item counts, collection value, last
-  backup age, and refresh outcomes.
+  scheduled refreshes, sent when each starts failing and when it recovers; an
+  hourly Uptime Kuma heartbeat; and a Prometheus `/api/metrics` endpoint with
+  item counts, collection value, backup age, and refresh outcomes.
 - **Wish-list targets** (v0.22.0) — a target price and priority on wish-list
   items, flagged when an estimate falls below the target.
 - **Checklist generation and matching** (v0.23.0) — slots generated from a

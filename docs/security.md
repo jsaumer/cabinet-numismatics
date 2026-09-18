@@ -7,7 +7,8 @@ and what you must do before exposing the app more widely.
 
 ## Secrets at rest
 
-Price-source credentials (Numista API key, PCGS token) are **encrypted before
+Price-source credentials (Numista API key, PCGS token), and the alert webhook
+and heartbeat URLs — which usually carry a token — are **encrypted before
 they reach the database**, using [Fernet](https://cryptography.io/en/latest/fernet/)
 from the `cryptography` library — AES-128-CBC with an HMAC-SHA256
 authentication tag. Encryption is authenticated, so a tampered value fails to
@@ -78,6 +79,12 @@ collection — database and photos — in one request. That is acceptable on a
 trusted LAN or behind an authenticating proxy, and a clear reason not to
 expose the stack directly. The backup directory is kept out of the publicly
 served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
+
+`/api/metrics` is off by default. Turned on, it's as open as the rest of the
+API and includes the collection's value and cost; scrape it over the
+internal Docker network (see [monitoring.md](monitoring.md)) rather than
+exempting it from an authenticating proxy. Alert webhooks and heartbeats send
+only a check's name and its error message — never collection data.
 
 Importing a photo from a URL makes the backend fetch it, so the fetch is
 fenced: only http(s), only hosts that resolve to public addresses — private,

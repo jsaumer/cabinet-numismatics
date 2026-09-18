@@ -18,6 +18,7 @@ from app.routers import (
     health,
     imports,
     items,
+    monitoring,
     photos,
     pricing_reports,
     reference,
@@ -25,7 +26,7 @@ from app.routers import (
     stats,
     trash,
 )
-from app.services import schema
+from app.services import scheduled, schema
 
 logger = logging.getLogger(__name__)
 
@@ -48,28 +49,12 @@ def _configure_logging() -> None:
 _configure_logging()
 
 
-def _run_scheduled_refresh() -> None:
+def _in_session(task) -> None:
     from app.db import SessionLocal
-    from app.services.app_settings import effective_reestimate_days, get_setting
-    from app.services.pricing import refresh_melt_estimates, refresh_source_estimates
 
     db = SessionLocal()
     try:
-        days = effective_reestimate_days(db)
-        if days <= 0 or not get_setting(db, "melt_enabled"):
-            logger.info("Scheduled melt refresh disabled (days=%s)", days)
-        else:
-            logger.info("Scheduled melt refresh: %s", refresh_melt_estimates(db, days))
-
-        numista_days = get_setting(db, "numista_refresh_days")
-        if numista_days and get_setting(db, "numista_enabled"):
-            logger.info(
-                "Scheduled numista refresh: %s",
-                refresh_source_estimates(db, "numista", int(numista_days)),
-            )
-
-        if get_setting(db, "pcgs_auto_refresh") and get_setting(db, "pcgs_enabled"):
-            logger.info("Scheduled pcgs refresh: %s", refresh_source_estimates(db, "pcgs", 7))
+        task(db)
     finally:
         db.close()
 
@@ -78,44 +63,22 @@ async def _reestimation_loop() -> None:
     while True:
         await asyncio.sleep(12 * 3600)
         try:
-            await asyncio.to_thread(_run_scheduled_refresh)
+            await asyncio.to_thread(_in_session, scheduled.refresh)
         except Exception:
             logger.exception("Scheduled refresh failed")
 
 
-def _run_scheduled_backup() -> None:
-    from app.db import SessionLocal
-    from app.services import backup as backups
-    from app.services import trash
-
-    db = SessionLocal()
-    try:
-        outcome = backups.run_scheduled(db)
-        if outcome:
-            logger.info("Scheduled backup: %s", outcome)
-    except backups.BackupError as exc:
-        logger.error("Scheduled backup failed: %s", exc)
-    finally:
-        db.close()
-    # The same hourly tick empties the trash of items past their retention.
-    db = SessionLocal()
-    try:
-        if purged := trash.purge_expired(db):
-            logger.info("Emptied %s item(s) from the trash (past retention)", purged)
-    finally:
-        db.close()
-
-
-async def _backup_loop() -> None:
+async def _hourly_loop() -> None:
     # Hourly checks against the last run, so a daily backup survives restarts
-    # and a failed one is retried within the hour. The first check waits a few
-    # minutes so a fresh deploy settles before archiving.
+    # and a failed one is retried within the hour; the same tick empties the
+    # trash and pushes the heartbeat. The first waits a few minutes so a fresh
+    # deploy settles before archiving.
     await asyncio.sleep(300)
     while True:
         try:
-            await asyncio.to_thread(_run_scheduled_backup)
+            await asyncio.to_thread(_in_session, scheduled.hourly)
         except Exception:
-            logger.exception("Scheduled backup failed")
+            logger.exception("Hourly task failed")
         await asyncio.sleep(3600)
 
 
@@ -129,7 +92,7 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(schema.upgrade_to_head, engine)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
-    tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_backup_loop())]
+    tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]
     yield
     for task in tasks:
         task.cancel()
@@ -160,3 +123,4 @@ app.include_router(comparables.router)
 app.include_router(imports.router)
 app.include_router(documents.router)
 app.include_router(trash.router)
+app.include_router(monitoring.router)

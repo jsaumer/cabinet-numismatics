@@ -2,14 +2,15 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
+from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
+from app.services import alerts, numista, pcgs
 from app.services import app_settings as store
-from app.services import numista, pcgs
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -31,6 +32,18 @@ class CachedValue(BaseModel):
     fetched_at: datetime
 
 
+class RefreshRun(BaseModel):
+    at: datetime
+    updated: int
+    skipped: int
+    failed: int
+    error: str | None = None  # the last failure's message
+    stopped: str | None = None  # why the run stopped early (key or quota)
+
+
+AlertFormat = Literal["generic", "ntfy", "discord", "slack", "gotify"]
+
+
 class SettingsOut(BaseModel):
     display_currency: str
     reestimate_days: int  # effective value (DB override or env default)
@@ -46,6 +59,15 @@ class SettingsOut(BaseModel):
     backup_keep: int
     backup_include_photos: bool
     trash_retention_days: Literal[0, 7, 30, 90, 365]
+    # Alerts & metrics. Saved URLs are secrets: only scheme://host/… comes back.
+    alert_webhook_hint: str | None
+    alert_webhook_format: AlertFormat
+    heartbeat_hint: str | None
+    metrics_enabled: bool
+    alerts: list[AlertStatus]
+    alert_delivery: Outcome | None  # last webhook delivery (since the backend started)
+    heartbeat: Outcome | None  # last heartbeat push (since the backend started)
+    refresh_last_run: dict[str, RefreshRun]
     sources: list[SourceStatus]
     cached: list[CachedValue]
 
@@ -68,6 +90,19 @@ class SettingsUpdate(BaseModel):
     backup_keep: int | None = Field(default=None, ge=1, le=365)
     backup_include_photos: bool | None = None
     trash_retention_days: Literal[0, 7, 30, 90, 365] | None = None
+    alert_webhook_url: str | None = Field(default=None, max_length=2000)  # "" clears
+    alert_webhook_format: AlertFormat | None = None
+    heartbeat_url: str | None = Field(default=None, max_length=2000)  # "" clears
+    metrics_enabled: bool | None = None
+
+    @field_validator("alert_webhook_url", "heartbeat_url")
+    @classmethod
+    def _http_url(cls, value: str | None) -> str | None:
+        if value:
+            value = value.strip()
+            if not alerts.valid_url(value):
+                raise ValueError("must be an http:// or https:// URL")
+        return value
 
 
 def _priceable_counts(db: Session) -> tuple[int, int]:
@@ -169,6 +204,14 @@ def _build(db: Session) -> SettingsOut:
         backup_keep=int(store.get_setting(db, "backup_keep")),
         backup_include_photos=bool(store.get_setting(db, "backup_include_photos")),
         trash_retention_days=int(store.get_setting(db, "trash_retention_days") or 0),
+        alert_webhook_hint=alerts.url_hint(str(store.get_setting(db, "alert_webhook_url"))),
+        alert_webhook_format=str(store.get_setting(db, "alert_webhook_format")),
+        heartbeat_hint=alerts.url_hint(str(store.get_setting(db, "heartbeat_url"))),
+        metrics_enabled=bool(store.get_setting(db, "metrics_enabled")),
+        alerts=alert_statuses(db),
+        alert_delivery=alerts.last_delivery(),
+        heartbeat=alerts.last_heartbeat(),
+        refresh_last_run=store.get_setting(db, "refresh_last_run") or {},
         sources=sources,
         cached=cached,
     )

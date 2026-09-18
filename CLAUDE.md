@@ -240,7 +240,22 @@ use it), so every other item endpoint is read-only by default.
 `purge_expired` runs in the hourly backup loop (`trash_retention_days`, 0 =
 never, default 30). `DELETE /api/items/{id}` now trashes; `?permanent=true`
 purges. Imports and Cabinet-export dedupe look into the trash.
-**Next: alerts and metrics** (v0.21.0). Phase 5.7 was added by a September
+Alerts and metrics are built for v0.21.0 (no migration; state lives in
+`app_settings`): `services/alerts.py` keeps each condition in `CONDITIONS`
+(backup, `<source>_key`/`_quota`, `refresh_<source>`) in the `alert_state`
+setting, and `fail`/`recover` send the webhook only on a change, on a
+background thread (`_spawn`; tests run it inline). `KeyRejected` /
+`QuotaExhausted` (subclasses of `SourceUnavailable`) are raised by the
+Numista and PCGS request helpers; `pricing.cached_fetch` reports them — even
+when stale cache covers — and any successful fetch recovers them, and
+`refresh_source_estimates` stops at the first one. The loops' work moved to
+`services/scheduled.py` (`refresh` records `refresh_last_run` and the refresh
+alerts; `hourly` = backup, trash, heartbeat). `services/metrics.py` renders
+`/api/metrics` via `prometheus_client` from DB queries plus the dashboard's
+own `collection_stats`, cached 60s; delivery/heartbeat outcomes are in
+memory. Webhook and heartbeat URLs are secrets (`SECRET_KEYS`); error details
+never repeat a URL (`alerts._describe`). See docs/monitoring.md.
+**Next: wish-list targets** (v0.22.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

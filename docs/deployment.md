@@ -164,6 +164,10 @@ Copy backups off the host, and back up `.env` separately — it holds the
 database password and the encryption key. Rehearse a restore at least once;
 [backup-restore.md](backup-restore.md) has the drill.
 
+So a failed backup doesn't go unnoticed, add an alert webhook and an Uptime
+Kuma heartbeat in Settings → Alerts & metrics, and optionally scrape
+`/api/metrics` with Prometheus — see [monitoring.md](monitoring.md).
+
 ## 5. Upgrades
 
 ```bash
@@ -196,6 +200,8 @@ docker compose build --pull && docker compose up -d
   metal symbol or a currency pair.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
+- **Alert webhooks and the heartbeat** are outbound requests to the URLs you
+  save; allow them if egress is filtered.
 
 ## 7. Swarm / multi-host deployment
 

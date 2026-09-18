@@ -36,7 +36,8 @@ the frontend and photo files directly, and proxies `/api/` to the backend. Sets
 
 ### backend (built image)
 FastAPI application exposing the REST API under `/api/`. It also runs
-background work (thumbnail generation, price lookups, scheduled backups) in-process — either
+background work (thumbnail generation, price lookups, scheduled backups,
+alerts and the heartbeat — see [monitoring.md](monitoring.md)) in-process — either
 synchronously or via FastAPI background tasks — since the job volume for a
 single user is low. On startup it ensures the photo directory exists.
 
