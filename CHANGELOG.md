@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-09-18
+
 ### Added
 - **Sales log and comps estimates** (sold-listing comparables). Each item has
   a sales log of what pieces like it actually sold for — date, where (with a

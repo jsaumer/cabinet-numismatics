@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.16.0**, with versioned images
+**Status (September 2026): released as v0.17.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
@@ -133,7 +133,7 @@ guidance, not appraisals.
   auction archives, or from Numista's auction records on its paid API plan)
   and a `comps` source taking the median of recent matching sales. No free
   sold-price API exists for individuals — see price-sources.md.
-  **Target: v0.17.0.**
+  **Shipped in v0.17.0.**
 - ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
   **Numista** (free key, coins + notes, prices by grade — pricing M2) and
   **PCGS** (free token, US coins, price guide + Auction Prices Realized —
