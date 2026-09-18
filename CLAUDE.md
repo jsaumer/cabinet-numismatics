@@ -190,8 +190,22 @@ converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there means
 no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
 day. Numista catalogue caching dropped to 7 days (licence §8.3).
-PriceCharting/Greysheet were researched and not planned. **Next: import
-mappings** (v0.18.0). Phase 5.7 was added by a September
+PriceCharting/Greysheet were researched and not planned. Import from other tools is built for v0.18.0 (migration `0014`, `items.import_source` +
+`import_key`, unique together; clone skips them). `services/import_formats.py`
+reads each source into `importing.Candidate`s — `spreadsheet` (field → column
+mapping, `suggest_mapping`, header row found past preambles), `numista_file`
+(by header name), `opennumismat` (SQLite; schema ≤10 keeps buy/sell on
+`coins`, 11 moved them to `prices`; photos read lazily via `BlobReader`), and
+`numista_account` (`numista.fetch_collection`: OAuth client-credentials with
+the stored key, collection cached 1h, `type_fields` per type) — and
+`services/importing.py` resolves grades (`parse_grade`; Numista buckets → the
+band's lowest grade), validates through `ItemCreate`, previews, and imports
+one commit per item via `items._build_item`. Files are staged under
+`IMPORT_DIR` (temp, 1 GB, a day) so preview and run read the same upload;
+`/api/imports/numista/*` routes are registered before `/{upload_id}/*`.
+Test fixtures are synthetic (`tests/import_samples.py`, also written to
+`docs/import-samples/`) — OpenNumismat's own demo files are GPL, keep them
+out. **Next: Phase 5.8** (documents, v0.19.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

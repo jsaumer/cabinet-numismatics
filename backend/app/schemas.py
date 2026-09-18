@@ -298,6 +298,96 @@ class SalesFetchResult(BaseModel):
     issue_id: int | None = None
 
 
+ImportFormatName = Literal["spreadsheet", "numista_file", "opennumismat"]
+
+
+class ImportDefaults(BaseModel):
+    """What a file doesn't say: applied to every row that lacks it."""
+
+    type: ItemTypeName = "coin"
+    status: ItemStatusName = "owned"
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    country: str | None = Field(default=None, max_length=100)
+
+    @field_validator("currency")
+    @classmethod
+    def _upper(cls, value: str) -> str:
+        return value.upper()
+
+
+class ImportOptions(BaseModel):
+    format: ImportFormatName | None = None  # None = as detected
+    mapping: dict[str, str] | None = None  # spreadsheet: Cabinet field → column
+    skip_rows: int | None = Field(default=None, ge=0, le=1000)  # None = find the header
+    defaults: ImportDefaults = ImportDefaults()
+
+
+class NumistaImportOptions(BaseModel):
+    catalogue_details: bool = True  # look types up (one request each, cached 7 days)
+    fetch_photos: bool = False  # download the pictures linked from Numista
+
+
+class ImportUpload(BaseModel):
+    upload_id: str
+    filename: str
+    size: int
+    format: ImportFormatName
+
+
+class ImportField(BaseModel):
+    key: str
+    label: str
+
+
+class ImportPreviewRow(BaseModel):
+    row: int
+    status: Literal["new", "duplicate", "error"]
+    label: str
+    grade: str | None = None
+    status_value: str | None = None
+    type: str | None = None
+    quantity: int | None = None
+    price: float | None = None
+    currency: str | None = None
+    photos: int = 0
+    messages: list[str] = []
+    error: str | None = None
+
+
+class ImportPreview(BaseModel):
+    format: str
+    filename: str | None = None
+    total: int
+    new: int
+    duplicates: int
+    errors: int
+    warnings: int
+    photos: int
+    rows: list[ImportPreviewRow]
+    # spreadsheet only: the columns found, where the header was, and the mapping used
+    headers: list[str] | None = None
+    header_row: int | None = None
+    mapping: dict[str, str] | None = None
+    fields: list[ImportField] | None = None
+    # Numista account only: types to look up on import (one request each)
+    types: int | None = None
+    types_to_fetch: int | None = None
+    fetched_at: datetime | None = None
+
+
+class ImportRunError(BaseModel):
+    row: int
+    error: str
+
+
+class ImportRunResult(BaseModel):
+    created: int
+    skipped: int  # already imported
+    errors: list[ImportRunError]
+    photos_added: int
+    photos_failed: int
+
+
 class ItemOut(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 

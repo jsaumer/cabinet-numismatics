@@ -19,7 +19,7 @@ described without an auth layer; add one before exposing the app publicly.
 |----------|---------------------------|-------------------------------------|
 | `GET`    | `/api/items`              | List items (filter/paginate)        |
 | `POST`   | `/api/items`              | Create an item                      |
-| `POST`   | `/api/items/import`       | Import items from CSV (multipart)   |
+| `POST`   | `/api/items/import`       | Import items from CSV in the export format (multipart); other formats: see Imports |
 | `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
 | `GET`    | `/api/items/export.xlsx`  | Export the collection as Excel      |
 | `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
@@ -249,6 +249,44 @@ The Numista fetch needs `numista_sales_enabled`, an API key, and a `numista`
 catalog ref; it answers `found`, `added`, `already_logged` (matched by lot
 URL), and `issue_id`. A key without Numista's paid plan gets 422 with that
 explanation; an unreachable Numista is 502. One request, cached for a day.
+
+## Imports
+
+| Method   | Path                              | Purpose                                          |
+|----------|-----------------------------------|--------------------------------------------------|
+| `POST`   | `/api/imports`                    | Stage a file (multipart, up to 1 GB); returns `upload_id` and the detected `format` |
+| `POST`   | `/api/imports/{upload_id}/preview`| What importing it would do — nothing is written  |
+| `POST`   | `/api/imports/{upload_id}/run`    | Import its new items                             |
+| `DELETE` | `/api/imports/{upload_id}`        | Discard a staged file (they expire after a day anyway) |
+| `POST`   | `/api/imports/numista/preview`    | Preview importing your Numista collection        |
+| `POST`   | `/api/imports/numista/run`        | Import it                                        |
+
+File formats: `spreadsheet` (any CSV/XLSX, read through a field → column
+`mapping`), `numista_file` (numista.com's collection export, by column name),
+and `opennumismat` (an OpenNumismat `.db`). Preview and run take the same JSON
+options: `format` (default: as detected), `mapping` (spreadsheet; default:
+suggested from the header names), `skip_rows` (lines above the header;
+default: found automatically), and `defaults` — `type`, `status`,
+`currency`, `country` for rows that don't say. A spreadsheet preview also
+returns `headers`, `header_row`, the `mapping` used, and the mappable
+`fields`.
+
+A preview answers `total`, `new`, `duplicates` (already imported), `errors`,
+`warnings`, `photos`, and up to 200 `rows` (`status` new / duplicate / error,
+`label`, the resolved `grade`, `messages`, `error`). A run answers `created`,
+`skipped`, `errors` (`row`, `error`), `photos_added`, and `photos_failed`;
+each item commits on its own, so a bad row never undoes others. Imported
+items record `import_source` + `import_key` (a Numista collected-item id,
+an OpenNumismat record, or a row fingerprint), which is how a second import
+of the same source skips them; their edit history notes the import.
+
+The Numista endpoints take `catalogue_details` (default true: one request per
+type not cached in the last week, on run only) and `fetch_photos` (default
+false; pictures go through the same guarded fetch as photo URL import). They
+authenticate as the API key's owner (OAuth client credentials, scope
+`view_collection`); the collection is cached for an hour, so a preview and
+the run that follows cost one fetch. 422 without a key or when the key has no
+user; 502 when Numista is unreachable or refuses.
 
 ## Settings
 

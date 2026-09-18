@@ -84,6 +84,7 @@ All configuration is via environment variables, loaded from `.env`
 | `AUTO_MIGRATE`    | Apply pending migrations on backend startup (default `true`) |
 | `BACKUP_DIR`      | Where in-app backup archives are written (compose: `/data/backups`) |
 | `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
+| `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 
 The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
 `PHOTO_DIR` points at the mounted photo volume, and `SECRET_KEY_FILE` points

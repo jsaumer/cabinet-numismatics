@@ -10,6 +10,43 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Import from other collection tools** — a new Import page (Collection →
+  Import) with a preview before anything is added:
+  - **My Numista collection**: reads the collection on your own Numista
+    account with the API key already in Settings — grade, quantity, price
+    paid, acquisition date and place, storage, comments, and slab details
+    (grading company, slab grade, number, CAC sticker, designations) — and
+    fills in denomination, composition, weight, and size from the catalogue
+    (one request per type, cached a week). Pictures can be downloaded too
+    (off by default). Tokens and medals aren't imported.
+  - **Numista's export file** (CSV or Excel), read by column name.
+  - **OpenNumismat collections** (the `.db` file, OpenNumismat 1.9 to 1.11,
+    including 1.11's new layout for purchases and sales), with their photos.
+  - **Any spreadsheet** (CSV or Excel) — uCoin, CoinSnap, Colnect, PCGS's
+    registry, a hand-kept sheet — with its columns matched to Cabinet's
+    fields: Cabinet suggests the matches from the column names, finds a
+    header below lines of preamble, and takes defaults for type, status,
+    country, and currency. Prices like "$1,250.00" and "1.234,50" and US or
+    European dates are understood.
+  - Grades written any usual way are read: MS-64, PF-69 DCAM, 64 EPQ, XF,
+    "Choice Very Fine", BU. Numista's G…UNC bands become the lowest grade of
+    each band (VF → VF-20), noted in the preview.
+  - Importing the same source again skips items already imported — each
+    imported item remembers where it came from.
+  - Cabinet's own CSV export still imports as before, now from the same page.
+- `docs/import-samples/` holds synthetic files in each format to try it with
+  (built by `python -m tests.import_samples`).
+- API: `POST /api/imports` (stage a file), `POST /api/imports/{id}/preview`,
+  `POST /api/imports/{id}/run`, `DELETE /api/imports/{id}`, and
+  `POST /api/imports/numista/{preview,run}`. Migration `0014` adds
+  `items.import_source` and `import_key`.
+
+### Changed
+- The Collection page's "Import CSV" button is now "Import", opening the
+  Import page. nginx accepts uploads up to 1 GB on `/api/imports` (an
+  OpenNumismat file carries its photos).
+
 ## [0.17.0] — 2026-09-18
 
 ### Added

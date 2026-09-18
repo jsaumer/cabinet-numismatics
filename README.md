@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.17.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: imports from other collection tools. See the
+Next up: attached documents, a trash with restore, and alerts. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -108,6 +108,10 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   and top-movers tables.
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
+- Import from other tools, with a preview first: your Numista collection
+  (straight from your account), Numista's export file, OpenNumismat
+  collections with their photos, or any spreadsheet with its columns matched
+  to Cabinet's fields. Re-importing skips what's already here.
 - Printable insurance report with photos, certs, provenance, and totals —
   export to PDF via the browser's print dialog.
 

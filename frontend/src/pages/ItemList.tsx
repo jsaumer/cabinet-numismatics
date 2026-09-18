@@ -1,7 +1,7 @@
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, CollectionStats, ImportResult, ItemPage, money, photoUrl } from "../api";
+import { api, CollectionStats, ItemPage, money, photoUrl } from "../api";
 
 const PAGE_SIZE = 50;
 
@@ -30,7 +30,6 @@ export default function ItemList() {
       params.has(k),
     ),
   );
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [stats, setStats] = useState<CollectionStats | null>(null);
   const [tagNames, setTagNames] = useState<string[]>([]);
 
@@ -43,7 +42,6 @@ export default function ItemList() {
   const [bulkAddTag, setBulkAddTag] = useState("");
   const [bulkRemoveTag, setBulkRemoveTag] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
-  const importInput = useRef<HTMLInputElement>(null);
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -119,20 +117,6 @@ export default function ItemList() {
     return () => clearTimeout(timer);
   }, [params, sort, offset]);
 
-  async function doImport(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError(null);
-    setImportResult(null);
-    try {
-      setImportResult(await api.importCsv(file));
-      set("offset", ""); // refresh from page one
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      e.target.value = "";
-    }
-  }
 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
 
@@ -243,8 +227,10 @@ export default function ItemList() {
           {showAdvanced ? "Less" : "More…"}
         </button>
         <div className="spacer" />
-        <button onClick={() => importInput.current?.click()}>Import CSV</button>
-        <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={doImport} />
+        <Link className="button" to="/import"
+          title="Import from Numista, OpenNumismat, a spreadsheet, or a Cabinet export">
+          Import
+        </Link>
         <a className="button" href={`/api/items/export.csv${exportQuery}`}
           title={exportQuery ? "Exports the current filters" : "Exports everything"}>
           CSV
@@ -292,23 +278,11 @@ export default function ItemList() {
       )}
 
       {error && <p className="error">{error}</p>}
-      {importResult && (
-        <p className={importResult.errors.length ? "error" : "muted"}>
-          Imported {importResult.created} item{importResult.created === 1 ? "" : "s"}.
-          {importResult.skipped > 0 && ` ${importResult.skipped} already existed (skipped).`}
-          {importResult.errors.length > 0 && (
-            <>
-              {" "}{importResult.errors.length} row(s) failed:{" "}
-              {importResult.errors.map((e) => `row ${e.row}: ${e.error}`).join("; ")}
-            </>
-          )}
-        </p>
-      )}
 
       {page && page.items.length === 0 && (
         <div className="empty">
           {page.total === 0 && !hasFilters
-            ? "No items yet — add the first piece of your collection."
+            ? "No items yet — add the first piece of your collection, or import one."
             : "Nothing matches these filters."}
         </div>
       )}

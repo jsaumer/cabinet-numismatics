@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import ItemDetail from "./pages/ItemDetail";
 import ItemForm from "./pages/ItemForm";
+import Import from "./pages/Import";
 import ItemList from "./pages/ItemList";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />
+          <Route path="/import" element={<Import />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/items/new" element={<ItemForm />} />
           <Route path="/items/:id" element={<ItemDetail />} />

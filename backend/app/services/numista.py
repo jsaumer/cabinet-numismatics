@@ -17,8 +17,9 @@ auction prices. Money is per row, so the per-piece price is multiplied by the
 item's quantity.
 """
 
+import hashlib
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -550,3 +551,104 @@ def fetch_sales(db: Session, item: Item) -> tuple[list[dict], int | None]:
     except _NotFound:
         raise NotApplicable(f"Numista has no type N#{type_id}") from None
     return sale_rows(payload), issue_id
+
+
+# ---------------------------------------------------------------- the user's collection
+# Importing the collection on the user's own Numista account (v0.18.0). The API
+# key authenticates as its owner through OAuth's client-credentials grant
+# (scope `view_collection`), then one request returns every collected item.
+# The collection is cached for an hour, so a preview and the import that
+# follows it cost one fetch; catalogue details come from the same 7-day type
+# cache as the item form's lookup, one request per type not already cached.
+
+COLLECTION_TTL = timedelta(hours=1)
+
+
+def _account_request(path: str, api_key: str, params: dict, token: str | None = None) -> dict:
+    headers = {"Numista-API-Key": api_key}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        resp = httpx.get(f"{API_ROOT}/{path}", params=params, headers=headers, timeout=30.0)
+        if resp.status_code == 501:
+            raise NotApplicable("This Numista API key isn't linked to a Numista account")
+        if resp.status_code in (401, 403):
+            raise SourceUnavailable(
+                "Numista refused access to the collection — check the API key in Settings"
+            )
+        if resp.status_code == 429:
+            raise SourceUnavailable("Numista request quota exhausted — try again later")
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPError as exc:
+        raise SourceUnavailable(f"Numista request failed: {exc}") from exc
+    except ValueError as exc:
+        raise SourceUnavailable(f"Numista returned invalid JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise SourceUnavailable("Numista returned an unexpected response")
+    return data
+
+
+def _load_collection(api_key: str) -> dict:
+    grant = _account_request(
+        "oauth_token", api_key, {"grant_type": "client_credentials", "scope": "view_collection"}
+    )
+    token, user_id = grant.get("access_token"), grant.get("user_id")
+    if not token or not isinstance(user_id, int):
+        raise SourceUnavailable("Numista didn't return an access token")
+    payload = _account_request(f"users/{user_id}/collected_items", api_key, {}, token)
+    items = payload.get("items")
+    return {"user_id": user_id, "items": items if isinstance(items, list) else []}
+
+
+def fetch_collection(db: Session) -> tuple[list[dict], datetime]:
+    """The items in the key owner's Numista collection, and when they were
+    fetched. Raises NotApplicable/SourceUnavailable."""
+    api_key = str(app_settings.get_setting(db, "numista_api_key"))
+    if not api_key:
+        raise NotApplicable("Add your Numista API key in Settings to import your collection")
+    owner = hashlib.sha256(api_key.encode()).hexdigest()[:16]  # a new key, a new collection
+    payload, fetched_at = cached_fetch(
+        db, "numista", f"collection:{owner}", COLLECTION_TTL, lambda: _load_collection(api_key)
+    )
+    return payload.get("items") or [], fetched_at
+
+
+def cached_type_ids(db: Session, type_ids: set[int]) -> set[int]:
+    """Which of these types have fresh catalogue data cached (no request needed)."""
+    from app.models import SourceCache
+
+    now = datetime.now(timezone.utc)
+    fresh = set()
+    for type_id in type_ids:
+        row = db.get(SourceCache, ("numista", f"type:{type_id}"))
+        if row is not None:
+            fetched = (
+                row.fetched_at
+                if row.fetched_at.tzinfo
+                else row.fetched_at.replace(tzinfo=timezone.utc)
+            )
+            if now - fetched < CATALOG_TTL:
+                fresh.add(type_id)
+    return fresh
+
+
+def type_fields(db: Session, type_ids: set[int], fetch: bool) -> tuple[dict[int, dict], int]:
+    """Item fields per catalogue type (`catalogue_fields`), from the cache, or
+    fetched when `fetch` — one request per uncached type. Returns the fields
+    found and how many types couldn't be looked up."""
+    api_key = _lookup_key(db)
+    fresh = cached_type_ids(db, type_ids)
+    found: dict[int, dict] = {}
+    missed = 0
+    for type_id in sorted(type_ids):
+        if type_id not in fresh and not fetch:
+            missed += 1
+            continue
+        try:
+            payload, _ = _cached(db, f"type:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}")
+        except (_NotFound, SourceUnavailable):
+            missed += 1
+            continue
+        found[type_id] = catalogue_fields(payload)
+    return found, missed
