@@ -7,7 +7,7 @@ changes, update this file and the docs it points to in the same commit. -->
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.15.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.16.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -172,8 +172,7 @@ the same `_cached`/`source_cache` as pricing (type `type:<id>`, search
 `catalogue_fields` maps a type onto item-schema keys, trimmed to schema
 limits, category-aware (notes get `issuer`, never diameter); fineness is
 parsed from composition text only for precious metals. The item form's
-"Fill from Numista" card fills empty fields only. The photo-niceties bundle is built for
-v0.16.0: `components/photos.tsx` holds the lightbox, the canvas editor
+"Fill from Numista" card fills empty fields only. The photo-niceties bundle shipped in v0.16.0: `components/photos.tsx` holds the lightbox, the canvas editor
 (90° turns, ±15° straighten with a cover-scale so no corners show, crop box
 in fractions of the turned frame, exported at full resolution), and the
 webcam modal; the item page adds drop, paste, and URL import. Backend:
