@@ -11,6 +11,7 @@ import Import from "./pages/Import";
 import ItemList from "./pages/ItemList";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
+import Trash from "./pages/Trash";
 
 /** The dashboard is the home page. Before v0.16.0 the collection list lived at
  * "/", so a "/" link carrying list filters or paging still opens the list. */
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/items/new" element={<ItemForm />} />
           <Route path="/items/:id" element={<ItemDetail />} />

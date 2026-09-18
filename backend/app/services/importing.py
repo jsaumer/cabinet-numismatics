@@ -375,14 +375,16 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
     grades = GradeTable(db)
     keys = [c.key for c in candidates if c.key]
     existing = set()
+    in_trash = set()  # already imported, but in the trash
     for start in range(0, len(keys), 500):
-        existing.update(
-            db.execute(
-                select(Item.import_key).where(
-                    Item.import_source == source, Item.import_key.in_(keys[start : start + 500])
-                )
-            ).scalars()
-        )
+        for key, deleted_at in db.execute(
+            select(Item.import_key, Item.deleted_at)
+            .where(Item.import_source == source, Item.import_key.in_(keys[start : start + 500]))
+            .execution_options(include_deleted=True)
+        ):
+            existing.add(key)
+            if deleted_at is not None:
+                in_trash.add(key)
     if source == "cabinet":
         # An export taken from this very Cabinet: its ids are already here.
         ids = []
@@ -392,14 +394,18 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
             except ValueError:
                 continue
         for start in range(0, len(ids), 500):
-            existing.update(
-                str(i)
-                for i in db.execute(
-                    select(Item.id).where(Item.id.in_(ids[start : start + 500]))
-                ).scalars()
-            )
+            for item_id, deleted_at in db.execute(
+                select(Item.id, Item.deleted_at)
+                .where(Item.id.in_(ids[start : start + 500]))
+                .execution_options(include_deleted=True)
+            ):
+                existing.add(str(item_id))
+                if deleted_at is not None:
+                    in_trash.add(str(item_id))
     out = []
     for cand in candidates:
+        if cand.key in in_trash and not cand.error:
+            cand.messages.append("Already imported — that item is in the trash; restore it there")
         if cand.error:
             out.append(Prepared(cand, None, None, None, False))
             continue

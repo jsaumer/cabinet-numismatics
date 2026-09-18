@@ -37,6 +37,10 @@ export default function ItemList() {
     api.listTags().then((ts) => setTagNames(ts.map((t) => t.name))).catch(() => setTagNames([]));
   }, []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [trashCount, setTrashCount] = useState(0);
+  useEffect(() => {
+    api.listTrash().then((t) => setTrashCount(t.items.length)).catch(() => setTrashCount(0));
+  }, []);
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkStorage, setBulkStorage] = useState("");
   const [bulkAddTag, setBulkAddTag] = useState("");
@@ -79,6 +83,23 @@ export default function ItemList() {
   }
 
   const set0 = () => setParams((prev) => new URLSearchParams(prev), { replace: true });
+
+  async function trashSelected() {
+    const count = selected.size;
+    if (!count || !window.confirm(`Move ${count} item${count === 1 ? "" : "s"} to the trash?`)) return;
+    setBulkBusy(true);
+    setError(null);
+    try {
+      await api.trashItems([...selected]);
+      setSelected(new Set());
+      setTrashCount((n) => n + count);
+      set0(); // refetch
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   useEffect(() => {
     api.collectionStats().then(setStats).catch(() => setStats(null));
@@ -239,6 +260,11 @@ export default function ItemList() {
           title={exportQuery ? "Exports the current filters" : "Exports everything"}>
           Excel
         </a>
+        {trashCount > 0 && (
+          <Link className="button" to="/trash" title="Deleted items, waiting to be restored">
+            Trash ({trashCount})
+          </Link>
+        )}
         <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 
@@ -317,6 +343,10 @@ export default function ItemList() {
           <button className="primary" style={{ alignSelf: "end" }} disabled={bulkBusy}
             onClick={applyBulk}>
             {bulkBusy ? "Applying…" : "Apply"}
+          </button>
+          <button className="danger" style={{ alignSelf: "end" }} disabled={bulkBusy}
+            onClick={trashSelected}>
+            Move to trash
           </button>
           <button style={{ alignSelf: "end" }} onClick={() => setSelected(new Set())}>
             Clear

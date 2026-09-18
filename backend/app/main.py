@@ -23,6 +23,7 @@ from app.routers import (
     reference,
     settings,
     stats,
+    trash,
 )
 from app.services import schema
 
@@ -85,6 +86,7 @@ async def _reestimation_loop() -> None:
 def _run_scheduled_backup() -> None:
     from app.db import SessionLocal
     from app.services import backup as backups
+    from app.services import trash
 
     db = SessionLocal()
     try:
@@ -93,6 +95,13 @@ def _run_scheduled_backup() -> None:
             logger.info("Scheduled backup: %s", outcome)
     except backups.BackupError as exc:
         logger.error("Scheduled backup failed: %s", exc)
+    finally:
+        db.close()
+    # The same hourly tick empties the trash of items past their retention.
+    db = SessionLocal()
+    try:
+        if purged := trash.purge_expired(db):
+            logger.info("Emptied %s item(s) from the trash (past retention)", purged)
     finally:
         db.close()
 
@@ -150,3 +159,4 @@ app.include_router(pricing_reports.router)
 app.include_router(comparables.router)
 app.include_router(imports.router)
 app.include_router(documents.router)
+app.include_router(trash.router)

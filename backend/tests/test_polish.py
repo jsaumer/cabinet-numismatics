@@ -78,12 +78,12 @@ def test_checklists(client):
     )
     assert resp.json()["item_id"] is None
 
-    # deleting a linked item leaves the slot (SET NULL)
+    # deleting a linked item for good leaves the slot (SET NULL)
     client.patch(
         f"/api/checklists/{checklist['id']}/slots/{checklist['slots'][2]['id']}",
         json={"item_id": item["id"]},
     )
-    client.delete(f"/api/items/{item['id']}")
+    client.delete(f"/api/items/{item['id']}?permanent=true")
     detail = client.get(f"/api/checklists/{checklist['id']}").json()
     assert detail["slots"][2]["item_id"] is None
 

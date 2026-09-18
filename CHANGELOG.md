@@ -10,6 +10,34 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **A trash for deleted items.** Deleting an item — on its page, or several
+  selected on the Collection page with the new **Move to trash** — moves it to
+  the Trash with its photos, documents, values, sales log, and history, and
+  **Restore** brings it back exactly as it was. The Trash page (linked from
+  the Collection page) restores or deletes items for good one at a time, by
+  selection, or all at once with **Empty trash**. A trashed item still opens,
+  read-only, with a banner saying so. The edit history records "trashed" and
+  "restored".
+- **The trash empties itself**: items deleted more than 30 days ago are
+  deleted for good by the hourly background task. Settings → General sets
+  it to 7, 30, 90, or 365 days, or never.
+- Trashed items are left out everywhere else — the collection, dashboard,
+  Pricing reports, exports, the insurance report, set and tag counts, and
+  scheduled refreshes. A document shared with a trashed item stays until
+  that item is deleted for good, and importing a source again skips items in
+  the trash and says so.
+- API: `POST /api/items/{id}/restore`; `GET /api/trash`, `DELETE /api/trash`
+  (empty it), and `POST /api/trash/{items,restore,purge}` for several items;
+  items carry `deleted_at`; the setting `trash_retention_days`. Backup
+  manifests count items in the trash. Migration `0016`.
+
+### Changed
+- **`DELETE /api/items/{id}` moves the item to the trash** instead of deleting
+  it; `?permanent=true` deletes it for good, as does deleting an item that's
+  already in the trash. Item endpoints treat a trashed item as missing (404)
+  until it's restored, except `GET /api/items/{id}`.
+
 ## [0.19.0] — 2026-09-18
 
 **Upgrading: documents need a volume.** The backend now stores attached

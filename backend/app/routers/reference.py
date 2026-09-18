@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -68,8 +68,11 @@ def list_grades(
 @router.get("/tags", response_model=list[TagOut])
 def list_tags(db: Session = Depends(get_db)):
     rows = db.execute(
-        select(Tag.name, func.count(item_tags.c.item_id))
+        # Counted through the link table, which the trash filter can't see, so
+        # trashed items are left out here explicitly.
+        select(Tag.name, func.count(Item.id))
         .outerjoin(item_tags, Tag.id == item_tags.c.tag_id)
+        .outerjoin(Item, and_(Item.id == item_tags.c.item_id, Item.deleted_at.is_(None)))
         .group_by(Tag.name)
         .order_by(Tag.name)
     ).all()

@@ -346,6 +346,30 @@ export default function Settings() {
             Save
           </button>
         </div>
+        <div className="estimate-form">
+          <label className="field">
+            Empty the trash automatically
+            <select
+              value={settings.trash_retention_days}
+              disabled={saving}
+              onChange={(e) => {
+                const days = Number(e.target.value);
+                apply(
+                  { trash_retention_days: days },
+                  days
+                    ? `Items in the trash are now deleted for good after ${days} days.`
+                    : "The trash is no longer emptied automatically.",
+                );
+              }}
+            >
+              <option value={0}>Never</option>
+              <option value={7}>After 7 days</option>
+              <option value={30}>After 30 days</option>
+              <option value={90}>After 90 days</option>
+              <option value={365}>After a year</option>
+            </select>
+          </label>
+        </div>
         <p className="muted" style={{ marginBottom: 0 }}>
           Amounts in other currencies convert at cached daily ECB rates; anything
           unconvertible is excluded from totals and counted, never guessed. The value

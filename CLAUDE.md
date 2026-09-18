@@ -224,7 +224,20 @@ images only — `sandbox` blanks Chrome's PDF viewer); no bundled pdf.js.
 Unlinking from the last item, or deleting that item (`remove_orphans`),
 deletes the file. Backups add `documents.tar.gz` (follows the photos flag),
 `backup.sh`/`restore.sh` handle it, CI's drill restores a PDF byte for byte.
-**Next: safer delete** (v0.20.0). Phase 5.7 was added by a September
+The trash is built for v0.20.0 (migration `0016`, `items.deleted_at`):
+`models.item._hide_trashed` is a `do_orm_execute` listener adding
+`with_loader_criteria(Item, deleted_at IS NULL)` to every ORM select unless
+`.execution_options(include_deleted=True)` — so new queries hide trashed items
+for free, but anything counting through a link table (tag counts) or
+deciding a document's last holder (`trash.links`, counted on
+`item_documents`) must handle trashed items itself. `get_item_or_404` treats
+trashed as missing unless `include_deleted` (only GET, restore, and delete
+use it), so every other item endpoint is read-only by default.
+`services/trash.py` moves, restores, purges (the old hard delete), and
+`purge_expired` runs in the hourly backup loop (`trash_retention_days`, 0 =
+never, default 30). `DELETE /api/items/{id}` now trashes; `?permanent=true`
+purges. Imports and Cabinet-export dedupe look into the trash.
+**Next: alerts and metrics** (v0.21.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
 v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

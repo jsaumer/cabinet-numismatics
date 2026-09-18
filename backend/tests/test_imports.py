@@ -502,7 +502,7 @@ def test_cabinet_export_round_trip(client, tmp_path, extension):
     body = _preview(client, upload)
     assert (body["total"], body["new"], body["duplicates"]) == (1, 0, 1)  # it's still here
 
-    client.delete(f"/api/items/{item['id']}")
+    client.delete(f"/api/items/{item['id']}?permanent=true")
     body = _preview(client, upload)
     assert (body["new"], body["rows"][0]["grade"]) == (1, "MS-64")
     assert _run(client, upload)["created"] == 1

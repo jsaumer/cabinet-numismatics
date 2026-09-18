@@ -164,8 +164,15 @@ def dump_database(out, server_major: int) -> str:
 
 
 def _counts(db: Session) -> dict:
+    everything = {"include_deleted": True}  # the archive holds the trash too
     return {
-        "items": db.scalar(select(func.count()).select_from(Item)),
+        "items": db.scalar(select(func.count()).select_from(Item).execution_options(**everything)),
+        "in_trash": db.scalar(
+            select(func.count())
+            .select_from(Item)
+            .where(Item.deleted_at.is_not(None))
+            .execution_options(**everything)
+        ),
         "photos": db.scalar(select(func.count()).select_from(ItemPhoto)),
         "documents": db.scalar(select(func.count()).select_from(Document)),
         "estimates": db.scalar(select(func.count()).select_from(PriceEstimate)),
