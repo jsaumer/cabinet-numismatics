@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.17.0**, with versioned images
+**Status (September 2026): released as v0.18.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
@@ -226,7 +226,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   collections (schema 9–11, photos included), and any spreadsheet through a
   column mapping (which covers Colnect, uCoin, CoinSnap, and PCGS's registry,
   whose headers couldn't be confirmed). Re-imports are deduplicated by
-  origin. **Target: v0.18.0.**
+  origin. **Shipped in v0.18.0.**
 - ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
   diffs).
 - ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated

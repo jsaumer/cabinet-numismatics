@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-09-18
+
 ### Added
 - **Import from other collection tools** — a new Import page (Collection →
   Import) with a preview before anything is added:
