@@ -13,6 +13,8 @@ venv/
 node_modules/
 dist/
 .vite/
+frontend/test-results/
+frontend/playwright-report/
 
 # OS / editor
 .DS_Store

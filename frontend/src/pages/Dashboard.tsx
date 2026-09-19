@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api, Breakdowns, CollectionStats, GainEntry, Gains, money, ValueHistory } from "../api";
 import { ChartDatum, Columns, HBars, LineChart } from "../components/charts";
+import { SetupChecklist } from "../components/setup";
 
 const TOP_N = 8;
 
@@ -58,9 +59,15 @@ export default function Dashboard() {
 
   if (stats.counts.total === 0) {
     return (
-      <div className="empty">
-        Nothing to report yet — <Link to="/items/new">add your first item</Link>.
-      </div>
+      <>
+        <div className="detail-header">
+          <h1>Dashboard</h1>
+        </div>
+        <SetupChecklist itemCount={0} />
+        <div className="empty">
+          Nothing to report yet — <Link to="/items/new">add your first item</Link>.
+        </div>
+      </>
     );
   }
 
@@ -108,6 +115,8 @@ export default function Dashboard() {
         <Link className="button" to="/report">Insurance report</Link>
       </div>
       {refreshNote && <p className="muted">{refreshNote}</p>}
+
+      <SetupChecklist itemCount={stats.counts.total} />
 
       <div className="card hero-card">
         <div className="hero">

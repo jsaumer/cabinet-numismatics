@@ -10,6 +10,31 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **A setup checklist on the dashboard**: what's still switched off on a
+  fresh install — scheduled backups, an alert webhook or heartbeat, a
+  price-source key, document storage not mounted, an empty collection — each
+  linking to where it's fixed. **Hide for 30 days** puts it away; a new
+  problem brings it back.
+- **Browser tests.** Playwright smoke tests (`frontend/e2e/`) drive the real
+  pages against the compose stack in CI — add an item, record a value, find
+  it in the collection, trash it, restore it, delete it for good, and check
+  every Settings section renders. `npm run e2e` locally.
+- **A Swarm stack file**, `deploy/docker-stack.yaml`, ready for
+  `docker stack deploy` with pulled images, one replica each, a health check
+  that waits out a first boot, and named volumes to swap for shared storage.
+
+### Changed
+- The frontend's three largest files were split: the API client into
+  `src/api/` (types by area, the fetch wrapper, the calls), the item page's
+  photos, value history, and provenance into their own components, and the
+  item form's state model and Numista fill card into `pages/item-form/`.
+  Nothing changes on screen.
+- README screenshots retaken on v0.21.0 (the dashboard as the home page,
+  the Alerts & metrics card).
+- `CLAUDE.md` is a third of its former length; the per-release
+  implementation notes moved to `docs/implementation-notes.md`.
+
 ## [0.21.0] — 2026-09-18
 
 ### Added

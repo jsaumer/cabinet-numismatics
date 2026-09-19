@@ -206,72 +206,43 @@ docker compose build --pull && docker compose up -d
 ## 7. Swarm / multi-host deployment
 
 A single host running `docker compose up` (sections 1–5) is the primary,
-best-tested path — this section is for running Cabinet as a stack across a
-Swarm instead.
-
-**Images are published to GHCR on every tagged release** (`.github/workflows/
-ci.yml`, `publish` job): `ghcr.io/jsaumer/cabinet-numismatics-backend` and
-`...-proxy`, tagged both with the release version and `latest`. Swarm mode
-can't build images the way `docker compose up --build` does — `docker stack
-deploy` silently ignores the `build:` key — so it needs these to already
-exist in a registry it can pull from. `docker-compose.yaml` carries both
-`build:` (for local dev) and `image:` (for Swarm) on the `backend` and
-`proxy` services, pinned to `${TAG:-latest}`.
-
-**The `publish` job itself didn't exist before v0.10.2.** Every earlier tag —
-`v0.10.1`, `v0.10.0`, `v0.9.1`, `v0.9.0` — was released before any CI job
-ever pushed an image anywhere, so none of them have anything published on
-GHCR, regardless of what any compose file or `TAG=` points at (confirmed:
-`docker pull ghcr.io/jsaumer/cabinet-numismatics-backend:0.10.1` fails with
-"not found"). If you're pinning `TAG=` explicitly rather than using
-`latest`, `0.10.2` is the floor.
-
-Both images publish as **public** automatically, inheriting the repo's own
-visibility — confirmed by pulling `cabinet-numismatics-backend:0.10.2` after
-an explicit `docker logout ghcr.io`, with no credential involved at any
-point. No Swarm node needs to authenticate to pull them. (If a fork or a
-differently-configured repo ever publishes these as private instead, each
-node would need `docker login ghcr.io` with a PAT carrying `read:packages`
-before `docker stack deploy` could pull — but that's not the case here.)
-
-**Deploy:**
+best-tested path. To run Cabinet as a Swarm stack instead, use
+[`deploy/docker-stack.yaml`](../deploy/docker-stack.yaml):
 
 ```bash
 git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
-docker stack deploy -c docker-compose.yaml cabinet
+set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
+TAG=0.21.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
-Pin a specific release instead of always pulling `latest`:
-`TAG=0.21.0 docker stack deploy -c docker-compose.yaml cabinet`. From v0.11.1
-the backend migrates the schema itself on startup, so upgrading is just a tag
-bump; on earlier images run
-`docker exec $(docker ps -q -f name=cabinet_backend) alembic upgrade head`
-after each deploy.
+What that file does differently from `docker-compose.yaml`, and why:
 
-**Known gaps versus single-host Compose** — this file hasn't been hardened
-beyond making it *pullable*; two Compose keys it relies on have no effect
-under `docker stack deploy`, and backups need a mount you choose:
+- **Images are pulled, never built.** `docker stack deploy` ignores `build:`,
+  so `TAG` must name a published release. Images are published to GHCR on
+  every `v*` tag from **v0.10.2** on (nothing earlier exists), as public
+  packages — no node needs to log in to pull them.
+- **No `depends_on`, no `restart:`.** Swarm has neither. The backend waits
+  up to 60 seconds for Postgres before migrating, and its health check gives
+  a first boot 90 seconds; `restart_policy: any` replaces `restart`.
+- **One replica each.** The refresh, backup, and alert schedulers run inside
+  the backend process; a second replica would run them twice.
+- **Storage is named volumes so the file works as is.** On a real Swarm,
+  point every volume at shared storage — NFS binds or a volume driver — so a
+  task can follow its service to another node. Two mounts matter more than
+  the rest: `/data/backups` (archives written inside the container are lost
+  with the task) and `/data/documents` (uploads are refused unless it's a
+  real mount, so the omission is loud rather than silent).
+- **Networks.** `cabinet-internal` is an internal overlay for the three
+  services; `cabinet-egress` is a plain overlay so the backend can reach its
+  price sources and the proxy can be reached. Replace it with your Swarm's
+  own ingress network (`external: true`) and, behind Traefik or similar,
+  drop the proxy's `ports:` for that proxy's labels — see section 3 for the
+  Traefik + Authentik pattern. `/api/metrics` is easiest scraped over the
+  internal network rather than exempted from the auth proxy
+  ([monitoring.md](monitoring.md)).
 
-- `depends_on` (with the `service_healthy` condition gating `backend` on
-  `db`) is one of the keys `docker stack deploy` documents as unsupported —
-  Swarm gives no startup-order guarantee. The backend handles it: before
-  migrating it waits up to 60 seconds for Postgres to accept connections. If
-  Postgres takes longer, startup fails and Swarm restarts the backend until
-  it succeeds — expect that on a slow first deploy, not an instant clean
-  start.
-- **Mount `/data/backups` on the backend.** Without it, scheduled archives
-  are written inside the container and lost when the task is replaced. Point
-  it at NAS storage alongside (not inside) the photo mount. `restore.sh`
-  needs `docker compose`, so restore on a Swarm by hand — see
-  [backup-restore.md](backup-restore.md#on-a-swarm).
-- `restart: unless-stopped` is also unsupported; Swarm uses its own default
-  restart policy (equivalent to "always restart, regardless of exit code")
-  instead, which happens to match the intended behavior here, so this is
-  cosmetic rather than a functional gap.
-
-Neither has been exercised against a real multi-node Swarm as part of this
-change — only confirmed locally that the images build, tag, and run
-correctly end to end via plain `docker compose up`. If you hit something
-beyond these two, it's worth a closer look rather than assuming it's covered.
+Upgrading is a tag bump: change `TAG`, deploy again, and the backend
+migrates on startup. `restore.sh` needs `docker compose`, so restore on a
+Swarm by hand — see [backup-restore.md](backup-restore.md#on-a-swarm).
