@@ -9,29 +9,20 @@ interface Check {
 }
 
 const DISMISS_KEY = "cabinet.setup.dismissed";
-const DISMISS_DAYS = 30;
 
-interface Dismissal {
-  until: string;
-  keys: string[];
-}
-
-function readDismissal(): Dismissal | null {
+function readDismissed(): boolean {
   try {
-    const raw = window.localStorage.getItem(DISMISS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Dismissal;
-    return new Date(parsed.until).getTime() > Date.now() ? parsed : null;
+    return window.localStorage.getItem(DISMISS_KEY) === "1";
   } catch {
-    return null;
+    return false;
   }
 }
 
 /** What's still switched off on a fresh install — shown on the dashboard
- * until it's done or hidden. A new problem brings it back. */
+ * until it's all done, or until it's dismissed for good (per browser). */
 export function SetupChecklist({ itemCount }: { itemCount: number }) {
   const [checks, setChecks] = useState<Check[] | null>(null);
-  const [dismissed, setDismissed] = useState<Dismissal | null>(readDismissal);
+  const [dismissed, setDismissed] = useState<boolean>(readDismissed);
 
   useEffect(() => {
     Promise.all([
@@ -131,19 +122,15 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
       .catch(() => setChecks([]));
   }, [itemCount]);
 
-  if (!checks || checks.length === 0) return null;
-  // Hidden only while every current problem was already known when it was hidden.
-  if (dismissed && checks.every((c) => dismissed.keys.includes(c.key))) return null;
+  if (dismissed || !checks || checks.length === 0) return null;
 
   function hide() {
-    const until = new Date(Date.now() + DISMISS_DAYS * 86_400_000).toISOString();
-    const next = { until, keys: checks!.map((c) => c.key) };
     try {
-      window.localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
+      window.localStorage.setItem(DISMISS_KEY, "1");
     } catch {
       /* private mode: hides for this page view only */
     }
-    setDismissed(next);
+    setDismissed(true);
   }
 
   return (
@@ -155,7 +142,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
         ))}
       </ul>
       <button type="button" className="link-button" onClick={hide}>
-        Hide for {DISMISS_DAYS} days
+        Don't show this again
       </button>
     </div>
   );

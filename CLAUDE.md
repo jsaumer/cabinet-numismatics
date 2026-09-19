@@ -111,11 +111,13 @@ rules that bite most often:
   fixtures are synthetic (`tests/import_samples.py`); OpenNumismat's demo
   files are GPL — keep them out.
 
-**Next: cert-first entry** (v0.22.0 — fill the item form from a PCGS cert
-number, a duplicate warning, eBay-sold and Photograde links). A second
-September 2026 review re-planned everything unshipped as roadmap Phase 5.9
-(v0.22.0–v0.30.0, then v1.0.0); the hardening release (v0.21.1) was its
-first step.
+Cert-first entry is built for v0.22.0 (`pcgs.cert_facts` / `parse_grade`,
+`services/duplicates.py` behind `GET /api/items/similar` and the importer's
+lookalike note, `components/lookup.tsx`; no migration).
+**Next: runs and registry sets** (v0.23.0 — "Add a run" from a Numista
+type's issues; checklists generated from a type or a year/mint range and
+auto-matched, with completion %). A second September 2026 review re-planned
+everything unshipped as roadmap Phase 5.9 (v0.22.0–v0.30.0, then v1.0.0).
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

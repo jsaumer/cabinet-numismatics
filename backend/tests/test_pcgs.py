@@ -256,3 +256,95 @@ def test_details_grade_needs_a_cert(client, upstream):
     assert resp.status_code == 422 and "details grade" in resp.json()["detail"]
     assert upstream == []
     assert estimate(client, by_cert(client, grade_details="Cleaned")).status_code == 201
+
+
+# --- filling an item in from a cert (v0.22.0) ---------------------------------
+
+CERT_FACTS = {
+    **FACTS,
+    "CertNo": "12345678",
+    "Year": 1932,
+    "Denomination": "25C",
+    "MintMark": "D",
+    "SeriesName": "Washington Quarter",
+    "MetalContent": "90% Silver, 10% Copper",
+    "Weight": 6.25,
+    "Diameter": 24.3,
+    "Edge": "Reeded",
+    "Mintage": "436,800",
+    "Grade": "MS64+",
+    "Designation": "",
+    "MajorVariety": "",
+    "MinorVariety": "",
+    "DieVariety": "",
+    "Population": 812,
+    "PopHigher": 240,
+    "CoinFactsLink": "www.pcgs.com/coinfacts/coin/5960",
+}
+
+
+def test_cert_fill_maps_the_coin(client, upstream):
+    configure(client)
+    upstream.body = CERT_FACTS
+    resp = client.get("/api/pcgs/cert/1234-5678")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["cert"] == "12345678" and body["pcgs_number"] == "5960"
+    assert body["fields"] == {
+        "type": "coin",
+        "country": "United States",
+        "denomination": "25 cents",
+        "year": 1932,
+        "mint_mark": "D",
+        "series": "Washington Quarter",
+        "composition": "90% Silver, 10% Copper",
+        "weight_g": 6.25,
+        "diameter_mm": 24.3,
+        "edge": "Reeded",
+        "mintage": 436800,
+        "cert_service": "PCGS",
+        "cert_number": "12345678",
+    }
+    assert body["grade"] == {"rank": 64, "strike": "business", "plus": True, "designations": []}
+    assert body["catalog_refs"] == [{"catalog": "pcgs", "ref_code": "5960"}]
+    assert body["population"] == 812 and body["pop_higher"] == 240
+    assert body["price_guide_value"] == 400.0
+    assert upstream == [("coindetail/GetCoinFactsByCertNo/12345678", {"retrieveAllData": "true"})]
+    # the same cached response then prices the item without a second request
+    item = by_cert(client)
+    assert estimate(client, item).status_code == 201
+    assert len(upstream) == 1
+
+
+def test_cert_fill_grades_and_designations():
+    assert pcgs.parse_grade("PR-65 DCAM") == {
+        "rank": 65,
+        "strike": "proof",
+        "plus": False,
+        "designations": ["DCAM"],
+    }
+    assert pcgs.parse_grade("AU58", "FB")["designations"] == ["FB"]
+    assert pcgs.parse_grade("SP66")["strike"] == "specimen"
+    assert pcgs.parse_grade("64", "+ RD") == {
+        "rank": 64,
+        "strike": "business",
+        "plus": True,
+        "designations": ["RD"],
+    }
+    assert pcgs.parse_grade("Genuine") is None and pcgs.parse_grade(None) is None
+    assert pcgs.cert_fields("1", {"Denomination": "$20", "Mintage": 0})["fields"] == {
+        "type": "coin",
+        "country": "United States",
+        "denomination": "20 dollars",
+        "cert_service": "PCGS",
+        "cert_number": "1",
+    }
+
+
+def test_cert_fill_needs_a_token_and_a_known_cert(client, upstream):
+    assert client.get("/api/pcgs/cert/1").status_code == 422
+    configure(client)
+    upstream.body = {"IsValidRequest": True, "ServerMessage": "No data found"}
+    resp = client.get("/api/pcgs/cert/1")
+    assert resp.status_code == 422 and "no record" in resp.json()["detail"]
+    assert client.get("/api/pcgs/cert/abc").status_code == 422

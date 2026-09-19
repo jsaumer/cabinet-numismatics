@@ -16,6 +16,7 @@ price fields at all, so notes have nothing to read here.
 Daily limit is 1,000 calls; responses are cached in `source_cache` for 7 days.
 """
 
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from statistics import median
@@ -249,3 +250,166 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
             **freshness(fetched_at, CACHE_TTL),
         },
     )
+
+
+# --- Filling an item in from a cert (roadmap Phase 5.9, v0.22.0) ------------
+#
+# GetCoinFactsByCertNo answers the coin's identity as well as its price:
+# PCGSNo, Name, Year, Denomination, MintMark, SeriesName, MetalContent,
+# Weight, Diameter, Edge, Mintage, Grade, Designation, the varieties, and
+# the population. The same cached response later prices the item, so a fill
+# followed by an estimate costs one request.
+
+# PCGS writes denominations as it prints them on labels.
+DENOMINATIONS = {
+    "1/2C": "half cent",
+    "1C": "1 cent",
+    "2C": "2 cents",
+    "3CS": "3 cents (silver)",
+    "3CN": "3 cents (nickel)",
+    "5C": "5 cents",
+    "H10C": "half dime",
+    "10C": "10 cents",
+    "20C": "20 cents",
+    "25C": "25 cents",
+    "50C": "50 cents",
+    "$1": "1 dollar",
+    "G$1": "1 dollar (gold)",
+    "$2.50": "2.5 dollars",
+    "$3": "3 dollars",
+    "$4": "4 dollars",
+    "$5": "5 dollars",
+    "$10": "10 dollars",
+    "$20": "20 dollars",
+    "$25": "25 dollars",
+    "$50": "50 dollars",
+    "$100": "100 dollars",
+}
+
+# Designation codes Cabinet keeps (schemas.DESIGNATIONS); anything else PCGS
+# prints stays in the grade's details text.
+_DESIGNATION_CODES = {
+    "PL",
+    "DMPL",
+    "CAM",
+    "DCAM",
+    "UCAM",
+    "RD",
+    "RB",
+    "BN",
+    "FB",
+    "FBL",
+    "FH",
+    "FS",
+    "FT",
+}
+_GRADE_RE = re.compile(
+    r"^\s*(?P<prefix>PO|FR|AG|G|VG|F|VF|XF|EF|AU|MS|PR|PF|SP|SPL)?\s*-?\s*(?P<number>\d{1,2})"
+    r"\s*(?P<plus>\+)?\s*(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+
+
+def parse_grade(grade: str | None, designation: str | None = None) -> dict | None:
+    """ "MS64+", "PR-65 DCAM", "AU58" (with "FB" in Designation) → the Sheldon
+    rank, strike, plus flag, and Cabinet's designation codes."""
+    match = _GRADE_RE.match(str(grade or ""))
+    if not match:
+        return None
+    rank = int(match.group("number"))
+    if not 1 <= rank <= 70:
+        return None
+    prefix = (match.group("prefix") or "").upper()
+    strike = (
+        "proof" if prefix in ("PR", "PF") else "specimen" if prefix in ("SP", "SPL") else "business"
+    )
+    words = re.split(r"[\s,/]+", f"{match.group('rest')} {designation or ''}".upper())
+    plus = bool(match.group("plus")) or "+" in words
+    codes = [w for w in words if w in _DESIGNATION_CODES]
+    return {
+        "rank": rank,
+        "strike": strike,
+        "plus": plus,
+        "designations": list(dict.fromkeys(codes)),
+    }
+
+
+def _mintage(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value) if value > 0 else None
+    digits = re.sub(r"[^\d]", "", str(value or ""))
+    return int(digits) if digits else None
+
+
+def _clean(value, limit: int) -> str | None:
+    text = " ".join(str(value).split()) if value is not None else ""
+    return text[:limit] if text else None
+
+
+def cert_fields(cert: str, payload: dict) -> dict:
+    """Item fields a cert lookup fills in, keyed like the item schema, plus
+    the grade and what else PCGS knows about the coin."""
+    denomination = _clean(payload.get("Denomination"), 100)
+    varieties = [
+        _clean(payload.get(key), 200) for key in ("MajorVariety", "MinorVariety", "DieVariety")
+    ]
+    variety = " · ".join(dict.fromkeys(v for v in varieties if v))
+    fields = {
+        "type": "coin",
+        "country": _clean(payload.get("Country"), 100) or "United States",
+        "denomination": DENOMINATIONS.get(denomination or "", denomination),
+        "year": payload.get("Year") if isinstance(payload.get("Year"), int) else None,
+        "mint_mark": _clean(payload.get("MintMark"), 10),
+        "series": _clean(payload.get("SeriesName"), 200),
+        "variety": variety[:200] or None,
+        "composition": _clean(payload.get("MetalContent"), 100),
+        "weight_g": _amount(payload.get("Weight")),
+        "diameter_mm": _amount(payload.get("Diameter")),
+        "edge": _clean(payload.get("Edge"), 100),
+        "mintage": _mintage(payload.get("Mintage")),
+        "cert_service": "PCGS",
+        "cert_number": cert,
+    }
+    fields = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in fields.items() if v}
+    number = _text(payload.get("PCGSNo"))
+    return {
+        "cert": cert,
+        "pcgs_number": number,
+        "name": _text(payload.get("Name")),
+        "fields": fields,
+        "grade": parse_grade(_text(payload.get("Grade")), _text(payload.get("Designation"))),
+        "catalog_refs": [{"catalog": "pcgs", "ref_code": number}] if number else [],
+        "population": payload.get("Population")
+        if isinstance(payload.get("Population"), int)
+        else None,
+        "pop_higher": payload.get("PopHigher")
+        if isinstance(payload.get("PopHigher"), int)
+        else None,
+        "price_guide_value": float(_amount(payload.get("PriceGuideValue")) or 0) or None,
+        "coinfacts_url": _text(payload.get("CoinFactsLink")),
+    }
+
+
+def cert_facts(db: Session, cert: str) -> dict:
+    """Look a PCGS cert up and describe the coin. Raises NotApplicable
+    without a token or when PCGS has no such cert, SourceUnavailable when
+    PCGS can't be reached."""
+    token = str(app_settings.get_setting(db, "pcgs_api_token"))
+    if not token:
+        raise NotApplicable("Add a PCGS API token in Settings to fill items in from a cert")
+    cert = re.sub(r"\D", "", cert)
+    if not cert:
+        raise NotApplicable("A PCGS cert number is digits only")
+    payload, _ = cached_fetch(
+        db,
+        "pcgs",
+        f"certfacts:{cert}",
+        CACHE_TTL,
+        lambda: _request(
+            token, f"coindetail/GetCoinFactsByCertNo/{cert}", {"retrieveAllData": "true"}
+        ),
+    )
+    check_payload(payload)
+    return cert_fields(cert, payload)

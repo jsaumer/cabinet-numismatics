@@ -132,6 +132,12 @@ number is the same, and the source reads `PR-65`. A details-graded coin is
 priced only by its cert number, since a grade lookup would return the
 problem-free value.
 
+The same cert response fills an item in (`GET /api/pcgs/cert/{cert}`,
+`pcgs.cert_facts`): identity, physical fields, the grade parsed from PCGS's
+`Grade`/`Designation` strings (`pcgs.parse_grade` — `MS64+`, `PR-65 DCAM`,
+`AU58` + `FB`), and the PCGS number as a `pcgs` reference; denominations
+are translated from label form (`25C` → `25 cents`).
+
 Realized auction prices win when PCGS has any: the median of up to the ten most
 recent lots, confidence 0.85 with five or more sales and 0.75 below that, with
 `sample_size` recording how many informed it. With no sales, the price-guide

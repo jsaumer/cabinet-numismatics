@@ -39,6 +39,17 @@ test("record a value by hand", async ({ page }) => {
   await expect(page.getByRole("cell", { name: "20.00 USD" })).toBeVisible();
 });
 
+test("entering it again warns about the duplicate", async ({ page }) => {
+  await page.goto("/items/new");
+  await page.getByLabel("Country *").fill(COUNTRY);
+  await page.getByLabel("Denomination *").fill(DENOMINATION);
+  await page.getByLabel("Year *").fill(YEAR);
+  const warning = page.locator(".dup-warning");
+  await expect(warning).toContainText("Already in the collection?");
+  await expect(warning.getByRole("link", { name: TITLE.replace(",", "") })).toBeVisible();
+  await expect(warning).toContainText("same country, denomination, year, and mint mark");
+});
+
 test("the collection finds it by search", async ({ page }) => {
   await page.goto(`/collection?q=${encodeURIComponent(COUNTRY)}`);
   const row = page.locator("table.items tbody tr", { hasText: COUNTRY }).first();

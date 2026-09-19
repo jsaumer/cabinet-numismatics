@@ -231,6 +231,23 @@ days through `localStorage` and back on any new problem. Playwright smoke
 tests in `frontend/e2e/` run in CI's stack job against the compose stack;
 `deploy/docker-stack.yaml` is the Swarm stack file.
 
+## Cert-first entry (v0.22.0)
+
+`pcgs.cert_facts` reuses the pricing lookup's cache key (`certfacts:<cert>`,
+`retrieveAllData=true`), so a fill and the estimate that follows cost one
+request; `pcgs.cert_fields` maps the CoinFacts model (fields confirmed from
+the API's swagger: PCGSNo, Year, Denomination, MintMark, SeriesName,
+MetalContent, Weight, Diameter, Edge, Mintage, Grade, Designation, the
+varieties, Population, PopHigher, CoinFactsLink) onto item-schema keys, and
+`pcgs.parse_grade` turns `Grade` + `Designation` into a Sheldon rank, strike,
+plus flag, and Cabinet's designation codes; the frontend picks the grade row
+by rank from `/api/grades?scale=sheldon`. `services/duplicates.find_similar`
+is shared by `GET /api/items/similar` and the importer's `_note_similar`;
+matches are case- and space-insensitive, trash included, cert matches
+first. Catalogue references are shared rows, so a reference match goes
+through `item_catalog_refs`. The item page's outbound links live in
+`components/lookup.tsx`; they're URLs only.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes

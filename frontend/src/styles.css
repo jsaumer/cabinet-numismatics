@@ -734,6 +734,19 @@ tr.import-duplicate td {
 .plain-fieldset:disabled .card {
   opacity: 0.85;
 }
+.dup-warning {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+}
+.dup-warning ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2rem;
+}
+.lookup-links {
+  margin-top: 0.6rem;
+}
 .setup-card {
   border-color: var(--danger-border);
 }

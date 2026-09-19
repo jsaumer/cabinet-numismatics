@@ -561,6 +561,39 @@ class NumistaType(BaseModel):
     issues: list[NumistaIssue]
 
 
+class PcgsGrade(BaseModel):
+    rank: int  # Sheldon number
+    strike: Literal["business", "proof", "specimen"]
+    plus: bool
+    designations: list[str]
+
+
+class PcgsCert(BaseModel):
+    """A PCGS cert as item fields ready to fill in, plus what PCGS knows."""
+
+    cert: str
+    pcgs_number: str | None = None
+    name: str | None = None
+    fields: dict[str, str | int | float]  # item fields, keyed like ItemCreate
+    grade: PcgsGrade | None = None
+    catalog_refs: list[CatalogRefIn]
+    population: int | None = None
+    pop_higher: int | None = None
+    price_guide_value: float | None = None
+    coinfacts_url: str | None = None
+
+
+class SimilarItem(BaseModel):
+    """An item that looks like one about to be added, and why."""
+
+    id: uuid.UUID
+    label: str
+    grade_label: str | None = None
+    status: ItemStatusName
+    in_trash: bool
+    reason: str
+
+
 class ItemListEntry(ItemOut):
     """List view: item plus its primary photo and latest estimate, if any."""
 

@@ -16,6 +16,8 @@ import {
   toPayload,
 } from "./item-form/model";
 import { NumistaFill } from "./item-form/NumistaFill";
+import { PcgsFill } from "./item-form/PcgsFill";
+import { DuplicateWarning } from "../components/duplicates";
 
 export default function ItemForm() {
   const { id } = useParams();
@@ -123,6 +125,14 @@ export default function ItemForm() {
     save(false);
   }
 
+  // A catalogue fill hands back the whole form plus references it didn't have.
+  function applyFill(next: FormState, newRefs: CatalogRef[]) {
+    setForm(next);
+    if (newRefs.length) {
+      setRefs((rs) => [...rs.filter((r) => r.catalog.trim() || r.ref_code.trim()), ...newRefs]);
+    }
+  }
+
   const text = (field: TextField, label: string, props: object = {}) => (
     <label className="field">
       {label}
@@ -157,15 +167,16 @@ export default function ItemForm() {
       {error && <p className="error">{error}</p>}
       {savedNote && <p className="muted">{savedNote}</p>}
       <form onSubmit={submit}>
-        <NumistaFill
-          form={form}
+        <PcgsFill form={form} refs={refs} onApply={applyFill} />
+        <NumistaFill form={form} refs={refs} onApply={applyFill} />
+        <DuplicateWarning
+          country={form.country}
+          denomination={form.denomination}
+          year={form.year}
+          mintMark={form.mint_mark}
+          certNumber={form.cert_number}
           refs={refs}
-          onApply={(next, newRefs) => {
-            setForm(next);
-            if (newRefs.length) {
-              setRefs((rs) => [...rs.filter((r) => r.catalog.trim() || r.ref_code.trim()), ...newRefs]);
-            }
-          }}
+          excludeId={id}
         />
 
         <div className="card">
