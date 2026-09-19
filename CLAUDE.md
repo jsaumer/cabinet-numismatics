@@ -255,9 +255,14 @@ alerts; `hourly` = backup, trash, heartbeat). `services/metrics.py` renders
 own `collection_stats`, cached 60s; delivery/heartbeat outcomes are in
 memory. Webhook and heartbeat URLs are secrets (`SECRET_KEYS`); error details
 never repeat a URL (`alerts._describe`). See docs/monitoring.md.
-**Next: wish-list targets** (v0.22.0). Phase 5.7 was added by a September
+**Next: hardening** (v0.21.x — a dashboard setup checklist, Playwright smoke
+tests in CI, fresh screenshots, split the ~900-line `ItemDetail.tsx` /
+`ItemForm.tsx` / `api.ts`, trim this file, a Swarm stack file in the repo),
+**then cert-first entry** (v0.22.0). Phase 5.7 was added by a September
 2026 feature review, which also moved photo niceties to v0.16.0, comps to
-v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.27.0). Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
+v0.17.0, import mappings to v0.18.0, and added Phase 5.8 (v0.19.0–v0.21.0);
+a second review on 19 September 2026 re-planned everything unshipped as
+Phase 5.9 (v0.22.0–v0.30.0, then v1.0.0) — see docs/roadmap.md. Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
 nothing before v0.10.2 is published). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
