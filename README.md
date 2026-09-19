@@ -13,7 +13,8 @@ or API keys required.
 
 **Status: v0.21.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: wish-list targets, and checklist generation. See the
+Next up: a hardening release, then filling in an item from its PCGS cert
+number. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
