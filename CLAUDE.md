@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.21.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.21.1, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -84,7 +84,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.21.0: roadmap Phases 0–5.8 are complete, migrations
+Released as v0.21.1: roadmap Phases 0–5.8 are complete, migrations
 `0001`–`0016`. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md — read the section for any area you touch. The
 rules that bite most often:
@@ -111,11 +111,11 @@ rules that bite most often:
   fixtures are synthetic (`tests/import_samples.py`); OpenNumismat's demo
   files are GPL — keep them out.
 
-**Next: hardening** (v0.21.x — the dashboard setup checklist, Playwright
-smoke tests, fresh screenshots, the frontend file splits, this file, the
-Swarm stack file), **then cert-first entry** (v0.22.0). A second September
-2026 review re-planned everything unshipped as roadmap Phase 5.9
-(v0.22.0–v0.30.0, then v1.0.0).
+**Next: cert-first entry** (v0.22.0 — fill the item form from a PCGS cert
+number, a duplicate warning, eBay-sold and Photograde links). A second
+September 2026 review re-planned everything unshipped as roadmap Phase 5.9
+(v0.22.0–v0.30.0, then v1.0.0); the hardening release (v0.21.1) was its
+first step.
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
