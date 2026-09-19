@@ -10,6 +10,29 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Fill from a PCGS cert.** A slabbed coin's cert number fills the item
+  form in from PCGS: type, country, denomination, year, mint mark, series,
+  variety, composition, weight, diameter, edge, mintage, the cert, the PCGS
+  number as a catalogue reference, and — when no grade is set — the grade,
+  strike, plus, and designations. Empty fields only, like the Numista fill;
+  the same cached answer prices the item afterwards, so one request covers
+  both. The message also says how many PCGS has graded at that grade and
+  higher. Needs a PCGS API token (Settings → Price sources).
+- **A duplicate warning.** As an item is entered or edited, the form checks
+  for one already here with the same cert number, the same catalogue
+  reference, or the same country, denomination, year, and mint mark —
+  trash included — and links to it. The import preview adds the same note
+  to rows it doesn't already know by their import key.
+- **Look it up links** on the item page: eBay's sold listings for the same
+  piece, PCGS Photograde for judging a grade, and CoinFacts when a PCGS
+  number is known.
+- API: `GET /api/pcgs/cert/{cert}` and `GET /api/items/similar`.
+
+### Changed
+- The dashboard's setup checklist now has **Don't show this again** instead
+  of a 30-day snooze.
+
 ## [0.21.1] — 2026-09-19
 
 ### Added

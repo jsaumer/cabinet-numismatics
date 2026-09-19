@@ -29,6 +29,7 @@ described without an auth layer; add one before exposing the app publicly.
 | `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
 | `DELETE` | `/api/items/{id}`         | Move an item to the trash; `?permanent=true` (or an item already there) deletes it for good |
 | `POST`   | `/api/items/{id}/restore` | Take an item out of the trash       |
+| `GET`    | `/api/items/similar`      | Items that look like one being entered — see below |
 
 **List query parameters** (all optional): `type`, `status`, `strike`
 (`business`/`proof`/`specimen`), `country`, `year`,
@@ -158,6 +159,18 @@ export to PDF via the browser's print dialog) are built on these endpoints.
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint.
 
+## Duplicate check
+
+`GET /api/items/similar` takes any of `country` + `denomination` + `year`
+(+ `mint_mark`, blank meaning none), `cert_number`, and `ref` (repeatable,
+`catalog:code`), plus `exclude` (the item being edited), and answers up to
+ten items that match on any of them — `id`, `label`, `grade_label`,
+`status`, `in_trash`, and the `reason` (`same cert number`, `same pcgs
+reference`, `same country, denomination, year, and mint mark`). Matching
+ignores case and spacing; trashed items are included and listed last. With
+nothing to go on it answers `[]`. The import preview runs the same check
+and notes lookalikes in a row's `messages`.
+
 ## Numista catalogue lookup
 
 | Method | Path                         | Purpose                                          |
@@ -178,6 +191,22 @@ Only values Numista has are present, trimmed to the item schema's limits.
 (`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year`, `mint_letter`,
 `mintage`, and `comment`. Responses are cached for 7 days in `source_cache`
 (the longest Numista's API licence allows), issues shared with Numista pricing.
+
+## PCGS cert lookup
+
+| Method | Path                     | Purpose                                              |
+|--------|--------------------------|------------------------------------------------------|
+| `GET`  | `/api/pcgs/cert/{cert}`  | A PCGS-graded coin as item fields ready to fill in   |
+
+Needs a PCGS API token (`422` without one, or when PCGS has no such cert;
+`502` when PCGS can't be reached). Answers `cert`, `pcgs_number`, `name`,
+`fields` (keyed like the item payload: `type`, `country`, `denomination`,
+`year`, `mint_mark`, `series`, `variety`, `composition`, `weight_g`,
+`diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number` — only what
+PCGS has), `grade` (`rank`, `strike`, `plus`, `designations`, or `null` for a
+Genuine/details holder), `catalog_refs` (the PCGS number), `population`,
+`pop_higher`, `price_guide_value`, and `coinfacts_url`. Cached with the
+pricing lookup for the same cert, so an estimate afterwards is free.
 
 ## Pricing reports
 

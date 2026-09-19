@@ -13,7 +13,7 @@ or API keys required.
 
 **Status: v0.21.1 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: filling in an item from its PCGS cert number. See the
+Next up: adding a whole date/mint run at once, and registry-style sets. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -134,6 +134,9 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   blended-value strategy, per-source refresh cadence, and price-source
   credentials — stored **encrypted at rest** and never readable back
     through the API (see [docs/security.md](docs/security.md)).
+- Fill a slabbed coin in from its **PCGS cert number**, and a **duplicate
+  warning** while entering anything already here — by cert, reference, or
+  country, denomination, year, and mint.
 - **Alerts and metrics**: a webhook (n8n, ntfy, Discord, Slack, Gotify) when
   a backup fails, a price source rejects its key or runs out of quota, or a
   refresh fails — and when it recovers; an Uptime Kuma heartbeat; and

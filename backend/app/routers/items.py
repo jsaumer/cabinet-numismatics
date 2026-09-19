@@ -25,8 +25,9 @@ from app.schemas import (
     ItemListEntry,
     ItemOut,
     ItemUpdate,
+    SimilarItem,
 )
-from app.services import app_settings, pricing, trash
+from app.services import app_settings, duplicates, pricing, trash
 from app.services.currency import Converter
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -611,6 +612,43 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     record_event(db, item.id, "created")
     db.commit()
     return get_item_or_404(db, item.id, load_related=True)
+
+
+@router.get("/similar", response_model=list[SimilarItem])
+def similar_items(
+    country: str | None = Query(default=None, max_length=100),
+    denomination: str | None = Query(default=None, max_length=100),
+    year: int | None = Query(default=None, ge=-5000, le=3000),
+    mint_mark: str | None = Query(default=None, max_length=10),
+    cert_number: str | None = Query(default=None, max_length=50),
+    ref: list[str] = Query(default=[], description="catalog:code, repeatable"),
+    exclude: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+):
+    """Items that look like the one being entered — the same cert number, the
+    same catalogue reference, or the same country, denomination, year, and
+    mint mark — trash included, so a restore can replace a re-entry."""
+    refs = [tuple(r.split(":", 1)) for r in ref if ":" in r]
+    return [
+        SimilarItem(
+            id=item.id,
+            label=item.label,
+            grade_label=item.grade_label,
+            status=item.status,
+            in_trash=item.deleted_at is not None,
+            reason=reason,
+        )
+        for item, reason in duplicates.find_similar(
+            db,
+            country=country,
+            denomination=denomination,
+            year=year,
+            mint_mark=mint_mark,
+            cert_number=cert_number,
+            refs=refs,
+            exclude_id=exclude,
+        )
+    ]
 
 
 @router.get("/{item_id}", response_model=ItemDetail)

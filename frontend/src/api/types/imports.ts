@@ -29,6 +29,26 @@ export interface NumistaType {
   issues: NumistaIssue[];
 }
 
+export interface PcgsGrade {
+  rank: number; // Sheldon number
+  strike: "business" | "proof" | "specimen";
+  plus: boolean;
+  designations: string[];
+}
+
+export interface PcgsCert {
+  cert: string;
+  pcgs_number: string | null;
+  name: string | null;
+  fields: Record<string, string | number>; // item fields, keyed like the payload
+  grade: PcgsGrade | null;
+  catalog_refs: CatalogRef[];
+  population: number | null;
+  pop_higher: number | null;
+  price_guide_value: number | null;
+  coinfacts_url: string | null;
+}
+
 export interface ImportResult {
   created: number;
   skipped: number;

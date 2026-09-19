@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Grade, Item
 from app.schemas import DESIGNATIONS, ItemCreate
+from app.services import duplicates
 from app.services import photos as photo_store
 
 UPLOAD_MAX_BYTES = 1024 * 1024 * 1024  # an OpenNumismat file carries its photos
@@ -414,6 +415,8 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
             grade_id = grade_id if grade_id is not None else payload.grade_id
             label = grades.code(grade_id)
             duplicate = bool(cand.key and cand.key in existing)
+            if not duplicate:
+                _note_similar(db, cand, payload)
             out.append(Prepared(cand, payload, grade_id, label, duplicate))
             continue
         grade_id, grade_label = resolve_grade(cand, grades)
@@ -432,10 +435,28 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
             err = exc.errors()[0]
             where = ".".join(str(p) for p in err.get("loc", ()))
             cand.error = f"{where}: {err['msg']}" if where else err["msg"]
-        out.append(
-            Prepared(cand, payload, grade_id, grade_label, bool(cand.key and cand.key in existing))
-        )
+        duplicate = bool(cand.key and cand.key in existing)
+        if payload is not None and not duplicate:
+            _note_similar(db, cand, payload)
+        out.append(Prepared(cand, payload, grade_id, grade_label, duplicate))
     return out
+
+
+def _note_similar(db: Session, cand: Candidate, payload: ItemCreate) -> None:
+    """Warn when the collection already holds something that looks like this
+    row — not the same import key, but the same cert, reference, or coin."""
+    found = duplicates.find_similar(
+        db,
+        country=payload.country,
+        denomination=payload.denomination,
+        year=payload.year,
+        mint_mark=payload.mint_mark,
+        cert_number=payload.cert_number,
+        refs=[(r.catalog, r.ref_code) for r in payload.catalog_refs],
+    )
+    if found:
+        item, reason = found[0]
+        cand.messages.append(f"Looks like one already here — {duplicates.describe(item)}: {reason}")
 
 
 def _dedupe(refs: list[dict]) -> list[dict]:

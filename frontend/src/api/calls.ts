@@ -1,8 +1,8 @@
 // Every endpoint the frontend calls, one method each.
 
 import { json, req } from "./client";
-import type { Angle, Comparable, ComparableInput, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SetInfo, TagInfo } from "./types/items";
-import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType } from "./types/imports";
+import type { Angle, Comparable, ComparableInput, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SetInfo, SimilarItem, TagInfo } from "./types/items";
+import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistSlot, ChecklistSummary, CollectionStats, Gains, ItemEvent, RefreshResult, TrashList, ValueHistory } from "./types/stats";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, SourcesReport, StaleReport } from "./types/settings";
 
@@ -141,6 +141,8 @@ export const api = {
       `/api/numista/search?${new URLSearchParams({ q, category })}`,
     ),
   numistaType: (typeId: number) => req<NumistaType>(`/api/numista/types/${typeId}`),
+  pcgsCert: (cert: string) => req<PcgsCert>(`/api/pcgs/cert/${encodeURIComponent(cert)}`),
+  similarItems: (params: URLSearchParams) => req<SimilarItem[]>(`/api/items/similar?${params}`),
   listBackups: () => req<BackupList>("/api/backups"),
   testAlert: (target: "webhook" | "heartbeat") =>
     req<MonitorOutcome>(`/api/alerts/test?target=${target}`, { method: "POST" }),

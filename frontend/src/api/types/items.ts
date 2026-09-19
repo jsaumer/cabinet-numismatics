@@ -95,6 +95,16 @@ export interface ItemListEntry extends Item {
   latest_value_source: string | null;
 }
 
+/** An item that looks like one about to be added, and why. */
+export interface SimilarItem {
+  id: string;
+  label: string;
+  grade_label: string | null;
+  status: ItemStatus;
+  in_trash: boolean;
+  reason: string;
+}
+
 export interface Photo {
   id: string;
   item_id: string;

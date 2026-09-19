@@ -10,6 +10,7 @@ import {
   SourceStatus,
 } from "../api";
 import { DocumentsCard } from "../components/documents";
+import { LookupLinks } from "../components/lookup";
 import { PhotoGallery } from "../components/photo-gallery";
 import { latestBySource, timeSince } from "../components/provenance";
 import { SalesLog } from "../components/sales";
@@ -240,6 +241,7 @@ export default function ItemDetail() {
           </p>
         )}
         {item.notes && <p style={{ marginBottom: 0, whiteSpace: "pre-wrap" }}>{item.notes}</p>}
+        <LookupLinks item={item} />
       </div>
 
       <PhotoGallery item={item} onChanged={reload} />

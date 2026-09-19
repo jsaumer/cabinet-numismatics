@@ -85,10 +85,10 @@ The heart of the app: describing what you own, accurately and flexibly.
   Phase 5.7 C4. **Target: v0.14.0.**
 - ✔ **[Core]** Fill in an item from the Numista catalogue by catalogue number or
   name search. Phase 5.7 C5. **Target: v0.15.0.**
-- **[Core]** Fill in an item from its PCGS cert number (type, date, mint,
+- ✔ **[Core]** Fill in an item from its PCGS cert number (type, date, mint,
   grade, designation, variety), and a duplicate warning when an item with
   the same reference, year, and mint already exists. Phase 5.9.
-  **Target: v0.22.0.**
+  **Shipped in v0.22.0.**
 - **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
   item per date and mint. Phase 5.9. **Target: v0.23.0.**
 - **[Nice]** Wish-list target price and priority, alerted when an estimate
@@ -180,8 +180,8 @@ guidance, not appraisals.
   totals — separate from the item page, which always shows every source's
   own latest value as a chip.
 - **[Nice]** PCGS population and eBay sold-listings / Photograde links on
-  the item page. Phase 5.9. **Target: v0.22.0** (links) and **v0.28.0**
-  (population).
+  the item page. Phase 5.9. Links ✔ **shipped in v0.22.0**; population on
+  the item page **target v0.28.0** (the cert fill already reports it).
 - **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
   the alert webhook. Phase 5.9, optional and last. **Target: v0.30.0.**
@@ -588,7 +588,7 @@ relative to the pace so far: S about a day, M a few days, L a week.
   retaken (the current ones predate the dashboard home page, documents,
   the trash, and alerts); `ItemDetail.tsx`, `ItemForm.tsx`, and `api.ts`
   split; CLAUDE.md trimmed; a Swarm-ready stack file in the repo.
-- **Cert-first entry** (v0.22.0, M) — fill the item form from a PCGS cert
+- ✔ **Cert-first entry** (v0.22.0, M) — fill the item form from a PCGS cert
   number using the public API already used for pricing (type, date, mint,
   denomination, grade, designation, variety); a duplicate warning on add
   and import; eBay sold-listings and PCGS Photograde links on the item
