@@ -28,6 +28,17 @@ docker compose exec backend alembic upgrade head
 python scripts/seed_demo.py
 ```
 
+Capture `settings.png` first, while nothing is configured. Then satisfy the
+dashboard's setup checklist so it doesn't crowd out the value hero in the two
+dashboard shots — daily backups plus one run, a placeholder webhook, and the
+fake key (never a real one):
+
+```bash
+curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \
+  -d '{"backup_schedule":"daily","alert_webhook_url":"https://ntfy.example/cabinet","numista_api_key":"demo-key-not-real"}'
+curl -fsS -X POST http://localhost/api/backups
+```
+
 Then capture at a fixed 1280×800 with Playwright, joining the compose network
 so the proxy is reachable as `proxy`:
 
@@ -37,8 +48,8 @@ ITEM=$(curl -s 'http://localhost/api/items?limit=100' \
 
 MSYS_NO_PATHCONV=1 docker run --rm --network cabinet-numismatics_default \
   -v "$PWD/docs/screenshots:/out" \
-  mcr.microsoft.com/playwright:v1.49.0-jammy sh -c "
-    P='npx -y playwright@1.49.0 screenshot --viewport-size=1280,800 --wait-for-timeout=4000'
+  mcr.microsoft.com/playwright:v1.63.0-noble sh -c "
+    P='npx -y playwright@1.63.0 screenshot --viewport-size=1280,800 --wait-for-timeout=4000'
     \$P --color-scheme=light http://proxy/collection       /out/collection.png
     \$P --color-scheme=light http://proxy/                 /out/dashboard.png
     \$P --color-scheme=light http://proxy/items/$ITEM      /out/item-detail.png
@@ -47,7 +58,9 @@ MSYS_NO_PATHCONV=1 docker run --rm --network cabinet-numismatics_default \
   "
 ```
 
-Pin the `playwright@` version to match the image tag — `npx` otherwise
+Pin the `playwright@` version to match the image tag (and keep it at the
+`@playwright/test` version in `frontend/package.json`, so the browser tests and
+the screenshots use one browser build) — `npx` otherwise
 installs the newest release, which then can't find the image's browsers.
 `MSYS_NO_PATHCONV=1` matters if you're running this from Git Bash on
 Windows: without it, MSYS rewrites the container-side `/out` path as if it

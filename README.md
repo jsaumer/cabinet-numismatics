@@ -214,6 +214,7 @@ Run from Git Bash on Windows. Copy backups off the machine — see
 ## Documentation
 
 - [Deployment](docs/deployment.md) — durable install: secrets, reverse proxy + auth, backups, upgrades
+- [Swarm stack file](deploy/docker-stack.yaml) — `docker stack deploy` with the published images
 - [Architecture](docs/architecture.md) — services, data flow, configuration
 - [Data model](docs/data-model.md) — database schema and relationships
 - [API](docs/api.md) — REST endpoints (mirrors the OpenAPI spec)
