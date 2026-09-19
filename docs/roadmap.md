@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.21.0**, with versioned images
+**Status (September 2026): released as v0.21.1**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done — settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
@@ -270,11 +270,11 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   Slack, Gotify) for failed backups, rejected or exhausted price-source keys,
   and failed refreshes, on change and on recovery; an Uptime Kuma heartbeat;
   a Prometheus `/api/metrics` endpoint. Phase 5.8. **Shipped in v0.21.0.**
-- **[Core]** Hardening: a dashboard setup checklist (backups off, no alert
+- ✔ **[Core]** Hardening: a dashboard setup checklist (backups off, no alert
   webhook, no source key), Playwright smoke tests in CI, current
   screenshots, the three ~900-line frontend files split, a trimmed
   CLAUDE.md, and a Swarm-ready stack file in the repo. Phase 5.9.
-  **Target: v0.21.x.**
+  **Shipped in v0.21.1.**
 - **[Nice]** Coin-show mode: an installable mobile web app (PWA) with
   quick-add from the phone camera and slab barcode/QR scanning (PCGS → cert
   and grade, NGC → cert) feeding cert-first entry, tolerant of a bad
@@ -582,7 +582,7 @@ single-user, self-hosted tool is below, ordered so each release makes
 entering and using a real collection easier than the last. Sizes are
 relative to the pace so far: S about a day, M a few days, L a week.
 
-- **Hardening** (v0.21.x, M) — a dashboard setup checklist that says what's
+- ✔ **Hardening** (v0.21.1, M) — a dashboard setup checklist that says what's
   still off (scheduled backups, the alert webhook, a price-source key);
   Playwright smoke tests in CI, since the frontend has none; screenshots
   retaken (the current ones predate the dashboard home page, documents,

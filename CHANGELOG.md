@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.21.1] — 2026-09-19
+
 ### Added
 - **A setup checklist on the dashboard**: what's still switched off on a
   fresh install — scheduled backups, an alert webhook or heartbeat, a
