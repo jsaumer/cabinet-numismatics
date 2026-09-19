@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-09-19
+
 ### Added
 - **Fill from a PCGS cert.** A slabbed coin's cert number fills the item
   form in from PCGS: type, country, denomination, year, mint mark, series,
