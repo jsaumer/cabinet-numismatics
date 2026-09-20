@@ -66,6 +66,57 @@ stale cached price is used if the upstream is down. Estimates record the spot
 price used in their `source` (e.g. `melt:silver @ 1.0562/g`) and carry
 confidence 0.95.
 
+### Purchase-day spot for the bullion stack (implemented, v0.28.0, roadmap Phase 7 P7)
+The bullion stack (see [api.md](api.md#bullion-stack)) also wants the metal's
+spot price on the day a piece was *bought*, not just its current value, to
+work out the premium paid over spot. This isn't a `price_estimates` source
+(there's no adapter, no confidence, no `POST .../estimate`): it fills one
+item field, `spot_at_purchase`.
+
+Researched and rejected:
+
+- **LBMA's public JSON price series** goes back to 1968, well past what
+  anything else offers, but the LBMA/ICE Benchmark Administration terms say a
+  licence is needed to use benchmark data, including for valuation. Cabinet
+  does not use it, and it must not gain an LBMA adapter without one.
+- **gold-api.com's `/history` endpoint** needs an API key (its free tier is
+  rate-limited to ten requests an hour); only its current-price endpoint
+  (already used for melt, above) is keyless.
+- **Stooq** now serves a bot-detection challenge page instead of CSV.
+- **Nasdaq Data Link and FRED** both need a free API key, which is one more
+  credential to manage for a single field most purchases won't use.
+- **datahub.io and the World Bank** publish monthly series only, too coarse
+  for a specific purchase date.
+- **Yahoo Finance's chart API** is unofficial and undocumented.
+
+Implemented instead with the public-domain (CC0) **fawazahmed0 currency-api**
+(`services/stack.py`, `historic_spot`), which has published daily
+XAU/XAG/XPT/XPD rates since **2024-03-02**:
+
+```
+https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{YYYY-MM-DD}/v1/currencies/{xau|xag|xpt|xpd}.json
+```
+
+with a fallback host if the CDN is unreachable:
+
+```
+https://{YYYY-MM-DD}.currency-api.pages.dev/v1/currencies/{code}.json
+```
+
+Each response is `{"date": "...", "xau": {"usd": ..., "eur": ..., ...}}`:
+units of the requested currency per one troy ounce, a cross-rate rather than
+a benchmark fixing. Only a date and a metal code are sent, never collection
+data. A past day's price never changes, so a fetched day is cached
+(`source_cache`, source `spot_history`) for ten years; today or a future
+date is refused (422: use the current spot price for today instead), so
+nothing that could still change is ever cached. A purchase before
+2024-03-02 needs a hand-typed figure; there is no free, keyless, cleanly
+licensed source that reaches further back.
+
+Confirmed against the live feed on 20 September 2026: silver on 2025-01-15
+was USD 29.81/oz, gold on 2024-06-03 was EUR 2145.62/oz, and a 2020 date was
+refused with 422.
+
 ### Numista (implemented, pricing program M2)
 Numista catalogues coins, banknotes, and exonumia and quotes collector-swap
 estimates per grade. Implemented in `app/services/numista.py`.

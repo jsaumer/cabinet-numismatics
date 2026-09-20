@@ -13,6 +13,7 @@ import ItemList from "./pages/ItemList";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
 import AddRun from "./pages/AddRun";
+import Stack from "./pages/Stack";
 import Trash from "./pages/Trash";
 
 /** The dashboard is the home page. Before v0.16.0 the collection list lived at
@@ -41,6 +42,7 @@ export default function App() {
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>
           <NavLink to="/pricing">Pricing</NavLink>
+          <NavLink to="/stack">Stack</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/import">Import</NavLink>
           <NavLink className="nav-icon" to="/trash" title="Trash" aria-label="Trash">
@@ -65,6 +67,7 @@ export default function App() {
           <Route path="/collection" element={<ItemList />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/stack" element={<Stack />} />
           <Route path="/report" element={<Report />} />
           <Route path="/checklists" element={<Checklists />} />
           <Route path="/import" element={<Import />} />

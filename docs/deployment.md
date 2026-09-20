@@ -38,7 +38,7 @@ Edit `.env`:
   reachable by people who shouldn't be able to do that.
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.27.1`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.28.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -234,15 +234,17 @@ docker compose build --pull && docker compose up -d
 
 - **Run one backend replica.** The price-refresh and backup schedulers run
   in-process; additional replicas would duplicate refreshes and backups.
-- **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices) and
-  `api.frankfurter.dev` (ECB exchange rates), plus `api.numista.com` and
-  `api.pcgs.com` once those sources have a key. All are optional (they
-  degrade to cached values), but allow them if your firewall filters egress.
-  Importing a photo from a URL fetches from whatever public host you name.
-- **The collection is never sent outward.** The first two APIs receive only a
-  metal symbol or a currency pair; Numista and PCGS receive the catalogue
-  number, PCGS number or cert number, and grade being looked up, nothing
-  else.
+- **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices),
+  `api.frankfurter.dev` (ECB exchange rates), and `cdn.jsdelivr.net` with its
+  fallback `*.currency-api.pages.dev` (purchase-day spot for the bullion
+  stack), plus `api.numista.com` and `api.pcgs.com` once those sources have a
+  key. All are optional (they degrade to cached values or a hand-typed
+  figure), but allow them if your firewall filters egress. Importing a photo
+  from a URL fetches from whatever public host you name.
+- **The collection is never sent outward.** The spot and rate APIs receive
+  only a metal symbol, a currency pair, or a date; Numista and PCGS receive
+  the catalogue number, PCGS number or cert number, and grade being looked
+  up, nothing else.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
 - **The backend runs unprivileged** (from v0.23.1), as `PUID`:`PGID`
@@ -267,7 +269,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.27.1 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.28.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 What that file does differently from `docker-compose.yaml`, and why:

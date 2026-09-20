@@ -1,6 +1,6 @@
 // The item form's state, its lookups, and the conversion to and from the API.
 
-import { CacSticker, CatalogRef, ItemDetail, ItemPayload, ItemStatus, ItemType, Priority, Strike } from "../../api";
+import { CacSticker, CatalogRef, ItemDetail, ItemPayload, ItemStatus, ItemType, Metal, Priority, Strike } from "../../api";
 
 export const EMPTY = {
   type: "coin" as ItemType,
@@ -51,6 +51,7 @@ export const EMPTY = {
   acquisition_date: "",
   acquisition_price: "",
   acquisition_fees: "",
+  spot_at_purchase: "",
   currency: "USD",
   acquired_from: "",
   storage_location: "",
@@ -99,6 +100,27 @@ export const PROBLEMS: Record<ItemType, string[]> = {
 
 export const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
 export const SHAPES = ["Round", "Square", "Polygonal", "Scalloped", "Holed"];
+
+// Historic spot only covers purchases from this date; mirrors the backend's
+// stack.HISTORY_START.
+export const HISTORY_START = "2024-03-02";
+
+// Mirrors the backend's detect_metal: a case-insensitive substring match,
+// gold checked before silver before platinum before palladium.
+const METALS: Metal[] = ["gold", "silver", "platinum", "palladium"];
+
+export function detectMetal(composition: string): Metal | null {
+  const text = composition.toLowerCase();
+  return METALS.find((m) => text.includes(m)) ?? null;
+}
+
+/** Whether a date falls inside the historic-spot lookup's coverage: on or
+ * after 2 March 2024, and before today (today uses current spot instead). */
+export function inHistoricCoverage(dateStr: string): boolean {
+  if (!dateStr) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return dateStr >= HISTORY_START && dateStr < today;
+}
 
 const opt = (v: string) => v.trim() || null;
 const optNum = (v: string) => (v === "" ? null : Number(v));
@@ -167,6 +189,7 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     acquisition_date: form.acquisition_date || null,
     acquisition_price: optNum(form.acquisition_price),
     acquisition_fees: optNum(form.acquisition_fees),
+    spot_at_purchase: optNum(form.spot_at_purchase),
     currency: form.currency.trim().toUpperCase(),
     acquired_from: opt(form.acquired_from),
     storage_location: opt(form.storage_location),
@@ -231,6 +254,7 @@ export function fromItem(item: ItemDetail): FormState {
     acquisition_date: str(item.acquisition_date),
     acquisition_price: str(item.acquisition_price),
     acquisition_fees: str(item.acquisition_fees),
+    spot_at_purchase: str(item.spot_at_purchase),
     currency: item.currency,
     acquired_from: str(item.acquired_from),
     storage_location: str(item.storage_location),

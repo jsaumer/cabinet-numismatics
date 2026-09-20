@@ -10,6 +10,34 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-20
+
+### Added
+- **Bullion stack figures** (roadmap Phase 7, P7). A Stack page (`/stack`)
+  showing fine troy ounces, melt value at spot, cost per ounce (also the
+  break-even spot price), gain or loss, and the premium paid over spot at
+  purchase, by metal and per item, scoped to a tag; "Fetch purchase-day spot"
+  backfills what it can. A new item field, `spot_at_purchase` (the metal's
+  spot price per troy ounce on the day it was bought, in the item's own
+  currency), with a "Look up" button on the item form for purchases from 2
+  March 2024 (`GET /api/reference/historic-spot`); older purchases take a
+  hand-typed figure. Purchase-day spot is filled automatically by
+  `POST /api/stack/backfill` and by the hourly loop (at most 20 a run), never
+  overwriting a typed value; it comes from the public-domain fawazahmed0
+  currency-api, never LBMA (see docs/price-sources.md for why). Spot-price
+  threshold alerts (Settings → Alerts, `spot_alerts`, at most 12) fire once
+  through the existing webhook when a metal's spot crosses a saved price and
+  re-arm silently when it moves back. A `stack` dashboard widget (by metal,
+  or a table of all four). The item page shows fine weight and, when known,
+  the premium paid over spot at purchase. A `cabinet_stack_fine_ounces{metal}`
+  metrics gauge. CSV/XLSX export and import carry `spot_at_purchase`.
+
+### Changed
+- `items.weight_g` now keeps four decimal places (was three), since a troy
+  ounce is 31.1035 g and three decimals could not hold a one-ounce round;
+  migration `0020`, which also adds `spot_at_purchase` and
+  `spot_at_purchase_source`.
+
 ## [0.27.1] - 2026-09-20
 
 ### Added

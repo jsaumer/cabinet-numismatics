@@ -1,6 +1,17 @@
 import { useState } from "react";
 
-import { AlertFormat, api, AppSettings, AppSettingsUpdate, MonitorOutcome } from "../api";
+import {
+  AlertFormat,
+  api,
+  AppSettings,
+  AppSettingsUpdate,
+  METAL_LABELS,
+  Metal,
+  money,
+  MonitorOutcome,
+  SpotAlert,
+  SpotDirection,
+} from "../api";
 
 const FORMATS: { value: AlertFormat; label: string; hint: string }[] = [
   {
@@ -60,6 +71,41 @@ export function AlertsCard({
   const [beatUrl, setBeatUrl] = useState("");
   const [testing, setTesting] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, MonitorOutcome | null>>({});
+  const [draftMetal, setDraftMetal] = useState<Metal>("silver");
+  const [draftDirection, setDraftDirection] = useState<SpotDirection>("above");
+  const [draftPrice, setDraftPrice] = useState("");
+  const [draftCurrency, setDraftCurrency] = useState(settings.display_currency);
+
+  function withoutMet(alerts: SpotAlert[]): Omit<SpotAlert, "met">[] {
+    return alerts.map(({ metal, direction, price, currency }) => ({
+      metal,
+      direction,
+      price,
+      currency,
+    }));
+  }
+
+  function addSpotAlert() {
+    const price = Number(draftPrice);
+    if (!(price > 0)) return;
+    const next = [
+      ...settings.spot_alerts,
+      {
+        metal: draftMetal,
+        direction: draftDirection,
+        price,
+        currency: (draftCurrency.trim() || settings.display_currency).toUpperCase(),
+      },
+    ];
+    apply({ spot_alerts: withoutMet(next) }, "Spot alert added.").then((ok) => {
+      if (ok) setDraftPrice("");
+    });
+  }
+
+  function removeSpotAlert(index: number) {
+    const next = settings.spot_alerts.filter((_, i) => i !== index);
+    apply({ spot_alerts: withoutMet(next) }, "Spot alert removed.");
+  }
 
   async function test(target: "webhook" | "heartbeat") {
     setTesting(target);
@@ -189,6 +235,85 @@ export function AlertsCard({
         )}
       </div>
       <Result outcome={results.heartbeat ?? settings.heartbeat} />
+
+      <h3>Spot price alerts</h3>
+      <p className="muted" style={{ marginTop: 0 }}>
+        An alert when a metal's spot price crosses a threshold, sent through the webhook above
+        (needs one saved). It fires once on the crossing and re-arms silently when spot moves
+        back the other way.
+      </p>
+      {settings.spot_alerts.length === 0 ? (
+        <p className="muted">No spot alerts set.</p>
+      ) : (
+        <table className="estimates">
+          <thead>
+            <tr>
+              <th>Metal</th>
+              <th>Direction</th>
+              <th className="num">Price</th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {settings.spot_alerts.map((a, i) => (
+              <tr key={i}>
+                <td>{METAL_LABELS[a.metal]}</td>
+                <td>{a.direction}</td>
+                <td className="num">{money(a.price, a.currency)}</td>
+                <td>{a.met && <span className="chip">met now</span>}</td>
+                <td>
+                  <button disabled={saving} onClick={() => removeSpotAlert(i)}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div className="estimate-form" style={{ marginTop: "0.4rem" }}>
+        <label className="field">
+          Metal
+          <select value={draftMetal} onChange={(e) => setDraftMetal(e.target.value as Metal)}>
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="platinum">Platinum</option>
+            <option value="palladium">Palladium</option>
+          </select>
+        </label>
+        <label className="field">
+          Direction
+          <select
+            value={draftDirection}
+            onChange={(e) => setDraftDirection(e.target.value as SpotDirection)}
+          >
+            <option value="above">Above</option>
+            <option value="below">Below</option>
+          </select>
+        </label>
+        <label className="field">
+          Price (per oz)
+          <input
+            type="number" step="0.01" min={0} style={{ width: "7rem" }}
+            value={draftPrice}
+            onChange={(e) => setDraftPrice(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          Currency
+          <input
+            value={draftCurrency} maxLength={3} style={{ width: "5rem" }}
+            onChange={(e) => setDraftCurrency(e.target.value)}
+          />
+        </label>
+        <button
+          disabled={saving || !draftPrice.trim() || settings.spot_alerts.length >= 12}
+          onClick={addSpotAlert}
+        >
+          Add
+        </button>
+      </div>
 
       <h3>Status</h3>
       {settings.alerts.length === 0 ? (

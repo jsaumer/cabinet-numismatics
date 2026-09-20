@@ -117,6 +117,7 @@ CSV_COLUMNS = [
     "acquisition_date",
     "acquisition_price",
     "acquisition_fees",
+    "spot_at_purchase",
     "currency",
     "acquired_from",
     "storage_location",
@@ -547,6 +548,7 @@ def _export_row(
         item.acquisition_date or "",
         item.acquisition_price or "",
         item.acquisition_fees or "",
+        item.spot_at_purchase or "",
         item.currency,
         item.acquired_from or "",
         item.storage_location or "",
@@ -690,6 +692,10 @@ def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -
     item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
     if item.pcgs_population is not None or item.pcgs_pop_higher is not None:
         item.population_as_of = datetime.now(timezone.utc)
+    # A purchase-day spot price that arrives with the item was typed in; the
+    # backfill is the only thing that writes "auto".
+    if item.spot_at_purchase is not None:
+        item.spot_at_purchase_source = "manual"
     item.grade_id = grade_id if grade_id is not None else payload.grade_id
     _check_grade(db, item.grade_id)
     _check_set(db, item.set_id)
@@ -866,13 +872,15 @@ def _apply_struck_date(item: Item, fields: dict) -> None:
 
 
 def _sync_derived(item: Item, changed) -> None:
-    """The server-set fields, after an edit: the serial's traits, and when the
-    population figures last changed."""
+    """The server-set fields, after an edit: the serial's traits, when the
+    population figures last changed, and where a purchase-day spot came from."""
     if "serial_number" in changed or "replacement_note" in changed:
         item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
     if "pcgs_population" in changed or "pcgs_pop_higher" in changed:
         has_any = item.pcgs_population is not None or item.pcgs_pop_higher is not None
         item.population_as_of = datetime.now(timezone.utc) if has_any else None
+    if "spot_at_purchase" in changed:
+        item.spot_at_purchase_source = "manual" if item.spot_at_purchase is not None else None
 
 
 @router.get("/{item_id}/history", response_model=list[EventOut])
@@ -907,6 +915,8 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         # ND is per piece, and a bulk year stays as it is (no struck-date check),
         # so a bulk edit can't empty the year either: that needs ND.
         fields.pop("year_nd", None)
+        # A purchase-day spot price is per piece, and looked up per piece.
+        fields.pop("spot_at_purchase", None)
         if "year" in fields and fields["year"] is None:
             raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
         if "grade_id" in fields:

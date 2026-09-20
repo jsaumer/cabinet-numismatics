@@ -71,6 +71,8 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
             "type": "coin", "country": "United Kingdom", "denomination": "1 sovereign",
             "year": 1911, "composition": "22kt gold (91.7%)", "weight_g": 7.99,
             "fineness": 0.9167, "grade_code": "AU-58", "acquisition_date": "2022-11-05",
+            # Before the purchase-day spot source starts, so it is typed in.
+            "spot_at_purchase": 1670.0,
             "acquisition_price": 410.0, "acquired_from": "dealer",
             "storage_location": "Safe", "tags": ["gold", "bullion"],
         },
