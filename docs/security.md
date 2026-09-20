@@ -141,8 +141,48 @@ Do not port-forward the stack to the internet as-is.
 - **Outbound requests** go only to the two documented price/rate APIs, with
   timeouts and cached fallbacks. No collection data is ever sent outward.
 
+## Containers and the browser
+
+The backend runs as an unprivileged user (`cabinet`, or `PUID`:`PGID`). Its
+entrypoint starts as root only to make the data directories writable by
+that user — volumes from releases before v0.23.1, and bind mounts, are
+owned by root — and then drops privileges with `setpriv`; a bug in an image
+or PDF parser runs with no more than the app's own files. If the hand-over
+fails (NFS with root squash), the log says which directory and the backend
+stays root: fix the ownership on the server, or set `PUID`/`PGID` to the
+owner. nginx's workers were already unprivileged. The backend image carries
+no pip: nothing is installed at runtime.
+
+The proxy sets a Content-Security-Policy on the app — scripts and
+connections from itself only, images from itself, `data:`/`blob:` (the
+photo editor) and `https:` (Numista thumbnails), inline style attributes
+(React), no plugins, no frames — plus `X-Content-Type-Options: nosniff`,
+`X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, and a `Permissions-Policy`
+allowing only the camera (webcam capture). The API's responses are left to
+the API: documents carry `default-src 'none'`. HSTS belongs to whatever
+terminates TLS in front of the stack. A browser test fails the build if any
+page trips the policy.
+
 ## Dependencies
 
 Runtime dependencies are pinned by minimum version and installed fresh at
 image build. Rebuild periodically (`docker compose build --pull`) to pick up
 security fixes in the base images and Python packages.
+
+The backend image installs from `backend/requirements.txt`, a lockfile with
+every package pinned and hash-verified; `pyproject.toml` keeps the minimum
+versions for development. After changing dependencies, regenerate it in the
+image's own Python:
+
+```bash
+docker run --rm -v "$PWD/backend:/src" -w /src python:3.14-slim sh -c \
+  "pip install -q pip-tools && pip-compile -q --generate-hashes --strip-extras --no-header -o requirements.txt pyproject.toml"
+```
+
+`.github/workflows/security.yml` runs on every change and weekly: `pip-audit`
+against that lockfile, `npm audit` on the frontend's runtime dependencies,
+and Trivy on both built images, failing on fixable high or critical
+findings. It is separate from CI on purpose — a CVE published against an
+unchanged base image shows up there without blocking a release that didn't
+cause it. The usual fix is a rebuild (the image applies Debian's pending
+updates) or regenerating the lockfile.

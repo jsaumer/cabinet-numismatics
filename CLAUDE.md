@@ -72,6 +72,9 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
   --list` (then `-s <source> -i <item-id>`) probes a live price API and dumps
   the raw response; `--fresh` bypasses the cache and spends quota.
 - Lint/format: in `backend/` — `ruff check .` and `ruff format .`.
+- Dependencies: the image installs `backend/requirements.txt` (hash-pinned);
+  after editing `pyproject.toml`'s dependencies, regenerate it with the
+  command in docs/security.md. `security.yml` audits it and scans both images.
 - Migrations: Alembic, run in `backend/` with `DATABASE_URL` set —
   `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
   to create. The backend also applies pending migrations itself on startup

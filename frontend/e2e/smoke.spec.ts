@@ -100,6 +100,25 @@ test("trash it, restore it, then delete it for good", async ({ page }) => {
   await expect(page.locator("p.error")).toBeVisible();
 });
 
+test("the security headers are set and nothing trips the policy", async ({ page }) => {
+  const violations: string[] = [];
+  page.on("console", (message) => {
+    if (/content security policy/i.test(message.text())) violations.push(message.text());
+  });
+  const response = await page.goto("/");
+  const headers = response!.headers();
+  expect(headers["content-security-policy"]).toContain("script-src 'self'");
+  expect(headers["x-content-type-options"]).toBe("nosniff");
+  expect(headers["x-frame-options"]).toBe("SAMEORIGIN");
+  expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  for (const path of ["/collection", "/items/new", "/items/run", "/checklists", "/pricing", "/settings"]) {
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByRole("link", { name: "Collection" }).first()).toBeVisible();
+  }
+  expect(violations).toEqual([]);
+});
+
 test("every Settings section renders, with the version", async ({ page }) => {
   await page.goto("/settings");
   for (const name of [

@@ -96,6 +96,7 @@ All configuration is via environment variables, loaded from `.env`
 | `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
 | `DOCUMENT_DIR`    | Where attached documents are stored (compose: `/data/documents`, its own volume) |
 | `REQUIRE_DOCUMENT_MOUNT` | Refuse document uploads unless `DOCUMENT_DIR` is a mounted volume (default `true`; `false` for local development) |
+| `PUID` / `PGID`   | The unprivileged user the backend runs as, and that owns its files (default `1000`:`1000`) |
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 
 The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,

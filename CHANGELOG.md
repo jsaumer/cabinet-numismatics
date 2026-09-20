@@ -10,6 +10,30 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Security
+- **The backend no longer runs as root.** Its container starts as root only
+  long enough to hand the data directories (photos, state, backups,
+  documents) to an unprivileged user, then drops to it for good. `PUID` and
+  `PGID` choose that user (default `1000:1000`). Upgrading needs nothing:
+  volumes and bind mounts written by earlier releases are re-owned once, on
+  the first start. If they can't be — an NFS export with root squash — the
+  backend says so in its log and stays root rather than failing to start.
+  `restore.sh` gives restored files to the volume's owner.
+- **Security headers from the proxy**: a Content-Security-Policy on the app
+  (its own scripts only, no plugins, no framing), `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy`, and a `Permissions-Policy` that
+  allows the camera and nothing else; the nginx version is no longer
+  announced. Documents keep their own stricter policy.
+- **A Security workflow** on every change and weekly: `pip-audit` on exactly
+  what the image installs, `npm audit` on what the frontend ships, and a
+  Trivy scan of both images for fixable high and critical vulnerabilities.
+  Its first run found 43 in the backend image's Debian packages and two in
+  libraries bundled inside pip; the image now applies Debian's pending
+  updates when it's built and removes pip, and scans clean.
+- **The backend image installs from a lockfile** (`backend/requirements.txt`,
+  every package pinned and verified by hash), so two builds of one commit
+  are the same image.
+
 ## [0.23.0] — 2026-09-19
 
 ### Added
