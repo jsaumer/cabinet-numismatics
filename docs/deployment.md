@@ -107,10 +107,10 @@ turns the check off, for local development only.
 
 ## 3. Reverse proxy, TLS, and authentication
 
-**Cabinet has no application-level login**, by decision, and v1.0.0 will ship
-the same way: it is for a trusted network, or behind an authenticating
-reverse proxy. Application login is not planned for 1.0 (a possible later
-item). Do not expose it directly to the internet. Put it behind a reverse
+**Cabinet has no application-level login yet**: it is for a trusted network,
+or behind an authenticating reverse proxy. Application login is planned
+before v1.0.0 (roadmap Phase 7); until it ships, this section is the only
+protection. Do not expose it directly to the internet. Put it behind a reverse
 proxy that terminates TLS and handles authentication.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:

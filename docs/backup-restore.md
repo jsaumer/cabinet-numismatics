@@ -117,9 +117,9 @@ Restoring into a *fresh* deployment works the same way: bring the stack up,
 wait until `/api/health` reports `schema.status: "ok"` (the backend creates
 the schema on startup), then restore.
 
-There is no restore button in the app. Restore is destructive and Cabinet has
-no login (and none is planned for v1.0.0), so it stays a host-side step
-(roadmap Phase 5.6, B3).
+There is no restore button in the app yet; one is planned (roadmap Phase 7,
+P2), with an automatic safety backup first and a typed confirmation. Until
+then, and whenever the app itself won't start, restore is a host-side step.
 
 ### On a Swarm
 

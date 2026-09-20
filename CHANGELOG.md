@@ -10,6 +10,21 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Changed
+- **The roadmap has a next phase again: Phase 7, parity with other
+  collection tools**, chosen by the owner from a survey of fourteen product
+  groups: population on the item page, wish-list depth, paper money depth,
+  fancy serial numbers, die axis and foreign dates, bullion stack figures,
+  authentication (local accounts with a first-run superuser, then single
+  sign-on), and a share view that waits on authentication; in-app restore
+  is no longer blocked on authentication and comes second, with an
+  automatic safety backup before it runs; labels and a
+  phone app are optional. This reverses the earlier decision to ship v1.0.0
+  without login, and every document that stated it now says login is
+  planned and not built yet. `docs/security.md` carries the proposed
+  permission table (admin, editor, viewer, API tokens, share links) so it
+  can be reviewed before any of it is coded.
+
 ## [0.24.9] - 2026-09-20
 
 ### Fixed
