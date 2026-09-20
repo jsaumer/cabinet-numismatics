@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.8] - 2026-09-20
+
 ### Fixed
 - **`deploy/docker-stack.yaml` set a broken `DOCUMENT_DIR`.** One
   over-indented line (since v0.23.1) folded `REESTIMATE_DAYS` into the line
