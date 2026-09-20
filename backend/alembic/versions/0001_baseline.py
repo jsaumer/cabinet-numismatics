@@ -1,4 +1,4 @@
-"""Baseline — empty schema; real tables arrive in Phase 1.
+"""Baseline: empty schema; real tables arrive in Phase 1.
 
 Revision ID: 0001
 Revises:

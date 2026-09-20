@@ -116,8 +116,8 @@ STRIKE_PREFIXES = {"PR": "proof", "PF": "proof", "SP": "specimen"}
 def get_item_or_404(
     db: Session, item_id: uuid.UUID, *, load_related: bool = False, include_deleted: bool = False
 ) -> Item:
-    """The item, or 404. Items in the trash count as missing — so they can't
-    be edited — unless `include_deleted` (viewing, restoring, purging)."""
+    """The item, or 404. Items in the trash count as missing (so they can't
+    be edited) unless `include_deleted` (viewing, restoring, purging)."""
     stmt = select(Item).where(Item.id == item_id)
     if include_deleted:
         stmt = stmt.execution_options(include_deleted=True)
@@ -282,7 +282,7 @@ def _list_entry(
 
 def _value_settings(db: Session) -> tuple[str, str | None, Converter | None]:
     """The value-resolution strategy, plus a Converter only when the
-    strategy needs one — "latest"/"preferred_source" never build one, so the
+    strategy needs one: "latest"/"preferred_source" never build one, so the
     default path costs no extra currency lookups."""
     strategy = str(app_settings.get_setting(db, "value_strategy"))
     preferred_source = app_settings.get_setting(db, "preferred_source")
@@ -618,7 +618,7 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
 
 @router.post("/run", response_model=RunResult, status_code=201)
 def add_run(payload: RunCreate, db: Session = Depends(get_db)):
-    """One item per chosen issue of a Numista type — a date/mint run in one
+    """One item per chosen issue of a Numista type: a date/mint run in one
     request. The type fills each item as "Fill from Numista" would; `shared`
     supplies what they have in common; issues already owned are skipped."""
     try:
@@ -679,9 +679,9 @@ def similar_items(
     exclude: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
-    """Items that look like the one being entered — the same cert number, the
+    """Items that look like the one being entered (the same cert number, the
     same catalogue reference, or the same country, denomination, year, and
-    mint mark — trash included, so a restore can replace a re-entry."""
+    mint mark), trash included, so a restore can replace a re-entry."""
     refs = [tuple(r.split(":", 1)) for r in ref if ":" in r]
     return [
         SimilarItem(
@@ -707,7 +707,7 @@ def similar_items(
 
 @router.get("/{item_id}", response_model=ItemDetail)
 def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
-    """One item with its photos, values, documents, and sales — including an
+    """One item with its photos, values, documents, and sales, including an
     item in the trash (`deleted_at` set), which is read-only until restored."""
     return get_item_or_404(db, item_id, load_related=True, include_deleted=True)
 
@@ -821,7 +821,7 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: uuid.UUID, permanent: bool = False, db: Session = Depends(get_db)):
     """Move the item to the trash, from where it can be restored. With
-    `?permanent=true` — or for an item already in the trash — delete it for
+    `?permanent=true`, or for an item already in the trash, delete it for
     good, with its photos, values, history, and documents no other item holds."""
     item = get_item_or_404(db, item_id, include_deleted=True)
     if permanent or item.deleted_at is not None:

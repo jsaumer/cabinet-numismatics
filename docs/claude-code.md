@@ -2,12 +2,13 @@
 
 From Phase 0 onward, Cabinet is built and planned in
 [Claude Code](https://code.claude.com/docs), Anthropic's agentic coding tool,
-run inside the Claude desktop app. It works directly in the repository — creating and editing files in place, running
-the compose stack, executing migrations and tests, and iterating on real code —
-rather than handing back files to copy in.
+run inside the Claude desktop app. It works directly in the repository
+(creating and editing files in place, running the compose stack, executing
+migrations and tests, and iterating on real code) rather than handing back
+files to copy in.
 
 Cabinet is developed using Claude Code inside the **Claude desktop app** (the
-Code tab), not the terminal CLI. It is the same Claude Code underneath — the
+Code tab), not the terminal CLI. It is the same Claude Code underneath: the
 `CLAUDE.md` context file, `@`-imports, and the `/init`, `/memory`, and
 `/context` commands all behave identically; only how you open a session
 differs.
@@ -33,7 +34,7 @@ differs.
 Claude Code reads a `CLAUDE.md` file at the repository root at the start of
 every session and treats it as persistent context. This repo ships one, seeded
 from the project brief: architecture, conventions, build commands, and the
-current next step. Keep it under ~200 lines and specific — it is loaded into
+current next step. Keep it under ~200 lines and specific: it is loaded into
 context every session, and shorter, concrete instructions are followed more
 reliably.
 
@@ -44,9 +45,9 @@ commit.
 
 Useful in-session commands:
 
-- `/init` — generate or improve a `CLAUDE.md` from the codebase.
-- `/memory` — view and edit the memory files Claude Code is using.
-- `/context` — confirm which memory files actually loaded this session.
+- `/init`: generate or improve a `CLAUDE.md` from the codebase.
+- `/memory`: view and edit the memory files Claude Code is using.
+- `/context`: confirm which memory files actually loaded this session.
 
 ## Conventions that carry over (and one that doesn't)
 
@@ -63,5 +64,5 @@ place, so there is nothing to un-flatten.
 - `CLAUDE.md` is committed and shared (relevant if Cabinet is open-sourced
   later).
 - For private, machine-local notes (sandbox URLs, scratch test data), use
-  `CLAUDE.local.md` at the repo root and add it to `.gitignore` — it loads
+  `CLAUDE.local.md` at the repo root and add it to `.gitignore`. It loads
   alongside `CLAUDE.md` but is never committed.

@@ -29,8 +29,8 @@ described without an auth layer; add one before exposing the app publicly.
 | `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
 | `DELETE` | `/api/items/{id}`         | Move an item to the trash; `?permanent=true` (or an item already there) deletes it for good |
 | `POST`   | `/api/items/{id}/restore` | Take an item out of the trash       |
-| `GET`    | `/api/items/similar`      | Items that look like one being entered — see below |
-| `POST`   | `/api/items/run`          | One item per chosen issue of a Numista type — see Add a run |
+| `GET`    | `/api/items/similar`      | Items that look like one being entered (see below) |
+| `POST`   | `/api/items/run`          | One item per chosen issue of a Numista type (see Add a run) |
 
 **List query parameters** (all optional): `type`, `status`, `strike`
 (`business`/`proof`/`specimen`), `country`, `year`,
@@ -42,7 +42,7 @@ refs/tags), `limit`,
 response includes each item's primary photo/thumbnail keys and its latest
 estimated value: `latest_value` + `latest_value_currency`, plus
 `latest_value_source` naming which source produced it (an adapter key, a
-manual entry's own source text, or `average`) — resolved by the app-wide
+manual entry's own source text, or `average`). It is resolved by the app-wide
 `value_strategy` setting (see Settings, below), not simply "whichever
 estimate is newest."
 
@@ -54,17 +54,17 @@ are reported without aborting the rest.
 
 Grading fields: `strike` (`business` default, `proof`, `specimen`),
 `grade_plus`, `grade_star`, `designations` (list; `PL`, `DMPL`, `CAM`, `DCAM`,
-`UCAM`, `RD`, `RB`, `BN`, `FB`, `FBL`, `FH`, `FS`, `FT`, `EPQ` — case-insensitive,
+`UCAM`, `RD`, `RB`, `BN`, `FB`, `FBL`, `FH`, `FS`, `FT`, `EPQ`; case-insensitive,
 deduplicated), `grade_details` (the problem on a details grade), and
 `cac_sticker` (`green`/`gold`). Physical: `diameter_mm`, `thickness_mm`, `edge`,
 `shape`, `mintage`. Banknotes: `serial_number`, `prefix_block`, `signatures`,
 `issuer`, `replacement_note`. Costs: `acquisition_fees` and, on sale,
 `sold_fees` and `sold_to`. Responses add three derived fields: `grade_label`
 (the grade as a holder reads, e.g. `PR-69 DCAM ★`), `cost_basis` (price plus
-fees), and `sale_proceeds` (sold price less fees) — the figures every gain
-calculation uses. CSV import also reads label-style grades: `PR-65`, `PF-65`,
-or `SP-65` on the Sheldon scale set the strike, and a trailing `+` sets
-`grade_plus`.
+fees), and `sale_proceeds` (sold price less fees); these are the figures
+every gain calculation uses. CSV import also reads label-style grades:
+`PR-65`, `PF-65`, or `SP-65` on the Sheldon scale set the strike, and a
+trailing `+` sets `grade_plus`.
 
 ## Photos
 
@@ -85,9 +85,9 @@ original. The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
 
-URL import fetches the image on the server — http(s) only, public addresses
+URL import fetches the image on the server: http(s) only, public addresses
 only (a host resolving to a private, loopback, or link-local address is
-refused, and so is a redirect to one), up to three redirects, 25 MB at most —
+refused, and so is a redirect to one), up to three redirects, 25 MB at most. It
 then validates and stores it exactly like an upload: 422 for a URL that isn't
 allowed or doesn't return a file, 502 when it can't be reached, 415 when the
 file isn't a supported image. Replacing an image (what the in-browser editor
@@ -109,11 +109,11 @@ Estimates are append-only: each `POST .../estimates` adds a timestamped record
 response carries `details`: the provenance an automatic source recorded (see
 [price-sources.md](price-sources.md)), `{"note": …}` for a manual entry given
 a note, or `null`. `POST .../estimate` runs one automatic adapter, chosen
-with `?source=` — `melt` (the default: spot × weight × fineness × quantity,
+with `?source=`: `melt` (the default: spot × weight × fineness × quantity,
 metal detected from `composition`), `numista` (by the item's `numista` catalog
 ref and grade), `pcgs` (US coins by PCGS cert number, or `pcgs` catalog ref
 + grade; auction sales when PCGS has them, price guide otherwise), or `comps`
-(the median of the item's logged sales — see Sales log below). The two
+(the median of the item's logged sales; see Sales log below). The two
 external sources need a credential in Settings. Any of them answers
 422 with the missing prerequisite when the item can't be priced by that source
 or the source is switched off, and 502 when the upstream is unreachable. See
@@ -121,7 +121,7 @@ or the source is switched off, and 502 when the upstream is unreachable. See
 melt estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7;
 `0` disables); a melt refresh never supersedes an item whose latest estimate
 is manual. The same 12h loop also refreshes Numista and/or PCGS when their
-own cadence is switched on in Settings (each off by default) — independently
+own cadence is switched on in Settings (each off by default), independently
 of melt and of whichever source currently wins an item's overall-latest
 estimate, since `value_strategy` may prefer or average a source that isn't
 "latest" right now.
@@ -140,10 +140,10 @@ item), unrealized gain (items with both price and estimate), and realized
 gain (sold items). All stats endpoints share one currency rule: amounts in
 other currencies are **converted** into the display currency at cached daily
 ECB rates (frankfurter.dev, 24h cache, stale fallback); amounts with no
-obtainable rate are **excluded** and counted — never guessed
+obtainable rate are **excluded** and counted, never guessed
 (`converted_other_currency` / `excluded_other_currency` on `/collection`).
 
-The dashboard and the printable insurance report (`/report` in the UI —
+The dashboard and the printable insurance report (`/report` in the UI;
 export to PDF via the browser's print dialog) are built on these endpoints.
 
 ## Reference data
@@ -165,7 +165,7 @@ references are managed inline on items rather than via a standalone endpoint.
 `GET /api/items/similar` takes any of `country` + `denomination` + `year`
 (+ `mint_mark`, blank meaning none), `cert_number`, and `ref` (repeatable,
 `catalog:code`), plus `exclude` (the item being edited), and answers up to
-ten items that match on any of them — `id`, `label`, `grade_label`,
+ten items that match on any of them, each with `id`, `label`, `grade_label`,
 `status`, `in_trash`, and the `reason` (`same cert number`, `same pcgs
 reference`, `same country, denomination, year, and mint mark`). Matching
 ignores case and spacing; trashed items are included and listed last. With
@@ -196,7 +196,7 @@ Both need a Numista API key in Settings (422 without one) and answer 502 when
 Numista is unreachable or the quota is exhausted; an unknown type is 404.
 Search returns `count` and up to 20 `results` (`type_id`, `title`,
 `category`, `issuer`, `min_year`, `max_year`, `thumbnail`). A type returns
-`title`, `url`, `category`, and `fields` keyed like the item payload —
+`title`, `url`, `category`, and `fields` keyed like the item payload:
 `type`, `country`, `denomination`, `series`, `composition`, `fineness`, and
 `year` when the type has a single year; coins add `weight_g`, `diameter_mm`,
 `thickness_mm`, `shape`, and `edge`; notes add `issuer` (the issuing bank).
@@ -216,7 +216,7 @@ Needs a PCGS API token (`422` without one, or when PCGS has no such cert;
 `502` when PCGS can't be reached). Answers `cert`, `pcgs_number`, `name`,
 `fields` (keyed like the item payload: `type`, `country`, `denomination`,
 `year`, `mint_mark`, `series`, `variety`, `composition`, `weight_g`,
-`diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number` — only what
+`diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number`; only what
 PCGS has), `grade` (`rank`, `strike`, `plus`, `designations`, or `null` for a
 Genuine/details holder), `catalog_refs` (the PCGS number), `population`,
 `pop_higher`, `price_guide_value`, and `coinfacts_url`. Cached with the
@@ -235,7 +235,7 @@ All four read existing data and call no upstream source. Estimates are
 grouped by source key: `melt`, `numista`, `pcgs`, and `manual` for any
 hand-entered source text.
 
-- **coverage** — `owned_items`, `estimated_items`, `manual_only_items`; per
+- **coverage**: `owned_items`, `estimated_items`, `manual_only_items`; per
   source a summary (`enabled`, `priced`, `not_applicable`, `failed`,
   `not_tried`); and `items` needing attention, each with a status per source
   (`priced`, `not_applicable`, `failed`, `not_tried`, `disabled`), a
@@ -243,18 +243,18 @@ hand-entered source text.
   when it has no estimate, a source failed or was never tried, or a source's
   last attempt came after its last estimate and didn't succeed. Reasons come
   from each adapter's local prerequisites, or from the latest recorded
-  attempt — every `POST /api/items/{id}/estimate` and scheduled refresh
+  attempt; every `POST /api/items/{id}/estimate` and scheduled refresh
   records one per item and source.
-- **stale** — `days`, `checked` (latest estimates examined, one per item and
+- **stale**: `days`, `checked` (latest estimates examined, one per item and
   source), and `stale` entries oldest first: value, `age_days`,
   `upstream_stale` (built from source data past its cache window), and
   `in_totals` (it feeds the item's shown value under `value_strategy`).
-- **sources** — per source: `items`, `total_value`, `avg_confidence`,
+- **sources**: per source: `items`, `total_value`, `avg_confidence`,
   `median_age_days`, `in_totals` (items whose shown value it supplies);
   `averaged_items` when the strategy is `average`; and up to ten
-  `disagreements` — items with two or more sources, with each value and the
-  `spread_pct` between highest and lowest.
-- **accuracy** — sold items with a sold price. For each, the latest estimate
+  `disagreements` (items with two or more sources, with each value and the
+  `spread_pct` between highest and lowest).
+- **accuracy**: sold items with a sold price. For each, the latest estimate
   per source recorded on or before `sold_date` (all estimates when there is
   no date) and the shown value as of then, each with `error_pct` =
   (estimate − sold) / sold. `summary` rows (`blended` plus each source) give
@@ -272,16 +272,16 @@ hand-entered source text.
 | `POST`   | `/api/trash/purge`    | Delete several trashed items for good                |
 | `DELETE` | `/api/trash`          | Empty the trash                                      |
 
-A trashed item keeps everything — photos, documents, values, sales, history
-— and is hidden from every other endpoint: lists, stats, reports, exports,
+A trashed item keeps everything (photos, documents, values, sales, history)
+and is hidden from every other endpoint: lists, stats, reports, exports,
 set and tag counts, refreshes. `GET /api/items/{id}` still returns it, with
 `deleted_at` set; every other item endpoint answers 404 until it's restored.
 `GET /api/trash` answers `retention_days` (0 = never emptied automatically)
 and `items` (`id`, `label`, `type`, `status`, `grade_label`, `series`,
-`thumb_key`, `deleted_at`, and `purge_at` — when it will be deleted for good).
+`thumb_key`, `deleted_at`, and `purge_at`, when it will be deleted for good).
 The bulk endpoints answer `{"count": n}`, counting only items that changed.
 Deleting for good removes the item's photos, values, history, sales, and any
-document no other item — trashed or not — holds. Items older than
+document no other item, trashed or not, holds. Items older than
 `trash_retention_days` are deleted for good by the hourly background task.
 
 ## Documents
@@ -299,20 +299,20 @@ document no other item — trashed or not — holds. Items older than
 
 `kind` is one of `receipt`, `invoice`, `certificate`, `grading_label`,
 `appraisal`, `correspondence`, `other`. Files may be PDF, JPEG, PNG, or WebP,
-25 MB at most (413 above that), detected from their bytes — anything else is
+25 MB at most (413 above that), detected from their bytes; anything else is
 415, with the reason. A PDF must open in PDFium; one that needs a password is
 kept without a thumbnail or page count. Responses carry `id`, the fields above,
 `filename` (the uploaded name with the detected extension), `content_type`,
 `size`, `pages`, `has_thumb`, `items` (`id`, `label` of every item it's
 attached to), and `created_at`; `GET /api/items/{id}` includes them as
-`documents`. Uploads answer 503 when document storage isn't usable — see
+`documents`. Uploads answer 503 when document storage isn't usable; see
 `documents` in Health.
 
 Files are served with `X-Content-Type-Options: nosniff`, `Cache-Control:
 private`, a `Content-Disposition` carrying the filename (RFC 5987 for non-ASCII
 names), and a content security policy: `default-src 'none'; sandbox` for
-images, `default-src 'none'; frame-ancestors 'self'` for PDFs — `sandbox`
-stops Chrome's built-in PDF viewer rendering at all.
+images, `default-src 'none'; frame-ancestors 'self'` for PDFs, because
+`sandbox` stops Chrome's built-in PDF viewer rendering at all.
 
 ## Sales log (comparables)
 
@@ -333,8 +333,8 @@ described it), `premium_included` (true / false / null for unknown), `fees`
 and `created_at`; `GET /api/items/{id}` includes them as `comparables`.
 
 `POST /api/items/{id}/estimate?source=comps` takes the median of the included
-sales that match — a sale with a `grade_bucket` counts only when it matches
-the item's grade — from the last three years, or all of them when fewer than
+sales that match (a sale with a `grade_bucket` counts only when it matches
+the item's grade) from the last three years, or all of them when fewer than
 three are that recent, at most twenty, converted into the display currency.
 Confidence starts at 0.30 for one sale and rises to 0.70 at ten, less 0.08 or
 0.15 when the prices spread more than 25% or 50% from the median, 0.05 with
@@ -351,13 +351,13 @@ explanation; an unreachable Numista is 502. One request, cached for a day.
 | Method   | Path                              | Purpose                                          |
 |----------|-----------------------------------|--------------------------------------------------|
 | `POST`   | `/api/imports`                    | Stage a file (multipart, up to 1 GB); returns `upload_id` and the detected `format` |
-| `POST`   | `/api/imports/{upload_id}/preview`| What importing it would do — nothing is written  |
+| `POST`   | `/api/imports/{upload_id}/preview`| What importing it would do; nothing is written   |
 | `POST`   | `/api/imports/{upload_id}/run`    | Import its new items                             |
 | `DELETE` | `/api/imports/{upload_id}`        | Discard a staged file (they expire after a day anyway) |
 | `POST`   | `/api/imports/numista/preview`    | Preview importing your Numista collection        |
 | `POST`   | `/api/imports/numista/run`        | Import it                                        |
 
-File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field —
+File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
 read by the same row reader as `POST /api/items/import`, keyed by the
 exported `id`, and a duplicate when that id is still here), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
@@ -365,7 +365,7 @@ CSV/XLSX, read through a field → column `mapping`), `numista_file`
 OpenNumismat `.db`). Preview and run take the same JSON
 options: `format` (default: as detected), `mapping` (spreadsheet; default:
 suggested from the header names), `skip_rows` (lines above the header;
-default: found automatically), and `defaults` — `type`, `status`,
+default: found automatically), and `defaults`: `type`, `status`,
 `currency`, `country` for rows that don't say. A spreadsheet preview also
 returns `headers`, `header_row`, the `mapping` used, and the mappable
 `fields`.
@@ -406,26 +406,27 @@ Also covered: `value_strategy` (`latest` / `preferred_source` / `average`)
 and `preferred_source`, which together control the single blended value used
 by the items list, CSV/XLSX export, and dashboard totals (the item page
 itself always shows every source's own latest value, unaffected by this
-setting); and each source's scheduled-refresh cadence —
+setting); and each source's scheduled-refresh cadence,
 `numista_refresh_days` (`null` for off, else `7`/`14`/`30`) and
 `pcgs_auto_refresh` (bool, fixed weekly when on). The response also reports
-`numista_priceable_items`/`pcgs_priceable_items` — owned items eligible for
-each source — so the UI can show the real projected monthly call count
+`numista_priceable_items`/`pcgs_priceable_items` (owned items eligible for
+each source) so the UI can show the real projected monthly call count
 before you turn Numista's cadence on. `backup_schedule` (`null` / `daily` /
 `weekly`), `backup_keep` (1–365), and `backup_include_photos` configure
 scheduled backups (see Backups below). `comps_enabled` switches the comps
 source (on by default), and `numista_sales_enabled` (off by default) allows
 fetching Numista's auction sales, which needs Numista's paid API plan.
 `preferred_source` accepts `comps`. `trash_retention_days` (`0` = never, `7`,
-`30` — the default — `90`, or `365`) is how long an item stays in the trash.
+`30`, `90`, or `365`; the default is `30`) is how long an item stays in the
+trash.
 
 Alerts and metrics: `alert_webhook_url` and `heartbeat_url` are secrets like
 the API keys (`""` clears; reads return only `alert_webhook_hint` /
 `heartbeat_hint`, the URL's `scheme://host/…`), `alert_webhook_format` is
 `generic`, `ntfy`, `discord`, `slack`, or `gotify`, and `metrics_enabled`
-serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed —
+serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed:
 `key`, `label`, `failing`, `since`, `message`), `alert_delivery` and
-`heartbeat` (the last attempt since the backend started — `at`, `ok`,
+`heartbeat` (the last attempt since the backend started: `at`, `ok`,
 `detail`), and `refresh_last_run` (per source: `at`, `updated`, `skipped`,
 `failed`, and `error` or `stopped` when set).
 
@@ -439,13 +440,13 @@ serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed —
 | `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
 
 An archive is a zip of `db.dump` (pg_dump custom format), `photos.tar.gz`
-and `documents.tar.gz` (unless data-only), `manifest.json`, and `SHA256SUMS` — see
+and `documents.tar.gz` (unless data-only), `manifest.json`, and `SHA256SUMS`; see
 [backup-restore.md](backup-restore.md). A failed backup returns `500` with
 the reason (for example, `pg_dump failed: …`) and is recorded as the last
 run; a second `POST` while one is running returns `409`. Stored archive names
 must match `cabinet-backup-YYYYMMDD-HHMMSS[-data].zip`; anything else is
 `404`. **These endpoints hand over the whole collection and are
-unauthenticated** — see [security.md](security.md).
+unauthenticated**; see [security.md](security.md).
 
 ## Alerts & metrics
 
@@ -454,7 +455,7 @@ unauthenticated** — see [security.md](security.md).
 | `POST` | `/api/alerts/test` | Send a test alert through the saved webhook; `?target=heartbeat` pushes the heartbeat now |
 | `GET`  | `/api/metrics`     | Prometheus metrics; `404` until `metrics_enabled`          |
 
-The test answers `200` either way, with `at`, `ok`, and `detail` — `HTTP
+The test answers `200` either way, with `at`, `ok`, and `detail`: `HTTP
 404`, a connection error, or `No webhook URL is saved`; a detail never
 repeats the URL. Metrics are cached for a minute. What alerts fire, the
 payload of each format, and every metric are in
@@ -481,7 +482,7 @@ optional, and 500 slots is the limit. A generated slot carries `year` and
 by hand **or** an owned, untrashed item matches it, in which case
 `matched_item_id` and `matched_label` name that item. Matching is never
 stored, so selling or trashing the item reopens the slot. Mint marks match
-as written — an item marked `P` doesn't fill a no-mint-mark slot. Details
+as written: an item marked `P` doesn't fill a no-mint-mark slot. Details
 also carry `match_catalog`/`match_ref` or `match_country`/
 `match_denomination`, `total`, and `filled`; summaries carry `generated`.
 
@@ -493,11 +494,12 @@ also carry `match_catalog`/`match_ref` or `match_country`/
 
 Returns `status`, `db` (`ok` / `unreachable`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
-build ships, and a `status` — `ok`, `pending` (migrations not yet applied),
-`ahead` (the database was migrated by a newer build), or `unknown` (database
-unreachable). `documents` says whether attached documents can be stored: `ok`,
-`not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so uploads are refused),
-`unwritable`, or `inside_photos`. Settings → About displays both.
+build ships, and a `status`, one of `ok`, `pending` (migrations not yet
+applied), `ahead` (the database was migrated by a newer build), or `unknown`
+(database unreachable). `documents` says whether attached documents can be
+stored: `ok`, `not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so
+uploads are refused), `unwritable`, or `inside_photos`. Settings → About
+displays both.
 
 ## Conventions
 

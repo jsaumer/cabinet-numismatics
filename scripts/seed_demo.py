@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Load a small demo collection into a running Cabinet instance.
 
-Gives you something to look at — populated list, dashboard breakdowns, gain/
-loss tables — without entering real data first. Uses only the standard library
+Gives you something to look at (populated list, dashboard breakdowns, gain/
+loss tables) without entering real data first. Uses only the standard library
 and talks to the public API, so it needs no install:
 
     python scripts/seed_demo.py
@@ -19,7 +19,7 @@ import sys
 import urllib.error
 import urllib.request
 
-# (payload, [(value, source) …]) — estimates are recorded oldest first so the
+# (payload, [(value, source) …]). Estimates are recorded oldest first so the
 # value-over-time chart has something to draw.
 DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
     (
@@ -129,7 +129,7 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
             "year": 1942, "series": "Mercury Dime", "composition": "90% silver",
             "weight_g": 2.5, "fineness": 0.9, "grade_code": "MS-64", "quantity": 5,
             "acquisition_date": "2023-12-01", "acquisition_price": 95.0,
-            "notes": "Roll remnant — priced as a lot.", "tags": ["silver"],
+            "notes": "Roll remnant, priced as a lot.", "tags": ["silver"],
         },
         [(128.0, "manual")],
     ),

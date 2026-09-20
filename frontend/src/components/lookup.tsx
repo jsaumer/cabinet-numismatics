@@ -2,7 +2,7 @@ import { Item } from "../api";
 
 /** Outbound lookups for an item: eBay's sold listings for the same coin or
  * note, PCGS Photograde for judging a grade by eye, and CoinFacts when a
- * PCGS number is known. Links only — no request leaves the browser until
+ * PCGS number is known. Links only: no request leaves the browser until
  * one is clicked. */
 export function LookupLinks({ item }: { item: Item }) {
   const query = [

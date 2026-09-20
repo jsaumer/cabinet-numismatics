@@ -10,16 +10,16 @@ ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
 plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
 `checklists` + `checklist_slots`.
 
-Revision `0008` (pricing program M1) added `app_settings` — key/value JSON
+Revision `0008` (pricing program M1) added `app_settings`: key/value JSON
 settings (display currency, source toggles, API credentials, melt cadence;
 later grew `value_strategy`/`preferred_source` for the blended-value display
 and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh, and
 `backup_schedule`/`backup_keep`/`backup_include_photos`/`backup_last_run`
-for in-app backups — no
-migration needed, since it's a generic key/value table), read through
-`app/services/app_settings.py` with defaults and env fallbacks. Revision
+for in-app backups, with no migration needed, since it's a generic key/value
+table), read through `app/services/app_settings.py` with defaults and env
+fallbacks. Revision
 `0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`;
-`0011` (M5) added `estimate_attempts` — the latest automatic pricing attempt
+`0011` (M5) added `estimate_attempts`, the latest automatic pricing attempt
 per item and source (`item_id` + `source` primary key, cascade with the item;
 `outcome` `ok` / `not_applicable` / `unavailable`, `message`,
 `attempted_at`), which the coverage report reads to explain gaps a failed
@@ -41,7 +41,7 @@ targets: label, position, filled, optional item link SET NULL). `items` also
 gained `variety` (text) and `custom_fields` (JSON key→value, max 20).
 
 **Money convention:** `acquisition_price`, `sold_price`, and
-`estimated_value` are all **per row** — the whole lot as entered — never
+`estimated_value` are all **per row** (the whole lot as entered), never
 per-piece. Automatic estimates multiply per-piece value by `quantity` to
 match.
 
@@ -79,7 +79,7 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `variety`          | text null     | die variety, overdate…                  |
 | `strike`           | enum          | `business` \| `proof` \| `specimen`     |
 | `composition`      | text null     | e.g. "90% silver"                       |
-| `weight_g`         | numeric null  | grams — enables melt value (Phase 3)    |
+| `weight_g`         | numeric null  | grams; enables melt value (Phase 3)     |
 | `fineness`         | numeric null  | 0–1, e.g. 0.9000                        |
 | `diameter_mm`      | numeric null  | coins                                   |
 | `thickness_mm`     | numeric null  | coins                                   |
@@ -102,7 +102,7 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `quantity`         | int           | default 1                               |
 | `acquisition_date` | date null     |                                         |
 | `acquisition_price`| numeric null  | what you paid                           |
-| `acquisition_fees` | numeric null  | premium, shipping, tax — in cost basis  |
+| `acquisition_fees` | numeric null  | premium, shipping, tax (in cost basis)  |
 | `currency`         | text          | ISO 4217, for acquisition price         |
 | `acquired_from`    | text null     | dealer, show, auction, inheritance…     |
 | `storage_location` | text null     | album, slab box, safe…                  |
@@ -178,7 +178,7 @@ delete with the item. Cloning an item leaves its sales behind.
 | `created_at`       | timestamptz   |                                             |
 
 ### documents / item_documents
-Attached files — receipts, certificates, invoices. The file and its
+Attached files: receipts, certificates, invoices. The file and its
 thumbnail live under `DOCUMENT_DIR/<id>/` (never the public photo volume);
 the row holds the metadata. `item_documents` links a document to any number
 of items (both keys cascade); the API deletes a document when its last link
@@ -222,8 +222,8 @@ stale row is used if the upstream fetch fails.
 Grade scales for coins and notes. Seeded by migration `0003` from
 `app/models/grades_seed.py`: `sheldon` (PO-1 through MS-70) and `pmg`
 (1 through 70; 1–3 were added by `0012`, which inserts them only where
-missing). Proofs and specimens reuse the Sheldon rows — the item's `strike`
-turns `MS-65` into `PR-65` or `SP-65` — and designations, plus grades, stars,
+missing). Proofs and specimens reuse the Sheldon rows (the item's `strike`
+turns `MS-65` into `PR-65` or `SP-65`), and designations, plus grades, stars,
 and details grades live on the item, not the grade.
 
 | Column        | Type    | Notes                                        |

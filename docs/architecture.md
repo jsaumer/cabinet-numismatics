@@ -4,7 +4,7 @@
 
 Cabinet is a single-user, self-hosted numismatics web application. All components run
 as containers managed by a single `docker-compose.yaml`. The stack is
-deliberately small — three services — because a single-user collection manager
+deliberately small (three services) because a single-user collection manager
 has modest performance needs.
 
 ```
@@ -21,7 +21,7 @@ has modest performance needs.
                     │     db      │  (postgres)
                     └─────────────┘
 
-     photos: shared volume — backend writes, nginx serves
+     photos: shared volume (backend writes, nginx serves)
 ```
 
 ## Services
@@ -37,9 +37,9 @@ the frontend and photo files directly, and proxies `/api/` to the backend. Sets
 ### backend (built image)
 FastAPI application exposing the REST API under `/api/`. It also runs
 background work (thumbnail generation, price lookups, scheduled backups,
-alerts and the heartbeat — see [monitoring.md](monitoring.md)) in-process — either
-synchronously or via FastAPI background tasks — since the job volume for a
-single user is low. On startup it ensures the photo directory exists.
+alerts and the heartbeat, see [monitoring.md](monitoring.md)) in-process,
+either synchronously or via FastAPI background tasks, since the job volume
+for a single user is low. On startup it ensures the photo directory exists.
 
 ### db (postgres)
 Primary relational store for items, photo metadata, and price estimates. Data
@@ -49,9 +49,10 @@ for the database to be ready.
 ## Photo storage
 
 Photos are stored as plain files on the `photo_data` volume rather than in an
-object store — simpler to run and back up for a single user. The backend
-writes originals and generated thumbnails into `PHOTO_DIR`; nginx serves them
-read-only under `/photos/`. The database stores only the relative file keys.
+object store, which is simpler to run and back up for a single user. The
+backend writes originals and generated thumbnails into `PHOTO_DIR`; nginx
+serves them read-only under `/photos/`. The database stores only the
+relative file keys.
 
 ## Document storage
 
@@ -111,7 +112,7 @@ at the private `backend_state` volume used when `SECRET_KEY` is unset. See
   and `DOCUMENT_DIR` set to local directories, and `REQUIRE_DOCUMENT_MOUNT=false`.
 - **Frontend:** `npm run dev` runs the Vite dev server, which proxies `/api`
   to localhost:8000. `npm run build` emits static files to `frontend/dist`
-  (only needed for local inspection — the container build does this itself).
+  (only needed for local inspection: the container build does this itself).
 - **Full stack:** `docker compose up --build` brings everything up with nginx
   as the entry point at http://localhost/; the frontend is built inside the
   proxy image.
@@ -122,8 +123,8 @@ at the private `backend_state` volume used when `SECRET_KEY` is unset. See
   TLS at the nginx proxy (add a cert and a `443` server block) or place the
   stack behind an existing reverse proxy / tunnel.
 - Back up from Settings → Backups (download, or scheduled archives into
-  `BACKUP_DIR`), or with `./scripts/backup.sh` from the host — database dump
-  and photo archive together either way; see
+  `BACKUP_DIR`), or with `./scripts/backup.sh` from the host (database dump
+  and photo archive together either way); see
   [backup-restore.md](backup-restore.md).
 - There is no application-level auth by design; put the stack behind an
   authenticating proxy with TLS before exposing it beyond a trusted network.

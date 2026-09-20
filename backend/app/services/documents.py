@@ -1,12 +1,12 @@
 """Attached documents (v0.19.0): receipts, certificates of authenticity,
 invoices, grading-label scans.
 
-Files live under DOCUMENT_DIR — a volume of their own, never the photo volume
-nginx serves — and are served only through the API, with headers chosen from
+Files live under DOCUMENT_DIR (a volume of their own, never the photo volume
+nginx serves) and are served only through the API, with headers chosen from
 the type detected here (see `routers/documents.py`). The type is read from the
 bytes: PDFs must start with `%PDF-` *and* open in PDFium; images must open in
-Pillow as JPEG, PNG, or WebP. Everything else — SVG and HTML above all, since
-they can run script — is refused.
+Pillow as JPEG, PNG, or WebP. Everything else (SVG and HTML above all, since
+they can run script) is refused.
 
 Each document gets a JPEG thumbnail: the image itself, or a PDF's first page
 rendered by PDFium (pypdfium2, Apache/BSD-licensed). A password-protected PDF
@@ -60,7 +60,7 @@ def _mount_points() -> set[str] | None:
 
 
 def storage_status() -> str:
-    """Whether documents can be stored: `ok`, or why not — `inside_photos`,
+    """Whether documents can be stored: `ok`, or why not: `inside_photos`,
     `not_mounted`, `unwritable` (uploads are refused)."""
     settings = get_settings()
     path = root()
@@ -106,7 +106,7 @@ def _is_heic(data: bytes) -> bool:
 
 
 def _pdf_thumbnail(data: bytes) -> tuple[bytes | None, int | None]:
-    """(JPEG thumbnail of page one, page count) — (None, None) for a PDF that
+    """(JPEG thumbnail of page one, page count), or (None, None) for a PDF that
     needs a password. ValueError if PDFium can't read it."""
     import pypdfium2 as pdfium
 
@@ -152,7 +152,7 @@ def inspect(data: bytes) -> dict:
         return {"content_type": PDF, "ext": ".pdf", "thumb": thumb, "pages": pages}
     if _is_heic(data):
         raise ValueError(
-            "HEIC photos aren't supported yet — export or share the photo as JPEG and upload that"
+            "HEIC photos aren't supported yet. Export or share the photo as JPEG and upload that"
         )
     try:
         image, fmt = photo_store.open_validated(data)

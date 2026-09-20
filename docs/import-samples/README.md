@@ -19,4 +19,4 @@ cd backend && python -m tests.import_samples ../docs/import-samples
 | `colnect-style.csv` | a spreadsheet | lines above the header row. Colnect's real column names vary by language and couldn't be confirmed, so this only illustrates the layout |
 
 Import them into a test instance (the local `docker compose` stack), not the
-collection you care about — the items are fictional.
+collection you care about, because the items are fictional.

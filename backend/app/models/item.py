@@ -226,7 +226,7 @@ class Item(Base):
 
     @property
     def cost_basis(self) -> Decimal | None:
-        """Price paid plus fees, shipping, and tax — what gains are measured against."""
+        """Price paid plus fees, shipping, and tax: what gains are measured against."""
         if self.acquisition_price is None:
             return None
         return Decimal(self.acquisition_price) + Decimal(self.acquisition_fees or 0)
@@ -240,7 +240,7 @@ class Item(Base):
 
 
 class Document(Base):
-    """An attached file — a receipt, certificate of authenticity, invoice…
+    """An attached file: a receipt, certificate of authenticity, invoice…
     Stored under DOCUMENT_DIR (never the public photo volume) and served only
     through the API. Shared between items via `item_documents`."""
 
@@ -271,8 +271,8 @@ class Document(Base):
 
 @event.listens_for(Session, "do_orm_execute")
 def _hide_trashed(state) -> None:
-    """Keep trashed items out of every ORM query — lists, stats, reports,
-    exports, refreshes, relationships — unless the statement opts in with
+    """Keep trashed items out of every ORM query (lists, stats, reports,
+    exports, refreshes, relationships) unless the statement opts in with
     `.execution_options(include_deleted=True)`. One filter here instead of a
     `deleted_at IS NULL` in every query, where one missed spot would leak
     trashed items into the totals. (Relationship and column loads inherit the
@@ -434,7 +434,7 @@ class PriceEstimate(Base):
 
 
 class Comparable(Base):
-    """One sale of a piece like this item — the sales log that the `comps`
+    """One sale of a piece like this item, in the sales log that the `comps`
     estimate takes its median from. Logged by hand, or fetched from Numista's
     auction records (`source = "numista"`, deduplicated by `external_id`)."""
 

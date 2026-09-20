@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api, CollectionStats, ItemPage, money, photoUrl } from "../api";
+import { Menu } from "../components/controls";
 
 const PAGE_SIZE = 50;
 
@@ -158,8 +159,35 @@ export default function ItemList() {
     </b>
   );
 
+  const exportTitle = exportQuery ? "Exports the current filters" : "Exports everything";
+
   return (
     <>
+      <div className="detail-header">
+        <h1>Collection</h1>
+        <div className="spacer" />
+        {trashCount > 0 && (
+          <Link to="/trash" title="Deleted items, waiting to be restored">
+            Trash ({trashCount})
+          </Link>
+        )}
+        <Menu label="Export / import">
+          <a role="menuitem" href={`/api/items/export.csv${exportQuery}`} title={exportTitle}>
+            Export as CSV
+          </a>
+          <a role="menuitem" href={`/api/items/export.xlsx${exportQuery}`} title={exportTitle}>
+            Export as Excel
+          </a>
+          <Link role="menuitem" to="/import"
+            title="From Numista, OpenNumismat, a spreadsheet, or a Cabinet export">
+            Import…
+          </Link>
+        </Menu>
+        <Link className="button" to="/items/run" title="One item per date and mint of a type">
+          Add a run
+        </Link>
+        <Link className="button primary" to="/items/new">Add item</Link>
+      </div>
       {stats && stats.counts.total > 0 && (
         <div className="stats-strip">
           <span><b>{stats.counts.owned}</b> owned</span>
@@ -247,28 +275,6 @@ export default function ItemList() {
         <button onClick={() => setShowAdvanced(!showAdvanced)}>
           {showAdvanced ? "Less" : "More…"}
         </button>
-        <div className="spacer" />
-        <Link className="button" to="/import"
-          title="Import from Numista, OpenNumismat, a spreadsheet, or a Cabinet export">
-          Import
-        </Link>
-        <a className="button" href={`/api/items/export.csv${exportQuery}`}
-          title={exportQuery ? "Exports the current filters" : "Exports everything"}>
-          CSV
-        </a>
-        <a className="button" href={`/api/items/export.xlsx${exportQuery}`}
-          title={exportQuery ? "Exports the current filters" : "Exports everything"}>
-          Excel
-        </a>
-        {trashCount > 0 && (
-          <Link className="button" to="/trash" title="Deleted items, waiting to be restored">
-            Trash ({trashCount})
-          </Link>
-        )}
-        <Link className="button" to="/items/run" title="One item per date and mint of a type">
-          Add a run
-        </Link>
-        <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 
       {showAdvanced && (
@@ -311,7 +317,7 @@ export default function ItemList() {
       {page && page.items.length === 0 && (
         <div className="empty">
           {page.total === 0 && !hasFilters
-            ? "No items yet — add the first piece of your collection, or import one."
+            ? "No items yet. Add the first piece of your collection, or import one."
             : "Nothing matches these filters."}
         </div>
       )}
@@ -415,11 +421,11 @@ export default function ItemList() {
                   {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}
                 </td>
                 <td>{item.year}</td>
-                <td>{item.grade_label ?? <span className="muted">—</span>}</td>
+                <td>{item.grade_label ?? <span className="muted">–</span>}</td>
                 <td className="muted hide-sm">{item.series ?? ""}</td>
                 <td className="num hide-sm">{item.quantity}</td>
                 <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>
-                <td className="muted hide-sm">{item.latest_value_source ?? "—"}</td>
+                <td className="muted hide-sm">{item.latest_value_source ?? "–"}</td>
                 <td className="num">{money(item.latest_value, item.latest_value_currency)}</td>
               </tr>
             ))}

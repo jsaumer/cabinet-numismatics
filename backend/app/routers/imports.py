@@ -153,7 +153,7 @@ def _read(upload_id: str, options: ImportOptions, db: Session):
 
 @router.post("/{upload_id}/preview", response_model=ImportPreview)
 def preview(upload_id: str, options: ImportOptions, db: Session = Depends(get_db)):
-    """What importing the file would do — nothing is written."""
+    """What importing the file would do. Nothing is written."""
     candidates, reader, extra = _read(upload_id, options, db)
     if reader is not None:
         reader.close()

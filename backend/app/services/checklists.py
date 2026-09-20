@@ -1,7 +1,7 @@
 """Registry-style checklists and runs: which owned items fill which slot.
 
-A generated checklist knows what fills it — a catalogue reference (every
-owned item carrying Numista N#1234) or a country + denomination — and each
+A generated checklist knows what fills it: a catalogue reference (every
+owned item carrying Numista N#1234) or a country + denomination, and each
 slot knows its year and mint mark. Matching is computed when a checklist is
 read, never stored, so it follows the collection: buy the coin and the slot
 fills, sell or trash it and the slot reopens. A slot ticked by hand stays

@@ -183,7 +183,7 @@ def test_unknown_type_and_upstream_failure(client, catalogue, monkeypatch):
     assert client.get("/api/numista/types/0").status_code == 422
 
     def down(api_key, path, params=None):
-        raise SourceUnavailable("Numista request quota exhausted — try again later")
+        raise SourceUnavailable("Numista request quota exhausted. Try again later")
 
     monkeypatch.setattr(numista, "_request", down)
     resp = client.get("/api/numista/types/4242")

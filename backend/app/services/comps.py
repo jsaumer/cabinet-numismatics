@@ -1,6 +1,6 @@
 """Sold-listing comparables (v0.17.0): the `comps` price source.
 
-The estimate is the median of recent sales in the item's sales log — sales the
+The estimate is the median of recent sales in the item's sales log: sales the
 user recorded by hand (eBay sold listings, auction archives, dealer sales) or
 fetched from Numista's auction records (`numista.fetch_sales`, paid API plan).
 No network: everything comes from the `comparables` table, converted into the
@@ -9,7 +9,7 @@ display currency at the cached daily rates.
 Which sales count:
 - only those marked `included` (the user can leave out an odd lot);
 - a sale whose grade bucket is known (Numista's g…unc) must match the item's
-  bucket — hand-logged sales carry no bucket, since choosing them was the match;
+  bucket (hand-logged sales carry no bucket, since choosing them was the match);
 - the last `WINDOW_YEARS`, falling back to every sale when fewer than
   `MIN_RECENT` are that recent;
 - at most `MAX_SALES`, newest first.
@@ -63,7 +63,7 @@ def prerequisite(db: Session, item: Item) -> str | None:
     if not item.comparables:
         return "Log sales of comparable pieces in the item's sales log to estimate from comps"
     if not any(c.included for c in item.comparables):
-        return "Every sale in the sales log is left out — include at least one"
+        return "Every sale in the sales log is left out. Include at least one"
     if not matching_sales(item)[0]:
         bucket = item_bucket(item)
         return f"None of the logged sales match this item's grade ({(bucket or '').upper()})"
@@ -108,7 +108,7 @@ def comps_estimate(db: Session, item: Item) -> EstimateResult:
             used.append((sale, value))
     if not used:
         raise NotApplicable(
-            f"No exchange rate to {currency} for the logged sales' currencies — try again later"
+            f"No exchange rate to {currency} for the logged sales' currencies. Try again later"
         )
 
     values = [v for _, v in used]

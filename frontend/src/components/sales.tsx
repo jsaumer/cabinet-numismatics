@@ -3,7 +3,7 @@ import { FormEvent, useState } from "react";
 import { api, Comparable, ComparableInput, ItemDetail, money } from "../api";
 
 // Numista's grade buckets, and the Sheldon/PMG rank cutoffs the backend uses
-// (services/numista.py) — a sale with a known bucket counts only when it matches.
+// (services/numista.py): a sale with a known bucket counts only when it matches.
 const RANK_CUTOFFS: [number, string][] = [
   [8, "g"], [12, "vg"], [20, "f"], [40, "vf"], [50, "xf"], [60, "au"],
 ];
@@ -159,7 +159,7 @@ export function SalesLog({
     <div className="card">
       <h2>Sales log</h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        Sales of pieces like this one — eBay sold listings, auction results, dealer sales. The{" "}
+        Sales of pieces like this one: eBay sold listings, auction results, dealer sales. The{" "}
         <b>comps</b> estimate is the median of recent ones (the last three years, or older when
         fewer than three are that recent), converted to your display currency; confidence grows
         with the number of sales and shrinks when they disagree.
@@ -216,10 +216,10 @@ export function SalesLog({
                       {sale.note && <div className="muted sale-title">{sale.note}</div>}
                     </td>
                     <td>
-                      {sale.grade ?? "—"}
+                      {sale.grade ?? "–"}
                       {otherGrade && (
                         <div className="muted sale-title">
-                          other grade ({sale.grade_bucket?.toUpperCase()}) — not counted
+                          other grade ({sale.grade_bucket?.toUpperCase()}), not counted
                         </div>
                       )}
                     </td>
@@ -272,7 +272,7 @@ export function SalesLog({
             })
           }
         >
-          {busy === "estimate" ? "Estimating…" : `📈 Estimate from ${counted} sale${counted === 1 ? "" : "s"}`}
+          {busy === "estimate" ? "Estimating…" : `Estimate from ${counted} sale${counted === 1 ? "" : "s"}`}
         </button>
         {!formOpen && <button onClick={() => setFormOpen(true)}>＋ Log a sale</button>}
         {numistaSales && (
@@ -294,7 +294,7 @@ export function SalesLog({
               })
             }
           >
-            {busy === "numista" ? "Fetching…" : "🔎 Fetch Numista auction sales"}
+            {busy === "numista" ? "Fetching…" : "Fetch Numista auction sales"}
           </button>
         )}
       </div>
@@ -370,31 +370,31 @@ export function SalesLog({
         <summary>Where to find sold prices</summary>
         <ul className="sale-help">
           <li>
-            <b>eBay</b> — search for the coin or note, then tick <i>Sold items</i> under Filter.
-            Shows roughly the last 90 days. Shipping is listed separately — add it under
+            <b>eBay</b>: search for the coin or note, then tick <i>Sold items</i> under Filter.
+            Shows roughly the last 90 days. Shipping is listed separately, so add it under
             <i> Fees on top</i> if you want it counted.
           </li>
           <li>
-            <b>Heritage Auctions</b> (coins.ha.com, currency.ha.com) — free membership opens the
+            <b>Heritage Auctions</b> (coins.ha.com, currency.ha.com): free membership opens the
             prices-realized archive back to 1997. Prices include the buyer's premium.
           </li>
           <li>
-            <b>GreatCollections</b> — a free archive of about 1.6 million certified US coins and
+            <b>GreatCollections</b>: a free archive of about 1.6 million certified US coins and
             notes. Prices include the buyer's premium.
           </li>
           <li>
-            <b>NGC Auction Central</b> and <b>PCGS Auction Prices</b> — free results from several
+            <b>NGC Auction Central</b> and <b>PCGS Auction Prices</b>: free results from several
             auction houses, by grading-service number and grade.
           </li>
           <li>
-            <b>Spink</b>, <b>Stack's Bowers</b>, <b>Sixbid</b>, <b>NumisBids</b> — archives with
+            <b>Spink</b>, <b>Stack's Bowers</b>, <b>Sixbid</b>, <b>NumisBids</b>: archives with
             prices realized, strong on world coins and banknotes.
           </li>
         </ul>
         <p className="muted">
           Log sales in the same grade as your piece where you can; a sale with a known grade
           bucket that differs from this item's is kept but not counted. Numista's auction records
-          can fill this log automatically, but only on Numista's paid API plan — see Settings →
+          can fill this log automatically, but only on Numista's paid API plan; see Settings →
           Price sources.
         </p>
       </details>

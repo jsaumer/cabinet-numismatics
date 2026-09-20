@@ -1,10 +1,10 @@
 import { Estimate, money } from "../api";
 
 export const SOURCE_LABELS: Record<string, string> = {
-  melt: "⚖ Melt value",
-  numista: "🔎 Numista value",
-  pcgs: "🏷 PCGS value",
-  comps: "📈 Comps value",
+  melt: "Melt value",
+  numista: "Numista value",
+  pcgs: "PCGS value",
+  comps: "Comps value",
 };
 
 export function timeSince(iso: string): string {
@@ -51,7 +51,7 @@ function DataAge({ details }: { details: Details }) {
   );
 }
 
-// What the source returned that produced an estimate — or the note left on a
+// What the source returned that produced an estimate, or the note left on a
 // manual one. Unknown shapes fall back to a plain field list.
 export function Provenance({ estimate }: { estimate: Estimate }) {
   const d: Details = estimate.details ?? {};
@@ -100,7 +100,7 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
             </>
           )}
           {wanted && used && wanted !== used && (
-            <span className="muted"> — no {wanted.toUpperCase()} price, nearest bucket used</span>
+            <span className="muted"> (no {wanted.toUpperCase()} price, nearest bucket used)</span>
           )}
           {quantity !== 1 && <span className="muted"> · per piece, × {quantity}</span>}
           <DataAge details={d} />
@@ -147,7 +147,7 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
               const url = text(lot.url);
               return (
                 <li key={index}>
-                  {text(lot.date) ?? "undated"} — {money(num(lot.price), "USD")}
+                  {text(lot.date) ?? "undated"}: {money(num(lot.price), "USD")}
                   {text(lot.auctioneer) && <span className="muted"> · {text(lot.auctioneer)}</span>}
                   {url && (
                     <>
@@ -194,7 +194,7 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
             const url = text(sale.url);
             return (
               <li key={index}>
-                {text(sale.date)} — {money(num(sale.converted), currency)}
+                {text(sale.date)}: {money(num(sale.converted), currency)}
                 {text(sale.currency) !== currency && (
                   <span className="muted"> ({money(num(sale.price), text(sale.currency))})</span>
                 )}

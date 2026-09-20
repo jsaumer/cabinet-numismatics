@@ -10,16 +10,43 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-## [0.23.2] — 2026-09-20
+### Changed
+- **A look of its own.** A bronze accent in place of the blue, a warm
+  off-white page (a warm near-black in dark mode), a gold rule under the
+  header, and a serif for the wordmark, page titles, and the dashboard's
+  headline value. The serif comes from fonts already on your system, so
+  nothing is downloaded. Card headings are small capitals, so page titles
+  clearly outrank them. Gain and loss colours and the badges are unchanged.
+  Screenshots retaken.
+- **Money reads as money**: `$2,733.42`, `CA$253.92`, `€52.00` instead of
+  `2,733.42 USD`, everywhere an amount is shown. List columns no longer wrap
+  an amount onto two lines, and number columns are right-aligned with
+  fixed-width digits.
+- **The collection page has a title row** holding "Add item" and "Add a
+  run"; CSV, Excel, and Import moved into one "Export / import" menu, so the
+  filter bar is one row again.
+- **Import and the trash are in the navigation**, and the header's emoji
+  (settings, dark mode) and the ones on buttons are now drawn icons that
+  look the same on every system. On a phone the navigation wraps instead of
+  running off the edge.
+- **File pickers look like buttons.** Photos get one drop area with "Add
+  photos", "Camera", and "Webcam"; documents and imports get a single
+  button in place of the browser's "Choose File" control.
+- **Plainer punctuation.** The em dashes are gone from the interface, the
+  API's messages, and the documentation; sentences were rewritten rather
+  than re-punctuated. Empty values show an en dash. Release headings here
+  now use the Keep a Changelog form, `## [x.y.z] - date`.
+
+## [0.23.2] - 2026-09-20
 
 ### Fixed
 - The insurance report's **Acquired** column printed a dash above the source
-  ("— / inherited") when an item had a source but no date.
-- Asking Numista to price an item that has no Numista number — anything
-  entered by hand — now links to where that's fixed ("Find it on Numista",
+  ("– / inherited") when an item had a source but no date.
+- Asking Numista to price an item that has no Numista number (anything
+  entered by hand) now links to where that's fixed ("Find it on Numista",
   the edit page's fill card) instead of only saying a reference is missing.
 
-## [0.23.1] — 2026-09-20
+## [0.23.1] - 2026-09-20
 
 ### Security
 - **The backend no longer runs as root.** Its container starts as root only
@@ -27,7 +54,7 @@ applies them itself on startup; for earlier releases, run
   documents) to an unprivileged user, then drops to it for good. `PUID` and
   `PGID` choose that user (default `1000:1000`). Upgrading needs nothing:
   volumes and bind mounts written by earlier releases are re-owned once, on
-  the first start. If they can't be — an NFS export with root squash — the
+  the first start. If they can't be (an NFS export with root squash), the
   backend says so in its log and stays root rather than failing to start.
   `restore.sh` gives restored files to the volume's owner.
 - **Security headers from the proxy**: a Content-Security-Policy on the app
@@ -45,12 +72,12 @@ applies them itself on startup; for earlier releases, run
   every package pinned and verified by hash), so two builds of one commit
   are the same image.
 
-## [0.23.0] — 2026-09-19
+## [0.23.0] - 2026-09-19
 
 ### Added
 - **Add a run.** Collection → **Add a run**: look a type up on Numista, tick
-  the dates and mints you have, fill in what they share — status, grade,
-  date and price paid (each), source, storage, set, tags — and get one item
+  the dates and mints you have, fill in what they share (status, grade,
+  date and price paid for each, source, storage, set, tags), and get one item
   per issue, each with the type's country, denomination, composition,
   weight, and catalogue references plus its own year, mint mark, and
   mintage. Issues you already own are marked and skipped. A fifty-coin run is
@@ -58,7 +85,7 @@ applies them itself on startup; for earlier releases, run
 - **Checklists that fill themselves.** Generate a checklist from a Numista
   type (one slot per issue) or from a date range (country, denomination,
   first and last year, mint marks, and any to leave out). A slot fills when
-  you own an item of that type — or that country and denomination — with
+  you own an item of that type (or that country and denomination) with
   the same year and mint mark, links to it, and reopens if the item is sold
   or trashed. Each checklist shows its completion percentage and a **needed
   to complete** view. Hand-written checklists and hand ticks work as before.
@@ -68,21 +95,21 @@ applies them itself on startup; for earlier releases, run
   checklists `match_*`, `total`, and `filled`, summaries `generated`.
   Migration `0017`.
 
-## [0.22.0] — 2026-09-19
+## [0.22.0] - 2026-09-19
 
 ### Added
 - **Fill from a PCGS cert.** A slabbed coin's cert number fills the item
   form in from PCGS: type, country, denomination, year, mint mark, series,
   variety, composition, weight, diameter, edge, mintage, the cert, the PCGS
-  number as a catalogue reference, and — when no grade is set — the grade,
+  number as a catalogue reference, and, when no grade is set, the grade,
   strike, plus, and designations. Empty fields only, like the Numista fill;
   the same cached answer prices the item afterwards, so one request covers
   both. The message also says how many PCGS has graded at that grade and
   higher. Needs a PCGS API token (Settings → Price sources).
 - **A duplicate warning.** As an item is entered or edited, the form checks
   for one already here with the same cert number, the same catalogue
-  reference, or the same country, denomination, year, and mint mark —
-  trash included — and links to it. The import preview adds the same note
+  reference, or the same country, denomination, year, and mint mark
+  (trash included), and links to it. The import preview adds the same note
   to rows it doesn't already know by their import key.
 - **Look it up links** on the item page: eBay's sold listings for the same
   piece, PCGS Photograde for judging a grade, and CoinFacts when a PCGS
@@ -93,16 +120,16 @@ applies them itself on startup; for earlier releases, run
 - The dashboard's setup checklist now has **Don't show this again** instead
   of a 30-day snooze.
 
-## [0.21.1] — 2026-09-19
+## [0.21.1] - 2026-09-19
 
 ### Added
 - **A setup checklist on the dashboard**: what's still switched off on a
-  fresh install — scheduled backups, an alert webhook or heartbeat, a
-  price-source key, document storage not mounted, an empty collection — each
+  fresh install (scheduled backups, an alert webhook or heartbeat, a
+  price-source key, document storage not mounted, an empty collection), each
   linking to where it's fixed. **Hide for 30 days** puts it away; a new
   problem brings it back.
 - **Browser tests.** Playwright smoke tests (`frontend/e2e/`) drive the real
-  pages against the compose stack in CI — add an item, record a value, find
+  pages against the compose stack in CI: add an item, record a value, find
   it in the collection, trash it, restore it, delete it for good, and check
   every Settings section renders. `npm run e2e` locally.
 - **A Swarm stack file**, `deploy/docker-stack.yaml`, ready for
@@ -120,16 +147,16 @@ applies them itself on startup; for earlier releases, run
 - `CLAUDE.md` is a third of its former length; the per-release
   implementation notes moved to `docs/implementation-notes.md`.
 
-## [0.21.0] — 2026-09-18
+## [0.21.0] - 2026-09-18
 
 ### Added
-- **Alerts.** Settings → Alerts & metrics takes a webhook URL — generic JSON
-  (n8n, Home Assistant, Node-RED), ntfy, Discord, Slack/Mattermost, or Gotify
-  — and sends an alert when a backup fails, Numista or PCGS rejects its key or
-  runs out of quota, or a scheduled refresh has failures: once when it starts,
-  and once when it's working again, never on every repeat. **Send test** checks
-  the URL. The URL is stored encrypted, like the API keys, and only its host
-  is shown.
+- **Alerts.** Settings → Alerts & metrics takes a webhook URL: generic JSON
+  (n8n, Home Assistant, Node-RED), ntfy, Discord, Slack/Mattermost, or
+  Gotify. It sends an alert when a backup fails, Numista or PCGS rejects its
+  key or runs out of quota, or a scheduled refresh has failures: once when it
+  starts, and once when it's working again, never on every repeat. **Send
+  test** checks the URL. The URL is stored encrypted, like the API keys, and
+  only its host is shown.
 - **Heartbeat** for an Uptime Kuma *Push* monitor: every hour Cabinet pushes
   `up`, or `down` with what's failing, so Kuma also notices Cabinet not
   running at all. **Push now** sends one immediately.
@@ -153,11 +180,11 @@ applies them itself on startup; for earlier releases, run
 - PCGS answering 401 is reported as a rejected token and 429 as an exhausted
   quota, alongside its existing 500 = bad token.
 
-## [0.20.0] — 2026-09-18
+## [0.20.0] - 2026-09-18
 
 ### Added
-- **A trash for deleted items.** Deleting an item — on its page, or several
-  selected on the Collection page with the new **Move to trash** — moves it to
+- **A trash for deleted items.** Deleting an item (on its page, or several
+  selected on the Collection page with the new **Move to trash**) moves it to
   the Trash with its photos, documents, values, sales log, and history, and
   **Restore** brings it back exactly as it was. The Trash page (linked from
   the Collection page) restores or deletes items for good one at a time, by
@@ -167,7 +194,7 @@ applies them itself on startup; for earlier releases, run
 - **The trash empties itself**: items deleted more than 30 days ago are
   deleted for good by the hourly background task. Settings → General sets
   it to 7, 30, 90, or 365 days, or never.
-- Trashed items are left out everywhere else — the collection, dashboard,
+- Trashed items are left out everywhere else: the collection, dashboard,
   Pricing reports, exports, the insurance report, set and tag counts, and
   scheduled refreshes. A document shared with a trashed item stays until
   that item is deleted for good, and importing a source again skips items in
@@ -183,20 +210,20 @@ applies them itself on startup; for earlier releases, run
   already in the trash. Item endpoints treat a trashed item as missing (404)
   until it's restored, except `GET /api/items/{id}`.
 
-## [0.19.0] — 2026-09-18
+## [0.19.0] - 2026-09-18
 
 **Upgrading: documents need a volume.** The backend now stores attached
 documents in `/data/documents` (`DOCUMENT_DIR`). Compose adds a
 `document_data` volume for it; a Swarm or bind-mount deployment must add a
-mount there, as for photos — see
+mount there, as for photos. See
 [deployment.md](docs/deployment.md#2-storage). Until it's mounted, document
 uploads are refused (Settings → About says so) rather than stored inside the
 container, where a redeploy would lose them.
 
 ### Added
 - **Documents on items**: receipts, invoices, certificates of authenticity,
-  grading labels, appraisals, correspondence — PDFs, JPEG, PNG, or WebP up to
-  25 MB, dropped onto or picked in the item page's new Documents card, each
+  grading labels, appraisals, correspondence (PDFs, JPEG, PNG, or WebP up to
+  25 MB), dropped onto or picked in the item page's new Documents card, each
   with a kind, title, date, and note, and a thumbnail (a PDF's first page).
   They open in the browser's own viewer, or download with their original
   name.
@@ -220,7 +247,7 @@ container, where a redeploy would lose them.
   `item_documents`. New dependency: pypdfium2 (PDF thumbnails;
   Apache-2.0/BSD).
 
-## [0.18.2] — 2026-09-18
+## [0.18.2] - 2026-09-18
 
 ### Fixed
 - **Numista imports read titles written with quotes.** Numista titles come as
@@ -229,18 +256,18 @@ container, where a redeploy would lose them.
   and the rest the denomination, for the account import and the export file.
 - **Importing your Numista collection brings the type's other catalogue
   numbers** (KM#, Schön#, Pick#…) along with the Numista number, from the same
-  catalogue lookup — as "Fill from Numista" on the item form already did.
+  catalogue lookup, as "Fill from Numista" on the item form already did.
 - The preview no longer says a denomination was "taken from the type's title"
   when the import is about to fill it in from Numista's catalogue; it says so.
 
-## [0.18.1] — 2026-09-18
+## [0.18.1] - 2026-09-18
 
 ### Fixed
 - **A Cabinet export imports in full from the Import page**, as CSV *or*
   Excel. It's recognised by its columns and read with every field (grades
   with designations, sets, custom fields, sale details…), with a preview
   like the other formats. The export's item id is the import key, so
-  importing the same export twice — into this Cabinet or another — skips
+  importing the same export twice (into this Cabinet or another) skips
   what's already there. In v0.18.0 it was read as an ordinary spreadsheet,
   which left out 27 of its columns.
 - Spreadsheet columns named with underscores (`acquisition_date`,
@@ -254,31 +281,31 @@ container, where a redeploy would lose them.
   file from another tool", which detects the format.
   `POST /api/items/import` still takes the CSV directly.
 
-## [0.18.0] — 2026-09-18
+## [0.18.0] - 2026-09-18
 
 ### Added
-- **Import from other collection tools** — a new Import page (Collection →
+- **Import from other collection tools.** A new Import page (Collection →
   Import) with a preview before anything is added:
   - **My Numista collection**: reads the collection on your own Numista
-    account with the API key already in Settings — grade, quantity, price
+    account with the API key already in Settings: grade, quantity, price
     paid, acquisition date and place, storage, comments, and slab details
-    (grading company, slab grade, number, CAC sticker, designations) — and
+    (grading company, slab grade, number, CAC sticker, designations). It
     fills in denomination, composition, weight, and size from the catalogue
     (one request per type, cached a week). Pictures can be downloaded too
     (off by default). Tokens and medals aren't imported.
   - **Numista's export file** (CSV or Excel), read by column name.
   - **OpenNumismat collections** (the `.db` file, OpenNumismat 1.9 to 1.11,
     including 1.11's new layout for purchases and sales), with their photos.
-  - **Any spreadsheet** (CSV or Excel) — uCoin, CoinSnap, Colnect, PCGS's
-    registry, a hand-kept sheet — with its columns matched to Cabinet's
-    fields: Cabinet suggests the matches from the column names, finds a
-    header below lines of preamble, and takes defaults for type, status,
-    country, and currency. Prices like "$1,250.00" and "1.234,50" and US or
-    European dates are understood.
+  - **Any spreadsheet** (CSV or Excel), whether from uCoin, CoinSnap,
+    Colnect, PCGS's registry, or a hand-kept sheet, with its columns matched
+    to Cabinet's fields: Cabinet suggests the matches from the column names,
+    finds a header below lines of preamble, and takes defaults for type,
+    status, country, and currency. Prices like "$1,250.00" and "1.234,50" and
+    US or European dates are understood.
   - Grades written any usual way are read: MS-64, PF-69 DCAM, 64 EPQ, XF,
     "Choice Very Fine", BU. Numista's G…UNC bands become the lowest grade of
     each band (VF → VF-20), noted in the preview.
-  - Importing the same source again skips items already imported — each
+  - Importing the same source again skips items already imported: each
     imported item remembers where it came from.
   - Cabinet's own CSV export still imports as before, now from the same page.
 - `docs/import-samples/` holds synthetic files in each format to try it with
@@ -293,11 +320,11 @@ container, where a redeploy would lose them.
   Import page. nginx accepts uploads up to 1 GB on `/api/imports` (an
   OpenNumismat file carries its photos).
 
-## [0.17.0] — 2026-09-18
+## [0.17.0] - 2026-09-18
 
 ### Added
 - **Sales log and comps estimates** (sold-listing comparables). Each item has
-  a sales log of what pieces like it actually sold for — date, where (with a
+  a sales log of what pieces like it actually sold for: date, where (with a
   link and lot), the grade as sold, price, whether buyer's premium is
   included, and any fees on top. A new **comps** price source estimates the
   median of recent logged sales (the last three years, or older ones when
@@ -311,7 +338,7 @@ container, where a redeploy would lose them.
 - **Numista auction sales** (Settings → Price sources, off by default): a
   button on the sales log that copies the auction results Numista records
   for the item's year and mint into the log. **This needs Numista's paid API
-  plan** — a free key gets "Permission denied", which Cabinet explains
+  plan**: a free key gets "Permission denied", which Cabinet explains
   rather than reporting a bad key. Runs only when clicked; a repeat the same
   day is served from cache.
 - `scripts/check_sources.py` probes `comps` and `numista-sales` too.
@@ -322,9 +349,9 @@ container, where a redeploy would lose them.
 
 ### Changed
 - Numista catalogue data (a type, its issues, and searches) is cached for 7
-  days instead of 30 — the longest Numista's API licence allows.
+  days instead of 30, the longest Numista's API licence allows.
 
-## [0.16.0] — 2026-09-18
+## [0.16.0] - 2026-09-18
 
 ### Added
 - **Photo tools on the item page** (the roadmap's "photo niceties" bundle):
@@ -350,7 +377,7 @@ container, where a redeploy would lose them.
 - Photo upload errors show on the Photos card instead of replacing the whole
   item page.
 
-## [0.15.0] — 2026-09-15
+## [0.15.0] - 2026-09-15
 
 ### Added
 - **Fill an item in from the Numista catalogue.** The item form's new
@@ -369,7 +396,7 @@ container, where a redeploy would lose them.
   request, cached for 30 days, and a type's issues share their cache entry
   with Numista estimates.
 
-## [0.14.0] — 2026-09-15
+## [0.14.0] - 2026-09-15
 
 ### Added
 - **Grading depth.** A strike type on every item (business, proof, specimen):
@@ -377,10 +404,10 @@ container, where a redeploy would lose them.
   number. Plus grades, the NGC/PMG star, designations (PL, DMPL, CAM, DCAM,
   UCAM, RD, RB, BN, FB, FBL, FH, FS, FT, and PMG's EPQ), CAC stickers, and
   "details" grades recording the problem (cleaned, damaged…). Items carry a
-  `grade_label` that reads like the holder — `PR-69 DCAM ★`, `MS-64+ RD`,
-  `VF-20 Details (Cleaned)` — shown in the list, item page, and report. PMG's
+  `grade_label` that reads like the holder (`PR-69 DCAM ★`, `MS-64+ RD`,
+  `VF-20 Details (Cleaned)`), shown in the list, item page, and report. PMG's
   grades 1–3 are now on the scale.
-- **Coin physical fields** — diameter, thickness, edge, shape, mintage — and
+- **Coin physical fields** (diameter, thickness, edge, shape, mintage) and
   **banknote fields**: serial number, prefix/block, signatures, issuer, and a
   replacement/star-note flag. Serial numbers, prefixes, and issuers are
   searchable.
@@ -395,11 +422,11 @@ container, where a redeploy would lose them.
   the plus grade.
 
 ### Changed
-- **Cost basis, unrealized and realized gain are net of fees** everywhere —
+- **Cost basis, unrealized and realized gain are net of fees** everywhere:
   dashboard, gains tables, breakdowns, and the insurance report's Cost column.
   The accuracy report still compares estimates with the gross sold price,
   since estimates are market prices.
-- **Numista no longer prices proofs, specimens, or details grades** — its
+- **Numista no longer prices proofs, specimens, or details grades**: its
   prices are for problem-free circulation strikes. **PCGS** passes the plus
   grade through, labels proofs PR-, and prices a details-graded coin only by
   its cert number.
@@ -412,13 +439,13 @@ container, where a redeploy would lose them.
 - Revision `0012` adds the new item columns and PMG grades 1–3; the backend
   applies it on startup.
 
-## [0.13.0] — 2026-09-14
+## [0.13.0] - 2026-09-14
 
 ### Added
-- **Pricing reports** — a new **Pricing** page (also linked from the
+- **Pricing reports.** A new **Pricing** page (also linked from the
   dashboard's "based on X of Y owned items" line) with four reports:
   - **Coverage**: per automatic source, how many owned items are priced,
-    can't be priced, failed, or haven't been tried — and for each item that
+    can't be priced, failed, or haven't been tried, and for each item that
     needs attention, why: the source is off, a prerequisite is missing (no
     catalog ref, no grade, no weight…), what the source itself said, or the
     fetch error.
@@ -430,18 +457,18 @@ container, where a redeploy would lose them.
     per source; how many items' shown value each supplies under the current
     value strategy; and the items where sources disagree most.
   - **Accuracy against sales**: for sold items, the estimates standing on
-    the sale date against the realized price — median error, bias, and how
+    the sale date against the realized price: median error, bias, and how
     many landed within 20%, for the shown value and for each source.
   API: `GET /api/pricing/coverage`, `/stale?days=`, `/sources`, `/accuracy`.
 
 ### Changed
-- Every automatic pricing attempt — from the item page or the scheduled
-  refresh — now records its outcome per item and source (revision `0011`,
+- Every automatic pricing attempt (from the item page or the scheduled
+  refresh) now records its outcome per item and source (revision `0011`,
   `estimate_attempts`), so a failed fetch or an upstream "can't price this"
   is visible later instead of vanishing with the error message. Applied
   automatically on startup.
 
-## [0.12.0] — 2026-09-14
+## [0.12.0] - 2026-09-14
 
 ### Added
 - **Backups from inside the app** (Settings → Backups). **Download backup**
@@ -469,15 +496,15 @@ container, where a redeploy would lose them.
 
 ### Upgrade notes
 - `docker-compose.yaml` adds a `backup_data` volume mounted at `/data/backups`
-  (`BACKUP_DIR`). **On a Swarm or custom stack, mount a directory there** —
-  ideally NAS storage — or scheduled archives live inside the container and
+  (`BACKUP_DIR`). **On a Swarm or custom stack, mount a directory there**
+  (ideally NAS storage), or scheduled archives live inside the container and
   disappear with it. It must not be inside the photo directory; the backend
   refuses that, because nginx serves photos publicly.
 - The backup endpoints are unauthenticated, like the rest of the API, and one
   request returns the whole collection. Keep Cabinet behind an
   authenticating proxy (see docs/deployment.md).
 
-## [0.11.1] — 2026-09-14
+## [0.11.1] - 2026-09-14
 
 No manual migration step from this release on: the backend applies pending
 migrations itself when it starts (set `AUTO_MIGRATE=false` to opt out).
@@ -490,7 +517,7 @@ migrations itself when it starts (set `AUTO_MIGRATE=false` to opt out).
 
 ### Changed
 - **The backend applies database migrations itself on startup**, before it
-  serves anything — upgrading is now just deploying the new image, with no
+  serves anything, so upgrading is now just deploying the new image, with no
   separate `alembic upgrade head`. All pending migrations run in one
   transaction under a Postgres advisory lock; a failure rolls back and stops
   startup instead of leaving new code running on an old schema. On Swarm,
@@ -499,12 +526,12 @@ migrations itself when it starts (set `AUTO_MIGRATE=false` to opt out).
   Going back to an older image still doesn't undo a migration.
 
 ### Fixed
-- The backend's own INFO logs never reached the container log — uvicorn only
-  configures its own loggers — so scheduled price refreshes ran silently. The
+- The backend's own INFO logs never reached the container log (uvicorn only
+  configures its own loggers), so scheduled price refreshes ran silently. The
   `app` and `alembic` loggers now log at INFO, which also shows migrations
   applied at startup.
 
-## [0.11.0] — 2026-09-14
+## [0.11.0] - 2026-09-14
 
 After upgrading, run `alembic upgrade head` (revision `0010`).
 
@@ -530,14 +557,14 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
   `sample_size`. `pricing.cached_response` became `cached_fetch`, which also
   returns when the payload was fetched.
 
-## [0.10.2] — 2026-08-12
+## [0.10.2] - 2026-08-12
 
 ### Added
 - **Published images.** Tagged releases now build and push
   `ghcr.io/jsaumer/cabinet-numismatics-backend` and `...-proxy` to GHCR
   (`.github/workflows/ci.yml`, `publish` job), tagged with both the release
   version and `latest`. `docker-compose.yaml` gained matching `image:`
-  entries alongside its existing `build:` blocks — local dev keeps building
+  entries alongside its existing `build:` blocks: local dev keeps building
   from source with `docker compose up --build`, while `docker stack deploy`
   (which cannot build at all) now has something to pull. Documented in
   `docs/deployment.md` §7, including the two Compose keys (`depends_on`,
@@ -546,16 +573,16 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
 
 ### Changed
 - `nginx.conf` is now baked into the proxy image at build time instead of
-  bind-mounted from the host — a bind mount can't be relied on to exist
+  bind-mounted from the host, because a bind mount can't be relied on to exist
   across every node in a multi-host deployment. The proxy image's build
   context moved from `frontend/` to the repo root so its Dockerfile can
   reach `proxy/nginx.conf`; a new root `.dockerignore` keeps that context
   from also picking up `backend/`, `.git`, and other irrelevant content.
 
-## [0.10.1] — 2026-08-11
+## [0.10.1] - 2026-08-11
 
 ### Added
-- A `SOURCE` column on the collection list, next to `VALUE` — the blended
+- A `SOURCE` column on the collection list, next to `VALUE`: the blended
   value shown there was giving no indication of which price source (or
   "average") it came from. Backed by a real schema change: `GET /api/items`
   entries now carry `latest_value_source`, resolved by the same
@@ -569,29 +596,29 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
   wrapping flex row spanning the full card width, each pinned to a single
   line.
 
-## [0.10.0] — 2026-08-11
+## [0.10.0] - 2026-08-11
 
 ### Added
-- **Numista price adapter** (pricing program M2) — coins *and* notes priced by
+- **Numista price adapter** (pricing program M2): coins *and* notes priced by
   their `numista` catalog reference and grade. `POST /api/items/{id}/estimate`
   takes a `?source=` parameter (`melt`, the default, or `numista`), and the
   item page shows a button per configured source. Requires a free Numista API
   key in Settings; the source stays off until you switch it on.
 - New `source_cache` table (revision `0009`) caching upstream price-source
-  responses — Numista catalogue data for 30 days, prices for 7 — so repeated
+  responses (Numista catalogue data for 30 days, prices for 7), so repeated
   estimates don't burn the free tier's 2,000 requests a month. A stale entry
   is preferred to a failed request, matching how spot prices and exchange
   rates behave.
 
-- **PCGS price adapter** (pricing program M3) — US coins priced by PCGS cert
+- **PCGS price adapter** (pricing program M3): US coins priced by PCGS cert
   number, or by `pcgs` catalog reference + Sheldon grade, via
   `?source=pcgs`. CoinFacts returns both numbers in one request: realized
   auction prices win when PCGS has any (median of up to the ten most recent
   lots, confidence 0.85 with five or more sales, 0.75 below), and the price
-  guide is the fallback at 0.60. Coins only — PCGS Banknote responses carry
+  guide is the fallback at 0.60. Coins only: PCGS Banknote responses carry
   no price fields. Requires a token from pcgs.com/publicapi.
 
-- `backend/scripts/check_sources.py` — runs one price adapter against one real
+- `backend/scripts/check_sources.py` runs one price adapter against one real
   item and prints the upstream calls, the raw payload, and the parsed
   estimate, without saving anything. The unit tests prove the parsing; this
   checks the contract. Ships in the backend image, so
@@ -600,7 +627,7 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
   now trimmed like long lists already were.
 
 - **Per-source value display and a configurable value strategy.** With more
-  than one price source configured, they don't agree — the item page now
+  than one price source configured, they don't agree, so the item page now
   shows each source's own latest value as a chip instead of collapsing to
   whichever is newest. A new `value_strategy` setting (Settings → General)
   controls the single blended number used everywhere else (items list,
@@ -612,7 +639,7 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
 - **Scheduled auto-refresh for Numista and PCGS, and item-level freshness.**
   The existing 12h melt-refresh loop now also refreshes each owned item's own
   Numista and/or PCGS estimate independently of whichever source currently
-  wins the item — needed since `value_strategy` can be "preferred source" or
+  wins the item, needed since `value_strategy` can be "preferred source" or
   "average," where a non-winning source still needs its own data current.
   Both are off by default: Numista offers 7/14/30-day cadences (Settings
   shows the real projected monthly call count against the free tier's
@@ -633,7 +660,7 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
   `SpotUnavailable` is a subclass, so melt behavior is unchanged. Response
   caching is shared too (`pricing.cached_response`).
 
-## [0.9.1] — 2026-08-10
+## [0.9.1] - 2026-08-10
 
 No user-facing changes: no schema change (still revision `0008`), no API
 change, and identical application behavior. This release exists mainly
@@ -656,14 +683,14 @@ because the test suite could not be run from a fresh checkout of 0.9.0.
   floor) and 3.14 (what the container runs).
 - GitHub Actions updated: `checkout` v7, `setup-node` v7, `setup-python` v7.
 - Frontend toolchain updated: Vite 8, `@vitejs/plugin-react` 6, TypeScript 7.
-  Vite 8 and the plugin must move together — their peer ranges don't overlap
+  Vite 8 and the plugin must move together: their peer ranges don't overlap
   across the boundary. TypeScript 7 also requires `src/vite-env.d.ts`, which
   supplies the type declarations for `import './styles.css'`.
 
 ### Added
 - `frontend/src/vite-env.d.ts` referencing Vite's client types.
 
-## [0.9.0] — 2026-08-09
+## [0.9.0] - 2026-08-09
 
 First public release. Pre-1.0 signals that the HTTP API may still change; the
 data model and migration path are considered stable.
@@ -722,7 +749,7 @@ data model and migration path are considered stable.
 - `GET /api/health` reports status, database reachability, and version.
 
 ### Known gaps
-- No application-level authentication — deploy behind an authenticating
+- No application-level authentication: deploy behind an authenticating
   reverse proxy. See [docs/security.md](docs/security.md).
 - Sold-listing comparables are not integrated (eBay's Marketplace Insights
   API is closed to new applicants); record those values manually.

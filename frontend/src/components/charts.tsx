@@ -1,7 +1,7 @@
 /* Hand-rolled single-series charts following the dataviz mark specs:
    bars ≤24px thick with a 4px rounded data-end (square at the baseline),
    2px surface gaps, hairline gridlines, text in ink tokens (never the series
-   color), no legend for a single series — the title names it. */
+   color), no legend for a single series, since the title names it. */
 
 /* Colors come from CSS variables so the theme toggle swaps light/dark chart
    steps (both validated against their surfaces). */
@@ -115,7 +115,7 @@ export function LineChart({
   if (data.length === 1) {
     return (
       <p className="muted">
-        One data point so far ({data[0].key}: {format(data[0].value)}) — the line appears as
+        One data point so far ({data[0].key}: {format(data[0].value)}). The line appears as
         history accumulates.
       </p>
     );

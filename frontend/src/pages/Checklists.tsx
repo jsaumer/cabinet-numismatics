@@ -117,7 +117,7 @@ export default function Checklists() {
 
       {lists.length === 0 && (
         <div className="empty">
-          No checklists yet — generate one below from a date range or a Numista type, and it fills
+          No checklists yet. Generate one below from a date range or a Numista type, and it fills
           itself from the coins you own.
         </div>
       )}
@@ -195,7 +195,7 @@ export default function Checklists() {
             </label>
             <label className="field">
               Denomination
-              <input required placeholder="25 cents — as your items spell it"
+              <input required placeholder="25 cents, as your items spell it"
                 {...rangeField("denomination")} />
             </label>
             <label className="field">
@@ -208,7 +208,7 @@ export default function Checklists() {
             </label>
             <label className="field">
               Mint marks (comma-separated)
-              <input placeholder='", D, S" — a leading comma keeps the no-mint-mark slot'
+              <input placeholder='", D, S" (a leading comma keeps the no-mint-mark slot)'
                 {...rangeField("mint_marks")} />
             </label>
             <label className="field">
@@ -218,7 +218,7 @@ export default function Checklists() {
           </div>
           <p className="muted">
             One slot per year and mint mark. A slot fills when you own an item of that country,
-            denomination, year, and mint mark — spelled the same way.
+            denomination, year, and mint mark, spelled the same way.
           </p>
           <div className="actions">
             <button className="primary" type="submit" disabled={creating}>Generate</button>

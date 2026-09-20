@@ -72,7 +72,7 @@ export function DuplicateWarning({
             {item.grade_label && ` · ${item.grade_label}`}
             {item.status !== "owned" && ` · ${item.status}`}
             {item.in_trash && " · in the trash"}
-            <span className="muted"> — {item.reason}</span>
+            <span className="muted"> ({item.reason})</span>
           </li>
         ))}
       </ul>

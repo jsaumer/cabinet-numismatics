@@ -86,7 +86,7 @@ export function Lightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [index, count, onIndex, onClose]);
 
-  // The pointer's position as a percentage of the stage — the image fills the
+  // The pointer's position as a percentage of the stage: the image fills the
   // stage box, so this is also the point on the image to zoom around.
   const pointAt = (e: ReactMouseEvent<HTMLDivElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
@@ -383,7 +383,7 @@ export function WebcamCapture({
     let stream: MediaStream | null = null;
     let cancelled = false;
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError("This browser can't reach a camera here — camera access needs HTTPS or localhost.");
+      setError("This browser can't reach a camera here. Camera access needs HTTPS or localhost.");
       return;
     }
     navigator.mediaDevices
@@ -405,7 +405,7 @@ export function WebcamCapture({
       .catch((e: Error) =>
         setError(
           e.name === "NotAllowedError"
-            ? "Camera access was denied — allow it for this site in the browser to use the webcam."
+            ? "Camera access was denied. Allow it for this site in the browser to use the webcam."
             : `No camera available: ${e.message}`,
         ),
       );
@@ -444,7 +444,7 @@ export function WebcamCapture({
       {error && <p className="error">{error}</p>}
       {taken > 0 && (
         <p className="muted">
-          {taken} photo{taken > 1 ? "s" : ""} added — take another, or close.
+          {taken} photo{taken > 1 ? "s" : ""} added. Take another, or close.
         </p>
       )}
       <div className="actions">

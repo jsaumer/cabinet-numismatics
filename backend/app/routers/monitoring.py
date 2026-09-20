@@ -57,5 +57,5 @@ def send_test_alert(
 def prometheus_metrics(db: Session = Depends(get_db)):
     """Prometheus exposition format. Off until turned on in Settings."""
     if not store.get_setting(db, "metrics_enabled"):
-        raise HTTPException(404, "Metrics are off — turn them on in Settings → Alerts & metrics")
+        raise HTTPException(404, "Metrics are off. Turn them on in Settings → Alerts & metrics")
     return Response(metrics.render(db), media_type=CONTENT_TYPE_LATEST)

@@ -1,4 +1,4 @@
-"""Currency conversion via cached exchange rates (frankfurter.app — free,
+"""Currency conversion via cached exchange rates (frankfurter.app: free,
 keyless, ECB daily rates). Same cache discipline as spot prices: 24h TTL,
 stale beats nothing, unavailable means the amount is excluded (never guessed).
 """

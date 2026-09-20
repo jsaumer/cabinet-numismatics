@@ -12,7 +12,7 @@ is the supported one.
 Report privately through GitHub's
 [security advisory form](https://github.com/jsaumer/cabinet-numismatics/security/advisories/new).
 Include what you found, how to reproduce it, and what an attacker could do
-with it. You'll get an acknowledgement as soon as it's seen — this is a
+with it. You'll get an acknowledgement as soon as it's seen. This is a
 personal project, so please allow a few days.
 
 ## Scope and design context
@@ -22,13 +22,13 @@ application-level authentication by design**. It expects to run on a trusted
 network, or behind an authenticating reverse proxy (Traefik + Authentik
 forward-auth is the documented path). Reports that amount to "the API is
 reachable without a login when exposed directly to the internet" describe the
-documented deployment model rather than a vulnerability — see
+documented deployment model rather than a vulnerability; see
 [docs/security.md](docs/security.md).
 
 Things that *are* in scope and worth reporting:
 
 - Any way to read a stored price-source credential back through the API, the
-  logs, or a response body — these are encrypted at rest and write-only.
+  logs, or a response body: these are encrypted at rest and write-only.
 - Path traversal, or any route that serves files outside the photo volume.
 - SQL or template injection.
 - Stored XSS via item fields, custom fields, tags, or filenames.

@@ -95,7 +95,7 @@ export function ValueHistory({
       <h2>Value history</h2>
       {item.estimates.length === 0 && (
         <p className="muted">
-          No value recorded yet — add one you researched, or try an automatic estimate.
+          No value recorded yet. Add one you researched, or try an automatic estimate.
         </p>
       )}
       {sourceValues.length >= 2 && (
@@ -145,7 +145,7 @@ export function ValueHistory({
                     <td>{money(est.estimated_value, est.currency)}</td>
                     <td className="muted">{est.source}</td>
                     <td className="muted">
-                      {est.confidence == null ? "—" : `${Math.round(est.confidence * 100)}%`}
+                      {est.confidence == null ? "–" : `${Math.round(est.confidence * 100)}%`}
                     </td>
                     <td className="provenance-toggle">
                       {est.details && (
@@ -189,9 +189,9 @@ export function ValueHistory({
         {estimateError && <span className="error">{estimateError}</span>}
         {needsNumistaRef && (
           <span>
-            <Link to={`/items/${item.id}/edit`}>Find it on Numista</Link>{" "}
+            <Link to={`/items/${item.id}/edit`}>Find it on Numista</Link>:{" "}
             <span className="muted">
-              — “Fill from Numista” on the edit page looks the piece up and adds its number; what
+              “Fill from Numista” on the edit page looks the piece up and adds its number; what
               you've already filled in stays as it is.
             </span>
           </span>
@@ -223,7 +223,7 @@ export function ValueHistory({
         <label className="field">
           Note
           <input value={estNote} maxLength={500}
-            placeholder="optional — e.g. eBay lot, sold 2026-08-01, raw"
+            placeholder="optional, e.g. eBay lot, sold 2026-08-01, raw"
             onChange={(e) => setEstNote(e.target.value)} />
         </label>
         <button className="primary" type="submit">Record value</button>

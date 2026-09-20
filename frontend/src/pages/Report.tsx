@@ -35,7 +35,7 @@ export default function Report() {
       </div>
 
       <header className="report-header">
-        <h1>Cabinet — Collection Report</h1>
+        <h1>Cabinet Collection Report</h1>
         <p className="muted">
           Generated {new Date().toLocaleDateString()} · {items.length} owned item(s) · estimated
           value {money(stats.estimated_value, cur)}
@@ -80,7 +80,7 @@ export default function Report() {
                 {item.storage_location && <div className="muted">@ {item.storage_location}</div>}
               </td>
               <td>
-                {item.grade_label ?? "—"}
+                {item.grade_label ?? "–"}
                 {item.cert_service && (
                   <div className="muted">
                     {item.cert_service} {item.cert_number ?? ""}
@@ -89,7 +89,7 @@ export default function Report() {
               </td>
               <td className="num">{item.quantity}</td>
               <td>
-                {item.acquisition_date ?? (item.acquired_from ? null : "—")}
+                {item.acquisition_date ?? (item.acquired_from ? null : "–")}
                 {item.acquired_from && <div className="muted">{item.acquired_from}</div>}
               </td>
               <td className="num">{money(item.cost_basis, item.currency)}</td>

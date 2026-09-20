@@ -21,8 +21,8 @@ const CERT_FIELDS: Partial<Record<TextField, string>> = {
   cert_number: "cert number",
 };
 
-/** The item form's "Fill from a PCGS cert" card. Fills only empty fields —
- * the grade included, when none is set — and hands the new form state and
+/** The item form's "Fill from a PCGS cert" card. Fills only empty fields
+ * (the grade included, when none is set) and hands the new form state and
  * any new catalogue references back through `onApply`. */
 export function PcgsFill({
   form,
@@ -95,7 +95,7 @@ export function PcgsFill({
       setNote(
         (filled.length
           ? `Filled ${filled.join(", ")} from cert ${found.cert}${found.name ? ` (${found.name})` : ""}.`
-          : `Nothing to fill from cert ${found.cert} — those fields are already set.`) + pop,
+          : `Nothing to fill from cert ${found.cert}: those fields are already set.`) + pop,
       );
     } catch (e) {
       setError((e as Error).message);
@@ -139,7 +139,7 @@ export function PcgsFill({
           {error && <p className="error">{error}</p>}
           {note && <p className="muted">{note}</p>}
           <p className="muted" style={{ marginBottom: 0 }}>
-            Fills the coin, its grade and designations, the cert, and the PCGS number — empty
+            Fills the coin, its grade and designations, the cert, and the PCGS number, empty
             fields only. One request from the 1,000/day quota; pricing the item afterwards reuses
             the answer.
           </p>

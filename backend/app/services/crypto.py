@@ -2,8 +2,8 @@
 
 Uses Fernet from `cryptography`: AES-128-CBC with an HMAC-SHA256 authentication
 tag, so ciphertext is tamper-evident as well as confidential. Keys are supplied
-via the `SECRET_KEY` environment variable, comma-separated to support rotation
-— the first key encrypts, any listed key may decrypt (MultiFernet).
+via the `SECRET_KEY` environment variable, comma-separated to support rotation:
+the first key encrypts, any listed key may decrypt (MultiFernet).
 
 If `SECRET_KEY` is unset, a key is generated once and persisted with 0600
 permissions to `SECRET_KEY_FILE`, which lives on the backend's private state
@@ -87,7 +87,7 @@ def encrypt(plaintext: str) -> str:
 def decrypt(stored: str) -> str:
     """Decrypt a stored secret. Returns "" when the value cannot be decrypted
     (e.g. the key was rotated away or lost) so the app degrades to 'not
-    configured' rather than crashing — never raises, never logs the value."""
+    configured' rather than crashing. Never raises, never logs the value."""
     if not stored:
         return ""
     if not is_encrypted(stored):

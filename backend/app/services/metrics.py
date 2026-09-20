@@ -1,5 +1,5 @@
 """Prometheus metrics for /api/metrics, computed from the database when
-scraped and cached for a minute — Prometheus typically scrapes every 15s, and
+scraped and cached for a minute: Prometheus typically scrapes every 15s, and
 collection value walks every item's estimates.
 
 Timestamps are Unix seconds, so an age is `time() - <metric>` in PromQL.

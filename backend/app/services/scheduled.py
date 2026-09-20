@@ -49,9 +49,9 @@ def _record(db: Session, source: str, outcome: dict) -> None:
     if outcome["failed"]:
         message = f"{outcome['failed']} item(s) failed"
         if outcome.get("stopped"):
-            message += f"; stopped early — {outcome['stopped']}"
+            message += f"; stopped early: {outcome['stopped']}"
         elif outcome.get("error"):
-            message += f" — {outcome['error']}"
+            message += f" ({outcome['error']})"
         alerts.fail(db, key, f"{SOURCE_NAMES[source]} refresh: {message}")
     else:
         alerts.recover(db, key)
@@ -59,7 +59,7 @@ def _record(db: Session, source: str, outcome: dict) -> None:
 
 def hourly(db: Session) -> None:
     """Back up if one is due, empty the trash of expired items, then push the
-    heartbeat — last, so it reports what this tick found."""
+    heartbeat (last, so it reports what this tick found)."""
     try:
         if outcome := backups.run_scheduled(db):
             logger.info("Scheduled backup: %s", outcome)
@@ -68,7 +68,7 @@ def hourly(db: Session) -> None:
     except Exception:  # keep the rest of the tick, and the heartbeat, going
         db.rollback()
         logger.exception("Scheduled backup failed")
-        alerts.fail(db, "backup", "Scheduled backup failed unexpectedly — see the log")
+        alerts.fail(db, "backup", "Scheduled backup failed unexpectedly. See the log")
     if purged := trash.purge_expired(db):
         logger.info("Emptied %s item(s) from the trash (past retention)", purged)
     alerts.ping_heartbeat(db)

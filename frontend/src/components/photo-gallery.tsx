@@ -1,12 +1,14 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Angle, api, ItemDetail, Photo, photoUrl } from "../api";
+import { FileButton } from "./controls";
+import { CameraIcon, UploadIcon, WebcamIcon } from "./icons";
 import { Lightbox, PhotoEditor, WebcamCapture } from "./photos";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
 
 /** The item page's Photos card: the grid with reorder, angle, primary, edit
- * and delete, plus every way in — picker, camera, webcam, URL, drop, paste. */
+ * and delete, plus every way in: picker, camera, webcam, URL, drop, paste. */
 export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [uploadAngle, setUploadAngle] = useState<Angle | "">("");
@@ -71,12 +73,6 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
     act(() => api.reorderPhotos(item.id, order))();
   };
 
-  function upload(e: FormEvent<HTMLInputElement>) {
-    const files = Array.from(e.currentTarget.files ?? []);
-    e.currentTarget.value = "";
-    if (files.length) uploadFiles(files, "Added");
-  }
-
   async function importFromUrl() {
     const url = photoSource.trim();
     if (!url) return;
@@ -136,7 +132,7 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
       {photoError && <p className="error">{photoError}</p>}
       {photoNote && <p className="muted">{photoNote}</p>}
       {item.photos.length === 0 && (
-        <p className="muted">No photos yet — drop images here, paste one, or add them below.</p>
+        <p className="muted">No photos yet.</p>
       )}
       <div className="photo-grid">
         {item.photos.map((photo, index) => (
@@ -188,9 +184,26 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
           </div>
         ))}
       </div>
+      <div className="dropzone">
+        <FileButton primary multiple accept="image/jpeg,image/png,image/webp"
+          disabled={uploading} onFiles={(files) => uploadFiles(files, "Added")}>
+          <UploadIcon /> {uploading ? "Uploading…" : "Add photos"}
+        </FileButton>
+        {/* capture opens the camera directly on phones; a normal picker elsewhere */}
+        <FileButton accept="image/jpeg,image/png,image/webp" capture="environment"
+          disabled={uploading} onFiles={(files) => uploadFiles(files, "Added")}
+          title="Opens the camera on a phone">
+          <CameraIcon /> Camera
+        </FileButton>
+        <button type="button" disabled={uploading} onClick={() => setWebcam(true)}
+          title="Take photos with a webcam">
+          <WebcamIcon /> Webcam
+        </button>
+        <span className="muted">or drop images here, or paste one</span>
+      </div>
       <div className="estimate-form">
         <label className="field">
-          Angle
+          Angle for new photos
           <select value={uploadAngle}
             onChange={(e) => setUploadAngle(e.target.value as Angle | "")}>
             <option value="">unspecified</option>
@@ -199,21 +212,6 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
             ))}
           </select>
         </label>
-        <label className="field">
-          {uploading ? "Uploading…" : "Add photos"}
-          <input type="file" accept="image/jpeg,image/png,image/webp" multiple
-            disabled={uploading} onChange={upload} />
-        </label>
-        <label className="field">
-          📷 Camera
-          {/* capture opens the camera directly on phones; a normal picker elsewhere */}
-          <input type="file" accept="image/jpeg,image/png,image/webp"
-            capture="environment" disabled={uploading} onChange={upload} />
-        </label>
-        <button type="button" disabled={uploading} onClick={() => setWebcam(true)}
-          title="Take photos with a webcam">
-          🎥 Webcam
-        </button>
         <label className="field">
           Import from URL
           <input type="url" value={photoSource} placeholder="https://…"
@@ -226,10 +224,6 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
           Import
         </button>
       </div>
-      <p className="muted" style={{ marginBottom: 0 }}>
-        You can also drop image files onto this card, or paste an image anywhere on the page.
-        New photos get the angle chosen above.
-      </p>
       {lightbox !== null && item.photos[lightbox] && (
         <Lightbox photos={item.photos} index={lightbox} onIndex={setLightbox}
           onClose={() => setLightbox(null)} />

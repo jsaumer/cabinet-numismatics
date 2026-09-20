@@ -32,7 +32,7 @@ RUN apt-get update \
     && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done
 
 # The unprivileged user the entrypoint drops to, and data directories it
-# owns — a new named volume inherits that ownership from the image.
+# owns. A new named volume inherits that ownership from the image.
 RUN groupadd --gid 1000 cabinet \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin cabinet \
     && mkdir -p /data/photos /data/state /data/backups /data/documents \

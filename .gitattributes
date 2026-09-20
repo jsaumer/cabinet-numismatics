@@ -1,2 +1,2 @@
-# Shell scripts must stay LF — CRLF breaks bash, including Git Bash on Windows.
+# Shell scripts must stay LF: CRLF breaks bash, including Git Bash on Windows.
 *.sh text eol=lf

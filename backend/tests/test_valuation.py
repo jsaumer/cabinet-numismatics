@@ -172,7 +172,7 @@ def test_collection_stats(client):
         "owned": 2,
         "sold": 1,
         "wishlist": 1,
-        "coins": 2,  # owned only — the split describes current holdings
+        "coins": 2,  # owned only: the split describes current holdings
         "notes": 0,
     }
     assert stats["cost_basis"] == 100.0

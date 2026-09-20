@@ -18,7 +18,7 @@ function readDismissed(): boolean {
   }
 }
 
-/** What's still switched off on a fresh install — shown on the dashboard
+/** What's still switched off on a fresh install, shown on the dashboard
  * until it's all done, or until it's dismissed for good (per browser). */
 export function SetupChecklist({ itemCount }: { itemCount: number }) {
   const [checks, setChecks] = useState<Check[] | null>(null);
@@ -37,7 +37,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "schema",
             text: (
               <>
-                The database schema is <b>{health.schema.status}</b> — see Settings → About.
+                The database schema is <b>{health.schema.status}</b>. See Settings → About.
               </>
             ),
           });
@@ -47,7 +47,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "documents",
             text: (
               <>
-                Document storage isn't a mounted volume, so uploads are refused — bind{" "}
+                Document storage isn't a mounted volume, so uploads are refused. Bind{" "}
                 <code>/data/documents</code> (docs/deployment.md §2).
               </>
             ),
@@ -58,7 +58,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "backup_schedule",
             text: (
               <>
-                Scheduled backups are off — <Link to="/settings">turn them on</Link>, and point{" "}
+                Scheduled backups are off. <Link to="/settings">Turn them on</Link>, and point{" "}
                 <code>/data/backups</code> somewhere off this host.
               </>
             ),
@@ -68,7 +68,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "backup_never",
             text: (
               <>
-                No backup has run yet — <Link to="/settings">Back up now</Link> proves the
+                No backup has run yet. <Link to="/settings">Back up now</Link> proves the
                 directory is writable.
               </>
             ),
@@ -89,7 +89,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "alerts",
             text: (
               <>
-                Failures only reach the log — add an alert webhook or an Uptime Kuma heartbeat in{" "}
+                Failures only reach the log. Add an alert webhook or an Uptime Kuma heartbeat in{" "}
                 <Link to="/settings">Settings</Link>.
               </>
             ),
@@ -100,7 +100,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "source_key",
             text: (
               <>
-                No price-source key — a free Numista API key prices items and fills them in from
+                No price-source key. A free Numista API key prices items and fills them in from
                 the catalogue (<Link to="/settings">Settings → Price sources</Link>).
               </>
             ),
@@ -111,7 +111,7 @@ export function SetupChecklist({ itemCount }: { itemCount: number }) {
             key: "empty",
             text: (
               <>
-                The collection is empty — <Link to="/items/new">add an item</Link>, or{" "}
+                The collection is empty. <Link to="/items/new">Add an item</Link>, or{" "}
                 <Link to="/import">import</Link> from Numista, OpenNumismat, or a spreadsheet.
               </>
             ),

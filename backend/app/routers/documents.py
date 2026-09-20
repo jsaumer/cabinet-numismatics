@@ -182,7 +182,7 @@ def _serve(path_key: str | None, content_type: str, disposition: str, filename: 
 
 @router.get("/documents/{document_id}/file")
 def document_file(document_id: uuid.UUID, download: bool = False, db: Session = Depends(get_db)):
-    """The document itself — shown in the browser, or `?download=true` to save it."""
+    """The document itself, shown in the browser, or `?download=true` to save it."""
     document = _get_or_404(db, document_id)
     disposition = "attachment" if download else "inline"
     return _serve(document.file_key, document.content_type, disposition, document.filename)

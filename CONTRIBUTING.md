@@ -8,14 +8,14 @@ Contributions that keep it simple are very welcome.
 
 - **Bugs**: open an issue with steps to reproduce. If it involves data, say
   what the item looked like (no need to share photos).
-- **Features**: check [docs/roadmap.md](docs/roadmap.md) first — the intended
+- **Features**: check [docs/roadmap.md](docs/roadmap.md) first: the intended
   scope, what's built, and what's deliberately deferred are all recorded
   there. Opening an issue before a large PR saves everyone time.
 - **Questions**: open a discussion or issue; there's no separate forum.
 
 ## Development setup
 
-You need Docker. You do *not* need Node or Python on the host — the frontend
+You need Docker. You do *not* need Node or Python on the host: the frontend
 compiles inside the image and the backend runs in a container.
 
 ```bash
@@ -45,7 +45,7 @@ ruff format .          # format
 ```
 
 Tests run against in-memory SQLite with the schema created from the models,
-and never touch the network — external price/rate APIs are mocked, and an
+and never touch the network: external price/rate APIs are mocked, and an
 autouse fixture fails any unmocked exchange-rate fetch.
 
 ### Working on the frontend
@@ -56,7 +56,7 @@ npm ci                 # installs exactly what package-lock.json pins
 npm run dev            # proxies /api to localhost:8000
 ```
 
-If you change dependencies, commit the updated `package-lock.json` — CI and
+If you change dependencies, commit the updated `package-lock.json`: CI and
 the container build both use `npm ci` and will fail if it's out of sync.
 
 `docker compose up --build` also type-checks the frontend, so a clean build is
@@ -64,7 +64,7 @@ a valid substitute if you'd rather not install Node.
 
 ### Database changes
 
-Every schema change is an Alembic revision — never create-on-startup:
+Every schema change is an Alembic revision, never create-on-startup:
 
 ```bash
 cd backend
@@ -84,7 +84,7 @@ and data migrations.
   were deliberately cut; reintroducing one needs a stated reason.
 - **Comments are sparse and explain *why*.** Match the density of the
   surrounding code.
-- **Money is per row** — `acquisition_price`, `sold_price`, and
+- **Money is per row.** `acquisition_price`, `sold_price`, and
   `estimated_value` describe the whole lot, never a single piece.
 - **Estimates are append-only.** Never overwrite value history.
 - **Secrets never appear in responses, logs, or URLs.** See

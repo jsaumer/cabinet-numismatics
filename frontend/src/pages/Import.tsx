@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { FileButton } from "../components/controls";
+import { UploadIcon } from "../components/icons";
 import {
   api,
   ImportDefaults,
@@ -25,7 +27,7 @@ const SOURCES: { key: Source; title: string; text: string }[] = [
     title: "A file from another tool",
     text:
       "A Cabinet export (CSV/XLSX), Numista's export, an OpenNumismat collection (.db), or " +
-      "any spreadsheet — uCoin, CoinSnap, Colnect, your own sheet.",
+      "any spreadsheet: uCoin, CoinSnap, Colnect, your own sheet.",
   },
 ];
 
@@ -185,8 +187,8 @@ export default function Import() {
         <h1>Import</h1>
       </div>
       <p className="muted" style={{ marginTop: 0 }}>
-        Bring a collection in from another tool. You'll see a preview first — nothing is added
-        until you confirm — and importing the same source again skips what's already here.
+        Bring a collection in from another tool. You'll see a preview first (nothing is added
+        until you confirm), and importing the same source again skips what's already here.
       </p>
 
       <div className="import-sources">
@@ -215,15 +217,15 @@ export default function Import() {
             </p>
           )}
           <p className="muted" style={{ marginTop: 0 }}>
-            Reads every coin and banknote in your collection on numista.com — grade, quantity,
-            price paid, acquisition date and place, storage, comments, and slab details —
+            Reads every coin and banknote in your collection on numista.com (grade, quantity,
+            price paid, acquisition date and place, storage, comments, and slab details)
             and links each item to its Numista type, so Numista pricing works on it straight away.
             Tokens and medals (exonumia) aren't imported.
           </p>
           <div className="estimate-form" style={{ marginTop: 0 }}>
             <label className="slot">
               <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} />
-              Fill in catalogue details (denomination, composition, weight, size) — one Numista
+              Fill in catalogue details (denomination, composition, weight, size): one Numista
               request per coin type not looked up in the last week
             </label>
             <label className="slot">
@@ -243,18 +245,10 @@ export default function Import() {
         <div className="card">
           <h2>A file from another tool</h2>
           <div className="estimate-form" style={{ marginTop: 0 }}>
-            <label className="field">
-              {busy === "upload" ? "Uploading…" : "File"}
-              <input
-                type="file"
-                accept=".csv,.xlsx,.db,.txt,text/csv"
-                disabled={busy !== null}
-                onChange={(e) => {
-                  chooseFile(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            <FileButton accept=".csv,.xlsx,.db,.txt,text/csv" disabled={busy !== null}
+              onFiles={(files) => chooseFile(files[0])}>
+              <UploadIcon /> {busy === "upload" ? "Uploading…" : "Choose a file"}
+            </FileButton>
             {upload && (
               <label className="field">
                 Read it as
@@ -286,21 +280,21 @@ export default function Import() {
             <summary>Where do I get these files?</summary>
             <ul className="sale-help">
               <li>
-                <b>Cabinet</b> — Collection → CSV or Excel, from this Cabinet or another. Every
+                <b>Cabinet</b>: Collection → CSV or Excel, from this Cabinet or another. Every
                 field comes back; items already here are skipped.
               </li>
               <li>
-                <b>Numista</b> — on numista.com open your collection ("My coins"), choose
+                <b>Numista</b>: on numista.com open your collection ("My coins"), choose
                 <i> Export</i>, and pick CSV or Excel. Tick the columns you want; Cabinet reads
                 them by name. (Or skip the file and use <i>My Numista collection</i>.)
               </li>
               <li>
-                <b>OpenNumismat</b> — upload the collection file itself (the <code>.db</code>{" "}
+                <b>OpenNumismat</b>: upload the collection file itself (the <code>.db</code>{" "}
                 you open in OpenNumismat). Photos stored in it come along. Works with files
                 from OpenNumismat 1.9 to 1.11.
               </li>
               <li>
-                <b>Anything else</b> — export or save as CSV or Excel, then match its columns
+                <b>Anything else</b>: export or save as CSV or Excel, then match its columns
                 below. Colnect's export has a few lines above the column names; Cabinet finds the
                 header row, and you can set it by hand.
               </li>
@@ -364,7 +358,7 @@ export default function Import() {
                   <label key={f.key} className="field">
                     {f.label}
                     <select value={mapping?.[f.key] ?? ""} onChange={(e) => setMapped(f.key, e.target.value)}>
-                      <option value="">— not imported —</option>
+                      <option value="">(not imported)</option>
                       {preview.headers!.map((h) => (
                         <option key={h} value={h}>
                           {h}
@@ -460,11 +454,11 @@ export default function Import() {
                           </ul>
                         )}
                       </td>
-                      <td>{r.grade ?? "—"}</td>
-                      <td>{r.status_value ?? "—"}</td>
-                      <td>{r.quantity ?? "—"}</td>
-                      <td>{r.price != null ? money(r.price, r.currency) : "—"}</td>
-                      <td>{r.photos || "—"}</td>
+                      <td>{r.grade ?? "–"}</td>
+                      <td>{r.status_value ?? "–"}</td>
+                      <td>{r.quantity ?? "–"}</td>
+                      <td>{r.price != null ? money(r.price, r.currency) : "–"}</td>
+                      <td>{r.photos || "–"}</td>
                       <td>{STATUS_LABELS[r.status]}</td>
                     </tr>
                   ))}

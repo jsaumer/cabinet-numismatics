@@ -5,7 +5,7 @@
 #
 # Differences from docker-compose.yaml, which stays the single-host path:
 #   - images are pulled, never built (stack deploy ignores `build:`), so TAG
-#     must name a published release — 0.10.2 or later;
+#     must name a published release (0.10.2 or later);
 #   - no depends_on / restart: Swarm has neither; the backend waits for
 #     Postgres itself, and restart_policy replaces restart;
 #   - one replica each: the refresh, backup, and alert schedulers run inside

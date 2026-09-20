@@ -1,6 +1,6 @@
 # Cabinet
 
-**Numismatics — Coin & Paper Money Collection Manager**
+**Numismatics: Coin & Paper Money Collection Manager**
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -11,13 +11,13 @@ money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.23.2 — feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.23.2, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
 Nothing is queued next: the roadmap is a list of candidates, pulled by
 what entering a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
-> **Deploying it?** Cabinet has no built-in login by design — put it behind an
+> **Deploying it?** Cabinet has no built-in login by design: put it behind an
 > authenticating reverse proxy. See [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
@@ -38,12 +38,12 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 - Coins and notes with full numismatic detail: country, denomination, year,
   mint mark, series, variety/sub-type, strike (business, proof, specimen),
   composition, weight, fineness, diameter, thickness, edge, shape, mintage,
-  quantity, and free-text notes — banknotes add serial number, prefix/block,
-  signatures, issuer, and replacement notes — plus up to 20 custom fields per
+  quantity, and free-text notes (banknotes add serial number, prefix/block,
+  signatures, issuer, and replacement notes), plus up to 20 custom fields per
   item.
 - **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with proof
   and specimen strikes, plus grades, stars, designations (CAM/DCAM, PL/DMPL,
-  RD/RB/BN, EPQ…), CAC stickers, and details grades — shown the way the holder
+  RD/RB/BN, EPQ…), CAC stickers, and details grades, shown the way the holder
   reads, e.g. `PR-69 DCAM ★`. Certification tracking (service + cert number)
   links to the grading service's verification.
 - **Provenance & location**: acquisition date, price and fees, source (dealer, show,
@@ -67,27 +67,27 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   other), a primary image, and reordering.
 - Uploads are validated as real JPEG/PNG/WebP images, EXIF orientation is
   corrected, and thumbnails are generated automatically. Files live on a
-  plain Docker volume served directly by nginx — no object store.
+  plain Docker volume served directly by nginx, with no object store.
 - Add photos by file picker, drag and drop, pasting an image, a URL, or a
   webcam or phone camera; view them full size in a zoomable lightbox; and
   crop, turn, or straighten them in the browser.
-- Attach documents — receipts, invoices, certificates of authenticity,
-  grading labels (PDF or image) — with a first-page thumbnail; share one
-  lot's invoice across every coin in it. Kept off the public photo path and
-  included in backups.
+- Attach documents, such as receipts, invoices, certificates of
+  authenticity, and grading labels (PDF or image), with a first-page
+  thumbnail; share one lot's invoice across every coin in it. Kept off the
+  public photo path and included in backups.
 
 ### Valuation
 - **Manual estimates**: record researched values (dealer quote, auction
-  result, price guide) with source and optional confidence — kept as
+  result, price guide) with source and optional confidence, kept as
   append-only history, never overwritten.
 - **Pluggable price sources**: melt value (spot price × weight × fineness ×
   quantity, keyless), Numista (coins and notes, priced by catalog ref +
   grade), and PCGS (US coins, by cert number or catalog ref + grade,
   preferring realized auction prices over the price guide). One-click and
-  scheduled refresh for all three — Numista and PCGS off by default, with
+  scheduled refresh for all three, with Numista and PCGS off by default and
     Numista's cadence (7/14/30 days) shown against its 2,000/month quota.
 - **Sold comparables**: log what pieces like yours actually sold for (eBay
-  sold listings, auction archives, dealer sales) and get a comps estimate —
+  sold listings, auction archives, dealer sales) and get a comps estimate:
   the median of recent sales in your currency, with confidence from how many
   there are and how much they agree. Numista's auction records can fill the
   log automatically on Numista's paid API plan.
@@ -95,11 +95,11 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   own latest value side by side (never blended), each with a "time since"
   label. A `value_strategy` setting picks the single blended number shown
   in the items list, export, and dashboard totals: latest estimate,
-  a preferred source, or an average — with a `SOURCE` column on the list
+  a preferred source, or an average, with a `SOURCE` column on the list
   showing which one produced it.
 - **Multi-currency**: totals are shown in one display currency; other
   currencies convert at cached daily ECB rates, and anything unconvertible
-  is excluded and counted — never silently mixed.
+  is excluded and counted, never silently mixed.
 - **Value over time**: month-end collection value and per-item estimate
   charts.
 - **Pricing reports**: a Pricing page showing which items lack estimates and
@@ -120,8 +120,8 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   (straight from your account), Numista's export file, OpenNumismat
   collections with their photos, or any spreadsheet with its columns matched
   to Cabinet's fields. Re-importing skips what's already here.
-- Printable insurance report with photos, certs, provenance, and totals —
-  export to PDF via the browser's print dialog.
+- Printable insurance report with photos, certs, provenance, and totals,
+  exported to PDF via the browser's print dialog.
 
 ### Platform
 - Three-container Compose stack; responsive UI for phone/tablet; full
@@ -130,20 +130,20 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   `.zip` (database + photos + manifest) from Settings, or schedule daily or
   weekly archives with retention into a directory you can point at a NAS.
   `scripts/restore.sh` restores them, and CI rehearses that restore on every
-  push — see [docs/backup-restore.md](docs/backup-restore.md).
+  push (see [docs/backup-restore.md](docs/backup-restore.md)).
 - **Configurable pricing**: a Settings page for display currency, the
   blended-value strategy, per-source refresh cadence, and price-source
-  credentials — stored **encrypted at rest** and never readable back
+  credentials, stored **encrypted at rest** and never readable back
     through the API (see [docs/security.md](docs/security.md)).
 - **Add a run**: pick a type on Numista, tick the dates and mints you have,
   and get one item each. **Checklists generate themselves** from a type or
   a date range and fill from what you own, with a completion percentage.
 - Fill a slabbed coin in from its **PCGS cert number**, and a **duplicate
-  warning** while entering anything already here — by cert, reference, or
+  warning** while entering anything already here: by cert, reference, or
   country, denomination, year, and mint.
 - **Alerts and metrics**: a webhook (n8n, ntfy, Discord, Slack, Gotify) when
   a backup fails, a price source rejects its key or runs out of quota, or a
-  refresh fails — and when it recovers; an Uptime Kuma heartbeat; and
+  refresh fails, and when it recovers; an Uptime Kuma heartbeat; and
   Prometheus metrics. See [docs/monitoring.md](docs/monitoring.md).
 
 ## Architecture
@@ -156,7 +156,7 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 
 Backend: Python / FastAPI / SQLAlchemy 2 / Alembic / Pillow. Frontend:
 React + Vite + TypeScript, hand-rolled SVG charts (no chart library). Photos
-are plain files on a shared volume — the backend writes, nginx serves. See
+are plain files on a shared volume: the backend writes, nginx serves. See
 [docs/architecture.md](docs/architecture.md) for detail.
 
 ## Quick start
@@ -168,14 +168,14 @@ cp .env.example .env        # then edit secrets in .env
 docker compose up --build
 ```
 
-No host Node or Python install is needed — the frontend is built inside the
+No host Node or Python install is needed: the frontend is built inside the
 proxy image. Once running: the app is at http://localhost/, API docs at
 http://localhost/api/docs. The backend creates and updates the database schema
 itself on startup. After pulling a new version, run `docker compose up --build`
 again; Settings → About shows the version and whether the schema is current.
 
-**Want something to look at first?** Load a small demo collection — 13 items
-across several countries, decades, and grades, with value history:
+**Want something to look at first?** Load a small demo collection (13 items
+across several countries, decades, and grades, with value history):
 
 ```bash
 python scripts/seed_demo.py
@@ -214,32 +214,32 @@ Settings → Backups downloads an archive or schedules them. From the host:
 ./scripts/restore.sh cabinet-backup-20260914-031500.zip   # an in-app archive
 ```
 
-Run from Git Bash on Windows. Copy backups off the machine — see
+Run from Git Bash on Windows. Copy backups off the machine. See
 [docs/backup-restore.md](docs/backup-restore.md).
 
 ## Documentation
 
-- [Deployment](docs/deployment.md) — durable install: secrets, reverse proxy + auth, backups, upgrades
-- [Swarm stack file](deploy/docker-stack.yaml) — `docker stack deploy` with the published images
-- [Architecture](docs/architecture.md) — services, data flow, configuration
-- [Data model](docs/data-model.md) — database schema and relationships
-- [API](docs/api.md) — REST endpoints (mirrors the OpenAPI spec)
-- [Price sources](docs/price-sources.md) — where estimates come from and caveats
-- [Backup & restore](docs/backup-restore.md) — what a backup contains and how to drill it
-- [Monitoring](docs/monitoring.md) — alert webhooks, the heartbeat, and Prometheus metrics
-- [Security](docs/security.md) — secrets at rest, key management, exposure guidance
-- [Roadmap](docs/roadmap.md) — full feature list, what's done, what remains
+- [Deployment](docs/deployment.md): a durable install (secrets, reverse proxy + auth, backups, upgrades)
+- [Swarm stack file](deploy/docker-stack.yaml): `docker stack deploy` with the published images
+- [Architecture](docs/architecture.md): services, data flow, configuration
+- [Data model](docs/data-model.md): database schema and relationships
+- [API](docs/api.md): REST endpoints (mirrors the OpenAPI spec)
+- [Price sources](docs/price-sources.md): where estimates come from and caveats
+- [Backup & restore](docs/backup-restore.md): what a backup contains and how to drill it
+- [Monitoring](docs/monitoring.md): alert webhooks, the heartbeat, and Prometheus metrics
+- [Security](docs/security.md): secrets at rest, key management, exposure guidance
+- [Roadmap](docs/roadmap.md): full feature list, what's done, what remains
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
-- [Developing with Claude Code](docs/claude-code.md) — how the project is built from Phase 0 on
+- [Developing with Claude Code](docs/claude-code.md): how the project is built from Phase 0 on
 
 ## Development
 
 - **Full stack:** `docker compose up --build` (the container build is also
   the frontend typecheck).
-- **Backend:** in `backend/` — `pip install -e .[dev]` once, then `pytest`
+- **Backend:** in `backend/`, `pip install -e .[dev]` once, then `pytest`
   (no database needed), `ruff check .` / `ruff format .`, and
   `alembic upgrade head` with `DATABASE_URL` set.
-- **Frontend:** in `frontend/` — `npm run dev` proxies `/api` to
+- **Frontend:** in `frontend/`, `npm run dev` proxies `/api` to
   localhost:8000.
 
 CI runs ruff, the backend test suite on Python 3.10 and 3.12, a frontend
@@ -252,7 +252,7 @@ repo-root `CLAUDE.md` for persistent context. See
 
 ## Contributing
 
-Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md)
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for setup, conventions, and what's in scope. Cabinet stays deliberately small;
 [docs/roadmap.md](docs/roadmap.md) records what was cut and why. Security
 issues should be reported privately per [SECURITY.md](SECURITY.md).

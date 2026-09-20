@@ -1,14 +1,14 @@
 """Numista price adapter (pricing program M2).
 
-Numista prices an *issue* — a catalogue type narrowed to a year and mint — and
+Numista prices an *issue* (a catalogue type narrowed to a year and mint) and
 quotes it per grade bucket. The adapter resolves that chain: the item's
 `numista` catalog ref gives the type, the type's issues are matched against the
 item's year (and mint mark), and the item's grade is mapped onto Numista's
 seven buckets.
 
 Free API keys allow 2,000 requests a month, so every upstream response is
-cached in `source_cache` — catalogue data and prices for 7 days, the longest
-Numista's API licence (§8.3) allows for catalogue data — and a stale entry is
+cached in `source_cache` (catalogue data and prices for 7 days, the longest
+Numista's API licence (§8.3) allows for catalogue data), and a stale entry is
 preferred over a failed request, the same discipline spot prices and exchange
 rates use.
 
@@ -49,7 +49,7 @@ _RANK_CUTOFFS = ((8, "g"), (12, "vg"), (20, "f"), (40, "vf"), (50, "xf"), (60, "
 
 
 class _NotFound(Exception):
-    """Upstream 404 — the catalogue has no such type or issue."""
+    """Upstream 404: the catalogue has no such type or issue."""
 
 
 def bucket_for_rank(rank: int) -> str:
@@ -75,7 +75,7 @@ def _request(
     api_key: str, path: str, params: dict | None = None, forbidden: str | None = None
 ) -> dict:
     """One upstream call. Raises _NotFound or SourceUnavailable; a 403 raises
-    `NotApplicable(forbidden)` when given — an endpoint the key's plan lacks."""
+    `NotApplicable(forbidden)` when given (an endpoint the key's plan lacks)."""
     try:
         resp = httpx.get(
             f"{API_ROOT}/{path}",
@@ -88,9 +88,9 @@ def _request(
         if resp.status_code == 403 and forbidden:
             raise NotApplicable(forbidden)
         if resp.status_code in (401, 403):
-            raise KeyRejected("Numista rejected the API key — check it in Settings")
+            raise KeyRejected("Numista rejected the API key. Check it in Settings")
         if resp.status_code == 429:
-            raise QuotaExhausted("Numista request quota exhausted — try again later")
+            raise QuotaExhausted("Numista request quota exhausted. Try again later")
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
@@ -163,7 +163,7 @@ def price_map(payload: dict) -> dict[str, Decimal]:
 
 
 def resolve_grade(prices: dict[str, Decimal], wanted: str) -> str | None:
-    """The wanted bucket if priced, else the nearest one — preferring the
+    """The wanted bucket if priced, else the nearest one, preferring the
     lower (more conservative) bucket when two are equally close."""
     if wanted in prices:
         return wanted
@@ -187,9 +187,9 @@ def prerequisite(db: Session, item: Item) -> str | None:
     if type_id_for(item) is None:
         return "Add a 'numista' catalog reference (e.g. N#1234) to price this item"
     if item.grade is None:
-        return "Set the item's grade — Numista quotes prices per grade"
+        return "Set the item's grade: Numista quotes prices per grade"
     if item.strike != "business":
-        return "Numista prices circulation strikes by grade — not proofs or specimens"
+        return "Numista prices circulation strikes by grade, not proofs or specimens"
     if item.grade_details:
         return "Numista prices problem-free pieces, and this one has a details grade"
     return None
@@ -447,13 +447,13 @@ def catalogue_type(db: Session, type_id: int) -> dict:
 # `comps` estimate (v0.17.0). The endpoint is part of Numista's *paid* API plan
 # (€0.01 a request, after an activation fee and a monthly minimum); a free key
 # gets 403 "Permission denied". So it sits behind its own setting, off by
-# default, and runs only when asked — never on the refresh schedule.
+# default, and runs only when asked, never on the refresh schedule.
 
 SALES_TTL = timedelta(days=1)  # a second click the same day costs nothing
 SALES_COUNT = 100
 PAID_PLAN = (
     "Numista refused the auction-sales request. Sales records need Numista's paid "
-    'API plan — a free key gets "Permission denied". See Settings → Price sources.'
+    'API plan: a free key gets "Permission denied". See Settings → Price sources.'
 )
 
 
@@ -576,10 +576,10 @@ def _account_request(path: str, api_key: str, params: dict, token: str | None = 
             raise NotApplicable("This Numista API key isn't linked to a Numista account")
         if resp.status_code in (401, 403):
             raise KeyRejected(
-                "Numista refused access to the collection — check the API key in Settings"
+                "Numista refused access to the collection. Check the API key in Settings"
             )
         if resp.status_code == 429:
-            raise QuotaExhausted("Numista request quota exhausted — try again later")
+            raise QuotaExhausted("Numista request quota exhausted. Try again later")
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
@@ -637,8 +637,8 @@ def cached_type_ids(db: Session, type_ids: set[int]) -> set[int]:
 
 def type_fields(db: Session, type_ids: set[int], fetch: bool) -> tuple[dict[int, dict], int]:
     """Item fields per catalogue type (`catalogue_fields`, plus the type's
-    references as `catalog_refs`), from the cache, or fetched when `fetch` —
-    one request per uncached type. Returns the fields found and how many
+    references as `catalog_refs`), from the cache, or fetched when `fetch`
+    (one request per uncached type). Returns the fields found and how many
     types couldn't be looked up."""
     api_key = _lookup_key(db)
     fresh = cached_type_ids(db, type_ids)

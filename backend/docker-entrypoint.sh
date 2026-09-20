@@ -2,8 +2,8 @@
 # Run the backend as an unprivileged user.
 #
 # The container starts as root only long enough to make sure that user can
-# write the data directories — volumes created by earlier releases, and bind
-# mounts, are owned by root — then drops to it for good with setpriv. PUID and
+# write the data directories (volumes created by earlier releases, and bind
+# mounts, are owned by root), then drops to it for good with setpriv. PUID and
 # PGID pick the user (default 1000:1000), so files on a bind mount or a NAS
 # belong to whoever you expect.
 #
@@ -34,7 +34,7 @@ if [ "$(id -u)" = "0" ]; then
   if [ "$writable" = "1" ]; then
     exec setpriv --reuid="$uid" --regid="$gid" --clear-groups "$@"
   fi
-  echo "WARNING:  staying root — fix the ownership above (or set PUID/PGID) to run unprivileged" >&2
+  echo "WARNING:  staying root. Fix the ownership above (or set PUID/PGID) to run unprivileged" >&2
 fi
 
 exec "$@"

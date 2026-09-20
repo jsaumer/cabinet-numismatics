@@ -1,5 +1,5 @@
 """The trash (v0.20.0): deleting an item moves it here with everything it
-holds — photos, documents, values, sales log, history — and restoring it puts
+holds (photos, documents, values, sales log, history), and restoring it puts
 it back as it was. Deleting from the trash (or emptying it, or the automatic
 clear-out after `trash_retention_days`) is the only permanent step.
 
@@ -88,7 +88,7 @@ def restore(db: Session, items: list[Item]) -> int:
 
 
 def links(db: Session, document_id: uuid.UUID) -> int:
-    """How many items — trashed ones included — a document is attached to.
+    """How many items, trashed ones included, a document is attached to.
     Counted on the link table itself: the ORM relationship hides trashed items."""
     return db.scalar(
         select(func.count())

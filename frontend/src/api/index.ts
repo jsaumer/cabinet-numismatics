@@ -26,9 +26,26 @@ export function certLookupUrl(service: string | null, cert: string | null): stri
 
 export const photoUrl = (key: string) => `/photos/${key}`;
 
-export const money = (value: number | null | undefined, currency: string | null | undefined) =>
-  value == null
-    ? "—"
-    : `${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency ?? ""}`.trim();
+const moneyFormats = new Map<string, Intl.NumberFormat | null>();
+
+/** An amount with its currency's symbol ($12.50, CA$12.50, €12.50). A code
+ * the browser doesn't know as a currency falls back to "12.50 XYZ". */
+export const money = (value: number | null | undefined, currency: string | null | undefined) => {
+  if (value == null) return "–";
+  const code = (currency ?? "").trim().toUpperCase();
+  if (!moneyFormats.has(code)) {
+    let format: Intl.NumberFormat | null = null;
+    try {
+      if (code) format = new Intl.NumberFormat(undefined, { style: "currency", currency: code });
+    } catch {
+      format = null;
+    }
+    moneyFormats.set(code, format);
+  }
+  const format = moneyFormats.get(code);
+  return format
+    ? format.format(value)
+    : `${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${code}`.trim();
+};
 
 export const gradeScaleFor = (type: ItemType) => (type === "coin" ? "sheldon" : "pmg");

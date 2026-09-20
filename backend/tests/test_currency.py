@@ -144,6 +144,6 @@ def test_refresh_melt_updates_only_stale_melt_estimates(client, monkeypatch):
     history = client.get(f"/api/items/{stale['id']}/estimates").json()
     assert len(history) == 2  # append-only: old melt estimate retained
 
-    # the manual item was left alone — a melt refresh never buries a manual value
+    # the manual item was left alone: a melt refresh never buries a manual value
     manual_history = client.get(f"/api/items/{manual['id']}/estimates").json()
     assert len(manual_history) == 1 and manual_history[0]["source"] == "manual"
