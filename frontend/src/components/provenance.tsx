@@ -119,6 +119,14 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
           {quantity !== 1 && <span className="muted"> · per piece, × {quantity}</span>}
           <DataAge details={d} />
         </div>
+        {(text(d.issue_reference) || text(d.issue_comment)) && (
+          <div className="muted">
+            Priced as: {[text(d.issue_reference), text(d.issue_comment)].filter(Boolean).join(", ")}
+          </div>
+        )}
+        {d.year_mismatch === true && (
+          <div className="muted">No issue matches the year exactly; the closest one was used.</div>
+        )}
         <div className="chip-row">
           {Object.entries(prices).map(([grade, price]) => (
             <span key={grade} className={grade === used ? "chip active" : "chip"}>

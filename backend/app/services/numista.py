@@ -2,9 +2,9 @@
 
 Numista prices an *issue* (a catalogue type narrowed to a year and mint) and
 quotes it per grade bucket. The adapter resolves that chain: the item's
-`numista` catalog ref gives the type, the type's issues are matched against the
-item's year (and mint mark), and the item's grade is mapped onto Numista's
-seven buckets.
+`numista` catalog ref gives the type, the type's issues are ranked against the
+item (year or ND, mint mark, replacement, references) and tried best first, and
+the item's grade is mapped onto Numista's seven buckets.
 
 Free API keys allow 2,000 requests a month, so every upstream response is
 cached in `source_cache` (catalogue data and prices for 7 days: the API
@@ -43,6 +43,7 @@ from app.services.pricing import (
 API_ROOT = "https://api.numista.com/api/v3"
 CATALOG_TTL = timedelta(days=7)  # the licence caps catalogue caching at 7 days
 PRICE_TTL = timedelta(days=7)
+MAX_CANDIDATES = 4  # issues an estimate will try before giving up (one request each)
 
 # Numista's grade buckets, worst to best.
 GRADE_BUCKETS = ("g", "vg", "f", "vf", "xf", "au", "unc")
@@ -109,20 +110,6 @@ def _cached(
     return cached_fetch(db, "numista", cache_key, ttl, lambda: _request(api_key, path, params))
 
 
-def pick_issue(issues: list[dict], item: Item) -> dict | None:
-    """The issue matching the item's year, preferring one whose mint letter
-    matches too."""
-    same_year = [i for i in issues if isinstance(i, dict) and _issue_year(i) == item.year]
-    if not same_year:
-        return None
-    if item.mint_mark:
-        mark = item.mint_mark.strip().lower()
-        exact = [i for i in same_year if str(i.get("mint_letter") or "").strip().lower() == mark]
-        if exact:
-            return exact[0]
-    return same_year[0]
-
-
 def _issue_year(issue: dict) -> int | None:
     for field in ("year", "min_year", "gregorian_year"):
         value = issue.get(field)
@@ -131,6 +118,109 @@ def _issue_year(issue: dict) -> int | None:
         if isinstance(value, str) and value.strip().isdigit():
             return int(value)
     return None
+
+
+def issue_nd(issue: dict) -> bool:
+    """An issue Numista lists as undated: `is_dated` false, or no year at all.
+    Nothing here could be confirmed against a live key, so every field is
+    treated as possibly absent or of another type."""
+    if issue.get("is_dated") is False:
+        return True
+    return not any(field in issue for field in ("year", "min_year", "gregorian_year"))
+
+
+def _norm(value) -> str:
+    return "".join(str(value or "").split()).lower()
+
+
+def _ref_number(value) -> str:
+    """A reference number for comparison: no spaces, no case, no `P#`/`#` head
+    ("P# M22a", "p#m22a", and "M22a" all read the same)."""
+    text = _norm(value)
+    return text.rsplit("#", 1)[-1] if "#" in text else text
+
+
+def issue_references(issue: dict) -> list[str]:
+    """The issue's own reference numbers, as written."""
+    out = []
+    for ref in issue.get("references") or []:
+        if not isinstance(ref, dict):
+            continue
+        catalogue = ref.get("catalogue") if isinstance(ref.get("catalogue"), dict) else {}
+        code, number = _clean(catalogue.get("code")), _clean(ref.get("number"))
+        if number:
+            out.append(f"{code}# {number}" if code else number)
+    return out
+
+
+def _looks_replacement(issue: dict) -> bool:
+    """A replacement (star) note's issue: its comment says so, or one of its
+    reference numbers ends in `r` or `*` (Pick's M22r beside M22a)."""
+    text = f"{issue.get('comment') or ''} {issue.get('signatures') or ''}".lower()
+    if "replacement" in text or "star" in text:
+        return True
+    return any(_ref_number(ref).endswith(("r", "*")) for ref in issue_references(issue))
+
+
+def _text_match(issue: dict, item: Item) -> bool:
+    """The item names this issue: a shared reference number, or its variety or
+    signatures written into the issue's comment or signatures."""
+    numbers = {_ref_number(ref) for ref in issue_references(issue)} - {""}
+    if numbers & {_ref_number(ref.ref_code) for ref in item.catalog_refs}:
+        return True
+    haystack = f"{issue.get('comment') or ''} {issue.get('signatures') or ''}".lower()
+    needles = [t.strip().lower() for t in (item.variety, item.signatures) if t and t.strip()]
+    return any(needle in haystack for needle in needles)
+
+
+def _issue_pool(issues: list[dict], item: Item) -> tuple[list[dict], bool]:
+    """The issues that could be this item's, and whether the year had to be
+    given up on (a single-issue type priced for an item whose year it lacks)."""
+    rows = [i for i in issues if isinstance(i, dict)]
+    pool = [i for i in rows if _issue_year(i) == item.year]
+    if not pool and item.year_nd:
+        pool = [i for i in rows if issue_nd(i)]
+    if not pool and len(rows) == 1:
+        return rows, True
+    return pool, False
+
+
+def _ranked(pool: list[dict], item: Item) -> list[dict]:
+    """The pool, best first: mint letter, then replacement agreement, then a
+    text match, then ND agreement, then the order Numista listed them in."""
+    mark = _norm(item.mint_mark)
+
+    def key(numbered: tuple[int, dict]) -> tuple:
+        index, issue = numbered
+        return (
+            _norm(issue.get("mint_letter")) != mark,
+            _looks_replacement(issue) != bool(item.replacement_note),
+            not _text_match(issue, item),
+            issue_nd(issue) != bool(item.year_nd),
+            index,
+        )
+
+    return [issue for _, issue in sorted(enumerate(pool), key=key)]
+
+
+def candidate_issues(issues: list[dict], item: Item) -> list[dict]:
+    """The issues that could be this item's, best first. Numista prices an
+    issue, and a type can hold several that resolve to the same year (a
+    replacement note beside the regular one), so the adapter tries them in
+    turn instead of trusting the first."""
+    pool, _ = _issue_pool(issues, item)
+    return _ranked(pool, item)
+
+
+def pick_issue(issues: list[dict], item: Item) -> dict | None:
+    """The likeliest single issue for the item, for callers that want one."""
+    candidates = candidate_issues(issues, item)
+    return candidates[0] if candidates else None
+
+
+def _year_phrase(item: Item) -> str:
+    """How an error names the year looked for: "1951", "ND (1951)", "undated"."""
+    return "undated" if item.year is None else item.year_label
 
 
 def price_map(payload: dict) -> dict[str, Decimal]:
@@ -216,29 +306,39 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
         raise NotApplicable(f"Numista has no type N#{type_id}") from None
     issues = issues_payload.get("issues") or issues_payload.get("items") or []
 
-    issue = pick_issue(issues, item)
-    if issue is None or issue.get("id") is None:
-        raise NotApplicable(f"Numista lists no {item.year} issue for N#{type_id}")
-    issue_id = issue["id"]
+    pool, year_mismatch = _issue_pool(issues, item)
+    candidates = [i for i in _ranked(pool, item) if i.get("id") is not None][:MAX_CANDIDATES]
+    phrase = _year_phrase(item)
+    if not candidates:
+        raise NotApplicable(f"Numista lists no {phrase} issue for N#{type_id}")
 
-    try:
-        payload, prices_fetched_at = _cached(
-            db,
-            f"prices:{type_id}:{issue_id}:{currency}",
-            PRICE_TTL,
-            api_key,
-            f"types/{type_id}/issues/{issue_id}/prices",
-            {"currency": currency},
-        )
-    except _NotFound:
+    # A type can list several issues for one year (a replacement note beside
+    # the regular one, and only one of them priced), so try them in order.
+    found = None
+    for tried, issue in enumerate(candidates, start=1):
+        issue_id = issue["id"]
+        try:
+            payload, prices_fetched_at = _cached(
+                db,
+                f"prices:{type_id}:{issue_id}:{currency}",
+                PRICE_TTL,
+                api_key,
+                f"types/{type_id}/issues/{issue_id}/prices",
+                {"currency": currency},
+            )
+        except _NotFound:
+            continue
+        prices = price_map(payload)
+        used = resolve_grade(prices, wanted)
+        if used is not None:
+            found = (issue, issue_id, payload, prices_fetched_at, prices, used, tried)
+            break
+    if found is None:
         raise NotApplicable(
-            f"Numista has no prices for the {item.year} issue of N#{type_id}"
-        ) from None
-
-    prices = price_map(payload)
-    used = resolve_grade(prices, wanted)
-    if used is None:
-        raise NotApplicable(f"Numista has no priced grade for the {item.year} issue of N#{type_id}")
+            f"Numista has no priced grade for any of the {len(candidates)} "
+            f"{phrase} issue(s) of N#{type_id}"
+        )
+    issue, issue_id, payload, prices_fetched_at, prices, used, tried = found
 
     value = (prices[used] * item.quantity).quantize(Decimal("0.01"))
     exact = used == wanted
@@ -247,15 +347,25 @@ def numista_estimate(db: Session, item: Item) -> EstimateResult:
         source += f" (for {wanted.upper()})"
     quoted_currency = _currency_of(payload, currency)
     mint_letter = issue.get("mint_letter")
+    references = issue_references(issue)
+    details = {
+        "type_id": type_id,
+        "issue_id": issue_id,
+        "issue_year": _issue_year(issue),
+        "issue_nd": issue_nd(issue),
+        "issue_comment": _clean(issue.get("comment")),
+        "issue_reference": ", ".join(references) or None,
+        "candidates_tried": tried,
+    }
+    if year_mismatch:
+        details["year_mismatch"] = True
     return EstimateResult(
         source=source,
         estimated_value=value,
         currency=quoted_currency,
         confidence=Decimal("0.60") if exact else Decimal("0.45"),
         details={
-            "type_id": type_id,
-            "issue_id": issue_id,
-            "issue_year": _issue_year(issue),
+            **details,
             "mint_letter": str(mint_letter) if mint_letter else None,
             "grade_wanted": wanted,
             "grade_used": used,
@@ -358,9 +468,10 @@ def search_types(db: Session, query: str, category: str | None = None) -> dict:
     return {"count": int(count) if str(count).isdigit() else len(results), "results": results}
 
 
-def catalogue_fields(payload: dict) -> dict:
+def catalogue_fields(payload: dict, issues: list[dict] | None = None) -> dict:
     """Item fields a catalogue type fills in, keyed like the item schema.
-    Only values Numista actually has are included."""
+    Only values Numista actually has are included. With the type's issues:
+    when every one of them is undated, the item is too."""
     note = payload.get("category") == "banknote"
     issuer = payload.get("issuer") if isinstance(payload.get("issuer"), dict) else {}
     value = payload.get("value") if isinstance(payload.get("value"), dict) else {}
@@ -392,6 +503,9 @@ def catalogue_fields(payload: dict) -> dict:
             if isinstance(edge, dict)
             else None,
         )
+    rows = [i for i in issues or [] if isinstance(i, dict)]
+    if rows and all(issue_nd(i) for i in rows):
+        fields["year_nd"] = True
     return {key: value for key, value in fields.items() if value is not None}
 
 
@@ -409,7 +523,8 @@ def catalogue_refs(type_id: int, payload: dict) -> list[dict]:
 
 def catalogue_type(db: Session, type_id: int) -> dict:
     """One catalogue type, as fields ready to fill into an item, plus its
-    issues (year, mint letter, mintage) for picking the exact one."""
+    issues (year or ND, mint letter, mintage, comment, reference) for picking
+    the exact one."""
     api_key = _lookup_key(db)
     try:
         payload, _ = _cached(db, f"type:{type_id}", CATALOG_TTL, api_key, f"types/{type_id}")
@@ -427,16 +542,18 @@ def catalogue_type(db: Session, type_id: int) -> dict:
         "title": _clean(payload.get("title")) or f"N#{type_id}",
         "url": _clean(payload.get("url")),
         "category": _clean(payload.get("category")),
-        "fields": catalogue_fields(payload),
+        "fields": catalogue_fields(payload, issues),
         "catalog_refs": catalogue_refs(type_id, payload),
         "issues": [
             {
                 "year": _issue_year(issue),
+                "nd": issue_nd(issue),
                 "mint_letter": _clean(issue.get("mint_letter")),
                 "mintage": issue["mintage"]
                 if isinstance(issue.get("mintage"), int) and issue["mintage"] >= 0
                 else None,
                 "comment": _clean(issue.get("comment")),
+                "reference": ", ".join(issue_references(issue)) or None,
             }
             for issue in issues
             if isinstance(issue, dict)
@@ -539,7 +656,7 @@ def fetch_sales(db: Session, item: Item) -> tuple[list[dict], int | None]:
         raise NotApplicable(f"Numista has no type N#{type_id}") from None
     issue = pick_issue(issues_payload.get("issues") or issues_payload.get("items") or [], item)
     if issue is None or issue.get("id") is None:
-        raise NotApplicable(f"Numista lists no {item.year} issue for N#{type_id}")
+        raise NotApplicable(f"Numista lists no {_year_phrase(item)} issue for N#{type_id}")
     issue_id = issue["id"]
     params = {"issue_id": issue_id, "count": SALES_COUNT}
     try:

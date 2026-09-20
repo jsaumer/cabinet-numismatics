@@ -134,7 +134,8 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
-number getting its badge, a wishlist coin showing its target price, the
+number getting its badge, a wishlist coin showing its target price, an
+undated piece taking ND with no year, the
 security headers, every Settings section, and, last, an in-app restore of a
 backup taken a moment earlier (last so a failure can't disturb the others;
 it leaves the collection as it found it, plus a safety backup). The tests

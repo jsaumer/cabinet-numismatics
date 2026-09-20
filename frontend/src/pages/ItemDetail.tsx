@@ -140,7 +140,7 @@ export default function ItemDetail() {
     <>
       <div className="detail-header">
         <h1>
-          {item.country} {item.denomination}, {item.year}
+          {item.country} {item.denomination}, {item.year_label}
           {item.mint_mark ? ` "${item.mint_mark}"` : ""}
         </h1>
         <span className={`badge ${item.type}`}>{item.type}</span>
@@ -221,7 +221,7 @@ export default function ItemDetail() {
             </dd>
           </div>
           {item.struck_calendar && item.struck_year != null &&
-            fact("Date as struck", `${struckDate(item, calendars)} (${item.year})`)}
+            fact("Date as struck", `${struckDate(item, calendars)} (${item.year_label})`)}
           {fact("Composition", item.composition)}
           {item.type === "coin" &&
             fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}

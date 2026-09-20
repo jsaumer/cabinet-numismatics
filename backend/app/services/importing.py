@@ -84,7 +84,12 @@ class Candidate:
     @property
     def label(self) -> str:
         f = self.fields
-        parts = [str(f.get(k)) for k in ("country", "denomination", "year") if f.get(k)]
+        parts = [str(f[k]) for k in ("country", "denomination") if f.get(k)]
+        year = f.get("year")
+        if f.get("year_nd"):
+            parts.append(f"ND ({year})" if year else "ND")
+        elif year:
+            parts.append(str(year))
         if f.get("mint_mark"):
             parts.append(f'"{f["mint_mark"]}"')
         return " ".join(parts) or f"Row {self.row}"
@@ -173,6 +178,23 @@ def to_year(value) -> int | None:
         return int(value)
     match = re.search(r"-?\d{1,4}", str(value))
     return int(match.group()) if match else None
+
+
+_ND_TEXT = re.compile(r"\b(?:n\.?\s*d\.?|no\s*date|undated|sans\s*date)\b", re.IGNORECASE)
+_ATTRIBUTED = re.compile(r"^\s*\(\s*-?\d{1,4}\s*\)\s*$")
+
+
+def parse_year(value) -> tuple[int | None, bool]:
+    """(year, undated) from a year cell, as catalogues write it: 1978 is dated;
+    "ND", "n.d", "undated" carry no date; "ND (1951)", "(1951)" carry none and
+    attribute a year. A cell with no year in it, or a year 0 (what gets typed
+    when the field is required), reads as undated."""
+    year = to_year(value)
+    if year in (None, 0):
+        return None, True
+    text = str(value)
+    undated = bool(_ND_TEXT.search(text) or _ATTRIBUTED.match(text))
+    return year, undated
 
 
 _DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%d.%m.%Y", "%Y-%m", "%Y")
@@ -428,6 +450,9 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
                 cand.messages.append(f"{key.replace('_', ' ')} shortened to {limit} characters")
         if cand.extra_notes:
             f["notes"] = "\n".join([n for n in [f.get("notes"), *cand.extra_notes] if n])
+        # A source that gives no year at all describes an undated piece.
+        if f.get("year") in (None, "") and not f.get("year_nd"):
+            f["year_nd"] = True
         payload = None
         try:
             payload = ItemCreate(**f, tags=cand.tags[:50], catalog_refs=_dedupe(cand.refs))
@@ -450,6 +475,7 @@ def _note_similar(db: Session, cand: Candidate, payload: ItemCreate) -> None:
         country=payload.country,
         denomination=payload.denomination,
         year=payload.year,
+        nd=payload.year_nd,
         mint_mark=payload.mint_mark,
         cert_number=payload.cert_number,
         refs=[(r.catalog, r.ref_code) for r in payload.catalog_refs],

@@ -33,6 +33,8 @@ def _resolve_strategy(db: Session) -> tuple[str, str | None]:
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
+UNDATED = "Undated"  # the decade bucket for a piece with no year
+
 
 def _load_items(db: Session) -> list[Item]:
     return (
@@ -146,7 +148,7 @@ def breakdowns(
         keys = {
             "country": [item.country],
             "type": [item.type],
-            "decade": [f"{(item.year // 10) * 10}s"],
+            "decade": [UNDATED if item.year is None else f"{(item.year // 10) * 10}s"],
             "grade": [item.grade.code if item.grade else "ungraded"],
             "tag": [t.name for t in item.tags],
             "acq_year": ([str(item.acquisition_date.year)] if item.acquisition_date else []),
@@ -163,7 +165,11 @@ def breakdowns(
         currency=currency,
         by_country=[_entry(k, b) for k, b in sorted(dims["country"].items(), key=by_value)],
         by_type=[_entry(k, b) for k, b in sorted(dims["type"].items(), key=by_value)],
-        by_decade=[_entry(k, b) for k, b in sorted(dims["decade"].items())],
+        # Undated pieces are their own bucket, after the decades.
+        by_decade=[
+            _entry(k, b)
+            for k, b in sorted(dims["decade"].items(), key=lambda kv: (kv[0] == UNDATED, kv[0]))
+        ],
         by_grade=[_entry(k, b) for k, b in sorted(dims["grade"].items(), key=by_value)],
         by_tag=[_entry(k, b) for k, b in sorted(dims["tag"].items(), key=by_value)],
         acquisitions_by_year=[_entry(k, b) for k, b in sorted(dims["acq_year"].items())],

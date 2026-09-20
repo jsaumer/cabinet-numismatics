@@ -59,7 +59,9 @@ export interface Item {
   status: ItemStatus;
   country: string;
   denomination: string;
-  year: number;
+  year: number | null;
+  year_nd: boolean;
+  year_label: string; // "1922", "ND", or "ND (1922)"
   mint_mark: string | null;
   series: string | null;
   variety: string | null;
@@ -281,7 +283,8 @@ export interface ItemPayload {
   status: ItemStatus;
   country: string;
   denomination: string;
-  year: number | null; // null only with a date as struck: the server converts it
+  year: number | null; // null with a date as struck (server converts it) or an ND piece
+  year_nd: boolean;
   mint_mark: string | null;
   series: string | null;
   variety: string | null;

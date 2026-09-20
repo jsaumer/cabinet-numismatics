@@ -133,7 +133,7 @@ export type ChecklistGenerate =
 
 export interface RunCreate {
   type_id: number;
-  issues: { year: number; mint_mark: string | null; mintage: number | null }[];
+  issues: { year: number | null; mint_mark: string | null; mintage: number | null }[];
   shared: {
     status: ItemStatus;
     grade_id: number | null;

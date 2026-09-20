@@ -101,6 +101,16 @@ def _validate_calendar(value: str | None) -> str | None:
     return value
 
 
+YEAR_ZERO = "There is no year 0. Tick ND for a piece with no date."
+YEAR_REQUIRED = "Enter the year, or tick ND for a piece with no date."
+
+
+def _validate_year(value: int | None) -> int | None:
+    if value == 0:
+        raise ValueError(YEAR_ZERO)
+    return value
+
+
 def _validate_era(value: str | None) -> str | None:
     if value is not None and value not in calendars.ERAS:
         raise ValueError(f"Unknown era {value!r}; expected one of {', '.join(calendars.ERAS)}")
@@ -121,7 +131,10 @@ class ItemBase(BaseModel):
     status: ItemStatusName = "owned"
     country: str = Field(min_length=1, max_length=100)
     denomination: str = Field(min_length=1, max_length=100)
-    year: int = Field(ge=-700, le=2100)  # numismatics goes back a while
+    # Numismatics goes back a while. Null only on an undated piece (`year_nd`),
+    # where a year that is given is the attributed one: "ND (1951)".
+    year: int | None = Field(default=None, ge=-700, le=2100)
+    year_nd: bool = False  # the piece carries no date
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
@@ -179,6 +192,14 @@ class ItemBase(BaseModel):
     _lower = field_validator(*LOWERED_FIELDS, mode="before")(_lowered)
     _cal = field_validator("struck_calendar")(_validate_calendar)
     _era = field_validator("struck_era")(_validate_era)
+    _yr = field_validator("year")(_validate_year)
+
+    @model_validator(mode="after")
+    def _year_or_nd(self):
+        """A year is required unless the piece carries no date."""
+        if self.year is None and not self.year_nd:
+            raise ValueError(YEAR_REQUIRED)
+        return self
 
 
 class ItemCreate(ItemBase):
@@ -216,6 +237,7 @@ class ItemUpdate(BaseModel):
     country: str | None = Field(default=None, min_length=1, max_length=100)
     denomination: str | None = Field(default=None, min_length=1, max_length=100)
     year: int | None = Field(default=None, ge=-700, le=2100)
+    year_nd: bool | None = None  # not bulk-editable; the router drops it there
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
@@ -277,6 +299,7 @@ class ItemUpdate(BaseModel):
     _lower = field_validator(*LOWERED_FIELDS, mode="before")(_lowered)
     _cal = field_validator("struck_calendar")(_validate_calendar)
     _era = field_validator("struck_era")(_validate_era)
+    _yr = field_validator("year")(_validate_year)
 
 
 class PhotoOut(BaseModel):
@@ -545,6 +568,7 @@ class ItemOut(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    year_label: str = ""  # "1922", "ND", or "ND (1922)"
     grade: GradeOut | None = None
     grade_label: str | None = None  # e.g. "PR-69 DCAM ★"
     cost_basis: float | None = None  # price paid plus fees
@@ -641,9 +665,18 @@ class ChecklistGenerate(BaseModel):
 
 
 class RunIssue(BaseModel):
-    year: int = Field(ge=-700, le=2100)
+    year: int | None = Field(default=None, ge=-700, le=2100)
+    nd: bool = False  # an undated issue; `year` is then the attributed one
     mint_mark: str | None = Field(default=None, max_length=20)
     mintage: int | None = Field(default=None, ge=0)
+
+    _yr = field_validator("year")(_validate_year)
+
+    @model_validator(mode="after")
+    def _year_or_nd(self):
+        if self.year is None and not self.nd:
+            raise ValueError(YEAR_REQUIRED)
+        return self
 
 
 class RunShared(BaseModel):
@@ -705,9 +738,11 @@ class NumistaSearch(BaseModel):
 
 class NumistaIssue(BaseModel):
     year: int | None = None
+    nd: bool = False  # the issue carries no date; `year` is then attributed
     mint_letter: str | None = None
     mintage: int | None = None
     comment: str | None = None
+    reference: str | None = None  # the issue's own references, e.g. "P# M22a"
     owned: bool = False  # an owned item carries this type, year, and mint mark
 
 
@@ -716,7 +751,7 @@ class NumistaType(BaseModel):
     title: str
     url: str | None = None
     category: str | None = None
-    fields: dict[str, str | int | float]  # item fields, keyed like ItemCreate
+    fields: dict[str, bool | str | int | float]  # item fields, keyed like ItemCreate
     catalog_refs: list[CatalogRefIn]
     issues: list[NumistaIssue]
 

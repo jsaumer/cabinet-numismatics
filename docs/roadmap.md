@@ -30,7 +30,8 @@ owner needs any of it (100–500 pieces to enter by hand, runs and singles,
 mostly held) and demoted the release train to **one next item and a list
 of candidates**, built only when real use asks for them. Since 20 September
 2026 the owner has been entering real pieces, and everything from v0.23.2 to
-v0.24.9 came from that: see "From the data-entry pass" under Phase 5.9.
+v0.24.9, and v0.27.1, came from that: see "From the data-entry pass" under
+Phase 5.9.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions: new capability = minor,
@@ -347,7 +348,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   sitting: README quick start plus `deployment.md` (secrets, reverse proxy +
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: `scripts/seed_demo.py` seeds a
-  13-item demo collection; screenshots are captured headlessly at a fixed
+  14-item demo collection; screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
@@ -356,7 +357,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0018`, applied by the
+  upgrades: Alembic since Phase 0, revisions `0001`–`0019`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -692,6 +693,14 @@ pieces turned up, each shipped as a small release:
   repo's Swarm stack file set a broken `DOCUMENT_DIR`.
 - ✔ v0.24.9: the header shifted sideways between a short page and one
   that scrolls.
+- ✔ v0.27.1: two more found entering real pieces. A German notgeld note
+  Numista lists with no year could only be saved by typing year 0, which
+  broke its title and its pricing; year is now optional, with an ND
+  checkbox and an optional attributed year ("ND" or "ND (1951)"). A 1951
+  Military Payment Certificate has two same-year Numista issues, a rare
+  unpriced replacement note and the common priced one, and pricing always
+  took the first, so it failed; same-year issues are now ranked and tried
+  in turn until one prices.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -1012,7 +1021,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0018`), never create-on-startup.
+  revision (`0001`–`0019`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty, the same reasoning that front-loaded Phase 2's fields.

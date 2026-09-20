@@ -26,13 +26,13 @@ const WISHLIST_SORTS = [
 
 // Filters behind "More…"; any of them in the URL opens it.
 const ADVANCED_KEYS = [
-  "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
+  "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
   "fancy", "serial_trait", "target_reached",
 ];
 
 const FILTER_KEYS = [
   "type", "status", "strike", "country", "year", "q", "tag", "set_id",
-  "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
+  "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
   "fancy", "serial_trait", "target_reached",
 ] as const;
 
@@ -325,6 +325,14 @@ export default function ItemList() {
               onChange={(e) => set("year_max", e.target.value)} />
           </label>
           <label className="field">
+            Dating
+            <select value={get("nd")} onChange={(e) => set("nd", e.target.value)}>
+              <option value="">All</option>
+              <option value="true">Undated (ND)</option>
+              <option value="false">Dated</option>
+            </select>
+          </label>
+          <label className="field">
             Grade ≥ (rank)
             <input type="number" min={1} max={70} value={get("grade_min")}
               onChange={(e) => set("grade_min", e.target.value)} />
@@ -496,7 +504,7 @@ export default function ItemList() {
                   {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}{" "}
                   <TraitBadges traits={item.serial_traits} reference={traitReference} max={2} />
                 </td>
-                <td>{item.year}</td>
+                <td>{item.year_label}</td>
                 <td>{item.grade_label ?? <span className="muted">–</span>}</td>
                 <td className="muted hide-sm">{item.series ?? ""}</td>
                 <td className="num hide-sm">{item.quantity}</td>

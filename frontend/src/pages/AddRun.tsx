@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, Grade, gradeScaleFor, NumistaSearchResult, NumistaType, SetInfo } from "../api";
+import { api, Grade, gradeScaleFor, ndYearLabel, NumistaSearchResult, NumistaType, SetInfo } from "../api";
 
 const issueKey = (i: { year: number | null; mint_letter: string | null }) =>
   `${i.year}|${(i.mint_letter ?? "").trim().toLowerCase()}`;
@@ -44,10 +44,9 @@ export default function AddRun() {
     api.listGrades(gradeScaleFor(itemType)).then(setGrades).catch(() => setGrades([]));
   }, [itemType]);
 
-  // Dated issues only, one per year and mint mark.
+  // One per year (or ND) and mint mark.
   const issues = (found?.issues ?? []).filter(
-    (issue, index, all) =>
-      issue.year != null && all.findIndex((other) => issueKey(other) === issueKey(issue)) === index,
+    (issue, index, all) => all.findIndex((other) => issueKey(other) === issueKey(issue)) === index,
   );
 
   async function load(typeId: number) {
@@ -114,7 +113,7 @@ export default function AddRun() {
       const result = await api.addRun({
         type_id: found.type_id,
         issues: chosen.map((i) => ({
-          year: i.year!,
+          year: i.year,
           mint_mark: i.mint_letter,
           mintage: i.mintage,
         })),
@@ -235,7 +234,7 @@ export default function AddRun() {
           <div className="card">
             <h2>2 · The dates and mints you have</h2>
             {issues.length === 0 ? (
-              <p className="muted">Numista lists no dated issues for this type.</p>
+              <p className="muted">Numista lists no issues for this type.</p>
             ) : (
               <>
                 <div className="estimate-form" style={{ marginTop: 0 }}>
@@ -256,13 +255,14 @@ export default function AddRun() {
                       <label key={key}
                         className={`slot${issue.owned ? " filled" : ""}`}
                         title={[
+                          issue.reference,
                           issue.mintage != null ? `mintage ${issue.mintage.toLocaleString()}` : null,
                           issue.comment,
                           issue.owned ? "already owned" : null,
                         ].filter(Boolean).join(" · ")}>
                         <input type="checkbox" checked={picked.has(key)} disabled={issue.owned}
                           onChange={() => toggle(key)} />
-                        {issue.year}
+                        {ndYearLabel(issue)}
                         {issue.mint_letter ? `-${issue.mint_letter}` : ""}
                         {issue.owned && <span className="muted"> ✓</span>}
                       </label>

@@ -24,6 +24,7 @@ def find_similar(
     country: str | None = None,
     denomination: str | None = None,
     year: int | None = None,
+    nd: bool = False,
     mint_mark: str | None = None,
     cert_number: str | None = None,
     refs: list[tuple[str, str]] | None = None,
@@ -47,12 +48,18 @@ def find_similar(
                 )
             )
         )
-    identity = bool(_norm(country) and _norm(denomination) and year is not None)
+    identity = bool(_norm(country) and _norm(denomination) and (year is not None or nd))
     if identity:
+        # An undated piece with no year matches undated items with no year.
+        same_year = (
+            Item.year == year
+            if year is not None
+            else (Item.year.is_(None) & Item.year_nd.is_(True))
+        )
         conditions.append(
             (func.lower(func.trim(Item.country)) == _norm(country))
             & (func.lower(func.trim(Item.denomination)) == _norm(denomination))
-            & (Item.year == year)
+            & same_year
             & (func.lower(func.trim(func.coalesce(Item.mint_mark, ""))) == _norm(mint_mark))
         )
     if not conditions:

@@ -8,6 +8,7 @@ export const EMPTY = {
   country: "",
   denomination: "",
   year: "",
+  year_nd: false, // the piece carries no date; year, if given, is attributed
   struck_calendar: "", // blank = Gregorian, the Year field alone
   struck_year: "",
   struck_era: "",
@@ -65,7 +66,7 @@ export type FormState = typeof EMPTY;
 export type TextField = {
   [K in keyof FormState]: FormState[K] extends string ? K : never;
 }[keyof FormState];
-export type FlagField = "grade_plus" | "grade_star" | "replacement_note";
+export type FlagField = "grade_plus" | "grade_star" | "replacement_note" | "year_nd";
 export type CustomField = { key: string; value: string };
 
 // Designations as grading services print them, with what each means.
@@ -121,6 +122,7 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     denomination: form.denomination.trim(),
     // With a date as struck and no year, the server converts it.
     year: form.year === "" ? null : Number(form.year),
+    year_nd: form.year_nd,
     struck_calendar: struck ? form.struck_calendar : null,
     struck_year: struck ? Number(form.struck_year) : null,
     struck_era: struck && form.struck_calendar === "japanese" ? opt(form.struck_era) : null,
@@ -185,7 +187,8 @@ export function fromItem(item: ItemDetail): FormState {
     status: item.status,
     country: item.country,
     denomination: item.denomination,
-    year: String(item.year),
+    year: str(item.year),
+    year_nd: item.year_nd,
     struck_calendar: str(item.struck_calendar),
     struck_year: str(item.struck_year),
     struck_era: str(item.struck_era),

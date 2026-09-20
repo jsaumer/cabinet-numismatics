@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, CatalogRef, ItemType, NumistaIssue, NumistaSearchResult } from "../../api";
+import { api, CatalogRef, ItemType, ndYearLabel, NumistaIssue, NumistaSearchResult } from "../../api";
 import { FormState, TextField } from "./model";
 
 // Fields a Numista lookup can fill, with how the "filled …" message names them.
@@ -97,6 +97,11 @@ export function NumistaFill({
         next[field] = String(value) as never;
         filled.push(label);
       }
+      // Every issue of the type is undated, and the piece isn't marked ND yet.
+      if (found.fields.year_nd === true && !next.year_nd) {
+        next.year_nd = true;
+        filled.push("ND");
+      }
       // An issue matching a year already entered supplies its mint mark and mintage.
       const year = Number(next.year);
       const issue = found.issues.find(
@@ -134,14 +139,15 @@ export function NumistaFill({
     onApply(
       {
         ...form,
-        year: issue.year != null ? String(issue.year) : form.year,
+        year: issue.year != null ? String(issue.year) : issue.nd ? "" : form.year,
+        year_nd: issue.nd,
         mint_mark: issue.mint_letter ?? "",
         mintage: issue.mintage != null ? String(issue.mintage) : form.mintage,
       },
       [],
     );
     setNote(
-      `Set the issue: ${[issue.year, issue.mint_letter].filter(Boolean).join(" ")}` +
+      `Set the issue: ${[ndYearLabel(issue), issue.mint_letter].filter(Boolean).join(" ")}` +
         (issue.mintage != null ? `, mintage ${issue.mintage.toLocaleString()}` : "") +
         ".",
     );
@@ -184,7 +190,8 @@ export function NumistaFill({
                   <option value="">choose year / mint…</option>
                   {issues.map((issue, i) => (
                     <option key={i} value={i}>
-                      {[issue.year, issue.mint_letter].filter(Boolean).join(" ") || "undated"}
+                      {[ndYearLabel(issue), issue.mint_letter].filter(Boolean).join(" ")}
+                      {issue.reference ? ` · ${issue.reference}` : ""}
                       {issue.mintage != null ? ` · ${issue.mintage.toLocaleString()} minted` : ""}
                       {issue.comment ? ` (${issue.comment})` : ""}
                     </option>

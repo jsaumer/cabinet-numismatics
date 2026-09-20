@@ -231,6 +231,22 @@ test("every Settings section renders, with the version", async ({ page }) => {
   await expect(page.getByRole("link", { name: /^\d+\.\d+\.\d+$/ })).toBeVisible();
 });
 
+test("an undated piece takes ND with no year", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `E2E nd ${Date.now()}`;
+  await page.goto("/items/new");
+  await page.getByLabel("Country *").fill(country);
+  await page.getByLabel("Denomination *").fill("1 notgeld");
+  await page.getByLabel("ND (no date on the piece)").check();
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(`${country} 1 notgeld, ND`);
+
+  await deleteForGood(page, url, country);
+});
+
 // Last on purpose: a restore replaces the whole collection, so a failure here
 // can't disturb the tests above. Restoring a backup taken a moment earlier
 // leaves everything as it was.

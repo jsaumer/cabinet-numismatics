@@ -14,9 +14,11 @@ export interface NumistaSearchResult {
 
 export interface NumistaIssue {
   year: number | null;
+  nd: boolean; // undated (Numista's is_dated: false, or no year field at all)
   mint_letter: string | null;
   mintage: number | null;
   comment: string | null;
+  reference: string | null; // e.g. "P# M22a"
   owned: boolean; // an owned item carries this type, year, and mint mark
 }
 
@@ -25,7 +27,7 @@ export interface NumistaType {
   title: string;
   url: string | null;
   category: string | null;
-  fields: Record<string, string | number | null>;
+  fields: Record<string, string | number | boolean | null>;
   catalog_refs: CatalogRef[];
   issues: NumistaIssue[];
 }

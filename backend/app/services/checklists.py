@@ -29,9 +29,11 @@ def owned_by_issue(
     ref: str | None = None,
     country: str | None = None,
     denomination: str | None = None,
-) -> dict[tuple[int, str], Item]:
+) -> dict[tuple[int | None, str], Item]:
     """Owned items of one kind, keyed by (year, mint mark); the earliest
-    entered wins a key. Trashed items are hidden by the ORM listener."""
+    entered wins a key. An undated item keys on (None, mint), which no
+    generated slot carries, so it never fills one. Trashed items are hidden
+    by the ORM listener."""
     stmt = select(Item).where(Item.status == "owned")
     if norm(catalog) and norm(ref):
         stmt = stmt.where(
@@ -51,7 +53,7 @@ def owned_by_issue(
         )
     else:
         return {}
-    owned: dict[tuple[int, str], Item] = {}
+    owned: dict[tuple[int | None, str], Item] = {}
     for item in db.execute(stmt.order_by(Item.created_at, Item.id)).scalars():
         owned.setdefault((item.year, norm(item.mint_mark)), item)
     return owned

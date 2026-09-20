@@ -143,12 +143,22 @@ def test_coin_type_fills_fields_refs_and_issues(client, catalogue):
         {"catalog": "km", "ref_code": "KM#273"},
     ]
     assert body["issues"] == [
-        {"year": 1986, "mint_letter": None, "mintage": 5393005, "comment": None, "owned": False},
+        {
+            "year": 1986,
+            "nd": False,
+            "mint_letter": None,
+            "mintage": 5393005,
+            "comment": None,
+            "reference": None,
+            "owned": False,
+        },
         {
             "year": 2000,
+            "nd": False,
             "mint_letter": "W",
             "mintage": 600743,
             "comment": "Proof",
+            "reference": None,
             "owned": False,
         },
     ]

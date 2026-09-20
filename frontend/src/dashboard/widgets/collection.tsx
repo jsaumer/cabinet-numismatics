@@ -26,7 +26,7 @@ export function RecentAdditionsWidget({ options }: WidgetProps) {
             <div className="thumb placeholder">◎</div>
           )}
           <span className="dash-list-main">
-            <Link to={`/items/${item.id}`}>{`${item.country} ${item.denomination}, ${item.year}`}</Link>
+            <Link to={`/items/${item.id}`}>{`${item.country} ${item.denomination}, ${item.year_label}`}</Link>
             {item.grade_label && <span className="muted"> · {item.grade_label}</span>}
           </span>
           <span className="num">
@@ -66,7 +66,7 @@ export function WishlistWidget({ options }: WidgetProps) {
         {data.items.map((item) => (
           <tr key={item.id}>
             <td>
-              <Link to={`/items/${item.id}`}>{`${item.country} ${item.denomination}, ${item.year}`}</Link>
+              <Link to={`/items/${item.id}`}>{`${item.country} ${item.denomination}, ${item.year_label}`}</Link>
               {item.target_reached && <span className="badge reached">target reached</span>}
             </td>
             <td>{item.priority ? PRIORITY_LABELS[item.priority] : <span className="muted">–</span>}</td>
@@ -110,7 +110,7 @@ export function FancySerialsWidget({ options }: WidgetProps) {
         <li key={item.id}>
           <span className="dash-list-main">
             <Link to={`/items/${item.id}`}>{item.serial_number ?? `${item.country} ${item.denomination}`}</Link>
-            <span className="muted"> · {`${item.denomination}, ${item.year}`}</span>
+            <span className="muted"> · {`${item.denomination}, ${item.year_label}`}</span>
           </span>
           <span>
             <TraitBadges traits={item.serial_traits} reference={traits} max={3} />

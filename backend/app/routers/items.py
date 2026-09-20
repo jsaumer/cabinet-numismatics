@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.models import CatalogRef, Grade, Item, ItemEvent, ItemSet, PriceEstimate, Tag
 from app.schemas import (
+    YEAR_REQUIRED,
     BulkResult,
     BulkUpdate,
     EventOut,
@@ -35,6 +36,7 @@ from app.services import (
     calendars,
     checklists,
     duplicates,
+    importing,
     numista,
     pricing,
     serials,
@@ -54,8 +56,9 @@ SORTABLE = {
     "priority": Item.priority,
     "target_price": Item.target_price,
 }
-# Mostly empty columns: rows without a value sort last in either direction.
-NULLS_LAST = {"priority", "target_price"}
+# Mostly empty columns: rows without a value sort last in either direction
+# (an undated piece has no year).
+NULLS_LAST = {"priority", "target_price", "year"}
 
 ITEM_LOAD = (
     selectinload(Item.photos),
@@ -73,6 +76,7 @@ CSV_COLUMNS = [
     "country",
     "denomination",
     "year",
+    "year_nd",
     "mint_mark",
     "series",
     "variety",
@@ -232,6 +236,7 @@ def _filtered(
     year: int | None,
     year_min: int | None,
     year_max: int | None,
+    nd: bool | None,
     tag: str | None,
     set_id: int | None,
     grade_min: int | None,
@@ -257,6 +262,10 @@ def _filtered(
         stmt = stmt.where(Item.year >= year_min)
     if year_max is not None:
         stmt = stmt.where(Item.year <= year_max)
+    # A null year never matches the year filters above (SQL comparison with
+    # NULL), which is what an undated piece should do.
+    if nd is not None:
+        stmt = stmt.where(Item.year_nd.is_(bool(nd)))
     if tag:
         stmt = stmt.where(Item.tags.any(Tag.name.ilike(tag)))
     if set_id is not None:
@@ -340,6 +349,7 @@ def filter_query(
     year: int | None = None,
     year_min: int | None = None,
     year_max: int | None = None,
+    nd: bool | None = None,
     tag: str | None = None,
     set_id: int | None = None,
     grade_min: int | None = Query(default=None, ge=1, le=70),
@@ -366,6 +376,7 @@ def filter_query(
         "year": year,
         "year_min": year_min,
         "year_max": year_max,
+        "nd": nd,
         "tag": tag,
         "set_id": set_id,
         "grade_min": grade_min,
@@ -494,7 +505,8 @@ def _export_row(
         item.status,
         item.country,
         item.denomination,
-        item.year,
+        "" if item.year is None else item.year,
+        flag(item.year_nd),
         item.mint_mark or "",
         item.series or "",
         item.variety or "",
@@ -578,6 +590,12 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
     data: dict = {
         k: v for k, v in row.items() if k and k not in IMPORT_IGNORED and v not in (None, "")
     }
+    # "ND", "ND (1951)", or an empty cell (an older export has no `year_nd`).
+    year, undated = importing.parse_year(data.pop("year", None))
+    if year is not None:
+        data["year"] = year
+    if undated and not data.get("year_nd"):
+        data["year_nd"] = True
     grade_id = None
     scale = data.pop("grade_scale", "").strip().lower() or "sheldon"
     code = data.pop("grade", "").strip()
@@ -724,6 +742,7 @@ def add_run(payload: RunCreate, db: Session = Depends(get_db)):
                     **fields,
                     **shared,
                     "year": issue.year,
+                    "year_nd": issue.nd,
                     "mint_mark": issue.mint_mark or None,
                     "mintage": issue.mintage,
                     "catalog_refs": found["catalog_refs"],
@@ -732,7 +751,8 @@ def add_run(payload: RunCreate, db: Session = Depends(get_db)):
         except ValidationError as exc:
             err = exc.errors()[0]
             where = ".".join(str(p) for p in err.get("loc", ()))
-            raise HTTPException(422, f"{issue.year}: {where}: {err['msg']}") from None
+            label = issue.year if issue.year is not None else "ND"
+            raise HTTPException(422, f"{label}: {where}: {err['msg']}") from None
         item = _build_item(db, item_payload)
         db.add(item)
         db.flush()
@@ -747,6 +767,7 @@ def similar_items(
     country: str | None = Query(default=None, max_length=100),
     denomination: str | None = Query(default=None, max_length=100),
     year: int | None = Query(default=None, ge=-5000, le=3000),
+    nd: bool = False,
     mint_mark: str | None = Query(default=None, max_length=10),
     cert_number: str | None = Query(default=None, max_length=50),
     ref: list[str] = Query(default=[], description="catalog:code, repeatable"),
@@ -771,6 +792,7 @@ def similar_items(
             country=country,
             denomination=denomination,
             year=year,
+            nd=nd,
             mint_mark=mint_mark,
             cert_number=cert_number,
             refs=refs,
@@ -818,23 +840,29 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
 
 
 def _apply_struck_date(item: Item, fields: dict) -> None:
-    """The era rule, checked against the item as it will be; and `year: null`
-    beside a date as struck is answered with the converted year. A year
-    already there is left alone."""
+    """The era rule, checked against the item as it will be; `year: null`
+    beside a date as struck is answered with the converted year, and on an
+    undated piece it stays empty. A year already there is left alone."""
     merged = {
         key: fields.get(key, getattr(item, key))
         for key in ("struck_calendar", "struck_year", "struck_era")
     }
     try:
         calendars.check_era(merged["struck_calendar"], merged["struck_era"])
-        if "year" in fields and fields["year"] is None:
-            if not merged["struck_calendar"] or merged["struck_year"] is None:
-                raise ValueError("year can only be empty beside a date as struck")
+        if (
+            "year" in fields
+            and fields["year"] is None
+            and merged["struck_calendar"]
+            and merged["struck_year"] is not None
+        ):
             fields["year"] = calendars.to_gregorian(
                 merged["struck_calendar"], merged["struck_year"], merged["struck_era"]
             )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    # The year rule, against the item as it will be.
+    if fields.get("year", item.year) is None and not fields.get("year_nd", item.year_nd):
+        raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
 
 
 def _sync_derived(item: Item, changed) -> None:
@@ -876,6 +904,11 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         fields = payload.set.model_dump(exclude_unset=True)
         fields.pop("tags", None)
         fields.pop("catalog_refs", None)
+        # ND is per piece, and a bulk year stays as it is (no struck-date check),
+        # so a bulk edit can't empty the year either: that needs ND.
+        fields.pop("year_nd", None)
+        if "year" in fields and fields["year"] is None:
+            raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
         if "grade_id" in fields:
             _check_grade(db, fields["grade_id"])
         if "set_id" in fields:

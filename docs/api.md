@@ -39,8 +39,10 @@ table of who will be able to call what.
 | `POST`   | `/api/items/run`          | One item per chosen issue of a Numista type (see Add a run) |
 
 **List query parameters** (all optional): `type`, `status`, `strike`
-(`business`/`proof`/`specimen`), `country`, `year`, `year_min`/`year_max`,
-`tag`, `set_id`, `grade_min`/`grade_max` (grade rank 1–70),
+(`business`/`proof`/`specimen`), `country`, `year`, `year_min`/`year_max`
+(none of the three match an undated item's null year), `nd` (`true` only
+undated, `false` only dated), `tag`, `set_id`, `grade_min`/`grade_max`
+(grade rank 1–70),
 `value_min`/`value_max` (the newest estimate, whatever the value strategy),
 `q` (substring match over notes/series/variety/country/denomination/cert and
 serial numbers/prefix/issuer/charter number/bank city/catalog refs/tags),
@@ -50,8 +52,8 @@ key from `/api/reference/serial-traits`; an unknown one is 422),
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`, or
 `grade`; `-` prefix for descending; default `-created_at`; anything else is
-422; with `priority` and `target_price`, items without a value come last in
-either direction). The response is
+422; with `priority`, `target_price`, and `year`, items without a value come
+last in either direction). The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
 estimated value: `latest_value` + `latest_value_currency`, plus
@@ -62,6 +64,16 @@ is newest." Both exports take the same filters (not `sort`, `limit`, or
 `offset`) and use the same resolved value. List rows carry the same fields
 as a single item, so `target_price`, `priority`, `target_gap`,
 `target_reached`, and `serial_traits` are there too.
+
+**Year, or ND.** `year` is nullable: a piece with no date on it ticks
+`year_nd` and may leave `year` empty, or give the year it's attributed to
+("ND (1951)"). A missing `year` without `year_nd` is 422 ("Enter the year,
+or tick ND for a piece with no date."), and `year: 0` is always 422 ("There
+is no year 0. Tick ND for a piece with no date."); `PATCH` checks the rule
+against the item as it will be after the patch. Every response carries a
+read-only `year_label` (`"1922"`, `"ND"`, or `"ND (1922)"`), used everywhere
+a year is shown; `Item.label` ends with it. `year_nd` is not accepted in a
+bulk `set` (a bulk `year` stays as it is, and can't be cleared without it).
 
 Item payloads accept `tags` (list of names, get-or-create), `catalog_refs`
 (list of `{catalog, ref_code}`), `grade_id`, `set_id` (an unknown one is 422),
@@ -139,6 +151,17 @@ The CSV and Excel exports, and both ways of importing them back, carry
 from an older version imports as before. `serial_traits` and
 `population_as_of` are not exported: the import recomputes them.
 
+The export also carries `year_nd` (`true` or empty like the other flags,
+next to `year`; the
+year cell is empty when null). Every import path (the Cabinet CSV, a
+mapped spreadsheet, a Numista export file or account, OpenNumismat) reads a
+year cell of `ND`, `N.D.`, `n.d`, `undated`, `ND (1951)`, `ND(1951)`, or
+`(1951)` as `year_nd = true` with the parenthesised year attributed, if
+any; a cell with no year at all, or an older export with no `year_nd`
+column, is no longer a rejected row: it imports as ND. A Numista export row
+that gives only a year range (its way of marking an undated issue) becomes
+ND with the range's first year attributed.
+
 ## Photos
 
 | Method   | Path                              | Purpose                        |
@@ -207,6 +230,17 @@ response reports a population, the estimate also writes it to the item
 (`pcgs_population`, `pcgs_pop_higher`, and `population_as_of`, the time the
 PCGS response was fetched), at no extra request; without one the item is
 left alone.
+
+A Numista estimate tries the type's matching issues in turn, best first (up
+to four), since a type can list more than one issue for the same year (a
+replacement note beside the regular one). `details` gains `issue_comment`,
+`issue_reference`, `issue_nd`, `candidates_tried`, and `year_mismatch`
+(present and true only when no issue matched the item's year and a type's
+single issue stood in for it). The item page's provenance line shows
+"Priced as: {reference}, {comment}" when Numista gave them. An item with no
+matching issue at all is 422 ("Numista lists no {year or ND} issue for
+N#{id}"); one where nothing tried had a priced grade is 422 ("Numista has
+no priced grade for any of the {n} {year or ND} issue(s) of N#{id}").
 
 Every new estimate, manual or automatic, scheduled refreshes included, is
 checked against a wish-list target: for an item with status `wishlist` and a
@@ -369,8 +403,10 @@ year uses `floor(year × 0.970224 + 621.5774)`). Bad input is 422.
 ## Duplicate check
 
 `GET /api/items/similar` takes any of `country` + `denomination` + `year`
-(+ `mint_mark`, blank meaning none), `cert_number`, and `ref` (repeatable,
-`catalog:code`), plus `exclude` (the item being edited), and answers up to
+or `nd` (an undated candidate with no year matches undated items with no
+year) (+ `mint_mark`, blank meaning none), `cert_number`, and `ref`
+(repeatable, `catalog:code`), plus `exclude` (the item being edited), and
+answers up to
 ten items that match on any of them, each with `id`, `label`, `grade_label`,
 `status`, `in_trash`, and the `reason` (`same cert number`, `same pcgs
 reference`, `same country, denomination, year, and mint mark`). Matching
@@ -381,16 +417,20 @@ and notes lookalikes in a row's `messages`.
 ## Add a run
 
 `POST /api/items/run` takes `type_id` (a Numista type), `issues` (1–200 of
-`{year, mint_mark, mintage}`), `shared` (`status`, `grade_id`, `quantity`,
-`acquisition_date`, `acquisition_price` and `acquisition_fees` per item,
-`currency`, `acquired_from`, `storage_location`, `set_id`, `tags`, `notes`),
-and `skip_owned` (default `true`). Each item gets the type's fields and
-catalogue references as "Fill from Numista" would, plus the issue's year,
-mint mark, and mintage. Issues already owned (same Numista number, year, and
-mint mark) and repeats within the request are skipped. Answers `201` with
-`created`, `skipped`, and `item_ids`; everything is one transaction. Needs a
-Numista API key (`422`); an unknown type is `404`, an unreachable Numista
-`502`, and an issue that doesn't validate `422`, naming the year and field.
+`{year, nd, mint_mark, mintage}`; `year` is optional but `nd` must be true
+when it's empty, the same year-or-ND rule as an item), `shared` (`status`,
+`grade_id`, `quantity`, `acquisition_date`, `acquisition_price` and
+`acquisition_fees` per item, `currency`, `acquired_from`, `storage_location`,
+`set_id`, `tags`, `notes`), and `skip_owned` (default `true`). Each item gets
+the type's fields and catalogue references as "Fill from Numista" would,
+plus the issue's year, `year_nd`, mint mark, and mintage: an undated issue
+with no year makes an ND item with no year, an undated issue with a year
+makes "ND (year)". Issues already owned (same Numista number, year, and
+mint mark, `None` included) and repeats within the request are skipped.
+Answers `201` with `created`, `skipped`, and `item_ids`; everything is one
+transaction. Needs a Numista API key (`422`); an unknown type is `404`, an
+unreachable Numista `502`, and an issue that doesn't validate `422`, naming
+the year (or `ND`) and field.
 
 ## Numista catalogue lookup
 
@@ -405,13 +445,16 @@ Search returns `count` and up to 20 `results` (`type_id`, `title`, `category`,
 `issuer`, `min_year`, `max_year`, `thumbnail`). A type returns `type_id`,
 `title`, `url`, `category`, and `fields` keyed like the item payload: `type`,
 `country`, `denomination`, `series`, `composition`, `fineness`, and `year`
-when the type has a single year; coins add `weight_g`, `diameter_mm`,
+when the type has a single year (left out, with `year_nd: true`, when every
+issue is undated); coins add `weight_g`, `diameter_mm`,
 `thickness_mm`, `shape`, and `edge`; notes add `issuer` (the issuing bank).
 Only values Numista has are present, trimmed to the item schema's limits.
 `catalog_refs` holds `numista:N#<id>` and the type's other references
-(`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year`, `mint_letter`,
-`mintage`, `comment`, and `owned` (an owned item already carries this type,
-year, and mint mark). Responses are cached for 7 days in `source_cache` (the
+(`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year` (null for an undated
+issue), `nd`, `mint_letter`, `mintage`, `comment`, `reference` (the issue's
+own catalogue references, e.g. `"P# M22a"`, telling apart two issues of the
+same year), and `owned` (an owned item already carries this type, year, and
+mint mark). Responses are cached for 7 days in `source_cache` (the
 longest Numista's API licence allows), issues shared with Numista pricing.
 
 ## PCGS cert lookup

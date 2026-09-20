@@ -5,7 +5,7 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0018`. `0001` is an empty baseline;
+**Migration status:** revisions `0001`–`0019`. `0001` is an empty baseline;
 `0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
 Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
 photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
@@ -49,7 +49,11 @@ fields) added fourteen nullable columns on `items`: `pcgs_population`,
 `serial_traits`, `die_axis`, `struck_calendar`, `struck_year`, and
 `struck_era`. It also backfills `serial_traits` for every item with a serial
 number or the replacement flag, trash included, using a copy of the traits
-logic frozen inside the revision.
+logic frozen inside the revision. `0019` (v0.27.1, undated pieces) makes
+`items.year` nullable and adds `items.year_nd` (`NOT NULL`, default false);
+a data step turns any existing `year = 0` (what got typed when the field was
+required) into `year = NULL, year_nd = true`. Unlike `0018`, this revision
+has no service logic to freeze: the data step is a plain `year = 0` update.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -100,7 +104,8 @@ not as native postgres enum types.
 | `status`           | enum          | `owned` \| `sold` \| `wishlist`; indexed |
 | `country`          | text          | indexed                                 |
 | `denomination`     | text          | e.g. "25 cents", "10 dollars"           |
-| `year`             | int           | issue year; indexed                     |
+| `year`             | int null      | issue year; indexed; null on an undated piece (`year_nd`), where a given value is the attributed year |
+| `year_nd`          | bool          | the piece carries no date                |
 | `mint_mark`        | text null     | coins only                              |
 | `series`           | text null     | series / variety name                   |
 | `variety`          | text null     | die variety, overdate…                  |
