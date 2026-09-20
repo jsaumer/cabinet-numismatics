@@ -501,6 +501,75 @@ gotcha met while proving it: rebuilding only the backend leaves nginx
 holding the old container's address (502 until the proxy restarts); a Swarm
 service VIP doesn't have that problem.
 
+## A customisable dashboard (v0.27.0)
+
+Roadmap Phase 7, P10. `backend/app/services/dashboard.py` and
+`routers/dashboard.py`; `frontend/src/dashboard/` (`registry.tsx`,
+`widgets/*.tsx`, `data.ts`, `edit.tsx`, `WidgetFrame.tsx`,
+`options.ts`); `pages/Dashboard.tsx` is now the shell. No migration: the
+layout sits under the generic `dashboard_layout` key in `app_settings` (see
+docs/data-model.md), read and written only by `/api/dashboard/layout`.
+What a later change has to respect:
+
+- **Adding a widget type needs three things in step**: a `REGISTRY` entry in
+  `registry.tsx` (name, description, group, default size, default options,
+  the options-form fields, the `Component`), a matching entry in the
+  backend's `WIDGET_OPTIONS` and `DEFAULT_SIZES` (`services/dashboard.py`),
+  and a row in the widget table in docs/api.md. The backend is the source of
+  truth for what is valid; the frontend registry has to describe exactly
+  that, or a value the form can produce would fail `PUT` validation, or a
+  value the backend accepts would have no field to set it.
+- **Retiring a widget type** means removing it from both `WIDGET_OPTIONS`
+  and `REGISTRY`. Nothing else is needed: `normalize_for_read` drops an
+  unknown type from a stored layout silently, and the frontend's grid
+  already skips a widget whose type isn't in `REGISTRY` (`Dashboard.tsx`,
+  "a widget this build retired"). Existing saved layouts keep working; the
+  retired type just stops appearing in them.
+- **Changing an option** (adding a choice, narrowing a range, changing a
+  default) is a `WIDGET_OPTIONS` edit plus the matching `registry.tsx` field
+  and `docs/api.md` row. A stored value that is no longer valid is replaced
+  by the new default on the next `GET`, not rejected: only `PUT` is strict.
+  Don't remove an option outright without checking nothing still reads it
+  from a widget's `options`; an option not in `WIDGET_OPTIONS` is stripped
+  from both `GET` and `PUT` bodies.
+- **The migration hook** (`dashboard.MIGRATIONS`, keyed by the version being
+  migrated *from*) is empty today; a future document-shape change adds a
+  function there rather than a new code path in `normalize_for_read`.
+  `CURRENT_VERSION` moves up by one, and a stored layout runs through every
+  migration between its version and the current one before normalisation.
+- **The drag listens on `window`, not the handle, and does not use pointer
+  capture.** Reordering keyed React children moves the handle's DOM node,
+  and a moved node loses whatever pointer capture it held, so the release
+  event would never arrive; listening on `window` for `pointermove` /
+  `pointerup` / `pointercancel` survives the handle being relocated
+  mid-drag. The landing spot (`Reorder.order` in `edit.tsx`) is held steady
+  while the pointer sits over the dragged card's own placeholder, or cards
+  would shuffle under a pointer that isn't moving.
+- **The data cache** (`dashboard/data.ts`) is one page-lifetime `Map` keyed
+  by request identity (several breakdown widgets with the same `tag`/
+  `set_id` share one key, so they fetch once); a failed request is evicted
+  so the next mount retries. It is invalidated (`invalidateData()`) by
+  "Refresh melt values" and after a layout Save, since either can change
+  what every widget should show. A widget added mid-edit and saved needs
+  data nothing has fetched yet, which is why Save invalidates rather than
+  only refetching what changed.
+- **The setup checklist is now a widget**, not a fixed card. `setup.tsx`
+  exports `setupChecks()` (the same checks, taking the settings/backups/
+  health it needs as arguments instead of fetching them itself) and
+  `SetupList` (just the list and the dismiss button); the `setup` widget
+  (`widgets/value.tsx`'s `SetupWidget`) supplies the three requests through
+  the shared cache. The empty-collection page still renders `SetupWidget`
+  directly, outside the grid, since there is no layout to show yet.
+- **`top_n` on the breakdown widget only trims a dimension sorted by size**
+  (`country`, `type`, `grade`, `tag`; `DIMENSIONS[key].trim` in
+  `widgets/breakdowns.tsx`): the rest become one "Other" bar. `decade` and
+  `acquisition_year` run in time order, where an "Other" bucket would mean
+  nothing, and keep every value regardless of `top_n`.
+- **Widgets below the fold don't fetch until they are near the viewport**
+  (`WidgetFrame`'s `IntersectionObserver`, `rootMargin: "300px"`), and each
+  widget has its own error boundary, so one broken widget shows its error in
+  its own card rather than blanking the page.
+
 ## Releases
 
 

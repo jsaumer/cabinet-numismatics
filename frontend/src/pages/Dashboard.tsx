@@ -1,54 +1,130 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { api, DashboardLayout, DashboardWidget, WidgetOptions, WidgetSize } from "../api";
+import { invalidateData, useData } from "../dashboard/data";
 import {
-  api,
-  Breakdowns,
-  CollectionStats,
-  GainEntry,
-  Gains,
-  money,
-  NotesBySignature,
-  ValueHistory,
-} from "../api";
-import { ChartDatum, Columns, HBars, LineChart } from "../components/charts";
-import { SetupChecklist } from "../components/setup";
+  DashboardEditBar,
+  useWidgetDrag,
+  WidgetCatalogue,
+  WidgetControls,
+  WidgetOptionsDialog,
+} from "../dashboard/edit";
+import { DEFAULT_WIDGETS, newWidget, REGISTRY, widgetTitle } from "../dashboard/registry";
+import { WidgetFrame } from "../dashboard/WidgetFrame";
+import { SetupWidget } from "../dashboard/widgets/value";
 
-const TOP_N = 8;
-
-function topN(entries: { key: string; estimated_value: number }[]): ChartDatum[] {
-  const data = entries.map((e) => ({ key: e.key, value: e.estimated_value }));
-  if (data.length <= TOP_N) return data;
-  const head = data.slice(0, TOP_N - 1);
-  const rest = data.slice(TOP_N - 1);
-  return [...head, { key: "Other", value: rest.reduce((s, d) => s + d.value, 0) }];
+/** Take the widget at `from` out and put it back at `to`. */
+function reorderList(widgets: DashboardWidget[], from: number, to: number): DashboardWidget[] {
+  const next = [...widgets];
+  const [moving] = next.splice(from, 1);
+  next.splice(to, 0, moving);
+  return next;
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState<CollectionStats | null>(null);
-  const [breakdowns, setBreakdowns] = useState<Breakdowns | null>(null);
-  const [gains, setGains] = useState<Gains | null>(null);
-  const [history, setHistory] = useState<ValueHistory | null>(null);
-  const [notes, setNotes] = useState<NotesBySignature | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<DashboardLayout | null>(null);
+  const [draft, setDraft] = useState<DashboardWidget[]>([]);
+  const [layoutNote, setLayoutNote] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [catalogue, setCatalogue] = useState(false);
+  const [optionsFor, setOptionsFor] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
 
-  const load = () =>
-    Promise.all([api.collectionStats(), api.breakdowns(), api.gains(), api.valueHistory()])
-      .then(([s, b, g, h]) => {
-        setStats(s);
-        setBreakdowns(b);
-        setGains(g);
-        setHistory(h);
-      })
-      .catch((e: Error) => setError(e.message));
+  // The shell needs the counts to know whether the collection is empty; the
+  // widgets read the same cached request.
+  const stats = useData("stats", () => api.collectionStats());
 
   useEffect(() => {
-    load();
-    // Its own request: the dashboard shouldn't fail with it.
-    api.notesBySignature().then(setNotes).catch(() => setNotes(null));
+    api
+      .dashboardLayout()
+      .then((layout) => {
+        setSaved(layout);
+        setDraft(layout.widgets);
+      })
+      .catch((e: Error) => {
+        // The page is worth more than its arrangement: fall back to the
+        // built-in layout and say why.
+        setLayoutNote(`The dashboard layout couldn't be read (${e.message}); showing the default.`);
+        setSaved({ version: 1, widgets: DEFAULT_WIDGETS, is_default: true });
+        setDraft(DEFAULT_WIDGETS);
+      });
   }, []);
+
+  const moveWidget = (from: number, to: number) =>
+    setDraft((widgets) => reorderList(widgets, from, to));
+
+  const drag = useWidgetDrag(draft, moveWidget, setAnnouncement);
+
+  const patch = (id: string, changes: Partial<DashboardWidget>) =>
+    setDraft((widgets) => widgets.map((w) => (w.id === id ? { ...w, ...changes } : w)));
+
+  function nudge(id: string, delta: number) {
+    const at = draft.findIndex((w) => w.id === id);
+    const to = at + delta;
+    if (at === -1 || to < 0 || to >= draft.length) return;
+    moveWidget(at, to);
+    setAnnouncement(`${widgetTitle(draft[at])} moved to position ${to + 1} of ${draft.length}`);
+  }
+
+  function addWidget(type: string) {
+    const widget = newWidget(
+      type,
+      draft.map((w) => w.id),
+    );
+    setDraft((widgets) => [...widgets, widget]);
+    setCatalogue(false);
+    setAnnouncement(`${widgetTitle(widget)} added at position ${draft.length + 1}`);
+  }
+
+  function duplicate(id: string) {
+    const at = draft.findIndex((w) => w.id === id);
+    if (at === -1) return;
+    const copy = {
+      ...newWidget(
+        draft[at].type,
+        draft.map((w) => w.id),
+      ),
+      size: draft[at].size,
+      title: draft[at].title,
+      options: { ...draft[at].options },
+    };
+    setDraft((widgets) => [...widgets.slice(0, at + 1), copy, ...widgets.slice(at + 1)]);
+    setAnnouncement(`${widgetTitle(copy)} duplicated`);
+  }
+
+  function remove(id: string) {
+    const widget = draft.find((w) => w.id === id);
+    setDraft((widgets) => widgets.filter((w) => w.id !== id));
+    if (widget) setAnnouncement(`${widgetTitle(widget)} removed`);
+  }
+
+  async function store(run: () => Promise<DashboardLayout>) {
+    setSaving(true);
+    setLayoutNote(null);
+    try {
+      const layout = await run();
+      setSaved(layout);
+      setDraft(layout.widgets);
+      setEditing(false);
+      setAnnouncement("");
+      invalidateData(); // a new widget may want data nothing has fetched yet
+    } catch (e) {
+      setLayoutNote((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function reset() {
+    if (!window.confirm("Put the dashboard back to the default layout? Your arrangement goes.")) {
+      return;
+    }
+    store(() => api.resetDashboardLayout());
+  }
 
   async function refreshMelt() {
     setRefreshing(true);
@@ -58,7 +134,7 @@ export default function Dashboard() {
       setRefreshNote(
         `Melt refresh: ${r.updated} updated, ${r.skipped} skipped${r.failed ? `, ${r.failed} failed` : ""}.`,
       );
-      await load();
+      invalidateData();
     } catch (e) {
       setRefreshNote((e as Error).message);
     } finally {
@@ -66,16 +142,18 @@ export default function Dashboard() {
     }
   }
 
-  if (error) return <p className="error">{error}</p>;
-  if (!stats || !breakdowns || !gains) return <p className="muted">Loading…</p>;
+  if (stats.error) return <p className="error">{stats.error}</p>;
+  if (!stats.data || !saved) return <p className="muted">Loading…</p>;
 
-  if (stats.counts.total === 0) {
+  if (stats.data.counts.total === 0) {
     return (
       <>
         <div className="detail-header">
           <h1>Dashboard</h1>
         </div>
-        <SetupChecklist itemCount={0} />
+        <div className="card setup-card">
+          <SetupWidget />
+        </div>
         <div className="empty">
           Nothing to report yet. <Link to="/items/new">Add your first item</Link>.
         </div>
@@ -83,38 +161,8 @@ export default function Dashboard() {
     );
   }
 
-  const cur = stats.currency;
-  const fmt = (v: number) => money(v, cur);
-  const count = (v: number) => String(v);
-  const delta = (v: number) => (
-    <span className={v >= 0 ? "gain" : "loss"}>
-      {v >= 0 ? "+" : ""}{money(v, cur)}
-    </span>
-  );
-
-  const gainsTable = (entries: GainEntry[], valueHead: string) => (
-    <table className="estimates">
-      <thead>
-        <tr><th>Item</th><th className="num">Paid</th>
-          <th className="num">{valueHead}</th><th className="num">Gain</th></tr>
-      </thead>
-      <tbody>
-        {entries.map((e) => (
-          <tr key={e.item_id}>
-            <td><Link to={`/items/${e.item_id}`}>{e.label}</Link></td>
-            <td className="num">{money(e.cost_basis, cur)}</td>
-            <td className="num">{money(e.value, cur)}</td>
-            <td className="num">{delta(e.gain)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-
-  const movers =
-    gains.unrealized.length > 10
-      ? [...gains.unrealized.slice(0, 5), ...gains.unrealized.slice(-5)]
-      : gains.unrealized;
+  const shown = editing ? drag.order : draft;
+  const editingWidget = optionsFor ? draft.find((w) => w.id === optionsFor) : undefined;
 
   return (
     <>
@@ -124,153 +172,94 @@ export default function Dashboard() {
         <button onClick={refreshMelt} disabled={refreshing}>
           {refreshing ? "Refreshing…" : "Refresh melt values"}
         </button>
-        <Link className="button" to="/report">Insurance report</Link>
-      </div>
-      {refreshNote && <p className="muted">{refreshNote}</p>}
-
-      <SetupChecklist itemCount={stats.counts.total} />
-
-      <div className="card hero-card">
-        <div className="hero">
-          <span className="hero-label">Estimated collection value</span>
-          <span className="hero-value">{money(stats.estimated_value, cur)}</span>
-          {stats.estimated_items < stats.counts.owned && (
-            <span className="muted">
-              based on {stats.estimated_items} of {stats.counts.owned} owned items;{" "}
-              <Link to="/pricing">see pricing coverage</Link>
-            </span>
-          )}
-        </div>
-        <div className="tiles">
-          <div className="tile">
-            <span className="tile-label">Owned</span>
-            <span className="tile-value">{stats.counts.owned}</span>
-            <span className="muted">
-              {stats.counts.coins} coins · {stats.counts.notes} notes
-            </span>
-          </div>
-          <div className="tile">
-            <span className="tile-label">Cost basis</span>
-            <span className="tile-value">{money(stats.cost_basis, cur)}</span>
-          </div>
-          <div className="tile">
-            <span className="tile-label">Unrealized</span>
-            <span className="tile-value">{delta(stats.unrealized_gain)}</span>
-          </div>
-          {stats.counts.sold > 0 && (
-            <div className="tile">
-              <span className="tile-label">Realized ({stats.counts.sold} sold)</span>
-              <span className="tile-value">{delta(stats.realized_gain)}</span>
-            </div>
-          )}
-          {stats.counts.wishlist > 0 && (
-            <div className="tile">
-              <span className="tile-label">Wishlist</span>
-              <span className="tile-value">{stats.counts.wishlist}</span>
-            </div>
-          )}
-        </div>
-        {(stats.converted_other_currency > 0 || stats.excluded_other_currency > 0) && (
-          <p className="muted" style={{ marginBottom: 0 }}>
-            {stats.converted_other_currency > 0 &&
-              `${stats.converted_other_currency} amount(s) converted to ${cur} at daily rates. `}
-            {stats.excluded_other_currency > 0 &&
-              `${stats.excluded_other_currency} amount(s) excluded (no exchange rate).`}
-          </p>
+        <Link className="button" to="/report">
+          Insurance report
+        </Link>
+        {!editing && (
+          <button
+            onClick={() => {
+              setDraft(saved.widgets);
+              setAnnouncement("");
+              setEditing(true);
+            }}
+          >
+            Edit dashboard
+          </button>
         )}
       </div>
+      {refreshNote && <p className="muted">{refreshNote}</p>}
+      {layoutNote && <p className="error">{layoutNote}</p>}
 
-      {history && history.points.length > 0 && (
-        <div className="card">
-          <h2>Collection value over time</h2>
-          <LineChart
-            data={history.points.map((p) => ({ key: p.date.slice(0, 7), value: p.value }))}
-            format={(v) => money(v, cur)}
-          />
-        </div>
+      {editing && (
+        <DashboardEditBar
+          count={draft.length}
+          saving={saving}
+          announcement={announcement}
+          onAdd={() => setCatalogue(true)}
+          onReset={reset}
+          onCancel={() => {
+            setDraft(saved.widgets);
+            setEditing(false);
+            setAnnouncement("");
+          }}
+          onSave={() => store(() => api.saveDashboardLayout(draft))}
+        />
       )}
 
-      <div className="chart-grid">
-        <div className="card">
-          <h2>Estimated value by country</h2>
-          <HBars data={topN(breakdowns.by_country)} format={fmt} />
-        </div>
-        <div className="card">
-          <h2>Estimated value by tag</h2>
-          <HBars data={topN(breakdowns.by_tag)} format={fmt} />
-        </div>
-        <div className="card">
-          <h2>Items by decade</h2>
-          <Columns
-            data={breakdowns.by_decade.map((e) => ({ key: e.key, value: e.count }))}
-            format={count}
-          />
-        </div>
-        <div className="card">
-          <h2>Acquisitions by year</h2>
-          <Columns
-            data={breakdowns.acquisitions_by_year.map((e) => ({
-              key: e.key,
-              value: e.count,
-              title: `${e.key}: ${e.count} item(s), ${money(e.cost_basis, cur)} spent`,
-            }))}
-            format={count}
-          />
-        </div>
-        <div className="card">
-          <h2>Items by grade</h2>
-          <HBars
-            data={breakdowns.by_grade.map((e) => ({ key: e.key, value: e.count }))}
-            format={count}
-          />
-        </div>
+      <div className="dash-grid">
+        {shown.map((widget, index) => {
+          const spec = REGISTRY[widget.type];
+          if (!spec) return null; // a widget this build retired
+          const Widget = spec.Component;
+          const lifted = widget.id === drag.dragId ? { height: drag.dragHeight } : undefined;
+          return (
+            <WidgetFrame
+              key={widget.id}
+              widget={widget}
+              title={widgetTitle(widget)}
+              untitled={spec.untitled}
+              cardClass={
+                [spec.cardClass, drag.grabbedId === widget.id ? "dash-grabbed" : ""]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
+              editing={editing}
+              cellRef={drag.registerCell(widget.id)}
+              lifted={lifted}
+              controls={
+                editing ? (
+                  <WidgetControls
+                    widget={widget}
+                    index={index}
+                    total={shown.length}
+                    reorder={drag}
+                    onMove={(delta) => nudge(widget.id, delta)}
+                    onSize={(size: WidgetSize) => patch(widget.id, { size })}
+                    onOptions={() => setOptionsFor(widget.id)}
+                    onDuplicate={() => duplicate(widget.id)}
+                    onRemove={() => remove(widget.id)}
+                  />
+                ) : undefined
+              }
+            >
+              <Widget options={widget.options} />
+            </WidgetFrame>
+          );
+        })}
       </div>
 
-      {notes && notes.groups.length > 0 && (
-        <div className="card">
-          <h2>Notes by series and signature</h2>
-          <table className="estimates">
-            <thead>
-              <tr><th>Series</th><th>Signatures</th><th className="num">Notes</th><th>Items</th></tr>
-            </thead>
-            <tbody>
-              {notes.groups.map((g) => (
-                <tr key={`${g.series ?? ""}|${g.signatures ?? ""}`}>
-                  <td>{g.series ?? <span className="muted">–</span>}</td>
-                  <td>{g.signatures ?? <span className="muted">–</span>}</td>
-                  <td className="num"
-                    title={g.quantity !== g.count ? `${g.quantity} pieces in all` : undefined}>
-                    {g.count}
-                  </td>
-                  <td>
-                    {g.items.map((n, i) => (
-                      <span key={n.id}>
-                        {i > 0 && " · "}
-                        <Link to={`/items/${n.id}`}
-                          title={[n.label, n.grade_label].filter(Boolean).join(", ")}>
-                          {n.serial_number ?? n.label}
-                        </Link>
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {catalogue && (
+        <WidgetCatalogue onAdd={addWidget} onClose={() => setCatalogue(false)} />
       )}
-
-      {gains.unrealized.length > 0 && (
-        <div className="card">
-          <h2>Unrealized gain/loss{gains.unrealized.length > 10 ? ": top movers" : ""}</h2>
-          {gainsTable(movers, "Est. value")}
-        </div>
-      )}
-      {gains.realized.length > 0 && (
-        <div className="card">
-          <h2>Realized gain/loss (sold)</h2>
-          {gainsTable(gains.realized, "Sold for")}
-        </div>
+      {editingWidget && (
+        <WidgetOptionsDialog
+          widget={editingWidget}
+          onClose={() => setOptionsFor(null)}
+          onApply={(changes: { title: string | null; options: WidgetOptions }) => {
+            patch(editingWidget.id, changes);
+            setOptionsFor(null);
+          }}
+        />
       )}
     </>
   );

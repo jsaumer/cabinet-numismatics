@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.26.1**, with versioned images
+**Status (September 2026): released as v0.27.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -19,9 +19,9 @@ September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
 depth, fancy serial numbers, die axis and foreign dates) shipped together in
-v0.25.0, and in-app restore (P2) in v0.26.0; the customisable dashboard
-(P10, next), the stack figures (P7), authentication (P8), and the share
-view (P9) remain.
+v0.25.0, in-app restore (P2) in v0.26.0, and the customisable dashboard
+(P10) in v0.27.0; the stack figures (P7), authentication (P8), and the
+share view (P9) remain.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -217,9 +217,8 @@ guidance, not appraisals.
 
 - ✔ **[Core]** Dashboard: counts, total cost basis, total estimated value,
   and top-level breakdowns.
-- **[Core]** A customisable dashboard: choose, reorder, and size its cards,
-  with the layout saved on the server. **Planned: Phase 7, P10**,
-  prioritised by the owner to follow in-app restore.
+- ✔ **[Core]** A customisable dashboard: choose, reorder, and size its cards,
+  with the layout saved on the server. Phase 7, P10. **Shipped in v0.27.0.**
 - ✔ **[Core]** Breakdowns by country, type, decade, grade, and tag, plus
   acquisitions by year.
 - ✔ **[Core]** Cost-basis vs. estimated-value comparison: unrealized (owned)
@@ -925,7 +924,7 @@ v0.26.0.
   deliberately public page, and everything else has to be closed before
   one door is opened.
 
-- **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
+- ✔ **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
   September 2026: next, now that in-app restore has shipped**, ahead of P7
   to P9. The dashboard today is a fixed page; the owner wants to decide what
   is on it.
@@ -941,11 +940,32 @@ v0.26.0.
   rather than the browser. No new chart library: the widgets are the cards
   that exist, made movable. To settle in its research: drag and drop without
   a dependency (pointer events and keyboard moves), and how a saved layout
-  survives a release that adds or retires a widget.
+  survives a release that adds or retires a widget. **Shipped in v0.27.0.**
+  As built: one ordered list of widget instances (twenty types, several
+  instances of one type allowed), each full, half, or a third in a
+  six-column grid; per-widget options, a title override, duplicate, and
+  remove; reorder by a hand-written pointer drag (no dependency), move
+  earlier/later buttons, and a keyboard path (Space or Enter to pick up,
+  arrows to move, Space or Enter to drop, Escape to cancel), all announced
+  through `aria-live`; nothing is saved until Save, and Cancel discards the
+  draft. The layout lives on its own endpoint
+  (`GET`/`PUT`/`DELETE /api/dashboard/layout`, stored under the
+  `dashboard_layout` setting), not `/api/settings`, so it is carried by
+  backups; reading is lenient (an unknown widget type or a bad option
+  quietly takes its default) and writing is strict (a `422` names the
+  widget and option), so a later release can retire a widget or narrow an
+  option without breaking a saved layout, and a version-migration hook is
+  in place for the day the document shape changes. The default layout
+  reproduces the dashboard exactly as it was, so nothing changes until the
+  owner edits it. The breakdown widget can scope to one tag or set
+  (`GET /api/stats/breakdowns` gained `tag` and `set_id`). Left for later:
+  the surveyed "group C" widgets (most valuable pieces, value by metal,
+  certified share, population highlights, data health, value spread,
+  showcase widgets, once P9 exists), which are candidates rather than a
+  commitment; bullion widgets arrive with P7.
 
-**The order from here** (P2 in-app restore shipped in v0.26.0): P10 the
-customisable dashboard, P7 bullion stack figures, P8 authentication, P9 the
-share view.
+**The order from here** (P10 the customisable dashboard shipped in
+v0.27.0): P7 bullion stack figures, P8 authentication, P9 the share view.
 
 Optional, after the above and only if still wanted:
 
