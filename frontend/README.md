@@ -91,6 +91,9 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
   light flash, `components/theme.ts` applies the theme, and the header
   toggle switches to light and remembers the choice in `localStorage`
   (`theme`). The operating system's preference is not consulted.
+- **No sideways shift.** `html` has `scrollbar-gutter: stable` (with
+  `overflow-y: scroll` where that isn't supported), so the header stays put
+  between a short page and one that scrolls.
 - **Icons are inline SVG** from `components/icons.tsx`, never emoji (emoji
   differ by system) and never an icon font. They take the text colour and
   size of what they sit in. Add new ones there.

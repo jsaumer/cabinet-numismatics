@@ -80,6 +80,17 @@
   box-sizing: border-box;
 }
 
+/* Keep room for the scrollbar on every page, so the header and the content
+   don't shift sideways between a short page and one that scrolls. */
+html {
+  scrollbar-gutter: stable;
+}
+@supports not (scrollbar-gutter: stable) {
+  html {
+    overflow-y: scroll;
+  }
+}
+
 body {
   margin: 0;
   font-family: var(--font);
