@@ -4,7 +4,7 @@ import { json, req } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, RefreshResult, TrashList, ValueHistory } from "./types/stats";
-import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, SourcesReport, StaleReport } from "./types/settings";
+import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 
 export const api = {
   listItems: (params: URLSearchParams) => req<ItemPage>(`/api/items?${params}`),
@@ -161,6 +161,24 @@ export const api = {
   testAlert: (target: "webhook" | "heartbeat") =>
     req<MonitorOutcome>(`/api/alerts/test?target=${target}`, { method: "POST" }),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
+
+  restoreStatus: () => req<RestoreStatus>("/api/restore/status"),
+  inspectRestoreFile: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return req<RestoreInspection>("/api/restore/inspect", { method: "POST", body: form });
+  },
+  inspectRestoreArchive: (name: string) =>
+    req<RestoreInspection>(`/api/restore/inspect?name=${encodeURIComponent(name)}`, {
+      method: "POST",
+    }),
+  runRestore: (restoreId: string, confirm: string) =>
+    req<{ state: string }>(
+      `/api/restore/${encodeURIComponent(restoreId)}/run`,
+      json("POST", { confirm }),
+    ),
+  discardRestore: (restoreId: string) =>
+    req<void>(`/api/restore/${encodeURIComponent(restoreId)}`, { method: "DELETE" }),
 
   pricingCoverage: () => req<PricingCoverage>("/api/pricing/coverage"),
   pricingStale: (days: number) => req<StaleReport>(`/api/pricing/stale?days=${days}`),

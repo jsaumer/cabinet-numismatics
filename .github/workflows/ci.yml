@@ -160,6 +160,38 @@ jobs:
           curl -fsS -X POST http://localhost/api/backups \
             | python3 -c 'import json,sys; run = json.load(sys.stdin); print(run); assert run["ok"]'
 
+      - name: Rehearse a restore from inside the app
+        run: |
+          set -euo pipefail
+          field() { python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+          # the restore.sh drill above left its item behind: it has to survive
+          drill_items() { curl -fsS 'http://localhost/api/items?country=Backup%20drill' | field total; }
+          before=$(drill_items)
+          test "$before" -ge 1
+          keep=$(curl -fsS -X POST http://localhost/api/items                    -H 'Content-Type: application/json'                    -d '{"type":"coin","country":"Restore drill","denomination":"1 kept","year":2026}'                  | field id)
+          name=$(curl -fsS -X POST http://localhost/api/backups | field file)
+          marker=$(curl -fsS -X POST http://localhost/api/items                      -H 'Content-Type: application/json'                      -d '{"type":"coin","country":"Restore drill","denomination":"1 marker","year":2026}'                    | field id)
+          rid=$(curl -fsS -X POST "http://localhost/api/restore/inspect?name=$name" | field restore_id)
+          # a wrong phrase is refused, and nothing starts
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost/api/restore/$rid/run"                     -H 'Content-Type: application/json' -d '{"confirm":"yes"}')" = 422
+          curl -fsS -X POST "http://localhost/api/restore/$rid/run"             -H 'Content-Type: application/json' -d '{"confirm":"RESTORE"}' -o /dev/null
+          state=running
+          for _ in $(seq 1 150); do   # five minutes
+            state=$(curl -fsS http://localhost/api/restore/status | field state)
+            [ "$state" = running ] || break
+            sleep 2
+          done
+          curl -fsS http://localhost/api/restore/status
+          test "$state" = done
+          if curl -fsS "http://localhost/api/items/$marker" -o /dev/null; then
+            echo "the marker item outlived the restore"; exit 1
+          fi
+          curl -fsS "http://localhost/api/items/$keep" > /dev/null
+          test "$(drill_items)" = "$before"
+          curl -fsS http://localhost/api/backups | grep -q -- '-prerestore.zip'
+          curl -fsS http://localhost/api/health | grep -q '"db":"ok"'
+          echo "in-app restore drill passed"
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"

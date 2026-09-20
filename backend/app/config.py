@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # Where uploaded import files wait between preview and import (a day at
     # most). Empty = a folder in the system temp directory.
     import_dir: str = ""
+    # In-app restore (Settings → Backups). It replaces the whole collection and
+    # the app has no login, so a deployment can switch it off: every restore
+    # endpoint then answers 404.
+    restore_enabled: bool = True
+    # Largest archive an upload to the restore page may be, in GB.
+    restore_max_gb: float = 20
 
     @property
     def sqlalchemy_url(self) -> str:

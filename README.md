@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.25.1-informational)
+![Version](https://img.shields.io/badge/version-0.26.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.25.1, feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.26.0, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
 1.0 will mean a stable HTTP API. There is no application login yet, so
 Cabinet belongs on a trusted network or behind an authenticating reverse
@@ -176,8 +176,13 @@ Dark is the default; the header toggle switches to light and remembers it.
 - **Backups from the app**: download the collection as one checksummed
   `.zip` (database + photos + documents + manifest) from Settings, or schedule daily or
   weekly archives with retention into a directory you can point at a NAS.
-  `scripts/restore.sh` restores them, and CI rehearses that restore on every
-  push (see [docs/backup-restore.md](docs/backup-restore.md)).
+- **Restore from the app**: pick a stored archive or upload one in
+  Settings. It is verified, compared with what is there now, and restored
+  only after an automatic safety backup and a typed confirmation; a failure
+  before the database is replaced changes nothing. `RESTORE_ENABLED=false`
+  switches it off. `scripts/restore.sh` remains for when the app won't
+  start, and CI rehearses both routes on every push (see
+  [docs/backup-restore.md](docs/backup-restore.md)).
 - **Configurable pricing**: a Settings page for display currency, the
   blended-value strategy, per-source refresh cadence, and price-source
   credentials, stored **encrypted at rest** and never readable back
@@ -253,6 +258,8 @@ from `.env.example`).
 | `REQUIRE_DOCUMENT_MOUNT` | Optional, default `true`: refuse document uploads unless `DOCUMENT_DIR` is a mounted volume. `false` for local development |
 | `PUID` / `PGID`   | Optional, default `1000`:`1000`: the unprivileged user the backend runs as, and that owns its files |
 | `IMPORT_DIR`      | Optional: where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
+| `RESTORE_ENABLED` | Optional, default `true`: restore from Settings → Backups. `false` switches it off (the endpoints answer 404; `scripts/restore.sh` is then the only way) |
+| `RESTORE_MAX_GB`  | Optional, default `20`: the largest archive that may be uploaded for a restore, in GB (nginx allows 20) |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and
@@ -263,7 +270,9 @@ nothing else.
 
 ## Backup & restore
 
-Settings → Backups downloads an archive or schedules them. From the host:
+Settings → Backups downloads an archive or schedules them, and restores one
+(a safety backup is taken first). From the host, and when the app won't
+start:
 
 ```bash
 ./scripts/backup.sh                     # → backups/<timestamp>/{db.dump, photos.tar.gz, documents.tar.gz}
@@ -307,7 +316,8 @@ Run from Git Bash on Windows. Copy backups off the machine. See
 CI runs ruff and the backend test suite on Python 3.10 and 3.14, a frontend
 typecheck and build, and a full compose stack job on every push and pull
 request: the schema migrating itself, an API smoke test, a backup → restore
-drill, and Playwright tests of the pages. A `v*` tag also publishes both
+drill (with `restore.sh`, then from inside the app), and Playwright tests of
+the pages. A `v*` tag also publishes both
 images to GHCR. A separate security workflow audits dependencies and scans
 both images.
 

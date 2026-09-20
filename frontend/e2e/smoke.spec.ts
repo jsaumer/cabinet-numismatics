@@ -189,3 +189,34 @@ test("every Settings section renders, with the version", async ({ page }) => {
   }
   await expect(page.getByRole("link", { name: /^\d+\.\d+\.\d+$/ })).toBeVisible();
 });
+
+// Last on purpose: a restore replaces the whole collection, so a failure here
+// can't disturb the tests above. Restoring a backup taken a moment earlier
+// leaves everything as it was.
+test("restore the backup just taken", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Back up now" }).click();
+  const written = page.getByText(/^Backup written: cabinet-backup-/);
+  await expect(written).toBeVisible({ timeout: 60_000 });
+  const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip/)![0];
+
+  await page
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name, exact: true }) })
+    .getByRole("button", { name: "Restore…" })
+    .click();
+  await expect(page.getByRole("columnheader", { name: "This archive" })).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(page.getByRole("columnheader", { name: "Here now" })).toBeVisible();
+
+  const run = page.getByRole("button", { name: "Restore this archive" });
+  await expect(run).toBeDisabled();
+  await page.getByLabel("Type RESTORE to confirm").fill("RESTORE");
+  await run.click();
+
+  await expect(page.getByText(/^Restore complete:/)).toBeVisible({ timeout: 120_000 });
+  // The page reloaded its data: the safety backup is in the list.
+  await expect(page.getByText("before restore").first()).toBeVisible({ timeout: 30_000 });
+});

@@ -1,7 +1,7 @@
 # Cabinet as a Docker Swarm stack. Deploy from the repo root:
 #
 #   set -a; . ./.env; set +a           # stack deploy reads the shell, not .env
-#   TAG=0.25.1 docker stack deploy -c deploy/docker-stack.yaml cabinet
+#   TAG=0.26.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 #
 # Differences from docker-compose.yaml, which stays the single-host path:
 #   - images are pulled, never built (stack deploy ignores `build:`), so TAG
@@ -28,6 +28,9 @@ services:
       # Empty means unset: the key is then generated on the state volume.
       - SECRET_KEY=${SECRET_KEY:-}
       - REESTIMATE_DAYS=${REESTIMATE_DAYS:-7}
+      # In-app restore replaces the whole collection; false switches it off.
+      - RESTORE_ENABLED=${RESTORE_ENABLED:-true}
+      - RESTORE_MAX_GB=${RESTORE_MAX_GB:-20}
       # The unprivileged user the backend drops to; match the owner of your
       # bind mounts or NFS paths.
       - PUID=${PUID:-1000}

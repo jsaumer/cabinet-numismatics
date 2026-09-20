@@ -38,7 +38,9 @@ src/
   styles.css          the one stylesheet, design tokens first
   api/                the API client; import everything from "../api"
     types/              response and payload types by area (items, settings,
-                        stats, imports)
+                        stats, imports); settings.ts also holds the backup
+                        and restore types (BackupFile, RestoreStatus,
+                        RestoreInspection, RestoreOutcome)
     client.ts           the fetch wrapper and error handling
     calls.ts            one function per endpoint, exported as `api`
     index.ts            re-exports it all, plus helpers such as money()
@@ -70,6 +72,10 @@ src/
     alerts.tsx, setup.tsx
                         Settings → Alerts & metrics; the dashboard's setup
                         checklist
+    restore.tsx         Settings → Backups → Restore: useRestore (inspect,
+                        confirm, run, poll the status every 2 s through the
+                        503s) and RestoreBlock; hidden when the deployment
+                        switches restore off
 e2e/                  Playwright smoke tests (smoke.spec.ts)
 playwright.config.ts, vite.config.ts, tsconfig.json
 ```
@@ -117,9 +123,11 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 an item, recording a value, the duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
 number getting its badge, a wishlist coin showing its target price, the
-security headers, and every Settings section. The tests run against a running
-stack (`docker compose up`), not the dev server, and they create and delete
-their own items.
+security headers, every Settings section, and, last, an in-app restore of a
+backup taken a moment earlier (last so a failure can't disturb the others;
+it leaves the collection as it found it, plus a safety backup). The tests
+run against a running stack (`docker compose up`), not the dev server, and
+they create and delete their own items.
 
 ```bash
 npm run e2e                            # http://localhost, through the proxy
@@ -127,6 +135,7 @@ BASE_URL=http://proxy npm run e2e      # another host
 ```
 
 The first run needs `npx playwright install chromium`. CI runs them in the
-compose stack job after the API smoke test and the backup drill; a failed run
+compose stack job after the API smoke test and the backup and restore
+drills; a failed run
 keeps its report as a workflow artifact. When a page's behaviour or wording
 changes, update the spec in the same commit: pytest won't catch it.

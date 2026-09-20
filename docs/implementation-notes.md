@@ -404,6 +404,89 @@ Numista fill writes Pick as `p: P#109` (so `p` and `pick`, `fr`/`f` and
 column from the longest label (`--hbar-label`, in `ch`) and left-aligns it:
 a fixed right-aligned gutter made short-label charts look centred.
 
+## In-app restore (v0.26.0)
+
+No migration. `services/restore.py`, `services/maintenance.py`,
+`routers/restore.py`, `components/restore.tsx`; the procedure is in
+docs/backup-restore.md. What a change here has to respect:
+
+- **Order.** Safety backup, unpack into `.restore-new` inside each volume
+  (touches nothing live), database, migrations, then the file swap
+  (`_Swap`, renames only) in `finishing`, after the database committed. The
+  status `step` follows that order, so `photos`/`documents` mean unpacking.
+  Anything that can fail cheaply belongs before the database step, where
+  the error can still end "Nothing was changed." (`NOTHING_CHANGED`).
+- **`restore.restore_database(dump_path)` is the monkeypatch point** (SQLite
+  has no pg_restore), like `backup.dump_database`. It drops tables the dump
+  doesn't hold before `pg_restore --single-transaction` (`--clean` only
+  drops what the dump knows, and a newer table's foreign keys block it);
+  that is the one change outside the transaction, so a failure after it
+  raises `PartialDatabase`, whose message names the tables and the safety
+  backup instead of claiming nothing changed.
+- **Maintenance** (`MaintenanceMiddleware`, plain ASGI so streamed responses
+  pass through): everything answers 503 except `maintenance.EXEMPT`,
+  `GET /api/health` and `GET /api/restore/status`. Anything added to that
+  list must not touch the database. `/api/restore*` requests aren't counted
+  as in flight, or `drain()` (30 s) would wait on the request that started
+  the restore. The scheduled loops wrap their work in
+  `maintenance.scheduled_task()`; a new loop must too, and `restore.start`
+  refuses while one holds it.
+- **`/api/health` must not touch the database during a restore**
+  (`db: "restoring"`): pg_restore holds exclusive locks, and a hung health
+  check gets the container killed mid-restore on a Swarm.
+- **Never rename or remove `PHOTO_DIR` or `DOCUMENT_DIR`**: they are mount
+  points. The swap moves their top-level entries, skipping `.restore-*` and
+  `.nfs*`.
+- **`backup.RESTORE_PREFIX` (`.restore-`) names stay excluded everywhere**:
+  the tar filter in `backup.write_archive`, `_safe_target` on the way in,
+  `stored_backups`/`prune` (which match `NAME_RE` on files only, so
+  `.restore-staging` is never listed or pruned as an archive), and nginx's
+  dot-name 404 under `/photos/`. A new walk over either volume, or a new
+  listing of `BACKUP_DIR`, has to skip them as well.
+- **Tar members** go through `_safe_target` at inspect (422) and again in
+  `_extract`, which is written by hand: plain files and folders only, no
+  modes or ownership. Don't replace it with `extractall`.
+- **The ending order in `_finish`**: write `restore_last.json`, maintenance
+  off, then set the final state, then release the locks, so whoever sees
+  `done` or `failed` can already read the outcome and call the API.
+- **Outcome and journal are files on the state volume** (beside
+  `SECRET_KEY_FILE`), never the database, which is what was replaced. The
+  journal's `phase` is `preparing` or `swapping`; `recover()` runs on
+  startup before migrations and rolls a `swapping` restore forward
+  (`_Swap.apply` is repeatable, the `MOVED_OUT` marker says which half is
+  done) or clears `.restore-new`. A non-empty `.restore-old` only survives
+  a failed put-back, may hold the only copy, and makes the next restore
+  refuse; never delete it automatically.
+- **Pre-restore archives** (`backup.write_prerestore`): verified after
+  writing, not recorded as `backup_last_run` (that database is about to go),
+  outside `backup_keep` in `prune`, newest `PRERESTORE_KEEP` (3) kept, and
+  the archive being restored is never pruned (`protect`). They match
+  `NAME_RE`, so they are listed (`prerestore: true`), downloadable,
+  restorable, and counted by the backup metrics.
+- **`backup._run_lock` is held for the whole restore**, with restore's own
+  lock, so no backup starts meanwhile; `write_prerestore` expects the caller
+  to hold it. Busy (another restore, a backup, a scheduled task) is 409.
+- **Uploads** are parsed with `python_multipart` straight into
+  `BACKUP_DIR/.restore-staging/<id>.zip`; FastAPI's `UploadFile` would spool
+  20 GB through the container's temp folder. `_pending` (restore ids) is in
+  memory; `DELETE` only ever unlinks a staged upload.
+- **After a restore** the engine is disposed and `metrics.reset_cache()` /
+  `alerts.reset_memory()` run; any new in-memory cache of database state
+  needs the same. Settings, `backup_last_run` and `alert_state` included,
+  are whatever the archive held.
+- **Tests** (`tests/test_restore.py`) run the thread inline (`restore._spawn`
+  patched), record rather than run `restore_database`, and stub
+  `dispose_engine` (disposing the StaticPool engine drops the in-memory
+  database) and `migrate`; conftest points `SECRET_KEY_FILE` at a temp state
+  folder and calls `restore.reset_memory()`. Real Postgres is covered by
+  CI's in-app drill (after the restore.sh drill) and the Playwright restore
+  test, which is last in `smoke.spec.ts` on purpose.
+- **Not covered**: NFS volumes, and an archive from a genuinely older
+  release (the older-revision path ran against a rewritten manifest). The
+  manifest isn't in `SHA256SUMS`, so verification catches corruption only.
+- nginx: `location /api/restore` (20g, `proxy_request_buffering off`, 60m)
+  sits before `location /api/`; `RESTORE_MAX_GB` above 20 needs it raised.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes

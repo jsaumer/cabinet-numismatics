@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.25.1, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.26.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -100,7 +100,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.25.1: roadmap Phases 0–5.8 are complete, migrations
+Released as v0.26.0: roadmap Phases 0–5.8 are complete, migrations
 `0001`–`0018`. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
@@ -125,8 +125,14 @@ rules that bite most often:
 - Every new `price_estimates` row goes through `pricing.add_estimate` (it
   notices a wish-list target). `serial_traits` and `population_as_of` are
   server-set, on every path that changes their inputs (`items._sync_derived`).
+- In-app restore: only `maintenance.EXEMPT` (health, restore status) answers
+  during one, and neither may touch the database; new loops use
+  `maintenance.scheduled_task()`; `.restore-*` folders stay excluded from
+  archives, listings, pruning, and nginx; the photo and document
+  directories are mount points, never renamed or removed.
 - Tests run on SQLite: one-second timestamps (backdate when order matters),
-  `backup.dump_database` monkeypatched, alert delivery run inline. Import
+  `backup.dump_database` and `restore.restore_database` monkeypatched, alert
+  delivery and the restore thread run inline. Import
   fixtures are synthetic (`tests/import_samples.py`); OpenNumismat's demo
   files are GPL, so keep them out.
 
@@ -151,16 +157,23 @@ a one-time webhook event, National Bank Note fields and the notes-by-signature
 report, fancy serial traits (`services/serials.py`), and the die axis and
 date as struck (`services/calendars.py`); see "Parity fields" in the
 implementation notes.
-**Next, in order:** P2 in-app restore (no longer blocked on auth; safety
-backup first, typed confirmation, `RESTORE_ENABLED` switch), P7 bullion
-stack figures, P8 authentication (decided: one admin first, onboarded with a
-setup code from the backend log, always on, scoped API tokens in the first
-cut, deny by default; then SSO for that admin; more accounts and roles are
-optional; the design and permission table are in docs/security.md), P9 a
-share view (blocked on P8; the whole feature is an admin setting, off by
-default); labels, a phone app, and more accounts are optional. Research and
-propose each before building, as always. v1.0.0 follows P8 and the checklist
-under "The road to v1.0.0". Before that, the roadmap's Phase 5.9 was demoted
+P2, in-app restore, shipped in v0.26.0 (no migration): `services/restore.py`
+and `maintenance.py`, `/api/restore/*`, `components/restore.tsx`; verify,
+safety backup (`-prerestore`, outside `backup_keep`), typed `RESTORE`,
+unpack, database in one transaction, then the file swap; outcome and journal
+on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Open until P8
+makes it admin-only; see "In-app restore" in the implementation notes.
+**Next, in order:** P10 a customisable dashboard (prioritised by the owner:
+widgets shown, hidden, reordered, and sized, layout saved in settings), P7
+bullion stack figures, P8 authentication (decided: one admin first,
+onboarded with a setup code from the backend log, always on, scoped API
+tokens in the first cut, deny by default; then SSO for that admin; more
+accounts and roles are optional; the design and permission table are in
+docs/security.md), P9 a share view (blocked on P8; the whole feature is an
+admin setting, off by default); labels, a phone app, and more accounts are
+optional. Research and propose each before building, as always. v1.0.0
+follows P8 and the checklist under "The road to v1.0.0". Before that, the
+roadmap's Phase 5.9 was demoted
 on 19 September 2026 from a release train to one next item plus unordered
 **candidates** and **parked** items: the owner is entering 100–500 pieces by
 hand (runs and singles, mostly held), so don't build ahead of that beyond

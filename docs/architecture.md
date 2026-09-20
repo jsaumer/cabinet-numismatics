@@ -38,6 +38,11 @@ are served at `/logo.svg`, `/logo-512.png`, `/favicon.ico`, and
 `/apple-touch-icon.png`. `client_max_body_size` is 25 MB for photo and
 document uploads, and 1 GB under `/api/imports` (an OpenNumismat file carries
 its photos); `/api/backup*` and `/api/imports` get a 30-minute read timeout.
+`/api/restore` has a location of its own: 20 GB bodies (an uploaded archive
+carries every photo and document), request buffering off so the backend
+streams the upload straight to the backup volume, and 60-minute read and
+send timeouts. Any dot-name under `/photos/` answers 404: a restore's
+working folders sit inside the photo volume for a moment.
 It sets the security headers on every response and a Content-Security-Policy
 on the app (see [security.md](security.md)). Config lives in
 `proxy/nginx.conf`, baked into the image. The photo volume is mounted
@@ -52,15 +57,24 @@ estimates run inside the request, and two loops in the process handle the
 rest (every 12 hours, the scheduled price refreshes; every hour, the backup
 schedule, the trash clear-out, and the heartbeat). On startup it ensures the
 photo directory exists and, unless `AUTO_MIGRATE=false`, waits up to 60
-seconds for postgres and applies pending migrations before serving.
+seconds for postgres and applies pending migrations before serving. Before
+that it finishes, or clears up after, an in-app restore the last process
+didn't complete.
+
+While an in-app restore runs the backend is in **maintenance mode**
+(`services/maintenance.py`, in memory): every request but `GET /api/health`
+and `GET /api/restore/status` answers 503, the two loops skip their work,
+and health answers `db: "restoring"` without touching the database. See
+[backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 
 The container's entrypoint starts as root only to hand the data directories
 to an unprivileged user (`PUID`:`PGID`, default `1000`:`1000`), then drops to
 that user with `setpriv`; see [security.md](security.md). It mounts four
 volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
-`backup_data` (`/data/backups`), and `backend_state` (`/data/state`, the
-generated encryption key when `SECRET_KEY` is unset). Run one replica: the
-loops live in the process.
+`backup_data` (`/data/backups`), and `backend_state` (`/data/state`: the
+generated encryption key when `SECRET_KEY` is unset, plus the last restore's
+outcome, `restore_last.json`, and `restore_journal.json` while one runs).
+Run one replica: the loops, and a restore's state, live in the process.
 
 ### db (postgres)
 Primary relational store (`postgres:16-alpine`) for items, photo and document
@@ -130,7 +144,9 @@ app's Settings page and stored in the database.
 | `REQUIRE_DOCUMENT_MOUNT` | Refuse document uploads unless `DOCUMENT_DIR` is a mounted volume (default `true`; `false` for local development) |
 | `PUID` / `PGID`   | The unprivileged user the backend runs as, and that owns its files (default `1000`:`1000`) |
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
-| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.25.1`) |
+| `RESTORE_ENABLED` | In-app restore (default `true`); `false` makes every restore endpoint answer 404 and hides it in Settings |
+| `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.26.0`) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
@@ -161,8 +177,9 @@ rotation.
   your own image with a cert and a `443` server block).
 - Back up from Settings → Backups (download, or scheduled archives into
   `BACKUP_DIR`), or with `./scripts/backup.sh` from the host (database dump,
-  photo archive, and document archive together either way); see
-  [backup-restore.md](backup-restore.md).
+  photo archive, and document archive together either way). Restore from
+  Settings → Backups too, or with `./scripts/restore.sh` when the app won't
+  start; see [backup-restore.md](backup-restore.md).
 - There is no application-level auth yet: Cabinet is for a trusted
   network, or behind an authenticating reverse proxy with TLS (for example
   Traefik + Authentik forward-auth). Application login is planned before

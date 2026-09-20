@@ -31,7 +31,14 @@ Edit `.env`:
 - `PUID` / `PGID` (optional, not in `.env.example`): the user the backend
   runs as and that owns its files, default `1000`:`1000`. Set them when the
   data sits on bind mounts or NFS owned by another account.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.25.1`. `--build` builds
+- `RESTORE_ENABLED` (optional, default `true`): restore from Settings →
+  Backups replaces the whole collection, and Cabinet has no login yet. Set
+  `false` to switch it off (the endpoints answer 404 and
+  `scripts/restore.sh` is the only way), for instance where the app is
+  reachable by people who shouldn't be able to do that.
+- `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
+  uploaded for a restore. The bundled nginx allows 20 GB.
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.26.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -155,6 +162,18 @@ files) or uploads will fail at the edge; likewise its timeouts, since a
 backup download or a large import can take minutes before the first byte
 (Cabinet's nginx allows 30).
 
+Restoring from an uploaded archive needs more: under `/api/restore`
+Cabinet's nginx allows 20 GB bodies, doesn't buffer the request, and waits
+60 minutes, because the archive carries every photo and document and
+checking a large one takes a while. Give the edge proxy a body limit at
+least the size of your archives there, long read and write timeouts, and
+no request buffering if it can be turned off (a proxy that buffers needs
+room for the whole upload). Or skip the upload: copy the archive into the
+backup directory under its own `cabinet-backup-….zip` name and restore it
+from the list in Settings, which sends no body at all. While a restore runs
+the app answers 503 to everything but `/api/health` and
+`/api/restore/status`; that is expected, not an outage.
+
 ### Other proxies
 
 Any proxy works: Caddy with `basicauth`, nginx with `auth_request`, or a
@@ -199,7 +218,9 @@ The backend applies any new migrations on startup, before serving, all in one
 transaction. If one fails it rolls back and the backend refuses to start.
 Check `docker compose logs backend`. Migrations are forward-only in practice,
 and going back to an older image doesn't undo them; take a backup first
-(Settings → Backups → **Back up now**). The
+(Settings → Backups → **Back up now**). Going back then means the older
+image plus that backup: an older Cabinet refuses an archive made by a newer
+one, and a newer one migrates an older archive after restoring it. The
 [CHANGELOG](../CHANGELOG.md) notes anything that needs attention.
 
 To pick up security fixes in the base images and dependencies without a code
@@ -246,7 +267,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.25.1 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.26.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 What that file does differently from `docker-compose.yaml`, and why:
@@ -259,7 +280,8 @@ What that file does differently from `docker-compose.yaml`, and why:
   first two, and the stack file passes the backend only the variables it
   names: the database URL, the data paths, `SECRET_KEY` (left empty, the key
   falls back to the one generated on the `backend_state` volume),
-  `REESTIMATE_DAYS`, `PUID`/`PGID`, and `TZ`. `AUTO_MIGRATE` and
+  `REESTIMATE_DAYS`, `RESTORE_ENABLED`, `RESTORE_MAX_GB`, `PUID`/`PGID`, and
+  `TZ`. `AUTO_MIGRATE` and
   `REQUIRE_DOCUMENT_MOUNT` are not among them; add a line to the backend's
   `environment:` if you change either from its default. The backend waits up to 60 seconds for Postgres before migrating,
   and its health check gives a first boot 90 seconds;
@@ -283,5 +305,10 @@ What that file does differently from `docker-compose.yaml`, and why:
   ([monitoring.md](monitoring.md)).
 
 Upgrading is a tag bump: change `TAG`, deploy again, and the backend
-migrates on startup. `restore.sh` needs `docker compose`, so restore on a
-Swarm by hand (see [backup-restore.md](backup-restore.md#on-a-swarm)).
+migrates on startup. Restore from Settings → Backups works on a Swarm as it
+does under Compose: the backend's health check keeps answering during a
+restore (`db: "restoring"`, without touching the database), so the task
+isn't killed halfway. It has not been tried on NFS-backed volumes; see
+[backup-restore.md](backup-restore.md#what-to-know-before-relying-on-it).
+`restore.sh` needs `docker compose`, so the disaster-recovery restore on a
+Swarm is done by hand (see [backup-restore.md](backup-restore.md#on-a-swarm)).
