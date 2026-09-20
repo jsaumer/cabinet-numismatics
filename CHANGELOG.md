@@ -10,6 +10,15 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Changed
+- **One clean typeface.** The serif titles are gone: the whole interface
+  uses a Calibri-style humanist sans (Calibri on Windows, Carlito where it's
+  installed on Linux, the system's own sans elsewhere), sized so the
+  fallbacks match. Still nothing downloaded.
+- **Dark is the default.** A browser that hasn't chosen a theme opens dark,
+  whatever the system prefers; the header toggle switches and remembers.
+  The README shows every page in both themes, dark first.
+
 ## [0.24.0] - 2026-09-20
 
 ### Changed

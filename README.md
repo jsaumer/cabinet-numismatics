@@ -24,13 +24,14 @@ what entering a real collection turns up rather than by a schedule. See the
 
 Shown with the bundled demo collection (`python scripts/seed_demo.py`).
 
-| Collection list | Dashboard |
+Dark is the default; the header toggle switches to light and remembers it.
+
+| Dark | Light |
 |---|---|
-| [![Collection list](docs/screenshots/collection.png)](docs/screenshots/collection.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) |
-| **Item detail** | **Settings** |
-| [![Item detail](docs/screenshots/item-detail.png)](docs/screenshots/item-detail.png) | [![Settings](docs/screenshots/settings.png)](docs/screenshots/settings.png) |
-| **Dark mode** | |
-| [![Dark mode](docs/screenshots/dark-mode.png)](docs/screenshots/dark-mode.png) | |
+| [![Dashboard, dark](docs/screenshots/dashboard-dark.png)](docs/screenshots/dashboard-dark.png) | [![Dashboard, light](docs/screenshots/dashboard-light.png)](docs/screenshots/dashboard-light.png) |
+| [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
+| [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
+| [![Settings, dark](docs/screenshots/settings-dark.png)](docs/screenshots/settings-dark.png) | [![Settings, light](docs/screenshots/settings-light.png)](docs/screenshots/settings-light.png) |
 
 ## Features
 
