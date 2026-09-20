@@ -8,20 +8,23 @@ phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
 **Status (September 2026): released as v0.24.7**, with versioned images
-published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are built, pricing-program M1–M5 are done (settings
+published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
+built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance), in-app backup (Phase 5.6 B1 + B2) shipped
-in v0.12.0, and the open-source readiness track (Phase 6) is complete apart
-from application-level login, deliberately deferred in favour of
-proxy-level auth.
+in v0.12.0, and the open-source readiness track (Phase 6) is complete. Application
+login is not planned: v1.0.0 will ship without one (see "The road to
+v1.0.0" under Phase 5.9).
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
 **Phase 5.9**. A third look the same day, after v0.22.0, asked whether the
 owner needs any of it (100–500 pieces to enter by hand, runs and singles,
 mostly held) and demoted the release train to **one next item and a list
-of candidates**, built only when real use asks for them.
+of candidates**, built only when real use asks for them. Since 20 September
+2026 the owner has been entering real pieces, and everything from v0.23.2 to
+v0.24.7 came from that: see "From the data-entry pass" under Phase 5.9.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions: new capability = minor,
@@ -182,6 +185,10 @@ guidance, not appraisals.
   single value shown in the items list, CSV/XLSX export, and dashboard
   totals, separate from the item page, which always shows every source's
   own latest value as a chip.
+- ✔ **[Core]** PCGS pricing checked against the live API: auction lots are
+  dated by month, only sales from the last five years count (older ones are
+  shown, not counted), the price guide stands in otherwise, and the default
+  quota is 100 calls a day. **Shipped in v0.24.4 and v0.24.6.**
 - **[Nice]** PCGS population and eBay sold-listings / Photograde links on
   the item page. Phase 5.9. Links ✔ **shipped in v0.22.0**; population on
   the item page is a **candidate** (the cert fill already reports it).
@@ -242,15 +249,13 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Core]** Secrets handled to standard: price-source credentials are
   Fernet-encrypted at rest with env-supplied keys and rotation support, and
   are write-only through the API. See `security.md`.
-- **[Nice]** Authentication. For homelab deployment behind an authenticating
-  reverse proxy (e.g. Traefik + Authentik forward-auth), no application code
-  is needed; that is the intended path for private networked use.
-  Application-level login only becomes necessary for direct public exposure
-  or the OSS release. **Target: v1.0.0.** Unlike everything else on this
-  list, auth changes the security model of every endpoint rather than adding
-  a capability, and this repo's README already treats 1.0 as the "HTTP API
-  is now stable" marker; auth landing is the natural trigger for declaring
-  that.
+- **[Nice]** Authentication. **Not planned for v1.0.0** (decided 20
+  September 2026). Cabinet is for a trusted network, or behind an
+  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth),
+  which needs no application code. v1.0.0 means a stable HTTP API, not
+  login. Application-level login would change the security model of every
+  endpoint; it is a possible 2.0 item if direct public exposure ever
+  becomes a goal.
 - ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
   frontend typecheck, and a compose build/migrate/smoke test on every push and
   PR; a `v*` tag push additionally publishes the backend and proxy images to
@@ -278,6 +283,23 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   screenshots, the three ~900-line frontend files split, a trimmed
   CLAUDE.md, and a Swarm-ready stack file in the repo. Phase 5.9.
   **Shipped in v0.21.1.**
+- ✔ **[Core]** A look of its own: a logo and browser-tab icon, a bronze
+  accent on warm surfaces, one Calibri-first system typeface, drawn icons in
+  place of emoji, dark by default with a remembered light mode, amounts shown
+  with their currency symbol, file pickers as buttons, a collection title
+  row with an export/import menu, and Import and the trash in the
+  navigation. No em dashes anywhere in the interface or the docs.
+  **Shipped in v0.24.0 to v0.24.3.**
+- ✔ **[Nice]** A Homepage (gethomepage.dev) tile: owned coins, owned notes,
+  and the estimated value from the existing `/api/stats/collection`, with
+  the logo served at `/logo-512.png`. See `monitoring.md`. **Shipped in
+  v0.24.2.**
+- **[Nice]** API call counter: requests sent to Numista and PCGS per month
+  and per day against editable limits, a reserve for manual lookups, a
+  spread-out PCGS refresh, and a cost preview before a run or an import.
+  Neither platform has a usage endpoint or quota headers (checked with real
+  keys), so it can only count Cabinet's own calls. **Tabled** by the owner
+  on 20 September 2026 until real use shows quota pressure.
 - **[Nice]** Coin-show mode: an installable mobile web app (PWA) with
   quick-add from the phone camera and slab barcode/QR scanning (PCGS → cert
   and grade, NGC → cert) feeding cert-first entry, tolerant of a bad
@@ -621,6 +643,28 @@ collection.
   the collection's makeup supports today: a run of fifty coins becomes one
   form instead of fifty.
 
+**From the data-entry pass** (from 20 September 2026). What entering real
+pieces turned up, each shipped as a small release:
+
+- ✔ v0.23.2: the insurance report printed a stray dash beside a filled
+  Acquired field; a Numista "no reference" error now leads to the fix.
+- ✔ v0.24.0 to v0.24.3: the text and look pass (no em dashes, money as
+  money, icons, file-picker buttons, the collection title row, the bronze
+  look, the Calibri-style typeface, dark by default, the logo and favicon,
+  the Homepage tile, a header alignment fix).
+- ✔ v0.24.4: PCGS's daily limit corrected from 1,000 to 100, with a Settings
+  warning past 100 priceable items; the Numista licence citation corrected
+  (§8.4, personal projects, permits the cache; §8.3 covers only metadata).
+- ✔ v0.24.5: a PCGS cert fill writes "United States" and drops a "P" the
+  coin doesn't carry, so it matches hand-entered pieces.
+- ✔ v0.24.6: PCGS's month-only lot dates are read, and one 2003 sale no
+  longer outvotes a guide value four times higher.
+- ✔ v0.24.7: the first date under a value chart was cut off.
+
+Confirmed against the real services along the way: the PCGS cert fill,
+grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
+run" against live Numista.
+
 **Candidates**: unordered, no targets; one is pulled when real use asks
 for it, and new ones found while entering the collection outrank these.
 
@@ -637,6 +681,11 @@ for it, and new ones found while entering the collection outrank these.
   item page.
 - **Portability**: Excel with thumbnails; an OpenNumismat-compatible
   round-trip export with a photo archive.
+- **Layout**: an item page that leads with the photos and groups its facts
+  (identity, grade and cert, acquisition, physical) instead of one grid with
+  a dash for every empty field; Settings split into sections. Recommended
+  in the September 2026 layout review and not picked yet.
+- **API call counter**: tabled by the owner; see section 5.
 
 **Parked**: real features for a collector this owner isn't; revisit only
 if that changes.
@@ -650,10 +699,25 @@ if that changes.
   typed number.)
 - **Stack view** for bullion. (Not a stack.)
 
-**v1.0.0** stays the marker for authentication and a stable API, but needs
-no code for this deployment: the homelab runs Authentik, so protecting
-Cabinet is a forward-auth middleware on its Traefik route. In-app restore
-and showcase links remain wants, not needs.
+**The road to v1.0.0** (decided 20 September 2026). v1.0.0 ships with **no
+application login**: Cabinet is documented as for a trusted network or
+behind an authenticating reverse proxy, and 1.0 means the HTTP API is
+stable. It is declared after the data-entry review, if that finds nothing
+structural. The checklist:
+
+- ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
+  API (v0.24.5 to v0.24.6).
+- "Add a run" confirmed against live Numista.
+- An API consistency pass while breaking changes are still free (for
+  example the old `POST /api/items/import` beside `/api/imports`), then a
+  written stability policy in `api.md`.
+- A CI check that fails on a breaking change to the OpenAPI schema.
+- A CI upgrade test: a database from an old release migrated to head.
+- A README and quick-start pass (the screenshots are current as of
+  v0.24.2).
+
+In-app restore stays blocked on authentication, so it stays a script;
+showcase links remain a want, not a need.
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -672,11 +736,10 @@ gets asked.*
 - ✔ Hardened setup docs (`deployment.md`), CI on PRs, changelog + versioned
   release, demo seed data, screenshots.
 - ✔ Migration story for upgrades (Alembic end to end).
-- Application-level authentication remains **deliberately unbuilt**: proxy-level
-  forward-auth (Traefik + Authentik) is the documented path, and app login is
-  only required for direct public exposure. Revisit if that changes.
-  **Target: v1.0.0**; see section 5's Authentication entry for why this one
-  gets the major bump instead of a minor.
+- Application-level authentication remains **deliberately unbuilt**, and is
+  not part of v1.0.0: proxy-level forward-auth (Traefik + Authentik) is the
+  documented path, and app login would only matter for direct public
+  exposure. See section 5's Authentication entry.
 - ✔ The repository is public on GitHub (since v0.10.1); versioned images are
   published to GHCR from v0.10.2.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
@@ -687,8 +750,9 @@ gets asked.*
 
 - **Auth is deliberately late, and mostly external.** For homelab deployment,
   an authenticating reverse proxy (Traefik + Authentik forward-auth) covers
-  private networked use with zero application code. App-level login is only a
-  prerequisite for direct public exposure or the OSS release, so it sits there.
+  private networked use with zero application code. App-level login would
+  only be a prerequisite for direct public exposure, which isn't a goal, so
+  v1.0.0 ships without it and marks a stable API instead.
 - **Schema-complete before data-complete.** Phase 2 front-loaded every field
   the collection would need (status, composition, certification, provenance)
   because adding columns is cheap before the full collection is entered and

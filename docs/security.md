@@ -3,7 +3,9 @@
 Cabinet is a single-user, self-hosted application. The design assumes the
 stack runs on a network you control, and that the operator is the only user.
 This document records what that means concretely, what is protected and how,
-and what you must do before exposing the app more widely.
+and what you must do before exposing the app more widely. There is no
+application login, and v1.0.0 will ship without one; see Authentication &
+network exposure below.
 
 ## Secrets at rest
 
@@ -26,7 +28,8 @@ request bodies).
 
 If a secret cannot be decrypted (the key was rotated away or lost), the app
 reports that source as *not configured* rather than failing. Re-enter the key
-in Settings.
+in Settings. A value stored as plaintext by a release from before encryption
+existed is encrypted in place the first time it is read.
 
 ## Key management
 
@@ -60,8 +63,9 @@ key in the list can decrypt. To rotate:
 
 ## What is *not* encrypted
 
-The collection data itself (items, photos, estimates) is stored unencrypted
-in postgres and on the photo volume. For a personal catalog on your own
+The collection data itself (items, photos, documents, estimates) is stored
+unencrypted in postgres and on the photo and document volumes. For a
+personal catalog on your own
 hardware this is the appropriate trade-off: it keeps backup, restore, and
 inspection simple. If the host is untrusted or portable, use full-disk or
 volume-level encryption underneath the stack rather than application-level
@@ -75,7 +79,8 @@ the matching key works fine; you just re-enter the source API keys. Treat
 
 The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) are as
 unauthenticated as the rest of the API, but they hand over the entire
-collection (database and photos) in one request. That is acceptable on a
+collection (database, photos, and documents) in one request. That is
+acceptable on a
 trusted LAN or behind an authenticating proxy, and a clear reason not to
 expose the stack directly. The backup directory is kept out of the publicly
 served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
@@ -97,16 +102,23 @@ that is an accepted gap.
 
 ## Authentication & network exposure
 
-There is **no application-level authentication**, by design (see the roadmap's
-sequencing notes). Cabinet is safe to run on a trusted LAN. Before exposing it
-beyond that:
+There is **no application-level authentication**, by decision (see the
+roadmap's "The road to v1.0.0"), and v1.0.0 will ship that way: 1.0 means a
+stable HTTP API, not login. Cabinet is for a trusted network, or behind an
+authenticating reverse proxy. Before exposing it beyond a trusted LAN:
 
 - Put it behind an authenticating reverse proxy (Traefik + Authentik
   forward-auth is the intended path), which requires no application changes.
+  [deployment.md](deployment.md) has the configuration.
 - Terminate TLS at the proxy so credentials entered in Settings and photos are
   not transmitted in the clear.
-- Application-level login is only necessary for direct public exposure; it is
-  tracked with the open-source release work.
+- Application-level login would only matter for direct public exposure, which
+  isn't a goal. It is not planned for 1.0; it is at most a possible later
+  item.
+
+Photos under `/photos/` are served by nginx without going through the API;
+their UUID file names are not guessable, but only the reverse proxy's
+authentication actually protects them, like everything else.
 
 Do not port-forward the stack to the internet as-is.
 
@@ -138,8 +150,13 @@ Do not port-forward the stack to the internet as-is.
   fetched only when asked, through the guarded photo-URL fetch.
 - **Custom fields** are bounded (20 keys, 50-char names, 500-char string
   values) so arbitrary payloads can't be stashed in the JSON column.
-- **Outbound requests** go only to the two documented price/rate APIs, with
-  timeouts and cached fallbacks. No collection data is ever sent outward.
+- **Outbound requests** go to the two keyless market-data APIs
+  (`api.gold-api.com`, `api.frankfurter.dev`), to Numista and PCGS once you
+  give them a key, to the alert webhook and heartbeat URLs you save, and to a
+  photo URL you ask for, all with timeouts, and the price and rate lookups
+  with cached fallbacks. The collection is never sent outward: a price source
+  receives only the catalogue number, PCGS number or cert number, and grade
+  being looked up.
 
 ## Containers and the browser
 
@@ -153,36 +170,53 @@ stays root: fix the ownership on the server, or set `PUID`/`PGID` to the
 owner. nginx's workers were already unprivileged. The backend image carries
 no pip: nothing is installed at runtime.
 
-The proxy sets a Content-Security-Policy on the app: scripts and
-connections from itself only, images from itself, `data:`/`blob:` (the
-photo editor) and `https:` (Numista thumbnails), inline style attributes
-(React), no plugins, no frames. It also sets
-`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
-`Referrer-Policy`, and a `Permissions-Policy` allowing only the camera
-(webcam capture). The API's responses are left to the API: documents carry
-`default-src 'none'`. HSTS belongs to whatever terminates TLS in front of
-the stack. A browser test fails the build if any page trips the policy.
+The proxy sets a Content-Security-Policy on the app and its static files
+(`location /` in `proxy/nginx.conf`):
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob: https:; media-src 'self' blob:;
+connect-src 'self'; font-src 'self'; object-src 'none'; frame-src 'none';
+base-uri 'self'; form-action 'self'; frame-ancestors 'self'
+```
+
+That is: scripts, connections, and fonts from itself only (no inline script,
+no CDN, no web fonts; the logo and icons are the app's own files), images
+from itself, `data:`/`blob:` (the photo editor) and any `https:` host
+(Numista thumbnails), media from itself and `blob:`, inline styles (React
+sets style attributes), no plugins, no iframes, and framing only by the same
+origin. On every response, `/photos/` and the proxied API included, it also
+sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
+`Referrer-Policy: strict-origin-when-cross-origin`, and a
+`Permissions-Policy` allowing only the camera (webcam capture) and denying
+the microphone, geolocation, payment, and USB; `server_tokens` is off. nginx
+adds no CSP under `/api/`, which is left to the API: documents carry
+`default-src 'none'`, and the API docs page loads its viewer from a CDN.
+HSTS belongs to whatever terminates TLS in front of the stack. A browser
+test fails the build if the headers are missing or one of the main pages
+trips the policy.
 
 ## Dependencies
 
-Runtime dependencies are pinned by minimum version and installed fresh at
-image build. Rebuild periodically (`docker compose build --pull`) to pick up
-security fixes in the base images and Python packages.
-
 The backend image installs from `backend/requirements.txt`, a lockfile with
-every package pinned and hash-verified; `pyproject.toml` keeps the minimum
-versions for development. After changing dependencies, regenerate it in the
-image's own Python:
+every package pinned and hash-verified (`pip install --require-hashes`);
+`pyproject.toml` keeps the minimum versions for development. The frontend is
+built with `npm ci` from `package-lock.json`. Rebuild periodically
+(`docker compose build --pull`) to pick up security fixes in the base images
+(the backend image also applies Debian's pending updates at build); Python
+package fixes arrive by regenerating the lockfile. After changing
+dependencies, regenerate it in the image's own Python:
 
 ```bash
 docker run --rm -v "$PWD/backend:/src" -w /src python:3.14-slim sh -c \
   "pip install -q pip-tools && pip-compile -q --generate-hashes --strip-extras --no-header -o requirements.txt pyproject.toml"
 ```
 
-`.github/workflows/security.yml` runs on every change and weekly: `pip-audit`
-against that lockfile, `npm audit` on the frontend's runtime dependencies,
-and Trivy on both built images, failing on fixable high or critical
-findings. It is separate from CI on purpose: a CVE published against an
-unchanged base image shows up there without blocking a release that didn't
-cause it. The usual fix is a rebuild (the image applies Debian's pending
-updates) or regenerating the lockfile.
+`.github/workflows/security.yml` runs on every push to `main`, every pull
+request, and weekly: `pip-audit` against that lockfile, `npm audit` on the
+frontend's runtime dependencies (high and above), and Trivy on both built
+images, failing on fixable high or critical findings. It is separate from
+CI on purpose: a CVE published against an unchanged base image shows up
+there without blocking a release that didn't cause it. The usual fix is a
+rebuild (the image applies Debian's pending updates) or regenerating the
+lockfile.

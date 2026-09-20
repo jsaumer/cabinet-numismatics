@@ -2,10 +2,11 @@
 
 ## Overview
 
-Cabinet is a single-user, self-hosted numismatics web application. All components run
-as containers managed by a single `docker-compose.yaml`. The stack is
-deliberately small (three services) because a single-user collection manager
-has modest performance needs.
+Cabinet is a single-user, self-hosted numismatics web application. All
+components run as containers managed by a single `docker-compose.yaml`
+(`deploy/docker-stack.yaml` is the same stack for a Docker Swarm, from the
+published images). The stack is deliberately small (three services) because
+a single-user collection manager has modest performance needs.
 
 ```
                     ┌─────────────┐
@@ -22,6 +23,7 @@ has modest performance needs.
                     └─────────────┘
 
      photos: shared volume (backend writes, nginx serves)
+     documents, backups, key file: backend-only volumes
 ```
 
 ## Services
@@ -30,21 +32,43 @@ has modest performance needs.
 The single public entry point. Its image is built from the multi-stage
 `frontend/Dockerfile` (Node build stage → nginx stage with the static files
 baked in), so `docker compose up --build` needs no host Node install. It serves
-the frontend and photo files directly, and proxies `/api/` to the backend. Sets
-`client_max_body_size` high enough for photo uploads. Config lives in
-`proxy/nginx.conf`, baked into the image.
+the frontend and photo files directly, and proxies `/api/` to the backend. The
+built frontend includes what is in `frontend/public`, so the logo and icons
+are served at `/logo.svg`, `/logo-512.png`, `/favicon.ico`, and
+`/apple-touch-icon.png`. `client_max_body_size` is 25 MB for photo and
+document uploads, and 1 GB under `/api/imports` (an OpenNumismat file carries
+its photos); `/api/backup*` and `/api/imports` get a 30-minute read timeout.
+It sets the security headers on every response and a Content-Security-Policy
+on the app (see [security.md](security.md)). Config lives in
+`proxy/nginx.conf`, baked into the image. The photo volume is mounted
+read-only, and it is the only data volume the proxy sees.
 
 ### backend (built image)
 FastAPI application exposing the REST API under `/api/`. It also runs
 background work (thumbnail generation, price lookups, scheduled backups,
 alerts and the heartbeat, see [monitoring.md](monitoring.md)) in-process,
-either synchronously or via FastAPI background tasks, since the job volume
-for a single user is low. On startup it ensures the photo directory exists.
+since the job volume for a single user is low: thumbnails and on-demand
+estimates run inside the request, and two loops in the process handle the
+rest (every 12 hours, the scheduled price refreshes; every hour, the backup
+schedule, the trash clear-out, and the heartbeat). On startup it ensures the
+photo directory exists and, unless `AUTO_MIGRATE=false`, waits up to 60
+seconds for postgres and applies pending migrations before serving.
+
+The container's entrypoint starts as root only to hand the data directories
+to an unprivileged user (`PUID`:`PGID`, default `1000`:`1000`), then drops to
+that user with `setpriv`; see [security.md](security.md). It mounts four
+volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
+`backup_data` (`/data/backups`), and `backend_state` (`/data/state`, the
+generated encryption key when `SECRET_KEY` is unset). Run one replica: the
+loops live in the process.
 
 ### db (postgres)
-Primary relational store for items, photo metadata, and price estimates. Data
-persists in the `db_data` volume. A healthcheck gates the backend so it waits
-for the database to be ready.
+Primary relational store (`postgres:16-alpine`) for items, photo and document
+metadata, price estimates, settings, and the market-data caches; see
+[data-model.md](data-model.md). Data persists in the `db_data` volume. Under
+Compose a healthcheck gates the backend so it waits for the database to be
+ready; on a Swarm, which has no `depends_on`, the backend's own wait covers
+it.
 
 ## Photo storage
 
@@ -75,35 +99,46 @@ mount can't quietly keep documents inside the container.
 6. nginx serves the files directly at `/photos/{key}`.
 
 **Requesting a price estimate**
-1. Client POSTs to `/api/items/{id}/estimate`.
-2. Backend looks up comparables by catalog reference + grade.
-3. Backend computes an estimate + confidence and writes a `price_estimates`
-   row, with a `details` summary of what the source returned (provenance).
+1. Client POSTs to `/api/items/{id}/estimate?source=` (`melt` by default, or
+   `numista`, `pcgs`, `comps`).
+2. Backend checks the source is switched on and the item has what it needs
+   (weight and fineness for melt, a catalog reference and grade for Numista,
+   a cert or PCGS number for PCGS, logged sales for comps).
+3. Backend fetches through the database cache (spot prices, `source_cache`),
+   computes an estimate + confidence, and writes a `price_estimates` row with
+   a `details` summary of what the source returned (provenance). The outcome,
+   success or not, is recorded in `estimate_attempts`.
 4. Client refetches the item to see the new estimate.
 
 ## Configuration
 
-All configuration is via environment variables, loaded from `.env`
-(gitignored). Start from `.env.example`.
+Deployment configuration is via environment variables, loaded from `.env`
+(gitignored). Start from `.env.example`. Everything else (display currency,
+price-source keys, refresh cadence, backup schedule, alerts) is set in the
+app's Settings page and stored in the database.
 
 | Variable          | Purpose                                              |
 |-------------------|------------------------------------------------------|
 | `DB_USER`         | Postgres username                                    |
 | `DB_PASSWORD`     | Postgres password                                    |
 | `DB_NAME`         | Postgres database name                               |
-| `REESTIMATE_DAYS` | Default melt re-estimation window (Settings overrides)|
+| `REESTIMATE_DAYS` | Default melt re-estimation window in days (default `7`, `0` disables; Settings overrides) |
 | `AUTO_MIGRATE`    | Apply pending migrations on backend startup (default `true`) |
 | `BACKUP_DIR`      | Where in-app backup archives are written (compose: `/data/backups`) |
-| `SECRET_KEY`      | Fernet key(s) encrypting stored API credentials; comma-separated to rotate |
+| `SECRET_KEY`      | Fernet key(s) encrypting stored secrets (API credentials, the alert webhook and heartbeat URLs); comma-separated to rotate |
 | `DOCUMENT_DIR`    | Where attached documents are stored (compose: `/data/documents`, its own volume) |
 | `REQUIRE_DOCUMENT_MOUNT` | Refuse document uploads unless `DOCUMENT_DIR` is a mounted volume (default `true`; `false` for local development) |
 | `PUID` / `PGID`   | The unprivileged user the backend runs as, and that owns its files (default `1000`:`1000`) |
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.24.7`) |
 
-The backend derives `DATABASE_URL` from these in `docker-compose.yaml`,
-`PHOTO_DIR` points at the mounted photo volume, and `SECRET_KEY_FILE` points
-at the private `backend_state` volume used when `SECRET_KEY` is unset. See
-[security.md](security.md) for key management and rotation.
+`docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
+values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
+`BACKUP_DIR=/data/backups`, `DOCUMENT_DIR=/data/documents`, and
+`SECRET_KEY_FILE=/data/state/secret.key` on the private `backend_state`
+volume, used when `SECRET_KEY` is unset. Change where data lives by changing
+the mounts, not these. See [security.md](security.md) for key management and
+rotation.
 
 ## Development
 
@@ -119,16 +154,20 @@ at the private `backend_state` volume used when `SECRET_KEY` is unset. See
 
 ## Deployment notes
 
-- Single-host deployment is the design target. For remote access, terminate
-  TLS at the nginx proxy (add a cert and a `443` server block) or place the
-  stack behind an existing reverse proxy / tunnel.
+- Single-host deployment is the design target; [deployment.md](deployment.md)
+  covers it, and the Swarm stack. For remote access, place the stack behind
+  an existing reverse proxy or tunnel that terminates TLS (the nginx config
+  is baked into the proxy image, so terminating TLS there means building
+  your own image with a cert and a `443` server block).
 - Back up from Settings → Backups (download, or scheduled archives into
-  `BACKUP_DIR`), or with `./scripts/backup.sh` from the host (database dump
-  and photo archive together either way); see
+  `BACKUP_DIR`), or with `./scripts/backup.sh` from the host (database dump,
+  photo archive, and document archive together either way); see
   [backup-restore.md](backup-restore.md).
-- There is no application-level auth by design; put the stack behind an
-  authenticating proxy with TLS before exposing it beyond a trusted network.
-  See [security.md](security.md).
+- There is no application-level auth, by decision: Cabinet is for a trusted
+  network, or behind an authenticating reverse proxy with TLS (for example
+  Traefik + Authentik forward-auth). v1.0.0 will ship the same way;
+  application login is not planned for 1.0 and is at most a possible later
+  item. See [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

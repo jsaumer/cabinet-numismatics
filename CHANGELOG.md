@@ -10,6 +10,29 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **`deploy/docker-stack.yaml` set a broken `DOCUMENT_DIR`.** One
+  over-indented line (since v0.23.1) folded `REESTIMATE_DAYS` into the line
+  above it, so a Swarm deployed from the repo's stack file got
+  `DOCUMENT_DIR=/data/documents - REESTIMATE_DAYS=7` and refused document
+  uploads. The stack file now also passes `SECRET_KEY` through; before, a
+  Swarm silently used the key generated on the state volume whatever `.env`
+  said.
+
+### Changed
+- **The documentation matches the build again.** Every document was checked
+  against the code at v0.24.7: `docs/api.md` (about forty corrections:
+  field names, limits, response shapes, error cases, the PCGS rules), the
+  data model (tables, keys, and settings that had gone undocumented),
+  architecture, deployment, backups, and security (the real headers and
+  policy, every outbound destination, documents in backups), the README's
+  feature list, CI description, and configuration table, CONTRIBUTING,
+  `docs/claude-code.md`, the price-source and monitoring guides, and
+  `frontend/README.md`, which still described a Phase 0 skeleton. The
+  roadmap now records what shipped from the data-entry pass, the tabled API
+  call counter, and the v1.0.0 decision: no application login, a stable
+  API, and the checklist to get there.
+
 ## [0.24.7] - 2026-09-20
 
 ### Fixed

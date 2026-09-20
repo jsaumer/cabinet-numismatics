@@ -1,24 +1,32 @@
 # Data Model
 
-The schema centers on **items**, with photos and price estimates hanging off
-each item, plus a few reference tables for grades and catalog numbers.
+The schema centers on **items**, with photos, price estimates, a sales log,
+documents, and edit history hanging off each item, plus reference tables for
+grades and catalog numbers, caches for market data, and a key/value settings
+table.
 
-**Migration status:** the full schema exists as of Phase 5. Revision `0002`
-created `items`, `item_photos`, `price_estimates`; `0003` added the Phase 2
-item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and photo
-ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
+**Migration status:** revisions `0001`–`0017`. `0001` is an empty baseline;
+`0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
+Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
+photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
 plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
 `checklists` + `checklist_slots`.
 
 Revision `0008` (pricing program M1) added `app_settings`: key/value JSON
 settings (display currency, source toggles, API credentials, melt cadence;
-later grew `value_strategy`/`preferred_source` for the blended-value display
-and `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh, and
+later grew `value_strategy`/`preferred_source` for the blended-value display,
+`numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh,
+`comps_enabled`/`numista_sales_enabled` for the sales log,
 `backup_schedule`/`backup_keep`/`backup_include_photos`/`backup_last_run`
-for in-app backups, with no migration needed, since it's a generic key/value
-table), read through `app/services/app_settings.py` with defaults and env
-fallbacks. Revision
-`0009` (M2) added `source_cache`; `0010` (M4) added `price_estimates.details`;
+for in-app backups, `trash_retention_days` for the trash, and
+`alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
+plus the service-written `refresh_last_run`/`alert_state` for alerts and
+metrics, with no migration needed, since it's a generic key/value table),
+read through `app/services/app_settings.py` with defaults and env fallbacks.
+The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
+`heartbeat_url`) are stored encrypted; see [security.md](security.md).
+Revision `0009` (M2) added `source_cache`; `0010` (M4) added
+`price_estimates.details`;
 `0011` (M5) added `estimate_attempts`, the latest automatic pricing attempt
 per item and source (`item_id` + `source` primary key, cascade with the item;
 `outcome` `ok` / `not_applicable` / `unavailable`, `message`,
@@ -35,10 +43,13 @@ fills a slot is computed on read, never stored.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
-`item_events` (append-only edit history: action + `{field: [old, new]}`
-JSON, cascade with the item); `checklists`/`checklist_slots` (completeness
-targets: label, position, filled, optional item link SET NULL). `items` also
-gained `variety` (text) and `custom_fields` (JSON key→value, max 20).
+`item_events` (append-only history: `at`, an action of `created` /
+`updated` / `trashed` / `restored`, and `{field: [old, new]}` JSON on an
+update; integer PK, cascade with the item); `checklists`/`checklist_slots`
+(completeness targets: a named checklist, and per slot a label, position,
+`filled` hand tick, and optional item link SET NULL; slots cascade with the
+checklist). `items` also gained `variety` (text) and `custom_fields` (JSON
+key→value, max 20).
 
 **Money convention:** `acquisition_price`, `sold_price`, and
 `estimated_value` are all **per row** (the whole lot as entered), never
@@ -51,29 +62,35 @@ match.
 items ──1:N── item_photos
   │
   ├──1:N── price_estimates
-  │
-    ├──1:N── comparables     (the sales log)
+  ├──1:N── estimate_attempts (the latest per source)
+  ├──1:N── comparables     (the sales log)
+  ├──1:N── item_events     (edit history)
   │
   ├──N:M── documents       (via item_documents)
+  ├──N:M── tags            (via item_tags)
+  ├──N:M── catalog_refs    (reference, via item_catalog_refs)
   │
-  └──N:1── grades          (reference)
-  └──N:M── catalog_refs    (reference, via item_catalog_refs)
+  ├──N:1── grades          (reference)
+  └──N:1── sets
+
+checklists ──1:N── checklist_slots ──N:1── items (optional link)
 ```
 
 ## Tables
 
 ### items
 The core record for a single coin or note (or a lot of identical pieces via
-`quantity`).
+`quantity`). Enums are stored as short strings, checked by the application,
+not as native postgres enum types.
 
 | Column             | Type          | Notes                                   |
 |--------------------|---------------|-----------------------------------------|
 | `id`               | uuid PK       |                                         |
-| `type`             | enum          | `coin` \| `note`                        |
-| `status`           | enum          | `owned` \| `sold` \| `wishlist`         |
-| `country`          | text          |                                         |
+| `type`             | enum          | `coin` \| `note`; indexed               |
+| `status`           | enum          | `owned` \| `sold` \| `wishlist`; indexed |
+| `country`          | text          | indexed                                 |
 | `denomination`     | text          | e.g. "25 cents", "10 dollars"           |
-| `year`             | int           | issue year                              |
+| `year`             | int           | issue year; indexed                     |
 | `mint_mark`        | text null     | coins only                              |
 | `series`           | text null     | series / variety name                   |
 | `variety`          | text null     | die variety, overdate…                  |
@@ -110,6 +127,8 @@ The core record for a single coin or note (or a lot of identical pieces via
 | `sold_price`       | numeric null  | realized price (gross), in `currency`   |
 | `sold_fees`        | numeric null  | commission, listing fees                |
 | `sold_to`          | text null     | buyer or venue                          |
+| `set_id`           | fk → sets null | the set or lot it belongs to; SET NULL when the set is deleted |
+| `custom_fields`    | json null     | user-defined key→value, max 20          |
 | `notes`            | text null     | free-form                               |
 | `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `cabinet`, `spreadsheet` |
 | `import_key`       | text null     | its id there; unique with `import_source`, so a re-import skips it; not copied by clone |
@@ -123,7 +142,7 @@ Photo metadata; the binary lives on the photo volume, served by nginx.
 | Column        | Type         | Notes                                     |
 |---------------|--------------|-------------------------------------------|
 | `id`          | uuid PK      |                                           |
-| `item_id`     | fk → items   | cascade delete                            |
+| `item_id`     | fk → items   | cascade delete, indexed                   |
 | `file_key`    | text         | relative path under PHOTO_DIR             |
 | `thumb_key`   | text null    | generated thumbnail path                  |
 | `angle`       | enum null    | `obverse` \| `reverse` \| `edge` \| `other` |
@@ -142,7 +161,7 @@ Timestamped estimates so history is retained rather than overwritten.
 | Column            | Type        | Notes                                    |
 |-------------------|-------------|------------------------------------------|
 | `id`              | uuid PK     |                                          |
-| `item_id`         | fk → items  | cascade delete                           |
+| `item_id`         | fk → items  | cascade delete, indexed                  |
 | `source`          | text        | which source produced the estimate       |
 | `estimated_value` | numeric     |                                          |
 | `currency`        | text        | ISO 4217                                 |
@@ -210,13 +229,18 @@ Per-metal spot price cache for melt estimates (`metal` PK, `price_per_gram`,
 `currency`, `source`, `fetched_at`). Refreshed on demand when older than 12
 hours; a stale row is used if the upstream fetch fails.
 
+### exchange_rates (cache)
+Daily ECB rates for converting between currencies (`base` + `quote` composite
+PK, `rate`, `source`, `fetched_at`). Refreshed on demand when older than 24
+hours; a stale row is used if the upstream fetch fails.
+
 ### source_cache (cache)
 Raw responses from external price sources, so repeated estimates don't spend a
 request against a small free-tier quota (`source` + `cache_key` composite PK,
 `payload` JSON, `fetched_at`). Numista caches catalogue data (a type, its
-issues, searches) and prices for 7 days, and auction sales for 1; PCGS caches
-CoinFacts responses for 7 days. A
-stale row is used if the upstream fetch fails.
+issues, searches) and prices for 7 days, auction sales for 1 day, and the
+user's own collection (for import) for 1 hour; PCGS caches CoinFacts
+responses for 7 days. A stale row is used if the upstream fetch fails.
 
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from
@@ -229,8 +253,8 @@ and details grades live on the item, not the grade.
 | Column        | Type    | Notes                                        |
 |---------------|---------|----------------------------------------------|
 | `id`          | int PK  |                                              |
-| `scale`       | text    | e.g. `sheldon`, `pmg`                        |
-| `code`        | text    | e.g. `MS-65`, `VF-20`, `64`              |
+| `scale`       | text    | `sheldon` or `pmg`                           |
+| `code`        | text    | e.g. `MS-65`, `VF-20`, `64`; unique per scale |
 | `label`       | text    | human-readable description                   |
 | `rank`        | int     | sortable ordering, low → high                |
 
@@ -241,15 +265,18 @@ Catalog numbers used to match items to external price sources.
 |-------------|--------|------------------------------------------------|
 | `id`        | int PK |                                                |
 | `catalog`   | text   | e.g. `krause`, `numista`, `redbook`            |
-| `ref_code`  | text   | the catalog's identifier                       |
+| `ref_code`  | text   | the catalog's identifier; unique per catalog   |
 
 ### item_catalog_refs (join)
 Associates an item with one or more catalog references.
 
-| Column           | Type              |
-|------------------|-------------------|
-| `item_id`        | fk → items        |
-| `catalog_ref_id` | fk → catalog_refs |
+| Column           | Type              | Notes       |
+|------------------|-------------------|-------------|
+| `item_id`        | fk → items        | PK, cascade |
+| `catalog_ref_id` | fk → catalog_refs | PK, cascade |
+
+A catalog reference is a shared row: two items with the same Krause number
+point at the same `catalog_refs` row.
 
 ## Notes on design choices
 

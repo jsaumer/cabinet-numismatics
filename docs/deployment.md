@@ -18,7 +18,8 @@ cp .env.example .env
 Edit `.env`:
 
 - `DB_PASSWORD`: a generated password, not the sample value.
-- `SECRET_KEY`: generate one; it encrypts stored price-source credentials:
+- `SECRET_KEY`: generate one; it encrypts the secrets saved in Settings
+  (price-source credentials, the alert webhook and heartbeat URLs):
 
   ```bash
   docker compose run --rm backend python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -27,6 +28,12 @@ Edit `.env`:
   If you skip it, a key is generated onto a private volume: workable, but you
   lose the stored API keys if that volume is ever recreated. See
   [security.md](security.md).
+- `PUID` / `PGID` (optional, not in `.env.example`): the user the backend
+  runs as and that owns its files, default `1000`:`1000`. Set them when the
+  data sits on bind mounts or NFS owned by another account.
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.24.7`. `--build` builds
+  locally whatever the tag; without `--build`, Compose pulls the published
+  image of that tag from GHCR instead.
 
 Then bring it up:
 
@@ -34,10 +41,13 @@ Then bring it up:
 docker compose up --build -d
 ```
 
-The backend creates the database schema itself before it starts serving.
-Check `curl http://localhost/api/health`: it reports database reachability,
-the running version, and `schema` (`status: "ok"` once migrations are
-applied). Settings → About shows the same.
+The app is at http://localhost/ and the API docs at
+http://localhost/api/docs. The backend creates the database schema itself
+before it starts serving. Check `curl http://localhost/api/health`: it
+reports database reachability, the running version, `schema` (`status: "ok"`
+once migrations are applied), and `documents` (`ok`, or `not_mounted` /
+`unwritable` when uploads would be refused). Settings → About shows the
+same.
 
 To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 `docker compose exec backend alembic upgrade head` after each deploy.
@@ -54,8 +64,8 @@ Data lives in five named Docker volumes:
 | `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
 | `document_data` | attached documents: receipts, certificates, invoices (`DOCUMENT_DIR`); private, served only through the API |
 
-If you'd rather keep data in a directory you manage (common when a host has a
-established layout, or a NAS mount), replace the volume entries with bind
+If you'd rather keep data in a directory you manage (common when a host has
+an established layout, or a NAS mount), replace the volume entries with bind
 mounts in a `docker-compose.override.yml`:
 
 ```yaml
@@ -64,7 +74,7 @@ services:
     volumes:
       - /srv/cabinet/photos:/data/photos
       - /srv/cabinet/state:/data/state
-            - /mnt/nas/cabinet-backups:/data/backups
+      - /mnt/nas/cabinet-backups:/data/backups
       - /srv/cabinet/documents:/data/documents
   proxy:
     volumes:
@@ -77,7 +87,9 @@ services:
 Keep the photo mount consistent between `backend` and `proxy`: the backend
 writes the files and nginx serves them. The backup mount must not sit inside
 the photo mount; the backend refuses to write archives where nginx would
-serve them.
+serve them. On first start the backend hands these directories to its
+unprivileged user (`PUID`:`PGID`); see section 6 if the log says it is
+"staying root".
 
 **Documents need their own mount** (from v0.19.0). The backend refuses
 document uploads unless `/data/documents` is a mounted volume (otherwise they
@@ -95,9 +107,11 @@ turns the check off, for local development only.
 
 ## 3. Reverse proxy, TLS, and authentication
 
-**Cabinet has no application-level login.** Do not expose it directly to the
-internet. Put it behind a reverse proxy that terminates TLS and handles
-authentication.
+**Cabinet has no application-level login**, by decision, and v1.0.0 will ship
+the same way: it is for a trusted network, or behind an authenticating
+reverse proxy. Application login is not planned for 1.0 (a possible later
+item). Do not expose it directly to the internet. Put it behind a reverse
+proxy that terminates TLS and handles authentication.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:
 
@@ -133,15 +147,21 @@ http:
           - url: "http://cabinet-proxy:80"
 ```
 
-Point `authentik@file` at your existing forward-auth middleware. Make sure the
-proxy's body-size limit is at least as generous as Cabinet's own (nginx allows
-25 MB) or photo uploads will fail at the edge.
+Point `authentik@file` at your existing forward-auth middleware, and make
+`cabinet-proxy` the name the proxy service has on the shared network. Make
+sure the edge proxy's body-size limit is at least as generous as Cabinet's
+own (nginx allows 25 MB, and 1 GB under `/api/imports` for OpenNumismat
+files) or uploads will fail at the edge; likewise its timeouts, since a
+backup download or a large import can take minutes before the first byte
+(Cabinet's nginx allows 30).
 
 ### Other proxies
 
 Any proxy works: Caddy with `basicauth`, nginx with `auth_request`, or a
 tunnel that requires identity. The requirements are: TLS, authentication, and
-a body-size limit that permits photo uploads.
+a body-size limit that permits photo uploads. HSTS belongs on that proxy too;
+Cabinet's nginx sets the other security headers itself
+([security.md](security.md)).
 
 ## 4. Scheduled backups
 
@@ -152,7 +172,7 @@ backup directory (`/data/backups`) on storage that isn't this host's disk
 writable; the last run's outcome stays visible there.
 
 To drive backups from the host instead, `scripts/backup.sh` captures the
-database and photos together:
+database, photos, and documents together:
 
 ```cron
 # 03:15 daily, keeping the last 30 days
@@ -194,17 +214,24 @@ docker compose build --pull && docker compose up -d
 - **Run one backend replica.** The price-refresh and backup schedulers run
   in-process; additional replicas would duplicate refreshes and backups.
 - **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices) and
-  `api.frankfurter.dev` (ECB exchange rates). Both are optional (they degrade
-  to cached values), but allow them if your firewall filters egress.
-- **No collection data is ever sent outward**; those two APIs receive only a
-  metal symbol or a currency pair.
+  `api.frankfurter.dev` (ECB exchange rates), plus `api.numista.com` and
+  `api.pcgs.com` once those sources have a key. All are optional (they
+  degrade to cached values), but allow them if your firewall filters egress.
+  Importing a photo from a URL fetches from whatever public host you name.
+- **The collection is never sent outward.** The first two APIs receive only a
+  metal symbol or a currency pair; Numista and PCGS receive the catalogue
+  number, PCGS number or cert number, and grade being looked up, nothing
+  else.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
-- **The backend runs unprivileged** (from v0.23.1). It re-owns its data
-  directories once on first start; on bind mounts or NFS, set `PUID`/`PGID`
-  to the account that should own the files. A warning in the log that it is
-  "staying root" means a directory couldn't be handed over (usually NFS
-  root squash); fix the ownership on the server.
+- **The backend runs unprivileged** (from v0.23.1), as `PUID`:`PGID`
+  (default `1000`:`1000`). Its entrypoint starts as root, re-owns any data
+  directory whose owner differs (once, not on every start), and drops to
+  that user. On bind mounts or NFS, set `PUID`/`PGID` to the account that
+  should own the files. A warning in the log that it is "staying root" means
+  a directory couldn't be handed over (usually NFS root squash); fix the
+  ownership on the server. `docker compose exec backend ...` still enters as
+  root.
 - **Alert webhooks and the heartbeat** are outbound requests to the URLs you
   save; allow them if egress is filtered.
 
@@ -228,9 +255,16 @@ What that file does differently from `docker-compose.yaml`, and why:
   so `TAG` must name a published release. Images are published to GHCR on
   every `v*` tag from **v0.10.2** on (nothing earlier exists), as public
   packages, so no node needs to log in to pull them.
-- **No `depends_on`, no `restart:`.** Swarm has neither. The backend waits
-  up to 60 seconds for Postgres before migrating, and its health check gives
-  a first boot 90 seconds; `restart_policy: any` replaces `restart`.
+- **No `depends_on`, no `restart:`, no `env_file`.** Swarm has none of the
+  first two, and the stack file passes the backend only the variables it
+  names: the database URL, the data paths, `SECRET_KEY` (left empty, the key
+  falls back to the one generated on the `backend_state` volume),
+  `REESTIMATE_DAYS`, `PUID`/`PGID`, and `TZ`. `AUTO_MIGRATE` and
+  `REQUIRE_DOCUMENT_MOUNT` are not among them; add a line to the backend's
+  `environment:` if you change either from its default. The backend waits up to 60 seconds for Postgres before migrating,
+  and its health check gives a first boot 90 seconds;
+  `restart_policy: any` replaces `restart`.
+- **Memory limits**: 1 GB each for the backend and db, 256 MB for the proxy.
 - **One replica each.** The refresh, backup, and alert schedulers run inside
   the backend process; a second replica would run them twice.
 - **Storage is named volumes so the file works as is.** On a real Swarm,

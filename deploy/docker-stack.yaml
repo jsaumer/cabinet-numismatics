@@ -25,7 +25,9 @@ services:
       - SECRET_KEY_FILE=/data/state/secret.key
       - BACKUP_DIR=/data/backups
       - DOCUMENT_DIR=/data/documents
-            - REESTIMATE_DAYS=${REESTIMATE_DAYS:-7}
+      # Empty means unset: the key is then generated on the state volume.
+      - SECRET_KEY=${SECRET_KEY:-}
+      - REESTIMATE_DAYS=${REESTIMATE_DAYS:-7}
       # The unprivileged user the backend drops to; match the owner of your
       # bind mounts or NFS paths.
       - PUID=${PUID:-1000}

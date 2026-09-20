@@ -15,12 +15,16 @@ or API keys required.
 
 **Status: v0.24.7, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Nothing is queued next: the roadmap is a list of candidates, pulled by
-what entering a real collection turns up rather than by a schedule. See the
-[roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
+1.0 will mean a stable HTTP API and nothing else: it ships without an
+application login, because Cabinet is meant for a trusted network or an
+authenticating reverse proxy. Nothing is queued next: the roadmap is a list
+of candidates, pulled by what entering a real collection turns up rather
+than by a schedule. See the [roadmap](docs/roadmap.md) and
+[changelog](CHANGELOG.md).
 
-> **Deploying it?** Cabinet has no built-in login by design: put it behind an
-> authenticating reverse proxy. See [docs/deployment.md](docs/deployment.md).
+> **Deploying it?** Cabinet has no built-in login by design, and none is
+> planned: keep it on a trusted network or put it behind an authenticating
+> reverse proxy. See [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
 
@@ -49,8 +53,9 @@ Dark is the default; the header toggle switches to light and remembers it.
   RD/RB/BN, EPQ…), CAC stickers, and details grades, shown the way the holder
   reads, e.g. `PR-69 DCAM ★`. Certification tracking (service + cert number)
   links to the grading service's verification.
-- **Provenance & location**: acquisition date, price and fees, source (dealer, show,
-  auction, inheritance), and storage location (album, slab box, safe).
+- **Provenance & location**: acquisition date, price and fees, source
+  (dealer, show, auction, inheritance), and storage location (album, slab
+  box, safe).
 - **Lifecycle**: `owned` / `sold` / `wishlist` status with sold date and
   realized price; sets/lots for pieces held or sold together; catalog
   references (Krause, Numista, Red Book…); free-form tags.
@@ -58,12 +63,26 @@ Dark is the default; the header toggle switches to light and remembers it.
   combined filters (type, status, country, year ranges, grade ranges,
   latest-value ranges, tag, set), sortable columns, clone-item, bulk edit,
   per-item edit history, and completeness checklists for target sets (e.g. a
-  date/mint run) with progress tracking.
+  date/mint run), written by hand or generated, with progress tracking.
 - List filters and paging persist in the URL, so back-navigation keeps your
   place.
 - **Fill from Numista**: enter a Numista number or search by name, and the
   item form fills in country, denomination, composition, fineness, weight,
   dimensions, catalogue references, and the issue's year, mint, and mintage.
+  Needs a free Numista API key in Settings.
+- **Fill from a PCGS cert number**: a slabbed coin's type, date, mint,
+  denomination, grade, designations, variety, and PCGS number come from the
+  cert lookup (needs a free PCGS API token). Only empty fields are filled.
+- **Duplicate warning** while entering anything already here: by cert,
+  catalogue reference, or country, denomination, year, and mint. The trash
+  is checked too, and the importer notes lookalikes in its preview.
+- **Add a run**: pick a type on Numista, tick the dates and mints you have,
+  and get one item each, with the shared fields typed once. Issues you
+  already own are marked and skipped.
+- **Generated checklists**: slots come from a Numista type's issues or a
+  year and mint range, and fill themselves from the owned items that match,
+  with a completion percentage and a "needed to complete" list. A slot can
+  still be ticked by hand.
 
 ### Photos
 - Multiple photos per item with angle designation (obverse/reverse/edge/
@@ -86,9 +105,10 @@ Dark is the default; the header toggle switches to light and remembers it.
 - **Pluggable price sources**: melt value (spot price × weight × fineness ×
   quantity, keyless), Numista (coins and notes, priced by catalog ref +
   grade), and PCGS (US coins, by cert number or catalog ref + grade,
-  preferring realized auction prices over the price guide). One-click and
-  scheduled refresh for all three, with Numista and PCGS off by default and
-    Numista's cadence (7/14/30 days) shown against its 2,000/month quota.
+  preferring auction prices realized in the last five years over the price
+  guide). One-click and scheduled refresh for all three, with Numista and
+  PCGS off by default, Numista's cadence (7/14/30 days) shown against its
+  2,000/month quota, and PCGS weekly within its 100 calls a day.
 - **Sold comparables**: log what pieces like yours actually sold for (eBay
   sold listings, auction archives, dealer sales) and get a comps estimate:
   the median of recent sales in your currency, with confidence from how many
@@ -111,9 +131,10 @@ Dark is the default; the header toggle switches to light and remembers it.
   disagree, and how estimates held up against actual sale prices.
 
 ### Insights & reporting
-- Dashboard (the home page): hero collection value, cost basis, unrealized and realized
-  gain/loss, breakdowns by country/decade/grade/tag, acquisitions by year,
-  and top-movers tables.
+- Dashboard (the home page): collection value, cost basis, unrealized and
+  realized gain/loss, breakdowns by country/decade/grade/tag, acquisitions
+  by year, top-movers tables, and a setup checklist that says what is still
+  off (scheduled backups, the alert webhook, a price-source key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
 - Deleting is recoverable: items go to a trash with their photos, documents,
@@ -127,45 +148,50 @@ Dark is the default; the header toggle switches to light and remembers it.
   exported to PDF via the browser's print dialog.
 
 ### Platform
-- Three-container Compose stack; responsive UI for phone/tablet; full
-  **dark mode** with a header toggle; auto-generated OpenAPI docs.
+- Three-container Compose stack, also published as versioned images on GHCR
+  with a [Swarm stack file](deploy/docker-stack.yaml); auto-generated
+  OpenAPI docs. The backend applies its own migrations on startup.
+- Responsive UI for phone/tablet, **dark by default** with a light theme on
+  the header toggle. System fonts and inline SVG icons only: the page loads
+  nothing from outside the app.
 - **Backups from the app**: download the collection as one checksummed
-  `.zip` (database + photos + manifest) from Settings, or schedule daily or
+  `.zip` (database + photos + documents + manifest) from Settings, or schedule daily or
   weekly archives with retention into a directory you can point at a NAS.
   `scripts/restore.sh` restores them, and CI rehearses that restore on every
   push (see [docs/backup-restore.md](docs/backup-restore.md)).
 - **Configurable pricing**: a Settings page for display currency, the
   blended-value strategy, per-source refresh cadence, and price-source
   credentials, stored **encrypted at rest** and never readable back
-    through the API (see [docs/security.md](docs/security.md)).
-- **Add a run**: pick a type on Numista, tick the dates and mints you have,
-  and get one item each. **Checklists generate themselves** from a type or
-  a date range and fill from what you own, with a completion percentage.
-- Fill a slabbed coin in from its **PCGS cert number**, and a **duplicate
-  warning** while entering anything already here: by cert, reference, or
-  country, denomination, year, and mint.
+  through the API (see [docs/security.md](docs/security.md)).
 - **Alerts and metrics**: a webhook (n8n, ntfy, Discord, Slack, Gotify) when
   a backup fails, a price source rejects its key or runs out of quota, or a
-  refresh fails, and when it recovers; an Uptime Kuma heartbeat; and
-  Prometheus metrics. See [docs/monitoring.md](docs/monitoring.md).
+  refresh fails, and when it recovers; an Uptime Kuma heartbeat;
+  Prometheus metrics; and a recipe for a [Homepage](https://gethomepage.dev)
+  tile. See [docs/monitoring.md](docs/monitoring.md).
+- **Hardened by default**: the backend container drops to an unprivileged
+  user (`PUID`/`PGID`), the image installs a hash-pinned lockfile, nginx
+  sets a Content-Security-Policy and the usual security headers, and a
+  security workflow runs pip-audit, npm audit, and Trivy image scans on
+  every change and weekly.
 
 ## Architecture
 
 | Service    | Image             | Purpose                                    |
 |------------|-------------------|--------------------------------------------|
 | `proxy`    | nginx (built)     | Entry point; serves the UI (built into the image) and photos, proxies `/api/` |
-| `backend`  | FastAPI (built)   | REST API + in-process background tasks (thumbnails, scheduled melt refresh) |
+| `backend`  | FastAPI (built)   | REST API + in-process background tasks (thumbnails, scheduled price refreshes and backups, trash clear-out, alerts and heartbeat) |
 | `db`       | postgres          | Relational store; schema managed by Alembic migrations |
 
 Backend: Python / FastAPI / SQLAlchemy 2 / Alembic / Pillow. Frontend:
 React + Vite + TypeScript, hand-rolled SVG charts (no chart library). Photos
-are plain files on a shared volume: the backend writes, nginx serves. See
-[docs/architecture.md](docs/architecture.md) for detail.
+are plain files on a shared volume: the backend writes, nginx serves.
+Documents sit on a private volume of their own and are served only by the
+API. See [docs/architecture.md](docs/architecture.md) for detail.
 
 ## Quick start
 
 ```bash
-git clone <your-repo-url> cabinet-numismatics
+git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # then edit secrets in .env
 docker compose up --build
@@ -176,6 +202,8 @@ proxy image. Once running: the app is at http://localhost/, API docs at
 http://localhost/api/docs. The backend creates and updates the database schema
 itself on startup. After pulling a new version, run `docker compose up --build`
 again; Settings → About shows the version and whether the schema is current.
+To run the published images instead of building, see
+[docs/deployment.md](docs/deployment.md).
 
 **Want something to look at first?** Load a small demo collection (13 items
 across several countries, decades, and grades, with value history):
@@ -200,19 +228,25 @@ from `.env.example`).
 | `REESTIMATE_DAYS` | Optional: default melt re-estimation window in days (Settings overrides it; `0` disables the scheduler) |
 | `AUTO_MIGRATE`    | Optional, default `true`: apply database migrations when the backend starts. Set `false` to run `alembic upgrade head` yourself |
 | `BACKUP_DIR`      | Set by `docker-compose.yaml` to `/data/backups` (the `backup_data` volume): where scheduled and on-demand backups are written |
-| `SECRET_KEY`      | Recommended: Fernet key encrypting stored price-source API credentials. Auto-generated onto a private volume if unset. Comma-separated to rotate. See [docs/security.md](docs/security.md) |
+| `SECRET_KEY`      | Recommended: Fernet key encrypting stored secrets (price-source credentials, the alert webhook and heartbeat URLs). Auto-generated onto a private volume if unset. Comma-separated to rotate. See [docs/security.md](docs/security.md) |
+| `DOCUMENT_DIR`    | Set by `docker-compose.yaml` to `/data/documents` (the `document_data` volume): where attached documents are stored |
+| `REQUIRE_DOCUMENT_MOUNT` | Optional, default `true`: refuse document uploads unless `DOCUMENT_DIR` is a mounted volume. `false` for local development |
+| `PUID` / `PGID`   | Optional, default `1000`:`1000`: the unprivileged user the backend runs as, and that owns its files |
+| `IMPORT_DIR`      | Optional: where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and
-frankfurter.dev for daily ECB exchange rates. No collection data ever leaves
-the machine.
+frankfurter.dev for daily ECB exchange rates. Numista and PCGS are optional
+and contacted only once you save a key and switch them on. No collection
+data ever leaves the machine: a lookup sends a catalogue or cert number,
+nothing else.
 
 ## Backup & restore
 
 Settings → Backups downloads an archive or schedules them. From the host:
 
 ```bash
-./scripts/backup.sh                     # → backups/<timestamp>/{db.dump, photos.tar.gz}
+./scripts/backup.sh                     # → backups/<timestamp>/{db.dump, photos.tar.gz, documents.tar.gz}
 ./scripts/restore.sh backups/<timestamp>
 ./scripts/restore.sh cabinet-backup-20260914-031500.zip   # an in-app archive
 ```
@@ -232,6 +266,9 @@ Run from Git Bash on Windows. Copy backups off the machine. See
 - [Monitoring](docs/monitoring.md): alert webhooks, the heartbeat, and Prometheus metrics
 - [Security](docs/security.md): secrets at rest, key management, exposure guidance
 - [Roadmap](docs/roadmap.md): full feature list, what's done, what remains
+- [Implementation notes](docs/implementation-notes.md): what each release added and the rules it left behind
+- [Backend](backend/README.md) and [frontend](frontend/README.md): layout and commands for each half
+- [Screenshots](docs/screenshots/README.md): how the images above are retaken
 - [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
 - [Developing with Claude Code](docs/claude-code.md): how the project is built from Phase 0 on
 
@@ -243,11 +280,16 @@ Run from Git Bash on Windows. Copy backups off the machine. See
   (no database needed), `ruff check .` / `ruff format .`, and
   `alembic upgrade head` with `DATABASE_URL` set.
 - **Frontend:** in `frontend/`, `npm run dev` proxies `/api` to
-  localhost:8000.
+  localhost:8000; `npm run build` typechecks and builds; `npm run e2e` runs
+  the Playwright smoke tests against a running stack. See
+  [frontend/README.md](frontend/README.md).
 
-CI runs ruff, the backend test suite on Python 3.10 and 3.12, a frontend
-typecheck, and a full compose build with migrations and an API smoke test on
-every pull request.
+CI runs ruff and the backend test suite on Python 3.10 and 3.14, a frontend
+typecheck and build, and a full compose stack job on every push and pull
+request: the schema migrating itself, an API smoke test, a backup → restore
+drill, and Playwright tests of the pages. A `v*` tag also publishes both
+images to GHCR. A separate security workflow audits dependencies and scans
+both images.
 
 From Phase 0 onward the project is built with Claude Code, which reads the
 repo-root `CLAUDE.md` for persistent context. See

@@ -228,8 +228,9 @@ The frontend API client is `src/api/` (`types/*` by area, `client.ts`,
 `latestBySource`); the item form is `pages/ItemForm.tsx` plus
 `pages/item-form/model.ts` (form state, `toPayload`, `fromItem`, the
 designation/problem lists) and `pages/item-form/NumistaFill.tsx`.
-`components/setup.tsx` is the dashboard's setup checklist, hidden for 30
-days through `localStorage` and back on any new problem. Playwright smoke
+`components/setup.tsx` is the dashboard's setup checklist; "Don't show this
+again" dismisses it for good in that browser (`localStorage`
+`cabinet.setup.dismissed`; from v0.22.0, replacing a 30-day snooze). Playwright smoke
 tests in `frontend/e2e/` run in CI's stack job against the compose stack;
 `deploy/docker-stack.yaml` is the Swarm stack file.
 

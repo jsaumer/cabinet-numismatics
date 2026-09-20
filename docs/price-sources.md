@@ -6,10 +6,17 @@ document describes how the app produces estimates and the caveats involved.
 
 ## Approach
 
-The backend produces estimates keyed by an item's catalog reference and grade.
-Results are appended to the `price_estimates` table with a timestamp and a
-confidence score, so value history is retained over time. Recent lookups can be
-cached in a small database table to avoid repeated upstream requests.
+The backend has four automatic sources (`melt`, `numista`, `pcgs`, `comps`)
+and manual entry. Each automatic source is an adapter chosen with
+`POST /api/items/{id}/estimate?source=`; it reads the item (catalog
+reference, grade, cert number, composition, or sales log, depending on the
+source) and returns one estimate. Results are appended to the
+`price_estimates` table with a timestamp and a confidence score, so value
+history is retained over time. Upstream responses are cached in the
+`source_cache` table (spot prices in `spot_prices`), so a repeat lookup
+spends no request and a stale copy covers for a failed one. No source is
+ever sent collection data: a lookup carries a catalogue or cert number and a
+grade, nothing else.
 
 Each estimate records:
 - `source`: where the number came from
@@ -27,10 +34,11 @@ Each estimate records:
   - **numista**: type and matched issue (id, year, mint letter), the grade
     bucket wanted and the one actually priced, and the full per-grade price
     list.
-  - **pcgs**: lookup (cert, or PCGS number + grade), basis (`apr` or
-    `guide`), the auction lots behind the median (date, price, auctioneer,
-        sale, lot URL), the median, the price-guide value (recorded even when
-    sales won), and the CoinFacts link.
+  - **pcgs**: lookup (cert, or PCGS number + grade), basis (`apr`, `guide`,
+    or `apr_old`), the auction lots behind the median (date, price, auctioneer,
+    sale, lot URL), older or undated lots that were recorded but not
+    counted (`older_lots`), the median, the price-guide value (recorded even
+    when sales won), and the CoinFacts link.
   - **comps**: the median and its currency, the sales used (date, venue,
     grade, price as recorded and converted, link, manual or Numista), the
     spread, the grade bucket they were matched on, and whether sales older
@@ -39,11 +47,12 @@ Each estimate records:
   The item page shows this under each value-history row. Rows recorded before
   it existed have no details.
 
-## Candidate sources
+## Sources
 
-The following are options; which to enable depends on their current terms of
-service and API availability. **Always review each source's ToS before
-automating access: some prohibit scraping or require an API agreement.**
+Melt, Numista, PCGS, and comps are implemented; the rest of this section
+records what was researched and why it isn't. **Always review a source's ToS
+before automating access: some prohibit scraping or require an API
+agreement.**
 
 ### Melt value (implemented, the first automatic source)
 For precious-metal items, `weight × fineness × spot price × quantity` gives a
@@ -93,8 +102,9 @@ Requirements and limits:
   apart from identifiers (§8.2), catalogue metadata for seven days (§8.3),
   and an individual's personal project (§8.4); §8.4 is what covers a
   self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
-  does not cover publishing the data or running a public service. A stale entry is used when the upstream fails. An item
-  missing its prerequisites (no ref, no grade) costs no request at all.
+  does not cover publishing the data or running a public service. A stale
+  entry is used when the upstream fails. An item missing its prerequisites
+  (no ref, no grade) costs no request at all.
 - Confidence is medium by design: these are collector estimates, not realized
   auction prices. Melt remains the higher-confidence floor for bullion.
 - **Scheduled refresh** (off by default): a cadence of every 7, 14, or 30
@@ -139,7 +149,14 @@ The same cert response fills an item in (`GET /api/pcgs/cert/{cert}`,
 `pcgs.cert_facts`): identity, physical fields, the grade parsed from PCGS's
 `Grade`/`Designation` strings (`pcgs.parse_grade`: `MS64+`, `PR-65 DCAM`,
 `AU58` + `FB`), and the PCGS number as a `pcgs` reference; denominations
-are translated from label form (`25C` → `25 cents`).
+are translated from label form (`25C` → `25 cents`). Two answers are
+brought into line with hand entry, because filters, checklists, and the
+duplicate check match text as written: the country is written "United
+States" however PCGS spells it, and PCGS's "P" mint mark is kept only where
+the coin carries it (wartime nickels, the 1979 dollar, everything but the
+cent from 1980, and the 2017 cent). The fill also reports the population and
+the guide value, and costs nothing extra when an estimate follows: both read
+the same cached response.
 
 Realized auction prices win when PCGS has recent ones: the median of up to the
 ten most recent lots from the last five years, at confidence 0.85 with five or
@@ -149,8 +166,10 @@ in the estimate's details (`older_lots`) but not counted: the first real cert
 looked up returned a single 2003 sale at $43,700 against a $160,000 guide
 value. With no recent sales, the price-guide value is used at confidence 0.60;
 with no guide value either, the median of the old lots at 0.35
-(`pcgs:apr-old`). The live API dates a lot by month (`07-2003`). The estimate's `source` says which
-(`pcgs:apr cert 12345678`, `pcgs:guide #5960 MS-65`). Values are USD.
+(`pcgs:apr-old`). The live API dates a lot by month (`07-2003`), read as
+the first of that month. The estimate's `source` says which
+(`pcgs:apr cert 12345678`, `pcgs:guide #5960 MS-65`). Values are USD, per
+piece, multiplied by the item's quantity.
 
 **Coins only.** PCGS Banknote has its own endpoints, but their responses carry
 no price fields, so there is nothing for notes to read.
@@ -165,8 +184,10 @@ Requirements and limits:
   quota headers, and no reset time.
 - PCGS signals failure in the body, not the status: `IsValidRequest: false`
   means the request values were malformed, and `"No data found"` means no such
-  coin. Both surface as 422 with the reason. A 500 usually means the token has
-  expired, which surfaces as 502 saying so.
+  coin. Both surface as 422 with the reason. A 401, or a 500 (which usually
+  means the token has expired), surfaces as 502 saying so and raises the
+  PCGS token alert; a 429 raises the quota alert
+  (see [monitoring.md](monitoring.md)).
 - **Scheduled refresh** (off by default): a simple weekly on/off toggle in
   Settings, no cadence choice needed. One call per estimate: with more
   than about 100 priceable items a refresh reaches the default daily limit,
@@ -182,12 +203,21 @@ estimate parsed out of it, without writing anything to `price_estimates`.
 ```bash
 docker compose exec backend python scripts/check_sources.py --list
 docker compose exec backend python scripts/check_sources.py -s numista -i <item-id> --fresh
+docker compose exec backend python scripts/check_sources.py -s pcgs -i <cert-number>
+docker compose exec backend python scripts/check_sources.py -s numista-sales -i <item-id>
 ```
 
-`--list` shows which items carry a handle a source could use. `--fresh`
-ignores the cache TTL to force a real request (and so spends quota); without
-it a cached response is reused and the run is free. `--full` prints untrimmed
-payloads. Credentials come from Settings and are never printed.
+`--list` shows which items carry a handle a source could use (a `numista` or
+`pcgs` reference, or a PCGS cert). `-s` takes `melt`, `numista`, `pcgs`,
+`comps`, or `numista-sales`, which fetches the item's Numista auction sales
+without adding them to its sales log (billed per uncached request on the
+paid plan). `-i` takes an item id or, failing that, the cert number of an
+item already in the collection. `--fresh` ignores the cache TTL to force a
+real request (and so spends quota); without it a cached response is reused,
+shown as such, and the run is free. `--full` prints untrimmed payloads.
+Credentials come from Settings and are never printed. A lookup that reaches
+the upstream still updates `source_cache` and the source's key and quota
+alerts, as any lookup does.
 
 ### Sold-listing comparables (implemented, v0.17.0)
 Sold prices are the closest thing to real market value, and almost nobody
@@ -270,10 +300,15 @@ A simple, transparent heuristic works better than false precision:
 
 ## Implementation notes
 
-- Keep each source behind a small adapter interface (`fetch(catalog_ref,
-  grade) -> list[comparable]`) so sources can be added or disabled
-  independently.
-- Rate-limit and cache upstream calls; respect each source's limits.
+- Each source is one adapter, `(db, item) -> EstimateResult`, registered in
+  `pricing.get_adapter` (names in `pricing.ADAPTER_NAMES`) and raising
+  `NotApplicable` (422) or `SourceUnavailable` (502), so sources can be added
+  or disabled independently.
+- Cache upstream calls through `pricing.cached_fetch` and respect each
+  source's limits: a fresh entry spends no request, and a stale one beats a
+  failed fetch. `KeyRejected` and `QuotaExhausted` (kinds of
+  `SourceUnavailable`) raise alerts and stop a scheduled refresh at the
+  first one.
 - Store raw comparables (or a summary) alongside the estimate where possible so
   a value can be explained, not just asserted (done as `details`, above).
   Adapters build it as JSON-safe values (floats, strings, ISO dates; never
