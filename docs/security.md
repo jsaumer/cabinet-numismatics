@@ -128,9 +128,19 @@ Do not port-forward the stack to the internet as-is.
 here so it is reviewed before it is coded; it will be revised by that item's
 research and replaced by a description of what ships.
 
+Decided on 20 September 2026: the first cut is **one admin and nothing
+else**, onboarded when the app is initialised; the setup page asks for a
+**one-time setup code the backend prints in its log** (or takes from an
+environment variable), so an open instance can't be claimed by whoever gets
+there first; login is **always on**, with no switch to turn it off; and
+**scoped API tokens ship with that first cut**. Single sign-on for that
+admin is the second part. **More accounts (the editor and viewer roles and
+user maintenance) are optional**, off the planned path: the table below
+keeps their columns so the design is ready if they are ever wanted.
+
 Accounts are logins to **one shared collection**, not separate collections.
-The first-run setup page creates the first admin, and works only while no
-account exists. Three roles:
+The setup page works only while no account exists. Three roles, of which
+only the admin is planned; editor and viewer are the optional part:
 
 - **Admin**: everything, including users, settings, secrets, backups, and
   restore. The superuser created at setup is an admin.
@@ -181,16 +191,25 @@ Rules that go with the table:
 - Photos need the same check as the API. nginx serves them directly today,
   so that becomes an `auth_request` to the backend, or signed, expiring
   photo URLs.
-- Single sign-on (OpenID Connect) maps a provider's groups to roles: an
-  admin group, an editor group, and viewer for anyone else allowed in; a
-  trusted-header mode does the same for a forward-auth proxy. Local accounts
-  stay available so a provider outage can't lock the admin out.
+- Single sign-on (OpenID Connect) signs in as the admin through an identity
+  linked to that account; a trusted-header mode does the same for a
+  forward-auth proxy. The local password stays so a provider outage can't
+  lock the admin out. Only if more accounts are ever built would it create
+  accounts and map a provider's groups to roles (an admin group, an editor
+  group, and viewer for anyone else allowed in).
 - Every sign-in, failed sign-in, role change, token, share link, backup
   download, and restore is written to an audit log the admin can read.
-- Open questions for the research: whether a deployment that sits behind its
-  own proxy can switch login off, and what the first start after upgrading
-  an open install does (the proposal: everything stays reachable only until
-  the setup page has created the admin, and the log says so loudly).
+- The whole API is denied by default behind one gate, with a short
+  allow-list (sign-in, setup, and a health check that tells an anonymous
+  caller only "ok" or not); a test fails if any other route answers without
+  a login. `/api/docs` sits behind the login.
+- A forgotten admin password is reset with a command inside the backend
+  container: shell access to the deployment is the proof of ownership.
+- On the first start after upgrading an open install, nothing is served but
+  the setup page until the admin exists, and the log says so.
+- Behind a TLS-terminating proxy the backend has to trust the forwarded
+  scheme and client address (for the Secure cookie and for throttling by
+  address); which proxies it trusts is a deployment setting.
 
 
 ## Input handling

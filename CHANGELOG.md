@@ -22,8 +22,10 @@ applies them itself on startup; for earlier releases, run
   phone app are optional. This reverses the earlier decision to ship v1.0.0
   without login, and every document that stated it now says login is
   planned and not built yet. `docs/security.md` carries the proposed
-  permission table (admin, editor, viewer, API tokens, share links) so it
-  can be reviewed before any of it is coded.
+  permission table (admin, editor, viewer, API tokens, share links) and the
+  decisions taken so far (one admin first, a setup code from the log,
+  always on, scoped tokens from the start, more accounts optional) so it can be reviewed before any
+  of it is coded.
 
 ## [0.24.9] - 2026-09-20
 

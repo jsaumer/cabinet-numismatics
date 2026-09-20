@@ -835,27 +835,43 @@ are illustrative.
   at purchase (from the spot price on the acquisition date where known),
   cost per ounce, break-even spot, and a spot-price threshold alert through
   the webhook. Every stack tracker has these; this is the parked stack view.
-- **P8: Authentication** (L, in two parts).
-  - **A1: Local accounts.** A first-run setup page that creates the
-    superuser; sign-in with a session cookie (HttpOnly, SameSite, behind a
-    CSRF check); passwords hashed with Argon2; sign-in rate limiting; user
-    maintenance by the superuser (add, disable, reset a password, roles:
-    admin, editor, read-only); personal API tokens so the Homepage tile,
-    Prometheus, and scripts keep working; and photos protected too, which
-    today nginx serves without asking the API (an `auth_request`, or signed
-    photo URLs). Still one shared collection: accounts are logins, not
-    separate collections.
-  - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
-    Keycloak, Authelia, Google), with accounts created on first sign-in or
-    matched by email, and a trusted-header mode for a forward-auth proxy
-    that already authenticates. Planned from the start so A1's user table
-    and sessions carry an external identity; built second.
+- **P8: Authentication** (L, in two parts, with more accounts optional;
+  decisions of 20 September 2026 marked ◆).
+  - **A1: One admin.** ◆ Single user to start: just the admin, onboarded
+    when the app is initialised. A setup page appears while no account
+    exists and asks for ◆ a one-time **setup code the backend prints in its
+    log** at startup (or takes from an environment variable), so nobody
+    else can claim an open instance first. ◆ Login is **always on**: there
+    is no switch to turn it off. Sign-in with a database-backed session
+    cookie (HttpOnly, Secure over HTTPS, SameSite) and an origin check on
+    anything that changes data; the password hashed with Argon2id; sign-in
+    throttled per account and per address; an Account section in Settings
+    (change password, see and end sessions); a command in the container to
+    reset a forgotten password. The whole API is **denied by default**
+    behind one gate with a short allow-list (sign-in, setup, a health check
+    trimmed to "ok" for anonymous callers), and a test fails if any other
+    route answers without a login. Photos get the same check through
+    nginx's `auth_request`; `/api/docs` goes behind the login. ◆ **API
+    tokens with scopes** (`read`, `write`, `metrics`) ship in this first
+    cut, created in Settings, shown once, stored hashed, so the Homepage
+    tile, Prometheus, the seed script, and CI keep working. One migration:
+    users (with a role and an external identity from the start), sessions,
+    tokens, and an audit log.
+    - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
+    Keycloak, Authelia, Google), signing in as the admin through an identity
+    linked to that account, and a trusted-header mode for a forward-auth
+    proxy that already authenticates. Planned from the start so A1's user
+    table and sessions carry an external identity; built second. The local
+    admin password stays, so a provider outage can't lock anyone out.
+  - ◆ **More accounts are optional** (see the optional list below), not
+    part of this item: Cabinet stays single-user unless that is wanted.
   - Authentication changes every endpoint, so it must land **before
     v1.0.0** declares the API stable (adding it afterwards would be the
-    breaking change 1.0 promises not to make). In-app restore (P2)
-    becomes admin-only when it ships. To settle during its research: whether
-    login can be switched off for a deployment that sits behind its own
-    proxy, and how an upgrade from an open install behaves on first start.
+    breaking change 1.0 promises not to make). ◆ It stays at P8 in
+    the order, after the numismatic items; in-app restore (P2) is open like
+    the rest of the app until then, and admin-only afterwards. On the first
+    start after upgrading an open install, nothing is served but the setup
+    page until the admin exists.
   - **The proposed permission table** (admin, editor, viewer, API tokens,
     and share links, action by action, with the rules around it) is in
     [security.md](security.md#planned-accounts-and-permissions), so it is
@@ -872,6 +888,13 @@ Optional, after the above and only if still wanted:
   back to the item.
 - **Phone app**: an installable web app (PWA) with quick-add from the
   camera; slab barcode scanning into the cert fill would ride on it.
+- **More accounts**: user maintenance by the admin (add, disable, reset a
+  password) and the editor and viewer roles, per the permission table in
+  [security.md](security.md#planned-accounts-and-permissions), with single
+  sign-on then creating accounts and mapping a provider's groups to roles.
+  Moved here from P8 by the owner on 20 September 2026. Still one shared
+  collection: accounts would be logins, not separate collections.
+
 
 Surveyed and not planned, with the reason: identifying a coin from a photo
 (a hosted model or a paid API, and the ANA's review disputes CoinSnap's
