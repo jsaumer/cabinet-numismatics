@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics — Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.22.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.23.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images** — treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -84,7 +84,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.22.0: roadmap Phases 0–5.8 are complete, migrations
+Released as v0.23.0: roadmap Phases 0–5.8 are complete, migrations
 `0001`–`0017`. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md — read the section for any area you touch. The
 rules that bite most often:
@@ -114,7 +114,7 @@ rules that bite most often:
 Cert-first entry shipped in v0.22.0 (`pcgs.cert_facts` / `parse_grade`,
 `services/duplicates.py` behind `GET /api/items/similar` and the importer's
 lookalike note, `components/lookup.tsx`; no migration).
-Runs and registry sets are built for v0.23.0 (`services/checklists.py`,
+Runs and registry sets shipped in v0.23.0 (`services/checklists.py`,
 `POST /api/items/run`, `POST /api/checklists/generate`, migration `0017`;
 slot matches are computed on read, never stored).
 **Next: nothing is queued.** The
