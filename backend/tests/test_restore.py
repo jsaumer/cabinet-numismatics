@@ -717,3 +717,25 @@ def test_recover_before_the_database_step_clears_up(client):
     assert not journal.exists()
     last = restore.last_outcome()
     assert last["ok"] is False and last["error"].endswith("Nothing was changed.")
+
+
+def test_a_folder_the_backend_cannot_move_stops_the_restore_before_the_database(
+    tmp_path, monkeypatch
+):
+    # Found on the first NFS restore: photos uploaded as root before v0.23.1
+    # sat in folders the unprivileged backend couldn't move, and the swap
+    # failed after the database had been replaced.
+    photos = tmp_path / "photos"
+    (photos / "old-item").mkdir(parents=True)
+    (photos / "fine-item").mkdir()
+    monkeypatch.setattr(restore, "_file_targets", lambda: (("photos.tar.gz", "photos", photos),))
+    real = restore.os.access
+    monkeypatch.setattr(
+        restore.os, "access", lambda p, mode: Path(p).name != "old-item" and real(p, mode)
+    )
+
+    with pytest.raises(restore.RestoreError) as err:
+        restore.check_movable({"members": {"db.dump": {}, "photos.tar.gz": {}}})
+    assert "old-item" in str(err.value) and "1 folder(s)" in str(err.value)
+
+    restore.check_movable({"members": {"db.dump": {}}})  # data-only: files aren't touched

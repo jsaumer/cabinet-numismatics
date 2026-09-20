@@ -487,7 +487,22 @@ docs/backup-restore.md. What a change here has to respect:
 - nginx: `location /api/restore` (20g, `proxy_request_buffering off`, 60m)
   sits before `location /api/`; `RESTORE_MAX_GB` above 20 needs it raised.
 
+## v0.26.1
+
+The first real NFS restore failed in the swap: renaming a DIRECTORY into
+another parent needs write permission on the directory itself, and item
+folders made before v0.23.1 were root-owned inside a volume whose top level
+already belonged to `PUID` (so the entrypoint's owner check never recursed).
+`restore.check_movable` now walks the target folders at inspect and again at
+the start of a run, before the safety backup and the database; the
+entrypoint also chowns first-level entries not owned by `PUID` (one `find
+-maxdepth 1`, still never a walk of the whole volume on every start). Local
+gotcha met while proving it: rebuilding only the backend leaves nginx
+holding the old container's address (502 until the proxy restarts); a Swarm
+service VIP doesn't have that problem.
+
 ## Releases
+
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
