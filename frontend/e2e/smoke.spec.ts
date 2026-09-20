@@ -29,14 +29,14 @@ test("add an item and see it on its page", async ({ page }) => {
   await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
   itemUrl = new URL(page.url()).pathname;
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(TITLE);
-  await expect(page.getByText("12.50 USD")).toBeVisible();
+  await expect(page.getByText("$12.50")).toBeVisible();
 });
 
 test("record a value by hand", async ({ page }) => {
   await page.goto(itemUrl);
   await page.getByLabel("Value", { exact: true }).fill("20");
   await page.getByRole("button", { name: "Record value" }).click();
-  await expect(page.getByRole("cell", { name: "20.00 USD" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
 });
 
 test("entering it again warns about the duplicate", async ({ page }) => {

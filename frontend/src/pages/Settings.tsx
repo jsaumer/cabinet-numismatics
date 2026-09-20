@@ -10,6 +10,7 @@ import {
   ValueStrategy,
 } from "../api";
 import { AlertsCard } from "../components/alerts";
+import { LockIcon } from "../components/icons";
 
 function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -23,10 +24,10 @@ function formatBytes(bytes: number): string {
 }
 
 function schemaLabel({ current, expected, status }: Health["schema"]): string {
-  if (status === "ok") return `${current} — up to date`;
-  if (status === "pending") return `${current ?? "empty"} — migration pending (expects ${expected})`;
-  if (status === "ahead") return `${current} — newer than this build (expects ${expected})`;
-  return "unknown — database unreachable";
+  if (status === "ok") return `${current} (up to date)`;
+  if (status === "pending") return `${current ?? "empty"} (migration pending, expects ${expected})`;
+  if (status === "ahead") return `${current} (newer than this build, which expects ${expected})`;
+  return "unknown (database unreachable)";
 }
 
 // Sources with nothing to configure beyond on/off.
@@ -35,10 +36,10 @@ const KEYLESS = new Set(["melt", "comps"]);
 const DOCUMENT_STORAGE: Record<string, string> = {
   ok: "ready",
   not_mounted:
-    "not a mounted volume — uploads are refused so documents can't be lost with the container " +
+    "not a mounted volume, so uploads are refused and documents can't be lost with the container " +
     "(see docs/deployment.md)",
-  unwritable: "not writable — uploads are refused",
-  inside_photos: "inside the public photo folder — uploads are refused",
+  unwritable: "not writable, so uploads are refused",
+  inside_photos: "inside the public photo folder, so uploads are refused",
 };
 
 export default function Settings() {
@@ -219,7 +220,7 @@ export default function Settings() {
                 return (
                   <p className={overBudget ? "error" : "muted"} style={{ margin: 0 }}>
                     ~{monthlyCalls} Numista calls/month at this cadence across{" "}
-                    {settings.numista_priceable_items} priceable item(s) — 2 calls per estimate,
+                    {settings.numista_priceable_items} priceable item(s): 2 calls per estimate,
                     free-tier cap is 2,000/month.
                     {overBudget && " This exceeds the free tier; expect 429s before the month is out."}
                   </p>
@@ -248,14 +249,14 @@ export default function Settings() {
               Adds a <i>Fetch Numista auction sales</i> button to each item's sales log, which
               copies the auction results Numista has recorded for that year and mint (house,
               date, lot link, grade, price) into the log for the comps estimate.{" "}
-              <b>This needs Numista's paid API plan</b> — at the time of writing a one-time
+              <b>This needs Numista's paid API plan</b>: at the time of writing a one-time
               €100 activation fee, then at least €100 a month (€0.01 a request, before VAT). A
               free key gets <code>Permission denied</code>, and the button says so. Leave this
               off unless you have that plan.
             </p>
             <p className="muted" style={{ margin: "0.3rem 0 0" }}>
-              Each fetch is one request, made only when you click — never on the refresh
-              schedule — and repeating it the same day is free (cached for a day).
+              Each fetch is one request, made only when you click, never on the refresh
+              schedule, and repeating it the same day is free (cached for a day).
             </p>
           </div>
         )}
@@ -276,7 +277,7 @@ export default function Settings() {
               Auto-refresh weekly
             </label>
             <p className="muted" style={{ margin: 0 }}>
-              {settings.pcgs_priceable_items} priceable item(s) — comfortably within the 1,000
+              {settings.pcgs_priceable_items} priceable item(s), comfortably within the 1,000
               calls/day quota at any realistic collection size.
             </p>
           </div>
@@ -376,7 +377,7 @@ export default function Settings() {
         <p className="muted" style={{ marginBottom: 0 }}>
           Amounts in other currencies convert at cached daily ECB rates; anything
           unconvertible is excluded from totals and counted, never guessed. The value
-          strategy controls this single blended number — the item page always shows
+          strategy controls this single blended number; the item page always shows
           every source's own latest value.
         </p>
       </div>
@@ -384,7 +385,7 @@ export default function Settings() {
       <div className="card">
         <h2>Price sources</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          🔒 Keys are encrypted before they are stored and can never be read back — only
+          <LockIcon /> Keys are encrypted before they are stored and can never be read back, only
           replaced or removed.
         </p>
         {settings.sources.map(sourceCard)}
@@ -394,7 +395,7 @@ export default function Settings() {
         <h2>Cached market data</h2>
         {settings.cached.length === 0 && (
           <p className="muted">
-            Nothing cached yet — spot prices and exchange rates appear here after the first
+            Nothing cached yet. Spot prices and exchange rates appear here after the first
             estimate or conversion.
           </p>
         )}
@@ -433,7 +434,7 @@ export default function Settings() {
           </a>
         </div>
         <p className="muted">
-          The download starts once the archive is built — allow a minute for a large photo
+          The download starts once the archive is built; allow a minute for a large photo
           collection.
         </p>
 
@@ -505,7 +506,7 @@ export default function Settings() {
                 Last run {new Date(backups.last_run.at).toLocaleString()}:{" "}
                 {backups.last_run.ok
                   ? `${backups.last_run.file} (${formatBytes(backups.last_run.size ?? 0)})`
-                  : `failed — ${backups.last_run.error}`}
+                  : `failed: ${backups.last_run.error}`}
               </p>
             )}
             {backups.backups.length > 0 && (

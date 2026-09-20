@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
+import { MoonIcon, SettingsIcon, SunIcon, TrashIcon } from "./components/icons";
 import { applyTheme, initialTheme } from "./components/theme";
 import Checklists from "./pages/Checklists";
 import Dashboard from "./pages/Dashboard";
@@ -32,19 +33,26 @@ export default function App() {
     <>
       <header className="site-header no-print">
         <Link to="/">Cabinet</Link>
-        <span className="subtitle">Numismatics — Coin &amp; Paper Money Collection Manager</span>
+        <span className="subtitle">Numismatics: Coin &amp; Paper Money Collection Manager</span>
         <nav>
           <NavLink to="/" end>Dashboard</NavLink>
           <NavLink to="/collection">Collection</NavLink>
           <NavLink to="/pricing">Pricing</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
-          <NavLink to="/settings" title="Settings">⚙</NavLink>
+          <NavLink to="/import">Import</NavLink>
+          <NavLink className="nav-icon" to="/trash" title="Trash" aria-label="Trash">
+            <TrashIcon />
+          </NavLink>
+          <NavLink className="nav-icon" to="/settings" title="Settings" aria-label="Settings">
+            <SettingsIcon />
+          </NavLink>
           <button
-            className="theme-toggle"
-            title="Toggle dark mode"
+            className="theme-toggle nav-icon"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
           >
-            {theme === "dark" ? "☀" : "🌙"}
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
         </nav>
       </header>

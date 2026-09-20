@@ -36,7 +36,7 @@ DEFAULTS: dict = {
     # Days an item stays in the trash before it's deleted for good; 0 = never.
     "trash_retention_days": 30,
     "backup_include_photos": True,
-    # Alerts: a webhook URL (secret — it often carries a token) and its format.
+    # Alerts: a webhook URL (secret, because it often carries a token) and its format.
     "alert_webhook_url": "",
     "alert_webhook_format": "generic",
     # Uptime Kuma push URL, pinged hourly.

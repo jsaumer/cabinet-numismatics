@@ -1,4 +1,4 @@
-"""v0.20.0: the trash — delete moves an item there, restore brings it back."""
+"""v0.20.0: the trash: delete moves an item there, restore brings it back."""
 
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -148,7 +148,7 @@ def test_a_document_on_a_trashed_item_is_kept(client):
     client.post(f"/api/documents/{doc['id']}/items", json={"item_ids": [second["id"]]})
     client.delete(f"/api/items/{second['id']}")  # to the trash, still holding the invoice
 
-    # the only item still showing it lets it go — but the trashed one holds it
+    # the only item still showing it lets it go, but the trashed one holds it
     assert client.delete(f"/api/items/{first['id']}/documents/{doc['id']}").status_code == 204
     assert client.get(f"/api/documents/{doc['id']}/file").status_code == 200
     client.post(f"/api/items/{second['id']}/restore")

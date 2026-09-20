@@ -1,7 +1,7 @@
 """Importing a collection from another tool (v0.18.0).
 
-Every source — Numista (account or export file), OpenNumismat, a spreadsheet
-with its columns matched to Cabinet's fields — is read by a format module in
+Every source, whether Numista (account or export file), OpenNumismat, or a spreadsheet
+with its columns matched to Cabinet's fields, is read by a format module in
 `import_formats` into `Candidate`s: item fields as plain values, the grade as
 the source wrote it, tags, catalogue refs, and photos. This module turns a
 candidate into a validated `ItemCreate` (the same path the item form and CSV
@@ -102,7 +102,7 @@ class Prepared:
 def fingerprint_keys(rows: list[dict]) -> list[str]:
     """Stable keys for rows that have no id of their own: a hash of the row's
     content, with an ordinal so identical rows (two of the same coin) stay
-    distinct — and re-importing the same file still matches them one to one."""
+    distinct, and re-importing the same file still matches them one to one."""
     seen: Counter = Counter()
     keys = []
     for row in rows:
@@ -226,7 +226,7 @@ def split_title(title: str | None) -> tuple[str | None, str | None]:
 
 
 def title_series(title: str | None) -> str | None:
-    """The name part of a Numista-style title — the series."""
+    """The name part of a Numista-style title: the series."""
     return split_title(title)[1]
 
 
@@ -316,7 +316,7 @@ class GradeTable:
         return None
 
     def find(self, scale: str, rank: int) -> tuple[Grade | None, bool]:
-        """(grade, exact) — the grade at `rank`, or the nearest lower one."""
+        """(grade, exact): the grade at `rank`, or the nearest lower one."""
         rows = self.rows.get(scale) or []
         below = [g for g in rows if g.rank <= rank]
         if not below:
@@ -348,7 +348,7 @@ def resolve_grade(candidate: Candidate, grades: GradeTable) -> tuple[int | None,
         return None, None
     match = parse_grade(candidate.grade)
     if match is None:
-        candidate.messages.append(f"Grade {candidate.grade!r} not recognized — kept in the notes")
+        candidate.messages.append(f"Grade {candidate.grade!r} not recognized, kept in the notes")
         candidate.extra_notes.append(f"Grade as imported: {candidate.grade}")
         return None, None
     if match.strike and scale == "sheldon":
@@ -406,7 +406,7 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
     out = []
     for cand in candidates:
         if cand.key in in_trash and not cand.error:
-            cand.messages.append("Already imported — that item is in the trash; restore it there")
+            cand.messages.append("Already imported: that item is in the trash; restore it there")
         if cand.error:
             out.append(Prepared(cand, None, None, None, False))
             continue
@@ -444,7 +444,7 @@ def prepare(db: Session, source: str, candidates: list[Candidate]) -> list[Prepa
 
 def _note_similar(db: Session, cand: Candidate, payload: ItemCreate) -> None:
     """Warn when the collection already holds something that looks like this
-    row — not the same import key, but the same cert, reference, or coin."""
+    row: not the same import key, but the same cert, reference, or coin."""
     found = duplicates.find_similar(
         db,
         country=payload.country,
@@ -456,7 +456,7 @@ def _note_similar(db: Session, cand: Candidate, payload: ItemCreate) -> None:
     )
     if found:
         item, reason = found[0]
-        cand.messages.append(f"Looks like one already here — {duplicates.describe(item)}: {reason}")
+        cand.messages.append(f"Looks like one already here: {duplicates.describe(item)} ({reason})")
 
 
 def _dedupe(refs: list[dict]) -> list[dict]:
@@ -624,7 +624,7 @@ def staged(upload_id: str) -> tuple[Path, str]:
     folder = upload_dir() / upload_id
     target = folder / "upload"
     if not target.exists():
-        raise LookupError("That upload has expired — choose the file again")
+        raise LookupError("That upload has expired. Choose the file again")
     name_file = folder / "name"
     name = name_file.read_text(encoding="utf-8") if name_file.exists() else "upload"
     return target, name

@@ -142,7 +142,7 @@ def test_generated_key_file_is_owner_only(tmp_path, monkeypatch):
         assert path.is_file()
         if sys.platform != "win32":
             # A key file must never be group/world readable. Windows has no
-            # POSIX mode bits, so this is asserted only where it's meaningful —
+            # POSIX mode bits, so this is asserted only where it's meaningful:
             # the app runs on Linux in the container.
             assert stat.S_IMODE(os.stat(path).st_mode) & 0o077 == 0
         # a second load reuses the persisted key

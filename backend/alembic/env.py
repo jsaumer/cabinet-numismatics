@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.config import get_settings
 from app.db import Base
-from app.models import *  # noqa: F401,F403 — register models on Base.metadata
+from app.models import *  # noqa: F401,F403  # register models on Base.metadata
 
 config = context.config
 # The app runs migrations itself on startup and turns this off so Alembic's

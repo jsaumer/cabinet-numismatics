@@ -1,8 +1,8 @@
 """Synthetic import files in the formats of other collection tools (v0.18.0).
 
-Built from each format's published layout — OpenNumismat's schema in its
+Built from each format's published layout (OpenNumismat's schema in its
 source code, Numista's collection export header, a hand-kept spreadsheet, a
-Colnect-style export with lines above its header — never from anyone's real
+Colnect-style export with lines above its header), never from anyone's real
 data or OpenNumismat's GPL-licensed demo files. The tests build them on the
 fly; to write a set you can upload by hand:
 
@@ -103,7 +103,7 @@ def opennumismat(path: Path, version: int = 10) -> Path:
     reverse = _insert(conn, "photos", {"title": "", "image": picture(fmt, (150, 120, 40))})
     stamp = "2025-06-01T12:00:00" + (".000Z" if version >= 11 else ".000")
     coins = [
-        {  # 1 — bought at a show, two photos, a renamed and a prefixed catalogue number
+        {  # 1: bought at a show, two photos, a renamed and a prefixed catalogue number
             "title": "1 Dollar 1978", "value": 1, "unit": "Dollar", "country": "United States",
             "year": 1978, "mintmark": "", "series": "Eisenhower Dollar", "status": "owned",
             "material": "Copper-nickel clad copper", "weight": 22.68, "diameter": 38.1,
@@ -112,7 +112,7 @@ def opennumismat(path: Path, version: int = 10) -> Path:
             "note": "Apollo 11 reverse.", "createdat": stamp,
             "_buy": {"date": "2025-06-01", "price": 3.5, "total": 4.25, "from": "Coin show"},
         },
-        {  # 2 — sold, with fees taken off the sale
+        {  # 2: sold, with fees taken off the sale
             "title": "25 Cents 1932 D", "value": 0.25, "unit": "Dollar", "country": "United States",
             "year": 1932, "mintmark": "D", "series": "Washington Quarter", "status": "sold",
             "material": "Silver", "fineness": 900, "weight": 6.25, "grade": "VF-30",
@@ -120,26 +120,26 @@ def opennumismat(path: Path, version: int = 10) -> Path:
             "_buy": {"date": "2019-03-02", "price": 120, "total": 120, "from": "Dealer"},
             "_sell": {"date": "2025-08-15", "price": 400, "total": 360, "to": "Heritage"},
         },
-        {  # 3 — on the wish list
+        {  # 3: on the wish list
             "title": "5 Mark 1975", "value": 5, "unit": "Mark", "country": "Germany",
             "year": 1975, "mintmark": "J", "status": "wish", "grade": "Unc", "createdat": stamp,
         },
-        {  # 4 — a graded banknote
+        {  # 4: a graded banknote
             "title": "1 Dollar 2017", "value": 1, "unit": "Dollar", "country": "United States",
             "year": 2017, "category": "Banknote", "status": "owned", "grade": "64 EPQ",
             "grader": "PMG", "barcode": "8081234-001", "signature": "Carranza / Mnuchin",
             "emitent": "Federal Reserve Bank of New York", "width": 156, "height": 66,
             "createdat": stamp,
         },
-        {  # 5 — lost at auction: not imported
+        {  # 5: lost at auction (not imported)
             "title": "2 Euro 2002", "value": 2, "unit": "Euro", "country": "France",
             "year": 2002, "status": "pass", "createdat": stamp,
         },
-        {  # 6 — no year anywhere: an error
+        {  # 6: no year anywhere (an error)
             "title": "Token", "value": 1, "unit": "Token", "country": "Nowhere",
             "year": "", "status": "owned", "createdat": stamp,
         },
-        {  # 7 — a proof silver dollar, year only in the issue date
+        {  # 7: a proof silver dollar, year only in the issue date
             "title": "1 Dollar 1986 S", "value": 1, "unit": "Dollar", "country": "United States",
             "year": "", "issuedate": "1986-01-01", "mintmark": "S", "status": "owned",
             "quality": "Proof", "grade": "PF-69 DCAM", "grader": "NGC", "barcode": "2851234-007",
@@ -250,8 +250,8 @@ def hand_sheet(path: Path) -> Path:
 
 def colnect_like(path: Path) -> Path:
     """A Colnect-style export: lines of title and totals above the header.
-    Colnect's real column names are translated per user and unconfirmed —
-    this only exercises header detection and column matching."""
+    Colnect's real column names are translated per user and unconfirmed,
+    so this only exercises header detection and column matching."""
     preamble = [
         ["Colnect collection export"], ["Coins"], ["Collector: sample"],
         ["Exported: 2026-09-18"], ["Items: 2"], [""], ["https://colnect.com"],

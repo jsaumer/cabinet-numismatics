@@ -65,7 +65,7 @@ export default function Dashboard() {
         </div>
         <SetupChecklist itemCount={0} />
         <div className="empty">
-          Nothing to report yet — <Link to="/items/new">add your first item</Link>.
+          Nothing to report yet. <Link to="/items/new">Add your first item</Link>.
         </div>
       </>
     );
@@ -110,7 +110,7 @@ export default function Dashboard() {
         <h1>Dashboard</h1>
         <div className="spacer" />
         <button onClick={refreshMelt} disabled={refreshing}>
-          {refreshing ? "Refreshing…" : "⚖ Refresh melt values"}
+          {refreshing ? "Refreshing…" : "Refresh melt values"}
         </button>
         <Link className="button" to="/report">Insurance report</Link>
       </div>
@@ -124,7 +124,7 @@ export default function Dashboard() {
           <span className="hero-value">{money(stats.estimated_value, cur)}</span>
           {stats.estimated_items < stats.counts.owned && (
             <span className="muted">
-              based on {stats.estimated_items} of {stats.counts.owned} owned items —{" "}
+              based on {stats.estimated_items} of {stats.counts.owned} owned items;{" "}
               <Link to="/pricing">see pricing coverage</Link>
             </span>
           )}
@@ -216,7 +216,7 @@ export default function Dashboard() {
 
       {gains.unrealized.length > 0 && (
         <div className="card">
-          <h2>Unrealized gain/loss{gains.unrealized.length > 10 ? " — top movers" : ""}</h2>
+          <h2>Unrealized gain/loss{gains.unrealized.length > 10 ? ": top movers" : ""}</h2>
           {gainsTable(movers, "Est. value")}
         </div>
       )}

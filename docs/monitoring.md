@@ -1,6 +1,6 @@
 # Alerts, heartbeat, and metrics
 
-Cabinet's scheduled work — backups, price refreshes, the trash clear-out —
+Cabinet's scheduled work (backups, price refreshes, the trash clear-out)
 runs inside the backend with nobody watching. Three things report on it,
 all set in **Settings → Alerts & metrics** and all off until configured:
 
@@ -24,7 +24,7 @@ all set in **Settings → Alerts & metrics** and all off until configured:
 An alert is sent **on the change only**: once when a check starts failing,
 once when it recovers. A rejected key that stays rejected doesn't alert again
 every refresh; its message is kept up to date in Settings. A rejected key or
-exhausted quota also **stops a scheduled refresh** at the first refusal —
+exhausted quota also **stops a scheduled refresh** at the first refusal, because
 every remaining request would fail the same way, and the quota is better
 spent after the fix. Key and quota checks fire even when cached data covers
 for the failure, since the next refresh will need the key.
@@ -40,7 +40,7 @@ keys, since it usually carries a token; Settings shows only its host.
 
 | Format             | What's sent                                                                 |
 |--------------------|-----------------------------------------------------------------------------|
-| Generic JSON       | `POST` `{"app": "cabinet", "alert", "label", "status", "title", "message", "at"}` — for n8n, Home Assistant, Node-RED |
+| Generic JSON       | `POST` `{"app": "cabinet", "alert", "label", "status", "title", "message", "at"}`, for n8n, Home Assistant, Node-RED |
 | ntfy               | `POST` to the topic URL: the message as the body, `Title`, `Priority` (high when failing), and `Tags` headers. A protected topic takes `?auth=…` in the URL |
 | Discord            | `POST` `{"username": "Cabinet", "content": "**title**\nmessage"}` to a channel webhook |
 | Slack / Mattermost | `POST` `{"text": "*title*\nmessage"}` to an incoming webhook                 |
@@ -63,8 +63,8 @@ keys, since it usually carries a token; Settings shows only its host.
 ```
 
 Delivery happens in the background with a 10-second timeout; a failed
-delivery is logged (without the URL) and shown in Settings, and not retried —
-the check's state is kept either way, so the metrics and heartbeat still see
+delivery is logged (without the URL) and shown in Settings, and not retried.
+The check's state is kept either way, so the metrics and heartbeat still see
 it.
 
 ## Heartbeat (Uptime Kuma)
@@ -121,7 +121,7 @@ cabinet_alert_failing == 1
 
 The endpoint goes through the proxy like the rest of the API. With
 Prometheus on the same Docker network as Cabinet's `proxy` service, scrape it
-by service name — in a Swarm stack named `cabinet`, that's `cabinet_proxy`:
+by service name (in a Swarm stack named `cabinet`, that's `cabinet_proxy`):
 
 ```yaml
 scrape_configs:

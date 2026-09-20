@@ -11,7 +11,7 @@ These illustrate the README. They are not used by the application.
 | `dark-mode.png` | `/` | dark |
 
 `settings.png` is captured straight off the demo seed with no price-source
-keys configured — both Numista and PCGS show "(not configured)" and no
+keys configured, so both Numista and PCGS show "(not configured)" and no
 `secret_hint`. If you ever capture it with a key actually saved, double-check
 the image doesn't show the masked hint before committing it; a fake,
 obviously-non-functional key (e.g. `demo-key-not-real`) is the safe way to
@@ -30,8 +30,8 @@ python scripts/seed_demo.py
 
 Capture `settings.png` first, while nothing is configured. Then satisfy the
 dashboard's setup checklist so it doesn't crowd out the value hero in the two
-dashboard shots — daily backups plus one run, a placeholder webhook, and the
-fake key (never a real one):
+dashboard shots, with daily backups plus one run, a placeholder webhook, and
+the fake key (never a real one):
 
 ```bash
 curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \
@@ -60,11 +60,11 @@ MSYS_NO_PATHCONV=1 docker run --rm --network cabinet-numismatics_default \
 
 Pin the `playwright@` version to match the image tag (and keep it at the
 `@playwright/test` version in `frontend/package.json`, so the browser tests and
-the screenshots use one browser build) — `npx` otherwise
+the screenshots use one browser build), because `npx` otherwise
 installs the newest release, which then can't find the image's browsers.
 `MSYS_NO_PATHCONV=1` matters if you're running this from Git Bash on
 Windows: without it, MSYS rewrites the container-side `/out` path as if it
-were a Windows path too, silently breaking the bind mount — the container
+were a Windows path too, silently breaking the bind mount. The container
 reports every capture as successful, but nothing lands on the host.
 
 ## Notes

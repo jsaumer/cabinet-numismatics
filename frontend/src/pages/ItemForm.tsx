@@ -248,7 +248,7 @@ export default function ItemForm() {
                 <option value="">ungraded</option>
                 {grades.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {gradeCode(g)} — {g.label}
+                    {gradeCode(g)}: {g.label}
                   </option>
                 ))}
               </select>

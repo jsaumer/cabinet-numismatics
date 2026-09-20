@@ -130,7 +130,7 @@ export interface Estimate {
   fetched_at: string;
 }
 
-/** One sale in an item's sales log — what the comps estimate is built from. */
+/** One sale in an item's sales log: what the comps estimate is built from. */
 export interface ComparableInput {
   sold_on: string;
   venue: string;

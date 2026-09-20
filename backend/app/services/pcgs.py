@@ -2,8 +2,8 @@
 
 PCGS CoinFacts answers with both a price-guide value and a list of auction
 sales in one response, so a single request yields the two numbers this adapter
-chooses between. Realized auction prices win when there are any — they are
-actual sales — and the price guide is the fallback.
+chooses between. Realized auction prices win when there are any (they are
+actual sales), and the price guide is the fallback.
 
 An item is looked up by its PCGS **cert number** when it has one (exact: that
 individual slab), otherwise by **PCGS number + grade** from a `pcgs` catalog
@@ -75,13 +75,13 @@ def _request(token: str, path: str, params: dict | None = None) -> dict:
         if resp.status_code == 204:  # documented as empty request data
             return {"IsValidRequest": False, "ServerMessage": "PCGS received an empty request"}
         if resp.status_code == 401:
-            raise KeyRejected("PCGS rejected the API token — check it in Settings")
+            raise KeyRejected("PCGS rejected the API token. Check it in Settings")
         if resp.status_code == 429:
-            raise QuotaExhausted("PCGS request quota exhausted — try again tomorrow")
+            raise QuotaExhausted("PCGS request quota exhausted. Try again tomorrow")
         if resp.status_code == 500:
             # PCGS documents 500 as usually meaning invalid credentials.
             raise KeyRejected(
-                "PCGS returned a server error — usually an expired or invalid token; "
+                "PCGS returned a server error, usually an expired or invalid token; "
                 "regenerate it and update Settings"
             )
         resp.raise_for_status()
@@ -163,19 +163,19 @@ def prerequisite(db: Session, item: Item) -> str | None:
     if not str(app_settings.get_setting(db, "pcgs_api_token")):
         return "Add a PCGS API token in Settings to price items from PCGS"
     if item.type != "coin":
-        return "PCGS prices coins only — its banknote data carries no values"
+        return "PCGS prices coins only: its banknote data carries no values"
     if cert_number(item) is not None:
         return None
     if pcgs_number(item) is None:
         return "Add a PCGS cert number, or a 'pcgs' catalog reference, to price this item"
     if item.grade is None:
-        return "Set the item's grade — PCGS quotes values per grade"
+        return "Set the item's grade: PCGS quotes values per grade"
     if item.grade.scale != "sheldon":
-        return "PCGS values are quoted on the Sheldon scale — regrade to use it"
+        return "PCGS values are quoted on the Sheldon scale. Regrade to use it"
     if item.grade_details:
         return (
-            "PCGS prices problem-free coins by grade, and this one has a details grade "
-            "— a PCGS cert number still works"
+            "PCGS prices problem-free coins by grade, and this one has a details grade. "
+            "A PCGS cert number still works"
         )
     return None
 

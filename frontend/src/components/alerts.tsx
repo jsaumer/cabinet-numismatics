@@ -8,7 +8,7 @@ const FORMATS: { value: AlertFormat; label: string; hint: string }[] = [
     label: "Generic JSON",
     hint:
       "POSTs JSON with app, alert, label, status (failing, recovered, or test), title, " +
-      "message, and at — for n8n, Home Assistant, Node-RED, or anything that takes a webhook.",
+      "message, and at. For n8n, Home Assistant, Node-RED, or anything that takes a webhook.",
   },
   {
     value: "ntfy",
@@ -84,7 +84,7 @@ export function AlertsCard({
       <h2>Alerts &amp; metrics</h2>
       <p className="muted" style={{ marginTop: 0 }}>
         Cabinet sends an alert when a backup fails, a price source rejects its key or runs out
-        of quota, or a scheduled refresh has failures — once when it starts, and once when it's
+        of quota, or a scheduled refresh has failures: once when it starts, and once when it's
         working again. Saved URLs often carry a token, so they're encrypted like the API keys
         and only their host is shown.
       </p>
@@ -203,7 +203,7 @@ export function AlertsCard({
               <tr key={a.key}>
                 <td>{a.label}</td>
                 <td className={a.failing ? "loss" : "gain"}>{a.failing ? "failing" : "recovered"}</td>
-                <td className="muted">{a.since ? when(a.since) : "—"}</td>
+                <td className="muted">{a.since ? when(a.since) : "–"}</td>
                 <td className="muted">{a.failing ? a.message : a.message && `was: ${a.message}`}</td>
               </tr>
             ))}
@@ -254,7 +254,7 @@ export function AlertsCard({
       <p className="muted" style={{ margin: "0.3rem 0 0" }}>
         Item counts, collection value and cost basis, backup and refresh outcomes, and which
         alerts are failing, refreshed at most once a minute. Like the rest of the API it has no
-        login, and it includes the collection's value — see docs/monitoring.md for the scrape
+        login, and it includes the collection's value. See docs/monitoring.md for the scrape
         config.
         {settings.metrics_enabled && (
           <>

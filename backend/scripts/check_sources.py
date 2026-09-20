@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Probe a price source against a real item and show exactly what came back.
 
-The adapter tests use canned responses; this covers the other half — what the
+The adapter tests use canned responses; this covers the other half: what the
 live APIs actually return. It runs one adapter for one item and prints the
 upstream calls made, the raw payload, and the estimate parsed out of it.
 Nothing is written to `price_estimates`: this only looks.
@@ -11,7 +11,7 @@ Nothing is written to `price_estimates`: this only looks.
     docker compose exec backend python scripts/check_sources.py -s pcgs -i <item-id> --fresh
     docker compose exec backend python scripts/check_sources.py -s numista-sales -i <item-id>
 
-`--fresh` ignores the `source_cache` TTL to force a real request — each one
+`--fresh` ignores the `source_cache` TTL to force a real request, and each one
 counts against the source's quota (Numista 2,000/month, PCGS 1,000/day).
 Without it, a cached response is reused and the run costs nothing.
 `numista-sales` fetches the item's auction sales without adding them to its
@@ -107,7 +107,7 @@ def report_settings(db, source: str) -> None:
     if source not in ("melt", "comps"):
         key = "pcgs_api_token" if source == "pcgs" else "numista_api_key"
         configured = bool(str(app_settings.get_setting(db, key)))
-        print(f"credential : {'configured' if configured else 'MISSING — set it in Settings'}")
+        print(f"credential : {'configured' if configured else 'MISSING: set it in Settings'}")
 
 
 def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
@@ -117,10 +117,10 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
         return 2
 
     print(f"item       : {item.id}  {describe(item)}")
-    print(f"grade      : {item.grade.code + ' (' + item.grade.scale + ')' if item.grade else '—'}")
-    refs = ", ".join(f"{r.catalog}={r.ref_code}" for r in item.catalog_refs) or "—"
+    print(f"grade      : {item.grade.code + ' (' + item.grade.scale + ')' if item.grade else '–'}")
+    refs = ", ".join(f"{r.catalog}={r.ref_code}" for r in item.catalog_refs) or "–"
     print(f"refs       : {refs}")
-    print(f"cert       : {item.cert_service or '—'} {item.cert_number or ''}".rstrip())
+    print(f"cert       : {item.cert_service or '–'} {item.cert_number or ''}".rstrip())
     report_settings(db, source)
 
     module = adapter_module(source)
@@ -129,7 +129,7 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
         original = module._request
 
         def spy(*args, **kwargs):
-            # args[0] is the credential — deliberately never captured.
+            # args[0] is the credential, deliberately never captured.
             path = args[1] if len(args) > 1 else kwargs.get("path")
             params = args[2] if len(args) > 2 else kwargs.get("params")
             try:
@@ -188,7 +188,7 @@ def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
         print(f"  value      : {result.estimated_value} {result.currency}")
         print(f"  source     : {result.source}")
         print(f"  confidence : {result.confidence}")
-        print(f"  sample     : {result.sample_size if result.sample_size is not None else '—'}")
+        print(f"  sample     : {result.sample_size if result.sample_size is not None else '–'}")
         if result.details:
             dump("  details", result.details, full)
         if item.quantity != 1:

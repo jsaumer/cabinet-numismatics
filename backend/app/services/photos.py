@@ -47,7 +47,7 @@ def save_photo(
     item_id: uuid.UUID, photo_id: uuid.UUID, data: bytes, stem: str | None = None
 ) -> tuple[str, str, int, int]:
     """Validate, write original + thumbnail, return (file_key, thumb_key, w, h).
-    `stem` names the files (default: the photo id) — a replaced image gets a
+    `stem` names the files (default: the photo id). A replaced image gets a
     fresh one so browsers don't keep showing the cached old file."""
     img, fmt = open_validated(data)
     ext = FORMATS[fmt]
@@ -98,7 +98,7 @@ def _require_public_host(host: str, port: int) -> None:
     """Refuse hosts resolving to private, loopback, link-local, or other
     non-public addresses, so an import can't reach the LAN or the stack's own
     services. (A DNS answer that changes between this check and the fetch
-    isn't covered — acceptable for a single-user app behind its own proxy.)"""
+    isn't covered, which is acceptable for a single-user app behind its own proxy.)"""
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:

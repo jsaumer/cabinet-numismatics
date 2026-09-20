@@ -51,7 +51,7 @@ def list_comparables(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 @router.post("/api/items/{item_id}/comparables", response_model=ComparableOut, status_code=201)
 def create_comparable(item_id: uuid.UUID, payload: ComparableCreate, db: Session = Depends(get_db)):
-    """Log a sale you found — an eBay sold listing, an auction result, a dealer sale."""
+    """Log a sale you found: an eBay sold listing, an auction result, a dealer sale."""
     get_item_or_404(db, item_id)
     row = Comparable(item_id=item_id, source="manual", **_money(payload.model_dump()))
     db.add(row)

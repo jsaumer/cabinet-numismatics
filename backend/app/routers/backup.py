@@ -1,4 +1,4 @@
-"""Backups from inside the app. Unauthenticated like the rest of the API — and
+"""Backups from inside the app. Unauthenticated like the rest of the API, and
 these endpoints hand over the whole collection in one request, so the
 deployment guidance (trusted LAN or an authenticating proxy) matters here most.
 """

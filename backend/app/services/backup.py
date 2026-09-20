@@ -219,7 +219,7 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
             "includes_documents": include_photos,
             "counts": counts,
             "members": members,
-            "restore": "scripts/restore.sh <this archive> — see docs/backup-restore.md",
+            "restore": "scripts/restore.sh <this archive> (see docs/backup-restore.md)",
         }
         zf.writestr(
             "manifest.json", json.dumps(manifest, indent=2), compress_type=zipfile.ZIP_DEFLATED

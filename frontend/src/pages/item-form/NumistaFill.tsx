@@ -119,7 +119,7 @@ export function NumistaFill({
       setNote(
         filled.length
           ? `Filled ${filled.join(", ")} from ${found.title} (N#${found.type_id}).`
-          : `Nothing to fill from ${found.title} (N#${found.type_id}) — those fields are already set.`,
+          : `Nothing to fill from ${found.title} (N#${found.type_id}): those fields are already set.`,
       );
     } catch (e) {
       setError((e as Error).message);
@@ -185,7 +185,7 @@ export function NumistaFill({
                   {issues.map((issue, i) => (
                     <option key={i} value={i}>
                       {[issue.year, issue.mint_letter].filter(Boolean).join(" ") || "undated"}
-                      {issue.mintage != null ? ` — ${issue.mintage.toLocaleString()}` : ""}
+                      {issue.mintage != null ? ` · ${issue.mintage.toLocaleString()} minted` : ""}
                       {issue.comment ? ` (${issue.comment})` : ""}
                     </option>
                   ))}

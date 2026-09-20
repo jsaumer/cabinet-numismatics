@@ -2,13 +2,13 @@
 
 An adapter is `(db, item) -> EstimateResult`; it raises `NotApplicable` when
 the item lacks a prerequisite and `SourceUnavailable` when the upstream fails.
-Melt value lives here — spot price × weight × fineness × quantity,
+Melt value lives here: spot price × weight × fineness × quantity,
 deterministic and explainable, with the metal and spot price recorded in the
 estimate's `source`. Other sources (numista, pcgs, comps) live in their own
 modules and are resolved by `get_adapter`.
 
-Money convention: estimates (like acquisition/sold prices) are per row — the
-whole lot — so per-piece values are multiplied by quantity.
+Money convention: estimates (like acquisition/sold prices) are per row (the
+whole lot), so per-piece values are multiplied by quantity.
 """
 
 import re
@@ -65,7 +65,7 @@ class EstimateResult:
     confidence: Decimal
     sample_size: int | None = None
     # Provenance: what the source returned that produced this value. Must be
-    # JSON-safe (floats, strings, ISO dates) — the column rejects Decimal.
+    # JSON-safe (floats, strings, ISO dates), because the column rejects Decimal.
     details: dict | None = None
 
 
@@ -83,7 +83,7 @@ def estimate_row(item_id: uuid.UUID, result: EstimateResult) -> PriceEstimate:
 
 def freshness(fetched_at: datetime, ttl: timedelta) -> dict:
     """When upstream data was fetched, and whether it was already past its
-    cache window — which is what gets served when a refresh fails."""
+    cache window, which is what gets served when a refresh fails."""
     fetched = _as_utc(fetched_at)
     return {
         "data_as_of": fetched.isoformat(),
@@ -194,7 +194,7 @@ def get_spot_price(db: Session, metal: str) -> SpotPrice:
 def melt_prerequisite(db: Session, item: Item) -> str | None:
     """What the item lacks for a melt estimate, or None. No network."""
     if detect_metal(item.composition) is None:
-        return "No precious metal found in composition — set it to e.g. '90% silver'"
+        return "No precious metal found in composition. Set it to e.g. '90% silver'"
     if item.weight_g is None:
         return "Set the item's weight to estimate melt value"
     if effective_fineness(item) is None:
@@ -257,7 +257,7 @@ def get_adapter(name: str):
 
 
 def get_prerequisite(name: str):
-    """The source's local eligibility check — `(db, item) -> reason | None` —
+    """The source's local eligibility check, `(db, item) -> reason | None`,
     which its adapter runs first. Used to explain gaps without a request."""
     if name == "melt":
         return melt_prerequisite
@@ -336,13 +336,13 @@ def resolve_display_value(
       `converter` is None or nothing converts.
 
     "latest"/"preferred_source" return the chosen estimate's own
-    value/currency unconverted — this keeps the default "latest" path a true
+    value/currency unconverted, which keeps the default "latest" path a true
     no-op. "average" always returns (mean, converter.display).
 
     Returns (value, currency, source_label): source_label is the winning
     estimate's source_key (e.g. "numista", "melt", or a manual entry's raw
-    source string), or the literal "average" when blended across sources —
-    lets callers show where a displayed value actually came from.
+    source string), or the literal "average" when blended across sources,
+    which lets callers show where a displayed value actually came from.
     """
     if not estimates:
         return None
@@ -378,7 +378,7 @@ def resolve_display_value(
 def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     """Re-run melt estimates for owned items whose LATEST estimate is a melt
     estimate older than max_age_days. Items whose latest estimate is manual are
-    left alone — a fresh melt value must never bury the user's own number.
+    left alone: a fresh melt value must never bury the user's own number.
     An item that no longer qualifies (NotApplicable) counts as skipped.
     Returns {"updated": n, "skipped": n, "failed": n}, plus "error" (the last
     failure's message) when anything failed."""
@@ -433,11 +433,11 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
     estimate FROM THIS SOURCE (not the item's overall-latest, which may
     belong to a different source or be manual) is missing or older than
     max_age_days. Keeps each source's own data current independent of what
-    currently wins — needed because value_strategy can be "preferred_source"
+    currently wins, needed because value_strategy can be "preferred_source"
     or "average". NotApplicable (not eligible) counts as skipped, not
     failed. A rejected key or exhausted quota stops the run (every remaining
     request would fail the same way) and is returned as "stopped". Never
-    called for "melt" — that keeps its own separate, conservative behavior in
+    called for "melt", which keeps its own separate, conservative behavior in
     refresh_melt_estimates.
     Returns {"updated": n, "skipped": n, "failed": n}, plus "error" and
     "stopped" when set."""

@@ -1,13 +1,13 @@
 # Implementation notes, by release
 
-What each release added and the non-obvious rules it left behind — the
+What each release added and the non-obvious rules it left behind: the
 things a change in that area has to respect. Moved here from `CLAUDE.md`
 in v0.21.x so that file stays short; `CLAUDE.md` keeps the rules that bite
 most often and points here for the rest. Newest last.
 
 ## Phases 0–5 (through v0.9.x)
 
-Phases 0–4 complete (see git history). Phase 5: three of four bundles done —
+Phases 0–4 complete (see git history). Phase 5: three of four bundles done:
 value depth (currency conversion via frankfurter.dev daily rates, value-over-
 time charts, scheduled + on-demand melt refresh, `REESTIMATE_DAYS` env),
 catalog depth (sets/lots, variety, custom_fields JSON, bulk edit), polish
@@ -37,19 +37,19 @@ Value differentiation + strategy: the item page shows every configured
 source's own latest value as a chip (with a "time since" label), never
 blending them; a `value_strategy` setting (latest / preferred source /
 average, Settings → General) controls the single blended number used
-everywhere else — items list (with a `SOURCE` column showing which source or
-"average" produced it), CSV/XLSX export, dashboard totals — via one shared
+everywhere else: items list (with a `SOURCE` column showing which source or
+"average" produced it), CSV/XLSX export, dashboard totals, all via one shared
 `pricing.resolve_display_value`. Scheduled refresh covers Numista (7/14/30-
 day cadence with projected monthly-call-count shown against its 2,000/month
 quota) and PCGS (fixed weekly; generous 1,000/day quota) in addition to melt,
 off by default, each kept fresh independent of whichever source currently
-wins an item — necessary since `value_strategy` may prefer or average a
+wins an item, necessary since `value_strategy` may prefer or average a
 source that isn't "latest." Manual per-item refresh shows a success message.
 
 ## Estimate provenance, M4 (v0.11.0)
 
 `price_estimates.details` (migration `0010`) holds what each adapter's
-`EstimateResult.details` recorded — JSON-safe values only, never `Decimal` —
+`EstimateResult.details` recorded (JSON-safe values only, never `Decimal`),
 built into rows by `pricing.estimate_row` on every path, with
 `pricing.freshness` supplying `data_as_of`/`stale` from `cached_fetch`'s
 fetch time; manual entries take an optional `note`. The item page renders it
@@ -57,9 +57,9 @@ per value-history row and filters that history by source.
 
 ## In-app backup, B1 + B2 (v0.12.0)
 
-`services/backup.py` writes one zip — `db.dump` (pg_dump custom format, the
-same file `scripts/backup.sh` makes), `photos.tar.gz`, `manifest.json`,
-`SHA256SUMS` — for `GET /api/backup.zip` and for scheduled/on-demand archives
+`services/backup.py` writes one zip of `db.dump` (pg_dump custom format, the
+same file `scripts/backup.sh` makes), `photos.tar.gz`, `manifest.json`, and
+`SHA256SUMS` for `GET /api/backup.zip` and for scheduled/on-demand archives
 in `BACKUP_DIR` (`/data/backups`, the `backup_data` volume; refused inside
 `PHOTO_DIR` because nginx serves that). An hourly in-process loop runs
 `backup.run_scheduled` against the `backup_schedule`/`backup_keep` settings
@@ -67,9 +67,9 @@ and records `backup_last_run`. The backend image copies only `pg_dump`/
 `pg_restore` for majors 14–18 + libpq from the PGDG repo (multi-stage; the
 full client packages pull ~50 MB of perl) into
 `/usr/local/lib/pgclient/<major>`, and `backup.pg_tool` picks the server's
-major — pg_dump 18 against a 16 server writes `SET transaction_timeout`,
-which 16 rejects on restore. Tests monkeypatch `backup.dump_database` —
-SQLite has no pg_dump; CI's stack job rehearses download → restore.sh on
+major: pg_dump 18 against a 16 server writes `SET transaction_timeout`,
+which 16 rejects on restore. Tests monkeypatch `backup.dump_database`
+(SQLite has no pg_dump); CI's stack job rehearses download → restore.sh on
 real Postgres. B3 (in-app restore) stays blocked on auth.
 
 ## Pricing reports, M5 (v0.13.0)
@@ -78,7 +78,7 @@ real Postgres. B3 (in-app restore) stays blocked on auth.
 sources, accuracy}` and a `/pricing` page. Every automatic estimate goes
 through `pricing.run_adapter`, which records the outcome in
 `estimate_attempts` (one row per item + source, migration `0011`; a failure
-is committed before it propagates) — so coverage can report fetch failures
+is committed before it propagates), so coverage can report fetch failures
 and upstream "can't price" answers that leave no estimate. Each adapter's
 local checks live in a `prerequisite(db, item)` (`pricing.get_prerequisite`)
 that the adapter calls first and coverage calls without spending a request;
@@ -89,7 +89,7 @@ have one-second resolution, so backdate estimates when order matters.
 
 ## Catalog depth, C1–C4 (v0.14.0)
 
-Migration `0012`: `items.strike` (business/proof/specimen — a Sheldon grade
+Migration `0012`: `items.strike` (business/proof/specimen; a Sheldon grade
 row is reused and `Item.grade_code` prints PR-/SP- plus "+"), `grade_plus`,
 `grade_star`, `designations` (JSON list validated against
 `schemas.DESIGNATIONS`), `grade_details`, `cac_sticker`; coin
@@ -120,7 +120,7 @@ parsed from composition text only for precious metals. The item form's
 ±15° straighten with a cover-scale so no corners show, crop box in fractions
 of the turned frame, exported at full resolution), and the webcam modal; the
 item page adds drop, paste, and URL import. Backend:
-`POST /api/items/{id}/photos/url` (`photos.fetch_remote_image` — http(s),
+`POST /api/items/{id}/photos/url` (`photos.fetch_remote_image`: http(s),
 public addresses only at every redirect hop, 3 redirects, 25 MB) and
 `PUT /api/photos/{id}/image`, which saves under a fresh file stem so cached
 images aren't reused. The dashboard is the home page (`/`); the list is
@@ -132,7 +132,7 @@ Migration `0013`. Research found no free sold-price API for individuals
 (eBay's is closed, auction houses forbid automation, Numista's
 `sales_records` is paid-plan only), so each item has a sales log
 (`comparables`, `routers/comparables.py`) and `services/comps.py` is a
-fourth adapter (`comps`, keyless, on by default) — median of included,
+fourth adapter (`comps`, keyless, on by default): median of included,
 grade-bucket-matching sales from the last 3 years (older if fewer than 3),
 converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there means
@@ -144,24 +144,24 @@ PriceCharting/Greysheet were researched and not planned.
 
 Migration `0014`: `items.import_source` + `import_key`, unique together;
 clone skips them. `services/import_formats.py` reads each source into
-`importing.Candidate`s — `cabinet` (Cabinet's own CSV/XLSX export, detected
+`importing.Candidate`s: `cabinet` (Cabinet's own CSV/XLSX export, detected
 by its columns, rows validated by `items._row_to_payload` into
 `Candidate.ready`, keyed by the exported id; added in v0.18.1 after v0.18.0
 read it as a plain spreadsheet), `spreadsheet` (field → column mapping,
-`suggest_mapping` — headers normalized with underscores as spaces — header
+`suggest_mapping` normalizing headers with underscores as spaces, header
 row found past preambles), `numista_file` (by header name), `opennumismat`
 (SQLite; schema ≤10 keeps buy/sell on `coins`, 11 moved them to `prices`;
 photos read lazily via `BlobReader`), and `numista_account`
 (`numista.fetch_collection`: OAuth client-credentials with the stored key,
-collection cached 1h, `type_fields` per type — fields plus `catalog_refs`;
+collection cached 1h, `type_fields` per type giving fields plus `catalog_refs`;
 titles split by `importing.split_title`, which handles both `X "Name"` and
-`X - Name`, fixed in v0.18.2) — and `services/importing.py` resolves grades
+`X - Name`, fixed in v0.18.2). `services/importing.py` resolves grades
 (`parse_grade`; Numista buckets → the band's lowest grade), validates
 through `ItemCreate`, previews, and imports one commit per item via
 `items._build_item`. Files are staged under `IMPORT_DIR` (temp, 1 GB, a
 day) so preview and run read the same upload; `/api/imports/numista/*`
 routes are registered before `/{upload_id}/*`. Test fixtures are synthetic
-(`tests/import_samples.py`, also written to `docs/import-samples/`) —
+(`tests/import_samples.py`, also written to `docs/import-samples/`):
 OpenNumismat's own demo files are GPL, keep them out.
 
 ## Documents (v0.19.0)
@@ -171,11 +171,11 @@ Migration `0015`: `documents` + `item_documents`, many-to-many;
 `document_data` volume at `DOCUMENT_DIR` (the user chose a new volume over
 the state volume or Postgres), never `PHOTO_DIR`; uploads are refused (503)
 unless it's a mount point (`/proc/self/mountinfo`;
-`REQUIRE_DOCUMENT_MOUNT=false` in tests/dev) — a Swarm needs a new bind.
+`REQUIRE_DOCUMENT_MOUNT=false` in tests/dev), so a Swarm needs a new bind.
 Type from bytes: `%PDF-` + PDFium open (pypdfium2, page-one JPEG thumbnail;
 password-protected kept without one) or Pillow JPEG/PNG/WebP; HEIC refused.
 Served by the API with `nosniff` and CSP `default-src 'none'` (+`sandbox`
-for images only — `sandbox` blanks Chrome's PDF viewer); no bundled pdf.js.
+for images only: `sandbox` blanks Chrome's PDF viewer); no bundled pdf.js.
 Unlinking from the last item, or purging that item, deletes the file.
 Backups add `documents.tar.gz` (follows the photos flag),
 `backup.sh`/`restore.sh` handle it, CI's drill restores a PDF byte for byte.
@@ -184,8 +184,8 @@ Backups add `documents.tar.gz` (follows the photos flag),
 
 Migration `0016`, `items.deleted_at`. `models.item._hide_trashed` is a
 `do_orm_execute` listener adding `with_loader_criteria(Item, deleted_at IS
-NULL)` to every ORM select unless `.execution_options(include_deleted=True)`
-— so new queries hide trashed items for free, but anything counting through
+NULL)` to every ORM select unless `.execution_options(include_deleted=True)`,
+so new queries hide trashed items for free, but anything counting through
 a link table (tag counts) or deciding a document's last holder
 (`trash.links`, counted on `item_documents`) must handle trashed items
 itself. `get_item_or_404` treats trashed as missing unless `include_deleted`
@@ -195,7 +195,7 @@ hard delete), and `purge_expired` runs in the hourly loop
 (`trash_retention_days`, 0 = never, default 30). `DELETE /api/items/{id}`
 trashes; `?permanent=true` purges. Imports and Cabinet-export dedupe look
 into the trash. CI's stack job drives the API with curl (smoke test, backup
-→ restore drill) — when an endpoint's behaviour changes, update those steps
+→ restore drill). When an endpoint's behaviour changes, update those steps
 too; pytest won't catch them (the trash broke the drill's `DELETE`).
 
 ## Alerts and metrics (v0.21.0)
@@ -206,7 +206,7 @@ each condition in `CONDITIONS` (backup, `<source>_key`/`_quota`,
 the webhook only on a change, on a background thread (`_spawn`; tests run it
 inline). `KeyRejected` / `QuotaExhausted` (subclasses of `SourceUnavailable`)
 are raised by the Numista and PCGS request helpers; `pricing.cached_fetch`
-reports them — even when stale cache covers — and any successful fetch
+reports them, even when stale cache covers, and any successful fetch
 recovers them, and `refresh_source_estimates` stops at the first one. The
 loops' work lives in `services/scheduled.py` (`refresh` records
 `refresh_last_run` and the refresh alerts; `hourly` = backup, trash,
@@ -253,8 +253,8 @@ through `item_catalog_refs`. The item page's outbound links live in
 Migration `0017`: `checklists.match_catalog`/`match_ref`/`match_country`/
 `match_denomination` and `checklist_slots.year`/`mint_mark`.
 `services/checklists.owned_by_issue` indexes owned (status `owned`,
-untrashed via the ORM listener) items of one kind — by catalogue reference
-through `item_catalog_refs`, or by country + denomination — keyed by
+untrashed via the ORM listener) items of one kind (by catalogue reference
+through `item_catalog_refs`, or by country + denomination) keyed by
 (year, normalized mint mark). `slot_views` computes each slot's match **on
 read**; nothing about a match is stored, `ChecklistSlot.filled` stays the
 hand tick, and the API's `filled` is tick-or-match. The same index marks
@@ -274,12 +274,27 @@ writable it logs that and stays root. `docker compose exec` still enters as
 root, which is why `restore.sh` chowns what it extracts to the volume's
 owner. The image installs `requirements.txt` with `--require-hashes`, then
 the project with `--no-deps`, then uninstalls pip (Trivy flags the msgpack
-and setuptools pip bundles) — so there is no pip in the running container.
+and setuptools pip bundles), so there is no pip in the running container.
 `proxy/nginx.conf`: an `add_header` inside a `location` replaces the
 server-level ones, so `location /` repeats them alongside its CSP; `/api/`
 gets no CSP from nginx (documents set their own, and `/api/docs` loads its
 viewer from a CDN). New inline scripts, external fonts, or iframes will trip
-the CSP — the e2e header test visits the main pages to catch that.
+the CSP, and the e2e header test visits the main pages to catch that.
+
+## Interface polish (after v0.23.2)
+
+`api.money` formats through `Intl.NumberFormat` (currency style, the
+browser's locale, formatters cached per code) and falls back to
+`12.50 XYZ` for a code the browser rejects; tests that look for an amount
+look for `$12.50`. Icons are inline SVG in `components/icons.tsx` (the CSP
+allows nothing external, and emoji differ by system); settings is drawn as
+sliders because a gear that small reads as a sun. `components/controls.tsx`
+has `FileButton` (the real input stays inside the label, visually hidden
+but focusable, so keyboard and Playwright's `setInputFiles` still work) and
+`Menu`. The palette is the `:root` tokens in `styles.css` (bronze `--accent`,
+warm surfaces, `--serif` from system fonts only, since the CSP's `font-src`
+is `'self'`); `.site-header a` sets the serif wordmark, so the nav links
+reset `font-family`. No em dashes anywhere; see CLAUDE.md.
 
 ## Releases
 

@@ -134,7 +134,7 @@ def _build(db: Session) -> SettingsOut:
             enabled=bool(store.get_setting(db, "melt_enabled")),
             configured=True,
             available=True,
-            note="Keyless — spot prices from gold-api.com, cached 12h.",
+            note="Keyless: spot prices from gold-api.com, cached 12h.",
         ),
         SourceStatus(
             key="numista",
@@ -163,7 +163,7 @@ def _build(db: Session) -> SettingsOut:
             enabled=bool(store.get_setting(db, "comps_enabled")),
             configured=True,
             available=True,
-            note="Keyless — the median of recent sales you log on each item (eBay sold "
+            note="Keyless: the median of recent sales you log on each item (eBay sold "
             "listings, auction archives, dealer sales), converted at daily rates.",
         ),
     ]

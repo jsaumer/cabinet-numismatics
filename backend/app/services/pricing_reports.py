@@ -1,6 +1,6 @@
 """Pricing reports (pricing program M5): where estimates are missing, old,
 disagreeing, or wrong. Read-only views over estimates, recorded pricing
-attempts, and settings — nothing here calls an upstream source.
+attempts, and settings. Nothing here calls an upstream source.
 
 Every report groups estimates by source key: `melt`, `numista`, `pcgs`, and
 `manual` for anything entered by hand (whatever its free-text source).
@@ -75,7 +75,7 @@ def _strategy(db: Session) -> tuple[str, str | None]:
 
 
 def _display_ids(estimates: list[PriceEstimate], strategy: str, preferred: str | None) -> set:
-    """Which estimates feed the item's shown value — the same choice
+    """Which estimates feed the item's shown value: the same choice
     `pricing.resolve_display_value` makes, minus currency conversion."""
     if not estimates:
         return set()
@@ -136,11 +136,11 @@ def _source_status(
         return status("failed", attempt.message)
     if attempt is not None and attempt.outcome == "not_applicable":
         return status("not_applicable", attempt.message)
-    return status("not_tried", "Ready to price — no attempt recorded yet")
+    return status("not_tried", "Ready to price: no attempt recorded yet")
 
 
 def coverage(db: Session) -> PricingCoverage:
-    """Owned items and, per automatic source, whether each is priced — and if
+    """Owned items and, per automatic source, whether each is priced, and if
     not, why: switched off, a missing prerequisite, what the source said, a
     failed fetch, or simply never tried."""
     items = _load(db, "owned")
@@ -313,7 +313,7 @@ def _error_pct(estimate: float, sold: float) -> float:
 def accuracy(db: Session, currency: str) -> AccuracyReport:
     """Sold items: the estimates that stood on the sale date (the latest per
     source, and the shown value) against the realized price. Estimates
-    recorded after the sale date are ignored — they aren't predictions."""
+    recorded after the sale date are ignored, because they aren't predictions."""
     conv = Converter(db, currency)
     strategy, preferred = _strategy(db)
     errors: dict[str, list[float]] = defaultdict(list)

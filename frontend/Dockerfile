@@ -1,7 +1,7 @@
 # Build the static frontend, then serve it from nginx.
 # This image IS the compose `proxy` service. Build context is the repo root
 # (not frontend/) so this can also COPY proxy/nginx.conf in, baked into the
-# image rather than bind-mounted — a bind-mounted host path can't be relied
+# image rather than bind-mounted: a bind-mounted host path can't be relied
 # on to exist across every node in a Swarm/multi-host deployment.
 FROM node:26-alpine AS build
 WORKDIR /src

@@ -1,17 +1,17 @@
 """Readers for each import source (v0.18.0), producing `importing.Candidate`s.
 
-- `spreadsheet` — any CSV or Excel file, its columns matched to Cabinet's
+- `spreadsheet`: any CSV or Excel file, its columns matched to Cabinet's
   fields (suggested from the header names, adjustable in the preview). Covers
   tools without a dedicated reader: uCoin, CoinSnap, Colnect (whose export has
   a few lines above the header), PCGS's registry, a hand-kept sheet.
-- `cabinet` — Cabinet's own export (CSV or XLSX), read in full by the same
+- `cabinet`: Cabinet's own export (CSV or XLSX), read in full by the same
   row reader as `POST /api/items/import`.
-- `numista_file` — the CSV/XLSX export from numista.com ("My coins" → export).
+- `numista_file`: the CSV/XLSX export from numista.com ("My coins" → export).
   Users choose its columns, so it is read by header name.
-- `opennumismat` — an OpenNumismat collection (`.db`, SQLite). Up to schema
+- `opennumismat`: an OpenNumismat collection (`.db`, SQLite). Up to schema
   10 the purchase and sale live in `coins`; schema 11 (OpenNumismat 1.11)
   moved them to a `prices` table. Both are read, and photos come along.
-- `numista_account` — the user's own collection through the Numista API
+- `numista_account`: the user's own collection through the Numista API
   (`numista.fetch_collection`), with catalogue details per type.
 """
 
@@ -308,9 +308,7 @@ def spreadsheet_candidates(
                 if (day := to_date(value)) is not None:
                     f[key] = day
                 elif clean(value):
-                    cand.messages.append(
-                        f"{key.replace('_', ' ')} {value!r} isn't a date — skipped"
-                    )
+                    cand.messages.append(f"{key.replace('_', ' ')} {value!r} isn't a date, skipped")
             elif kind == "grade":
                 cand.grade = clean(value)
             elif kind == "refs":
@@ -381,7 +379,7 @@ def _cell_text(value) -> str:
 
 def cabinet_candidates(rows: list[dict], db) -> list[Candidate]:
     """Rows of Cabinet's own export, every field included. The exported `id`
-    is the import key, so a second import — here or into another Cabinet —
+    is the import key, so a second import (here or into another Cabinet)
     skips what's already there."""
     from pydantic import ValidationError
 
@@ -430,9 +428,7 @@ def numista_file_candidates(rows: list[dict], defaults: dict) -> list[Candidate]
         f["denomination"] = " ".join(p for p in (face, unit) if p) or clean(get("title"))
         f["year"] = to_year(get("gregorian year", "year", "year range"))
         if clean(get("year range")) and not clean(get("year", "gregorian year")):
-            cand.messages.append(
-                f"Undated issue ({get('year range')}) — recorded as its first year"
-            )
+            cand.messages.append(f"Undated issue ({get('year range')}), recorded as its first year")
         if mark := clean(get("mintmark", "mint mark")):
             f["mint_mark"] = mark
         if series := title_series(get("title")):
@@ -536,7 +532,7 @@ def open_sqlite(path: Path) -> sqlite3.Connection:
 
 class BlobReader:
     """Reads OpenNumismat photos one at a time, only when an item is actually
-    imported — a collection file can hold hundreds of megabytes of them."""
+    imported: a collection file can hold hundreds of megabytes of them."""
 
     def __init__(self, path: Path):
         self.path = path
@@ -689,7 +685,7 @@ def _opennumismat(
                 f["sold_fees"] = round(sold - net, 2)
         f["currency"] = currency if re.fullmatch(r"[A-Z]{3}", currency) else "USD"
         if currency != f["currency"]:
-            cand.messages.append(f"Currency {currency!r} isn't an ISO code — recorded as USD")
+            cand.messages.append(f"Currency {currency!r} isn't an ISO code, recorded as USD")
         for key in ("acquisition_date", "acquired_from", "sold_date", "sold_to"):
             if f.get(key) is None:
                 f.pop(key, None)
@@ -730,7 +726,7 @@ def numista_account_candidates(
 ) -> list[Candidate]:
     """The user's Numista collection (`/users/{id}/collected_items`), with
     catalogue fields and references per type where `types` has them
-    (`numista.type_fields`). `pending` types will be looked up on import —
+    (`numista.type_fields`). `pending` types will be looked up on import, and
     the preview says so instead of reporting a fallback."""
     pending = pending or set()
     out = []
@@ -744,7 +740,7 @@ def numista_account_candidates(
         f = cand.fields
         category = str(type_.get("category") or "coin")
         if category == "exonumia":
-            cand.error = "Skipped: exonumia (tokens, medals) — Cabinet holds coins and notes"
+            cand.error = "Skipped: exonumia (tokens, medals). Cabinet holds coins and notes"
         details = dict(types.get(type_id, {})) if isinstance(type_id, int) else {}
         cand.refs.extend(details.pop("catalog_refs", []))
         f.update({k: v for k, v in details.items() if k not in ("year",)})
@@ -770,7 +766,7 @@ def numista_account_candidates(
             or _int(issue.get("min_year"))
         )
         if not issue.get("is_dated", True) and issue.get("min_year"):
-            cand.messages.append("Undated issue — recorded as its first year")
+            cand.messages.append("Undated issue, recorded as its first year")
         if mark := clean(issue.get("mint_letter")):
             f["mint_mark"] = mark
         if isinstance(issue.get("mintage"), int) and issue["mintage"] >= 0:

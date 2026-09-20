@@ -19,7 +19,7 @@ if [ -f "$SRC" ] && [[ "$SRC" == *.zip ]]; then
   unzip -q "$SRC" -d "$DIR"
   [ -f "$DIR/SHA256SUMS" ] || { echo "$SRC is not a Cabinet backup archive" >&2; exit 1; }
   (cd "$DIR" && sha256sum -c --quiet SHA256SUMS) \
-    || { echo "Checksum mismatch in $SRC — nothing restored" >&2; exit 1; }
+    || { echo "Checksum mismatch in $SRC: nothing restored" >&2; exit 1; }
   echo "Archive checksums OK"
 else
   DIR="$SRC"

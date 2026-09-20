@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for the report. Please don't include API keys, passwords, or the
-        contents of your `.env` — see SECURITY.md for reporting vulnerabilities
+        contents of your `.env`. See SECURITY.md for reporting vulnerabilities
         privately instead.
 
   - type: textarea

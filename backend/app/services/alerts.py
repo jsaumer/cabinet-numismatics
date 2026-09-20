@@ -3,7 +3,7 @@ recovers, and an optional Uptime Kuma push heartbeat.
 
 Each watched condition (a failing backup, a rejected key, an exhausted quota,
 a scheduled refresh with failures) keeps its state in the `alert_state`
-setting, so an alert fires on the change only — a rejected key doesn't
+setting, so an alert fires on the change only: a rejected key doesn't
 re-alert every refresh. Webhook delivery runs on a background thread so it
 never slows the request or task that noticed the problem; the last delivery
 and heartbeat outcomes are kept in memory for Settings and /api/metrics.
@@ -93,7 +93,7 @@ def fail(db: Session, key: str, message: str) -> None:
     store.set_setting(db, "alert_state", state)
     db.commit()
     if changed:
-        logger.warning("Alert: %s failing — %s", CONDITIONS[key], message)
+        logger.warning("Alert: %s failing: %s", CONDITIONS[key], message)
         _notify(db, key, "failing", message)
 
 

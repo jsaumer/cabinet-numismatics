@@ -7,7 +7,7 @@ const issueKey = (i: { year: number | null; mint_letter: string | null }) =>
   `${i.year}|${(i.mint_letter ?? "").trim().toLowerCase()}`;
 
 /** Add a run: pick a Numista type, tick its issues, and get one item per
- * date and mint mark — a fifty-coin run in one form instead of fifty. */
+ * date and mint mark: a fifty-coin run in one form instead of fifty. */
 export default function AddRun() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
@@ -153,7 +153,7 @@ export default function AddRun() {
       const made = await api.generateChecklist({ source: "numista", type_id: found.type_id });
       setNote(
         <>
-          Created the checklist “{made.name}” — {made.filled} of {made.total} filled.{" "}
+          Created the checklist “{made.name}”: {made.filled} of {made.total} filled.{" "}
           <Link to="/checklists">Open checklists</Link>.
         </>,
       );
@@ -180,7 +180,7 @@ export default function AddRun() {
         <h2>1 · The type</h2>
         {configured === false ? (
           <p className="muted" style={{ margin: 0 }}>
-            Adding a run reads a type's dates and mints from Numista — add a Numista API key in{" "}
+            Adding a run reads a type's dates and mints from Numista. Add a Numista API key in{" "}
             <Link to="/settings">Settings</Link> first.
           </p>
         ) : (
@@ -286,9 +286,9 @@ export default function AddRun() {
               <label className="field">
                 Grade (each)
                 <select {...field("grade_id")}>
-                  <option value="">ungraded — set later</option>
+                  <option value="">ungraded (set later)</option>
                   {grades.map((g) => (
-                    <option key={g.id} value={g.id}>{g.code} — {g.label}</option>
+                    <option key={g.id} value={g.id}>{g.code}: {g.label}</option>
                   ))}
                 </select>
               </label>

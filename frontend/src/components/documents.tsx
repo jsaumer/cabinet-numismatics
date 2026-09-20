@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { FileButton } from "./controls";
+import { UploadIcon } from "./icons";
 import { api, DocumentKind, ItemDetail, ItemDocument, ItemListEntry } from "../api";
 
 export const DOCUMENT_KINDS: { key: DocumentKind; label: string }[] = [
@@ -143,7 +145,7 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
       {note && <p className="gain">{note}</p>}
       {item.documents.length === 0 && (
         <p className="muted">
-          No documents yet — attach receipts, certificates of authenticity, invoices, or grading
+          No documents yet. Attach receipts, certificates of authenticity, invoices, or grading
           labels (PDF, JPEG, PNG, WebP, up to 25 MB). Drop them here or pick them below.
         </p>
       )}
@@ -254,7 +256,7 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
                                   {m.mint_mark ? ` "${m.mint_mark}"` : ""}
                                   {m.series && <span className="muted"> · {m.series}</span>}{" "}
                                   {linked ? (
-                                    <span className="muted">— attached</span>
+                                    <span className="muted">(attached)</span>
                                   ) : (
                                     <button type="button" className="link-button"
                                       disabled={busy !== null} onClick={() => share(doc, m)}>
@@ -283,15 +285,9 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
             {DOCUMENT_KINDS.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
           </select>
         </label>
-        <label className="field">
-          {busy === "upload" ? "Uploading…" : "Attach files"}
-          <input type="file" multiple accept={ACCEPT} disabled={busy !== null}
-            onChange={(e) => {
-              const files = Array.from(e.currentTarget.files ?? []);
-              e.currentTarget.value = "";
-              upload(files);
-            }} />
-        </label>
+        <FileButton multiple accept={ACCEPT} disabled={busy !== null} onFiles={upload}>
+          <UploadIcon /> {busy === "upload" ? "Uploading…" : "Attach files"}
+        </FileButton>
       </div>
       <p className="muted" style={{ marginBottom: 0 }}>
         Documents open in your browser's own viewer. They're kept apart from photos and served

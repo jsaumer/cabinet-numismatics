@@ -1,24 +1,27 @@
 :root {
-  --page: #f6f7f9;
-  --surface: #ffffff;
-  --surface-alt: #f6f8fa;
-  --hover: #f3f6fa;
-  --border: #d0d7de;
-  --border-soft: #eaeef2;
-  --ink: #1f2328;
-  --ink-2: #57606a;
-  --ink-3: #8c959f;
-  --link: #205ea6;
-  --header-bg: #24292f;
+  /* Titles and the wordmark; system fonts only, the CSP loads nothing. */
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --header-rule: #9a7a35;
+  --page: #f7f4ee;
+  --surface: #fffdf9;
+  --surface-alt: #f3efe6;
+  --hover: #f1ece1;
+  --border: #ddd5c5;
+  --border-soft: #ebe5d8;
+  --ink: #26221c;
+  --ink-2: #5f584c;
+  --ink-3: #91897a;
+  --link: #6d4f14;
+  --header-bg: #211d17;
   --header-ink: #ffffff;
-  --header-muted: #b9c0c8;
-  --accent: #1f6feb;
+  --header-muted: #b9ae9a;
+  --accent: #7c5c1e;
   --accent-ink: #ffffff;
   --danger: #b42318;
   --danger-border: #e3b0ab;
   --gain: #116329;
   --loss: #b42318;
-  --chip-bg: #eef2f6;
+  --chip-bg: #efe9dc;
   --chip-ref-bg: #f6f4ea;
   --badge-coin-bg: #fff1c2;
   --badge-coin-ink: #7a5901;
@@ -29,33 +32,33 @@
   --badge-wish-bg: #e6dcf7;
   --badge-wish-ink: #533a91;
   /* charts (validated palette, light steps) */
-  --series: #2a78d6;
+  --series: #9a7a35;
   --chart-grid: #e1e0d9;
   --chart-axis: #c3c2b7;
   --chart-muted: #898781;
 }
 
 :root[data-theme="dark"] {
-  --page: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-alt: #222221;
-  --hover: #242423;
-  --border: #3a3a38;
-  --border-soft: #2c2c2a;
-  --ink: #e8e8e5;
-  --ink-2: #c3c2b7;
-  --ink-3: #898781;
-  --link: #6da7ec;
-  --header-bg: #111110;
+  --page: #12100d;
+  --surface: #1c1915;
+  --surface-alt: #24201a;
+  --hover: #29241d;
+  --border: #3d372c;
+  --border-soft: #2e2921;
+  --ink: #ece7dc;
+  --ink-2: #c4bba8;
+  --ink-3: #8f8775;
+  --link: #d9b96e;
+  --header-bg: #0d0b09;
   --header-ink: #ffffff;
-  --header-muted: #898781;
-  --accent: #2a78d6;
-  --accent-ink: #ffffff;
+  --header-muted: #8f8775;
+  --accent: #b8934a;
+  --accent-ink: #1a1408;
   --danger: #e66767;
   --danger-border: #7a3a35;
   --gain: #0ca30c;
   --loss: #e66767;
-  --chip-bg: #262624;
+  --chip-bg: #2a251d;
   --chip-ref-bg: #2a2822;
   --badge-coin-bg: #3a3212;
   --badge-coin-ink: #eda100;
@@ -66,7 +69,7 @@
   --badge-wish-bg: #2a2140;
   --badge-wish-ink: #9085e9;
   /* charts (validated palette, dark steps) */
-  --series: #3987e5;
+  --series: #c9a45c;
   --chart-grid: #2c2c2a;
   --chart-axis: #383835;
   --chart-muted: #898781;
@@ -98,11 +101,14 @@ a:hover {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
+  border-bottom: 2px solid var(--header-rule);
 }
 .site-header a {
   color: var(--header-ink);
-  font-size: 1.15rem;
+  font-family: var(--serif);
+  font-size: 1.35rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .site-header .subtitle {
   color: var(--header-muted);
@@ -115,6 +121,8 @@ a:hover {
   align-items: center;
 }
 .site-header nav a {
+  font-family: inherit;
+  letter-spacing: normal;
   font-size: 0.9rem;
   font-weight: 400;
   color: var(--header-muted);
@@ -122,6 +130,17 @@ a:hover {
 .site-header nav a.active {
   color: var(--header-ink);
   font-weight: 600;
+}
+.site-header nav a.nav-icon,
+.site-header nav .nav-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.icon {
+  vertical-align: -0.14em;
+  flex: none;
 }
 .theme-toggle {
   background: none;
@@ -239,9 +258,13 @@ table.items tbody tr {
 table.items tbody tr:hover {
   background: var(--hover);
 }
-td.num {
+td.num,
+th.num,
+table.items td.num,
+table.items th.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .thumb {
@@ -319,7 +342,11 @@ td.num {
 }
 .card h2 {
   margin: 0 0 0.75rem;
-  font-size: 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
 }
 
 .detail-header {
@@ -331,7 +358,12 @@ td.num {
 }
 .detail-header h1 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.6rem;
+}
+h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: -0.005em;
 }
 .detail-header .spacer {
   flex: 1;
@@ -823,6 +855,7 @@ button.chip {
   color: var(--ink-2);
 }
 .hero-value {
+  font-family: var(--serif);
   font-size: 3rem;
   font-weight: 600;
   line-height: 1.1;
@@ -1061,5 +1094,112 @@ details.history summary {
   }
   .site-header .subtitle {
     display: none;
+  }
+}
+
+
+/* Numbers line up wherever they sit in columns or change in place. */
+main {
+  font-variant-numeric: tabular-nums;
+}
+
+/* File pickers that look like buttons; the input stays focusable. */
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  position: relative;
+}
+.file-button input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.file-button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.file-button.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.dropzone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface-alt);
+}
+.dropzone button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* A button with a short drop-down list. */
+.menu {
+  position: relative;
+}
+.menu > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.menu-items {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 11rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+}
+.menu-items a {
+  padding: 0.45rem 0.6rem;
+  border-radius: 5px;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.menu-items a:hover {
+  background: var(--hover);
+  text-decoration: none;
+}
+
+/* The subtitle goes before the navigation gets squeezed. */
+@media (max-width: 1000px) {
+  .site-header .subtitle {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .site-header {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+  .site-header nav {
+    margin-left: 0;
+    width: 100%;
+    gap: 0.35rem 0.9rem;
+    flex-wrap: wrap;
+  }
+  .site-header nav a {
+    white-space: nowrap;
+  }
+  .site-header nav .nav-icon:first-of-type {
+    margin-left: auto;
   }
 }

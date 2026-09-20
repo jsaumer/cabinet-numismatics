@@ -115,7 +115,7 @@ export default function Pricing() {
         </div>
 
         {coverage.items.length === 0 ? (
-          <p className="muted">Nothing needs attention — every owned item is priced where it can be.</p>
+          <p className="muted">Nothing needs attention: every owned item is priced where it can be.</p>
         ) : (
           <>
             <h3>Needs attention</h3>
@@ -229,7 +229,7 @@ export default function Pricing() {
           {sources.strategy === "preferred_source" &&
             sources.preferred_source &&
             ` (${sourceName(sources.preferred_source)})`}
-          {sources.averaged_items > 0 && ` — ${sources.averaged_items} item(s) averaged`}.{" "}
+          {sources.averaged_items > 0 && ` (${sources.averaged_items} item(s) averaged)`}.{" "}
           <Link to="/settings">Change in Settings</Link>.
         </p>
         <div className="table-scroll">
@@ -249,12 +249,12 @@ export default function Pricing() {
                 <tr key={s.source}>
                   <td>{sourceName(s.source)}</td>
                   <td className="num">{s.items}</td>
-                  <td className="num">{s.items ? money(s.total_value, cur) : "—"}</td>
+                  <td className="num">{s.items ? money(s.total_value, cur) : "–"}</td>
                   <td className="num">
-                    {s.avg_confidence != null ? `${Math.round(s.avg_confidence * 100)}%` : "—"}
+                    {s.avg_confidence != null ? `${Math.round(s.avg_confidence * 100)}%` : "–"}
                   </td>
                   <td className="num">
-                    {s.median_age_days != null ? `${s.median_age_days} d` : "—"}
+                    {s.median_age_days != null ? `${s.median_age_days} d` : "–"}
                   </td>
                   <td className="num">{s.in_totals}</td>
                 </tr>
@@ -363,9 +363,9 @@ export default function Pricing() {
                       </td>
                       <td className="num">{money(item.sold_price, accuracy.currency)}</td>
                       <td className="num">
-                        {item.blended ? money(item.blended.value, accuracy.currency) : "—"}
+                        {item.blended ? money(item.blended.value, accuracy.currency) : "–"}
                       </td>
-                      <td className="num">{item.blended ? pct(item.blended.error_pct) : "—"}</td>
+                      <td className="num">{item.blended ? pct(item.blended.error_pct) : "–"}</td>
                       <td>
                         <div className="chip-row">
                           {item.by_source.map((e) => (

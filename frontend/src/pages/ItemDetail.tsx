@@ -103,7 +103,7 @@ export default function ItemDetail() {
   const fact = (label: string, value: string | number | null | undefined) => (
     <div>
       <dt>{label}</dt>
-      <dd>{value == null || value === "" ? "—" : value}</dd>
+      <dd>{value == null || value === "" ? "–" : value}</dd>
     </div>
   );
 
@@ -148,7 +148,7 @@ export default function ItemDetail() {
           <div>
             <dt>Set / lot</dt>
             <dd>
-              {item.set ? <Link to={`/collection?set_id=${item.set.id}`}>{item.set.name}</Link> : "—"}
+              {item.set ? <Link to={`/collection?set_id=${item.set.id}`}>{item.set.name}</Link> : "–"}
             </dd>
           </div>
           {fact("Grade", item.grade ? `${item.grade_label} (${item.grade.label})` : null)}
@@ -159,7 +159,7 @@ export default function ItemDetail() {
           <div>
             <dt>Certification</dt>
             <dd>
-              {item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : "—"}
+              {item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : "–"}
               {certUrl && (
                 <>
                   {" "}
@@ -205,7 +205,7 @@ export default function ItemDetail() {
           <div style={{ gridColumn: "1 / -1" }}>
             <dt>Latest value</dt>
             <dd>
-              {sourceValues.length === 0 && "—"}
+              {sourceValues.length === 0 && "–"}
               {sourceValues.length === 1 && (
                 <>
                   {money(sourceValues[0][1].estimated_value, sourceValues[0][1].currency)}{" "}
@@ -263,7 +263,7 @@ export default function ItemDetail() {
         {events && events.length === 0 && <p className="muted">No history recorded.</p>}
         {events?.map((event) => (
           <div className="history-entry" key={event.id}>
-            <span className="muted">{new Date(event.at).toLocaleString()}</span> — {event.action}
+            <span className="muted">{new Date(event.at).toLocaleString()}</span>: {event.action}
             {event.changes && (
               <>
                 {": "}

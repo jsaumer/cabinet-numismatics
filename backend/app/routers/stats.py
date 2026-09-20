@@ -224,7 +224,7 @@ def value_history(
     db: Session = Depends(get_db),
 ):
     """Collection value at each month-end: per owned item, the latest estimate
-    on or before that date (converted at today's cached rates — historical
+    on or before that date (converted at today's cached rates: historical
     rates are out of scope for a personal tool)."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)

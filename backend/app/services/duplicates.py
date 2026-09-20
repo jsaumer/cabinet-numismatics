@@ -1,4 +1,4 @@
-"""Finding items that look like one about to be added — the item form's
+"""Finding items that look like one about to be added: the item form's
 warning and the importer's note. A match is the same cert number (any
 service), the same catalogue reference, or the same country, denomination,
 year, and mint mark. Trashed items count: restoring one beats re-entering it."""

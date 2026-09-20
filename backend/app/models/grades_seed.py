@@ -1,8 +1,8 @@
 """Seed data for the grades reference table.
 
 Used by migration 0003 and by the test fixtures. Treat as append-only: editing
-existing rows here does not change databases that were already migrated —
-rows added later also need a migration that inserts them (see 0012).
+existing rows here does not change databases that were already migrated.
+Rows added later also need a migration that inserts them (see 0012).
 """
 
 SHELDON = [

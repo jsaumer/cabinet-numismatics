@@ -79,7 +79,7 @@ export default function Trash() {
         exactly as they were.{" "}
         {trash.retention_days
           ? `They're deleted for good after ${trash.retention_days} days`
-          : "They stay until you delete them — automatic emptying is off"}{" "}
+          : "They stay until you delete them; automatic emptying is off"}{" "}
         (<Link to="/settings">Settings</Link>).
       </p>
       {error && <p className="error">{error}</p>}
@@ -139,7 +139,7 @@ export default function Trash() {
                     {item.series && <span className="muted"> · {item.series}</span>}{" "}
                     <span className={`badge ${item.type}`}>{item.type}</span>
                   </td>
-                  <td>{item.grade_label ?? "—"}</td>
+                  <td>{item.grade_label ?? "–"}</td>
                   <td>
                     {when(item.deleted_at)}
                     {item.purge_at && <div className="muted sale-title">{untilPurge(item.purge_at)}</div>}
