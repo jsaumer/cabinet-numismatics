@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.23.2] — 2026-09-20
+
 ### Fixed
 - The insurance report's **Acquired** column printed a dash above the source
   ("— / inherited") when an item had a source but no date.
