@@ -146,7 +146,7 @@ app's Settings page and stored in the database.
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 | `RESTORE_ENABLED` | In-app restore (default `true`); `false` makes every restore endpoint answer 404 and hides it in Settings |
 | `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
-| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.27.0`) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.27.1`) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,

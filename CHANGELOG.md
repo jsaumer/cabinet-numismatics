@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-09-20
+
 ### Added
 - **Undated pieces (ND).** Year is now optional: tick "ND (no date on the
   piece)" on the item form for a piece that carries no date, with an
