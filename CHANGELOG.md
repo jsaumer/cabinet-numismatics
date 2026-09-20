@@ -10,6 +10,27 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Add a run.** Collection → **Add a run**: look a type up on Numista, tick
+  the dates and mints you have, fill in what they share — status, grade,
+  date and price paid (each), source, storage, set, tags — and get one item
+  per issue, each with the type's country, denomination, composition,
+  weight, and catalogue references plus its own year, mint mark, and
+  mintage. Issues you already own are marked and skipped. A fifty-coin run is
+  one form instead of fifty.
+- **Checklists that fill themselves.** Generate a checklist from a Numista
+  type (one slot per issue) or from a date range (country, denomination,
+  first and last year, mint marks, and any to leave out). A slot fills when
+  you own an item of that type — or that country and denomination — with
+  the same year and mint mark, links to it, and reopens if the item is sold
+  or trashed. Each checklist shows its completion percentage and a **needed
+  to complete** view. Hand-written checklists and hand ticks work as before.
+- "Fill from Numista" and the API's type lookup now say which issues you own.
+- API: `POST /api/items/run`, `POST /api/checklists/generate`; checklist
+  slots carry `year`, `mint_mark`, `matched_item_id`, and `matched_label`,
+  checklists `match_*`, `total`, and `filled`, summaries `generated`.
+  Migration `0017`.
+
 ## [0.22.0] — 2026-09-19
 
 ### Added

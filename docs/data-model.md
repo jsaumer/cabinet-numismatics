@@ -28,7 +28,10 @@ grading, physical, banknote, and cost columns on `items` below, and PMG
 grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log. `0014`
 (v0.18.0) added `items.import_source` / `import_key`. `0015` (v0.19.0) added
 `documents` and `item_documents`. `0016` (v0.20.0) added `items.deleted_at`
-for the trash.
+for the trash. `0017` (v0.23.0) added `checklists.match_catalog`,
+`match_ref`, `match_country`, and `match_denomination` (what fills a
+generated checklist) and `checklist_slots.year` and `mint_mark`; which item
+fills a slot is computed on read, never stored.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);

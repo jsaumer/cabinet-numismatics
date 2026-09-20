@@ -50,6 +50,23 @@ test("entering it again warns about the duplicate", async ({ page }) => {
   await expect(warning).toContainText("same country, denomination, year, and mint mark");
 });
 
+test("a generated checklist fills itself from what's owned", async ({ page }) => {
+  acceptDialogs(page);
+  await page.goto("/checklists");
+  const form = page.locator("form", { hasText: "First year" });
+  await form.getByLabel("Country").fill(COUNTRY);
+  await form.getByLabel("Denomination").fill(DENOMINATION);
+  await form.getByLabel("First year").fill("2025");
+  await form.getByLabel("Last year").fill("2027");
+  await form.getByRole("button", { name: "Generate" }).click();
+
+  const card = page.locator(".card", { hasText: `${COUNTRY} ${DENOMINATION} 2025–2027` });
+  await expect(card).toContainText("1 / 3 · 33%");
+  await expect(card.getByRole("link", { name: YEAR, exact: true })).toBeVisible();
+  await card.getByRole("button", { name: "Delete" }).click();
+  await expect(card).toHaveCount(0);
+});
+
 test("the collection finds it by search", async ({ page }) => {
   await page.goto(`/collection?q=${encodeURIComponent(COUNTRY)}`);
   const row = page.locator("table.items tbody tr", { hasText: COUNTRY }).first();

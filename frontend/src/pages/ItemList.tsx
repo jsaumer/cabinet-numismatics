@@ -265,6 +265,9 @@ export default function ItemList() {
             Trash ({trashCount})
           </Link>
         )}
+        <Link className="button" to="/items/run" title="One item per date and mint of a type">
+          Add a run
+        </Link>
         <Link className="button primary" to="/items/new">Add item</Link>
       </div>
 

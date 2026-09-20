@@ -143,8 +143,14 @@ def test_coin_type_fills_fields_refs_and_issues(client, catalogue):
         {"catalog": "km", "ref_code": "KM#273"},
     ]
     assert body["issues"] == [
-        {"year": 1986, "mint_letter": None, "mintage": 5393005, "comment": None},
-        {"year": 2000, "mint_letter": "W", "mintage": 600743, "comment": "Proof"},
+        {"year": 1986, "mint_letter": None, "mintage": 5393005, "comment": None, "owned": False},
+        {
+            "year": 2000,
+            "mint_letter": "W",
+            "mintage": 600743,
+            "comment": "Proof",
+            "owned": False,
+        },
     ]
 
     client.get("/api/numista/types/1493")

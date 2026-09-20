@@ -85,7 +85,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 ## Current status & next step
 
 Released as v0.22.0: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0016`. What each release added, and the rules it left behind, is in
+`0001`–`0017`. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md — read the section for any area you touch. The
 rules that bite most often:
 
@@ -114,9 +114,10 @@ rules that bite most often:
 Cert-first entry shipped in v0.22.0 (`pcgs.cert_facts` / `parse_grade`,
 `services/duplicates.py` behind `GET /api/items/similar` and the importer's
 lookalike note, `components/lookup.tsx`; no migration).
-**Next: runs and registry sets** (v0.23.0 — "Add a run" from a Numista
-type's issues; checklists generated from a type or a year/mint range and
-auto-matched, with completion %) — and nothing is queued after it. The
+Runs and registry sets are built for v0.23.0 (`services/checklists.py`,
+`POST /api/items/run`, `POST /api/checklists/generate`, migration `0017`;
+slot matches are computed on read, never stored).
+**Next: nothing is queued.** The
 roadmap's Phase 5.9 was demoted on 19 September 2026 from a release train to
 one next item plus unordered **candidates** and **parked** items: the owner
 is entering 100–500 pieces by hand (runs and singles, mostly held), so don't

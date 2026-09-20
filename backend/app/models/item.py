@@ -332,6 +332,12 @@ class Checklist(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # What fills a generated checklist's slots: owned items carrying this
+    # catalogue reference, or of this country and denomination.
+    match_catalog: Mapped[str | None] = mapped_column(String(50))
+    match_ref: Mapped[str | None] = mapped_column(String(100))
+    match_country: Mapped[str | None] = mapped_column(String(100))
+    match_denomination: Mapped[str | None] = mapped_column(String(100))
 
     slots: Mapped[list["ChecklistSlot"]] = relationship(
         back_populates="checklist", cascade="all, delete-orphan", order_by="ChecklistSlot.position"
@@ -347,10 +353,13 @@ class ChecklistSlot(Base):
     )
     label: Mapped[str] = mapped_column(String(200))
     position: Mapped[int] = mapped_column(Integer, default=0)
-    filled: Mapped[bool] = mapped_column(Boolean, default=False)
+    filled: Mapped[bool] = mapped_column(Boolean, default=False)  # ticked by hand
     item_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("items.id", ondelete="SET NULL")
     )
+    # Set on generated slots; an owned item of the same year and mint fills it.
+    year: Mapped[int | None] = mapped_column(Integer)
+    mint_mark: Mapped[str | None] = mapped_column(String(20))
 
     checklist: Mapped[Checklist] = relationship(back_populates="slots")
 

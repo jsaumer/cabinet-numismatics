@@ -91,18 +91,65 @@ export interface ChecklistSummary {
   name: string;
   total: number;
   filled: number;
+  generated: boolean; // slots fill themselves from owned items
 }
 
 export interface ChecklistSlot {
   id: number;
   label: string;
   position: number;
-  filled: boolean;
+  filled: boolean; // ticked by hand, or matched by an owned item
   item_id: string | null;
+  year: number | null;
+  mint_mark: string | null;
+  matched_item_id: string | null;
+  matched_label: string | null;
 }
 
 export interface ChecklistDetail {
   id: number;
   name: string;
+  match_catalog: string | null;
+  match_ref: string | null;
+  match_country: string | null;
+  match_denomination: string | null;
+  total: number;
+  filled: number;
   slots: ChecklistSlot[];
+}
+
+export type ChecklistGenerate =
+  | { source: "numista"; type_id: number; name?: string }
+  | {
+      source: "range";
+      country: string;
+      denomination: string;
+      year_from: number;
+      year_to: number;
+      mint_marks: string[];
+      skip: string[];
+      name?: string;
+    };
+
+export interface RunCreate {
+  type_id: number;
+  issues: { year: number; mint_mark: string | null; mintage: number | null }[];
+  shared: {
+    status: ItemStatus;
+    grade_id: number | null;
+    acquisition_date: string | null;
+    acquisition_price: number | null;
+    currency: string;
+    acquired_from: string | null;
+    storage_location: string | null;
+    set_id: number | null;
+    tags: string[];
+  };
+  skip_owned?: boolean;
+}
+
+export interface RunResult {
+  created: number;
+  skipped: number;
+  item_ids: string[];
 }

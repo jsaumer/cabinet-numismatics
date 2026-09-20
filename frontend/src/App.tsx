@@ -11,6 +11,7 @@ import Import from "./pages/Import";
 import ItemList from "./pages/ItemList";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
+import AddRun from "./pages/AddRun";
 import Trash from "./pages/Trash";
 
 /** The dashboard is the home page. Before v0.16.0 the collection list lived at
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/items/new" element={<ItemForm />} />
+          <Route path="/items/run" element={<AddRun />} />
           <Route path="/items/:id" element={<ItemDetail />} />
           <Route path="/items/:id/edit" element={<ItemForm />} />
         </Routes>

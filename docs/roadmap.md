@@ -91,8 +91,8 @@ The heart of the app: describing what you own, accurately and flexibly.
   grade, designation, variety), and a duplicate warning when an item with
   the same reference, year, and mint already exists. Phase 5.9.
   **Shipped in v0.22.0.**
-- **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
-  item per date and mint. Phase 5.9. **Next — v0.23.0.**
+- ✔ **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
+  item per date and mint. Phase 5.9. **Shipped in v0.23.0.**
 - **[Nice]** Wish-list target price and priority, alerted when an estimate
   falls to the target; statuses beyond owned/sold/wishlist — watching,
   bidding, ordered, for sale, for swap — with auction fields (house, lot,
@@ -206,10 +206,10 @@ guidance, not appraisals.
   progress, e.g. a date/mint run).
 - ✔ **[Nice]** Insurance report (itemized values, photos, certs, totals,
   disclaimer).
-- **[Nice]** Registry-style sets: checklist slots generated from a catalogue
+- ✔ **[Nice]** Registry-style sets: checklist slots generated from a catalogue
   type's issues or a year and mint range, matched automatically to owned
   items, with a completion percentage and a "needed to complete" list.
-  Phase 5.9. **Next — v0.23.0**, with "Add a run".
+  Phase 5.9. **Shipped in v0.23.0**, with "Add a run".
 - **[Nice]** Tax lots and realized gains by year: several purchase and sale
   records per item, partial sales, holding period, basis including fees,
   FIFO or specific identification, and a Form 8949-style CSV. Phase 5.9.
@@ -307,7 +307,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog — `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades — Alembic since Phase 0, revisions `0001`–`0016`, applied by the
+  upgrades — Alembic since Phase 0, revisions `0001`–`0017`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -608,9 +608,10 @@ if it's reachable beyond the LAN, and the first 25–50 real pieces entered,
 because the friction found doing that is the real roadmap. So the numbered
 train ends here:
 
-**Next**
+**Next** — nothing is queued; the next item comes from entering the
+collection.
 
-- **Runs and registry sets** (v0.23.0, M–L) — "Add a run": pick a Numista
+- ✔ **Runs and registry sets** (v0.23.0, M–L) — "Add a run": pick a Numista
   type, tick its issues (already fetched for "Fill from Numista"), get one
   item per date and mint; checklists generated from a type's issues or a
   year and mint range, matched automatically to owned items, with a
@@ -696,7 +697,7 @@ gets asked.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0016`), never create-on-startup.
+  revision (`0001`–`0017`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty — the same reasoning that front-loaded Phase 2's fields.

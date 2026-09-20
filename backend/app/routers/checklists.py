@@ -4,7 +4,16 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db import get_db
 from app.models import Checklist, ChecklistSlot
-from app.schemas import ChecklistCreate, ChecklistDetail, ChecklistSummary, SlotOut, SlotUpdate
+from app.schemas import (
+    ChecklistCreate,
+    ChecklistDetail,
+    ChecklistGenerate,
+    ChecklistSummary,
+    SlotOut,
+    SlotUpdate,
+)
+from app.services import checklists, numista
+from app.services.pricing import NotApplicable, SourceUnavailable
 
 router = APIRouter(prefix="/api/checklists", tags=["checklists"])
 
@@ -18,18 +27,37 @@ def _get_or_404(db: Session, checklist_id: int) -> Checklist:
     return checklist
 
 
+def _detail(db: Session, checklist: Checklist) -> ChecklistDetail:
+    slots = checklists.slot_views(db, checklist)
+    return ChecklistDetail(
+        id=checklist.id,
+        name=checklist.name,
+        match_catalog=checklist.match_catalog,
+        match_ref=checklist.match_ref,
+        match_country=checklist.match_country,
+        match_denomination=checklist.match_denomination,
+        total=len(slots),
+        filled=sum(1 for s in slots if s["filled"]),
+        slots=slots,
+    )
+
+
 @router.get("", response_model=list[ChecklistSummary])
 def list_checklists(db: Session = Depends(get_db)):
     rows = db.execute(select(Checklist).options(selectinload(Checklist.slots))).scalars().all()
-    return [
-        ChecklistSummary(
-            id=c.id,
-            name=c.name,
-            total=len(c.slots),
-            filled=sum(1 for s in c.slots if s.filled),
+    out = []
+    for c in sorted(rows, key=lambda c: c.name):
+        slots = checklists.slot_views(db, c)
+        out.append(
+            ChecklistSummary(
+                id=c.id,
+                name=c.name,
+                total=len(slots),
+                filled=sum(1 for s in slots if s["filled"]),
+                generated=bool(c.match_ref or c.match_country),
+            )
         )
-        for c in sorted(rows, key=lambda c: c.name)
-    ]
+    return out
 
 
 @router.post("", response_model=ChecklistDetail, status_code=201)
@@ -44,12 +72,66 @@ def create_checklist(payload: ChecklistCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="At least one non-empty slot is required")
     db.add(checklist)
     db.commit()
-    return _get_or_404(db, checklist.id)
+    return _detail(db, _get_or_404(db, checklist.id))
+
+
+@router.post("/generate", response_model=ChecklistDetail, status_code=201)
+def generate_checklist(payload: ChecklistGenerate, db: Session = Depends(get_db)):
+    """A checklist whose slots fill themselves: one per issue of a Numista
+    type, or one per year and mint mark of a range."""
+    checklist = Checklist()
+    if payload.source == "numista":
+        if payload.type_id is None:
+            raise HTTPException(422, "type_id is required to generate from a Numista type")
+        try:
+            found = numista.catalogue_type(db, payload.type_id)
+        except NotApplicable as exc:
+            raise HTTPException(422, str(exc)) from None
+        except numista.CatalogueNotFound as exc:
+            raise HTTPException(404, str(exc)) from None
+        except SourceUnavailable as exc:
+            raise HTTPException(502, str(exc)) from None
+        slots = checklists.slots_from_issues(found["issues"])
+        if not slots:
+            raise HTTPException(422, f"Numista lists no dated issues for {found['title']}")
+        name = payload.name or found["title"]
+        checklist.match_catalog, checklist.match_ref = "numista", f"N#{payload.type_id}"
+    else:
+        if not (payload.country and payload.denomination) or None in (
+            payload.year_from,
+            payload.year_to,
+        ):
+            raise HTTPException(
+                422, "A range needs a country, a denomination, and a first and last year"
+            )
+        if payload.year_to < payload.year_from:
+            raise HTTPException(422, "The last year is before the first")
+        slots = checklists.slots_from_range(
+            payload.year_from, payload.year_to, payload.mint_marks, payload.skip
+        )
+        if not slots:
+            raise HTTPException(422, "That range leaves no slots")
+        name = payload.name or (
+            f"{payload.country.strip()} {payload.denomination.strip()} "
+            f"{payload.year_from}–{payload.year_to}"
+        )
+        checklist.match_country = payload.country.strip()
+        checklist.match_denomination = payload.denomination.strip()
+    if len(slots) > checklists.MAX_SLOTS:
+        raise HTTPException(422, f"That makes {len(slots)} slots; the limit is 500")
+    checklist.name = name.strip()[:100]
+    checklist.slots = [
+        ChecklistSlot(label=label, position=i, year=year, mint_mark=mint)
+        for i, (label, year, mint) in enumerate(slots)
+    ]
+    db.add(checklist)
+    db.commit()
+    return _detail(db, _get_or_404(db, checklist.id))
 
 
 @router.get("/{checklist_id}", response_model=ChecklistDetail)
 def get_checklist(checklist_id: int, db: Session = Depends(get_db)):
-    return _get_or_404(db, checklist_id)
+    return _detail(db, _get_or_404(db, checklist_id))
 
 
 @router.patch("/{checklist_id}/slots/{slot_id}", response_model=SlotOut)
