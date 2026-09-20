@@ -505,8 +505,12 @@ class SlotOut(BaseModel):
     id: int
     label: str
     position: int
-    filled: bool
+    filled: bool  # ticked by hand, or matched by an owned item
     item_id: uuid.UUID | None
+    year: int | None = None
+    mint_mark: str | None = None
+    matched_item_id: uuid.UUID | None = None  # the owned item filling it
+    matched_label: str | None = None
 
 
 class SlotUpdate(BaseModel):
@@ -519,13 +523,68 @@ class ChecklistSummary(BaseModel):
     name: str
     total: int
     filled: int
+    generated: bool = False  # slots fill themselves from owned items
+
+
+class ChecklistGenerate(BaseModel):
+    """From a Numista type's issues, or a year × mint-mark range."""
+
+    source: Literal["numista", "range"]
+    name: str | None = Field(default=None, max_length=100)
+    type_id: int | None = Field(default=None, ge=1)
+    country: str | None = Field(default=None, max_length=100)
+    denomination: str | None = Field(default=None, max_length=100)
+    year_from: int | None = Field(default=None, ge=-700, le=2100)
+    year_to: int | None = Field(default=None, ge=-700, le=2100)
+    mint_marks: list[str] = Field(default=[""], max_length=20)  # "" = no mint mark
+    skip: list[str] = Field(default=[], max_length=500)  # labels to leave out
+
+
+class RunIssue(BaseModel):
+    year: int = Field(ge=-700, le=2100)
+    mint_mark: str | None = Field(default=None, max_length=20)
+    mintage: int | None = Field(default=None, ge=0)
+
+
+class RunShared(BaseModel):
+    """What every item of the run has in common. Prices are per item."""
+
+    status: ItemStatusName = "owned"
+    grade_id: int | None = None
+    quantity: int = Field(default=1, ge=1)
+    acquisition_date: date | None = None
+    acquisition_price: float | None = Field(default=None, ge=0)
+    acquisition_fees: float | None = Field(default=None, ge=0)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    acquired_from: str | None = Field(default=None, max_length=200)
+    storage_location: str | None = Field(default=None, max_length=200)
+    set_id: int | None = None
+    tags: list[str] = []
+    notes: str | None = None
+
+
+class RunCreate(BaseModel):
+    type_id: int = Field(ge=1)
+    issues: list[RunIssue] = Field(min_length=1, max_length=200)
+    shared: RunShared = RunShared()
+    skip_owned: bool = True
+
+
+class RunResult(BaseModel):
+    created: int
+    skipped: int  # issues already owned
+    item_ids: list[uuid.UUID]
 
 
 class ChecklistDetail(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     name: str
+    match_catalog: str | None = None
+    match_ref: str | None = None
+    match_country: str | None = None
+    match_denomination: str | None = None
+    total: int
+    filled: int
     slots: list[SlotOut]
 
 
@@ -549,6 +608,7 @@ class NumistaIssue(BaseModel):
     mint_letter: str | None = None
     mintage: int | None = None
     comment: str | None = None
+    owned: bool = False  # an owned item carries this type, year, and mint mark
 
 
 class NumistaType(BaseModel):

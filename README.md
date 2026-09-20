@@ -13,9 +13,8 @@ or API keys required.
 
 **Status: v0.22.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: adding a whole date/mint run at once, with checklists generated
-and filled from what's owned. After that the roadmap is a list of
-candidates, pulled by real use rather than a schedule. See the
+Nothing is queued next: the roadmap is a list of candidates, pulled by
+what entering a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an
@@ -136,6 +135,9 @@ Shown with the bundled demo collection (`python scripts/seed_demo.py`).
   blended-value strategy, per-source refresh cadence, and price-source
   credentials — stored **encrypted at rest** and never readable back
     through the API (see [docs/security.md](docs/security.md)).
+- **Add a run**: pick a type on Numista, tick the dates and mints you have,
+  and get one item each. **Checklists generate themselves** from a type or
+  a date range and fill from what you own, with a completion percentage.
 - Fill a slabbed coin in from its **PCGS cert number**, and a **duplicate
   warning** while entering anything already here — by cert, reference, or
   country, denomination, year, and mint.

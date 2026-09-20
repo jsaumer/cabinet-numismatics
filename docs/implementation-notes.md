@@ -248,6 +248,23 @@ first. Catalogue references are shared rows, so a reference match goes
 through `item_catalog_refs`. The item page's outbound links live in
 `components/lookup.tsx`; they're URLs only.
 
+## Runs and registry sets (v0.23.0)
+
+Migration `0017`: `checklists.match_catalog`/`match_ref`/`match_country`/
+`match_denomination` and `checklist_slots.year`/`mint_mark`.
+`services/checklists.owned_by_issue` indexes owned (status `owned`,
+untrashed via the ORM listener) items of one kind — by catalogue reference
+through `item_catalog_refs`, or by country + denomination — keyed by
+(year, normalized mint mark). `slot_views` computes each slot's match **on
+read**; nothing about a match is stored, `ChecklistSlot.filled` stays the
+hand tick, and the API's `filled` is tick-or-match. The same index marks
+`owned` issues in `GET /api/numista/types/{id}` and lets `POST
+/api/items/run` skip them. A run builds each `ItemCreate` from
+`numista.catalogue_type`'s fields (less `year`/`mintage`) + the issue + the
+shared fields, through `_build_item`, in one transaction. Mint marks match
+as written (`P` ≠ blank). `POST /api/checklists/generate` and
+`POST /api/items/run` are declared before the `/{id}` routes.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes

@@ -3,7 +3,7 @@
 import { json, req } from "./client";
 import type { Angle, Comparable, ComparableInput, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
-import type { Breakdowns, ChecklistDetail, ChecklistSlot, ChecklistSummary, CollectionStats, Gains, ItemEvent, RefreshResult, TrashList, ValueHistory } from "./types/stats";
+import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, RefreshResult, TrashList, ValueHistory } from "./types/stats";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, SourcesReport, StaleReport } from "./types/settings";
 
 export const api = {
@@ -125,6 +125,9 @@ export const api = {
   createChecklist: (name: string, slots: string[]) =>
     req<ChecklistDetail>("/api/checklists", json("POST", { name, slots })),
   getChecklist: (id: number) => req<ChecklistDetail>(`/api/checklists/${id}`),
+  generateChecklist: (payload: ChecklistGenerate) =>
+    req<ChecklistDetail>("/api/checklists/generate", json("POST", payload)),
+  addRun: (payload: RunCreate) => req<RunResult>("/api/items/run", json("POST", payload)),
   updateSlot: (checklistId: number, slotId: number, filled: boolean) =>
     req<ChecklistSlot>(
       `/api/checklists/${checklistId}/slots/${slotId}`,

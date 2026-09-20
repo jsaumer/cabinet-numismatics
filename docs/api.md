@@ -30,6 +30,7 @@ described without an auth layer; add one before exposing the app publicly.
 | `DELETE` | `/api/items/{id}`         | Move an item to the trash; `?permanent=true` (or an item already there) deletes it for good |
 | `POST`   | `/api/items/{id}/restore` | Take an item out of the trash       |
 | `GET`    | `/api/items/similar`      | Items that look like one being entered — see below |
+| `POST`   | `/api/items/run`          | One item per chosen issue of a Numista type — see Add a run |
 
 **List query parameters** (all optional): `type`, `status`, `strike`
 (`business`/`proof`/`specimen`), `country`, `year`,
@@ -170,6 +171,19 @@ reference`, `same country, denomination, year, and mint mark`). Matching
 ignores case and spacing; trashed items are included and listed last. With
 nothing to go on it answers `[]`. The import preview runs the same check
 and notes lookalikes in a row's `messages`.
+
+## Add a run
+
+`POST /api/items/run` takes `type_id` (a Numista type), `issues` (1–200 of
+`{year, mint_mark, mintage}`), `shared` (`status`, `grade_id`, `quantity`,
+`acquisition_date`, `acquisition_price` and `acquisition_fees` per item,
+`currency`, `acquired_from`, `storage_location`, `set_id`, `tags`, `notes`),
+and `skip_owned` (default `true`). Each item gets the type's fields and
+catalogue references as "Fill from Numista" would, plus the issue's year,
+mint mark, and mintage. Issues already owned (same Numista number, year, and
+mint mark) and repeats within the request are skipped. Answers `201` with
+`created`, `skipped`, and `item_ids`; everything is one transaction. Needs a
+Numista API key (`422`); an unknown type is `404`.
 
 ## Numista catalogue lookup
 
@@ -452,9 +466,24 @@ payload of each format, and every metric are in
 |----------|-----------------------------------------|-----------------------------|
 | `GET`    | `/api/checklists`                       | List with filled/total      |
 | `POST`   | `/api/checklists`                       | Create with a slot list     |
+| `POST`   | `/api/checklists/generate`              | Generate slots that fill themselves |
 | `GET`    | `/api/checklists/{id}`                  | Detail with slots           |
 | `PATCH`  | `/api/checklists/{id}/slots/{slot_id}`  | Check/uncheck or link item  |
 | `DELETE` | `/api/checklists/{id}`                  | Delete a checklist          |
+
+`POST /api/checklists/generate` takes `source: "numista"` with a `type_id`
+(one slot per dated issue, matched by the type's Numista number) or
+`source: "range"` with `country`, `denomination`, `year_from`, `year_to`,
+`mint_marks` (`""` is the no-mint-mark slot) and `skip` (labels such as
+`1933` or `1934-S`), matched by country and denomination; `name` is
+optional, and 500 slots is the limit. A generated slot carries `year` and
+`mint_mark`; when the checklist is read, a slot is `filled` if it was ticked
+by hand **or** an owned, untrashed item matches it, in which case
+`matched_item_id` and `matched_label` name that item. Matching is never
+stored, so selling or trashing the item reopens the slot. Mint marks match
+as written — an item marked `P` doesn't fill a no-mint-mark slot. Details
+also carry `match_catalog`/`match_ref` or `match_country`/
+`match_denomination`, `total`, and `filled`; summaries carry `generated`.
 
 ## Health
 

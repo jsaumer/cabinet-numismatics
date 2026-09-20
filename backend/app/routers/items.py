@@ -25,9 +25,11 @@ from app.schemas import (
     ItemListEntry,
     ItemOut,
     ItemUpdate,
+    RunCreate,
+    RunResult,
     SimilarItem,
 )
-from app.services import app_settings, duplicates, pricing, trash
+from app.services import app_settings, checklists, duplicates, numista, pricing, trash
 from app.services.currency import Converter
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -612,6 +614,58 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     record_event(db, item.id, "created")
     db.commit()
     return get_item_or_404(db, item.id, load_related=True)
+
+
+@router.post("/run", response_model=RunResult, status_code=201)
+def add_run(payload: RunCreate, db: Session = Depends(get_db)):
+    """One item per chosen issue of a Numista type — a date/mint run in one
+    request. The type fills each item as "Fill from Numista" would; `shared`
+    supplies what they have in common; issues already owned are skipped."""
+    try:
+        found = numista.catalogue_type(db, payload.type_id)
+    except pricing.NotApplicable as exc:
+        raise HTTPException(422, str(exc)) from None
+    except numista.CatalogueNotFound as exc:
+        raise HTTPException(404, str(exc)) from None
+    except pricing.SourceUnavailable as exc:
+        raise HTTPException(502, str(exc)) from None
+    fields = {k: v for k, v in found["fields"].items() if k not in ("year", "mintage")}
+    shared = payload.shared.model_dump(exclude_none=True)
+    shared["currency"] = shared["currency"].upper()
+    owned = (
+        checklists.owned_by_issue(db, catalog="numista", ref=f"N#{payload.type_id}")
+        if payload.skip_owned
+        else {}
+    )
+    created, skipped, seen = [], 0, set()
+    for issue in payload.issues:
+        key = (issue.year, checklists.norm(issue.mint_mark))
+        if key in owned or key in seen:
+            skipped += 1
+            continue
+        seen.add(key)
+        try:
+            item_payload = ItemCreate(
+                **{
+                    **fields,
+                    **shared,
+                    "year": issue.year,
+                    "mint_mark": issue.mint_mark or None,
+                    "mintage": issue.mintage,
+                    "catalog_refs": found["catalog_refs"],
+                }
+            )
+        except ValidationError as exc:
+            err = exc.errors()[0]
+            where = ".".join(str(p) for p in err.get("loc", ()))
+            raise HTTPException(422, f"{issue.year}: {where}: {err['msg']}") from None
+        item = _build_item(db, item_payload)
+        db.add(item)
+        db.flush()
+        record_event(db, item.id, "created")
+        created.append(item.id)
+    db.commit()
+    return RunResult(created=len(created), skipped=skipped, item_ids=created)
 
 
 @router.get("/similar", response_model=list[SimilarItem])

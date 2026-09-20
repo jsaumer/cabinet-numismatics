@@ -53,7 +53,15 @@ def test_checklists(client):
     assert [s["position"] for s in checklist["slots"]] == [0, 1, 2]
 
     summaries = client.get("/api/checklists").json()
-    assert summaries == [{"id": checklist["id"], "name": "Mercury dimes", "total": 3, "filled": 0}]
+    assert summaries == [
+        {
+            "id": checklist["id"],
+            "name": "Mercury dimes",
+            "total": 3,
+            "filled": 0,
+            "generated": False,
+        }
+    ]
 
     slot = checklist["slots"][1]
     resp = client.patch(

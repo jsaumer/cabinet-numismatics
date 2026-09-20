@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.schemas import NumistaSearch, NumistaType, PcgsCert
-from app.services import numista, pcgs
+from app.services import checklists, numista, pcgs
 from app.services.pricing import NotApplicable, SourceUnavailable
 
 router = APIRouter(prefix="/api/numista", tags=["numista"])
@@ -48,7 +48,11 @@ def get_type(type_id: int = Path(ge=1), db: Session = Depends(get_db)):
     """A Numista type as item fields ready to fill in, its catalogue
     references, and its issues."""
     try:
-        return numista.catalogue_type(db, type_id)
+        found = numista.catalogue_type(db, type_id)
+        owned = checklists.owned_by_issue(db, catalog="numista", ref=f"N#{type_id}")
+        for issue in found["issues"]:
+            issue["owned"] = (issue["year"], checklists.norm(issue["mint_letter"])) in owned
+        return found
     except NotApplicable as exc:
         raise HTTPException(422, str(exc)) from None
     except numista.CatalogueNotFound as exc:

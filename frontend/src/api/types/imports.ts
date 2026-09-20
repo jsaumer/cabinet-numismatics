@@ -17,6 +17,7 @@ export interface NumistaIssue {
   mint_letter: string | null;
   mintage: number | null;
   comment: string | null;
+  owned: boolean; // an owned item carries this type, year, and mint mark
 }
 
 export interface NumistaType {
