@@ -145,11 +145,12 @@ export function LineChart({
         strokeLinejoin="round" strokeLinecap="round" />
 
       {data.map((d, i) => (
-        <g key={d.key}>
+        <g key={i}>
           <title>{`${d.key}: ${format(d.value)}`}</title>
           <circle cx={x(i)} cy={y(d.value)} r={7} fill="transparent" />
           {i % ticks === 0 && i < data.length - 1 && (
-            <text x={x(i)} y={H + 14} fontSize={10} fill={MUTED} textAnchor="middle">
+            <text x={x(i)} y={H + 14} fontSize={10} fill={MUTED}
+              textAnchor={i === 0 ? "start" : "middle"}>
               {d.key}
             </text>
           )}
