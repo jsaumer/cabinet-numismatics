@@ -21,8 +21,9 @@ changelog entry when releasing.
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- Single-user, so no auth in the app; authentication is deferred to a
-  reverse proxy until v1.0.0.
+- Single-user, so no auth in the app, by decision: it runs on a trusted
+  network or behind an authenticating reverse proxy, and v1.0.0 will ship
+  that way (1.0 means a stable API, not login).
 
 ## Repo layout
 
@@ -35,14 +36,21 @@ docs/                    architecture, data-model, api, price-sources,
                          monitoring, roadmap, implementation-notes, claude-code
 proxy/nginx.conf
 backend/                 FastAPI app, Alembic migrations, pytest suite
-frontend/                React + Vite app; e2e/ holds the Playwright tests
+frontend/                React + Vite app; e2e/ holds the Playwright tests,
+                         public/ the logo and favicon (see frontend/README.md)
 scripts/                 backup.sh, restore.sh, seed_demo.py
 ```
 
 ## Conventions
 
-- Proper git project with maintained documentation. When the design changes,
-  update the affected `docs/` files in the same commit. See @docs/roadmap.md for
+- Proper git project with maintained documentation. When behaviour changes,
+  update every affected document in the same commit, not only the changelog:
+  `README.md` (features), `docs/api.md`, `docs/roadmap.md` (what shipped,
+  what's next), `docs/implementation-notes.md`, `frontend/README.md`, and
+  the topic doc it touches. Before cutting a release, reread those against
+  the diff since the last tag; the owner expects the docs to match the
+  build, and they drifted once (v0.24.x) when only the changelog was kept
+  up. See @docs/roadmap.md for
   the feature list and phase plan, and @docs/architecture.md for service detail.
 - Prefer single/minimal container images. Do not reintroduce cut services
   (Redis, object storage) without a clearly stated reason.
@@ -124,7 +132,16 @@ lookalike note, `components/lookup.tsx`; no migration).
 Runs and registry sets shipped in v0.23.0 (`services/checklists.py`,
 `POST /api/items/run`, `POST /api/checklists/generate`, migration `0017`;
 slot matches are computed on read, never stored).
-**Next: nothing is queued.** The
+v0.23.2 to v0.24.7 came from the owner's data-entry pass (the roadmap's
+"From the data-entry pass" list): the text and look pass (no em dashes,
+`api.money`, `components/icons.tsx` and `controls.tsx`, the bronze tokens
+and Calibri-first `--font` in `styles.css`, dark by default, the logo in
+`frontend/public/`, the Homepage tile in docs/monitoring.md), and the PCGS
+fixes found with a real token (100 calls/day, `_country` / `_mint_mark`,
+month-only lot dates, `APR_MAX_AGE`). The API call counter was planned and
+**tabled** by the owner; don't build it unprompted.
+**Next: nothing is queued**, and v1.0.0 follows the checklist under "The
+road to v1.0.0" in the roadmap (no application login). The
 roadmap's Phase 5.9 was demoted on 19 September 2026 from a release train to
 one next item plus unordered **candidates** and **parked** items: the owner
 is entering 100–500 pieces by hand (runs and singles, mostly held), so don't

@@ -10,6 +10,9 @@ all set in **Settings → Alerts & metrics** and all off until configured:
   notices Cabinet not running at all.
 - **Metrics**: a Prometheus endpoint at `/api/metrics`.
 
+A [Homepage](#homepage-gethomepagedev) tile needs no setting at all: it
+reads the same statistics the dashboard does.
+
 ## Alerts
 
 | Check                     | Fails when                                                   | Recovers when                          |
@@ -30,7 +33,9 @@ spent after the fix. Key and quota checks fire even when cached data covers
 for the failure, since the next refresh will need the key.
 
 Items a source can't price (no catalogue number, a proof on Numista) are
-skipped, not failed, so they never raise a refresh alert.
+skipped, not failed, so they never raise a refresh alert. The same goes for
+a 403 from Numista's paid auction-sales endpoint on a free key: the item
+page says sales records need the paid plan, and no key alert is raised.
 
 ### Formats
 
