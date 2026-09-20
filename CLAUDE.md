@@ -132,7 +132,7 @@ lookalike note, `components/lookup.tsx`; no migration).
 Runs and registry sets shipped in v0.23.0 (`services/checklists.py`,
 `POST /api/items/run`, `POST /api/checklists/generate`, migration `0017`;
 slot matches are computed on read, never stored).
-v0.23.2 to v0.24.7 came from the owner's data-entry pass (the roadmap's
+v0.23.2 to v0.24.9 came from the owner's data-entry pass (the roadmap's
 "From the data-entry pass" list): the text and look pass (no em dashes,
 `api.money`, `components/icons.tsx` and `controls.tsx`, the bronze tokens
 and Calibri-first `--font` in `styles.css`, dark by default, the logo in
