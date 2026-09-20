@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-09-20
+
 ### Fixed
 - The header's subtitle, navigation, and icons sat above centre once the
   logo made the wordmark taller; everything in the header is centred again.
