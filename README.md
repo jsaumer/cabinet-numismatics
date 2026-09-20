@@ -13,7 +13,9 @@ or API keys required.
 
 **Status: v0.22.0 — feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
-Next up: adding a whole date/mint run at once, and registry-style sets. See the
+Next up: adding a whole date/mint run at once, with checklists generated
+and filled from what's owned. After that the roadmap is a list of
+candidates, pulled by real use rather than a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has no built-in login by design — put it behind an

@@ -116,8 +116,12 @@ Cert-first entry shipped in v0.22.0 (`pcgs.cert_facts` / `parse_grade`,
 lookalike note, `components/lookup.tsx`; no migration).
 **Next: runs and registry sets** (v0.23.0 — "Add a run" from a Numista
 type's issues; checklists generated from a type or a year/mint range and
-auto-matched, with completion %). A second September 2026 review re-planned
-everything unshipped as roadmap Phase 5.9 (v0.22.0–v0.30.0, then v1.0.0).
+auto-matched, with completion %) — and nothing is queued after it. The
+roadmap's Phase 5.9 was demoted on 19 September 2026 from a release train to
+one next item plus unordered **candidates** and **parked** items: the owner
+is entering 100–500 pieces by hand (runs and singles, mostly held), so don't
+build ahead of that — propose work from friction they report, and treat the
+pipeline, tax lots, submissions, slab scanning, and the stack view as parked.
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
