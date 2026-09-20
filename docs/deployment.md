@@ -219,7 +219,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.24.2 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.24.3 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 What that file does differently from `docker-compose.yaml`, and why:
