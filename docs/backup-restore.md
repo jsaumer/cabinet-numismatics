@@ -230,9 +230,17 @@ bodies and long requests; see
   (and an upload).
 - The checksums catch corruption, not tampering: the manifest isn't itself
   signed or summed. Restore archives you made.
-- **Not tested on NFS.** The swap is renames within one volume, and `.nfs*`
-  placeholder files (an NFS client's stand-ins for open files) are skipped,
-  but it has only been run on local volumes.
+- **Every folder under the photo and document volumes must be writable by
+  the user the backend runs as**: the swap moves them, and moving a folder
+  needs write permission on the folder itself. Folders made before v0.23.1,
+  when the backend ran as root, may still belong to root. Restore checks
+  this before it changes anything and says which folder is in the way, and
+  from v0.26.1 the backend's startup hands such folders over, so a restart
+  usually clears it; otherwise `chown -R` the volume to `PUID`:`PGID`.
+- **On NFS** the first real restore (v0.26.0) found exactly that: the
+  database was restored, the file swap was refused, and the files were put
+  back. The swap is renames within one volume, and `.nfs*` placeholder files
+  (an NFS client's stand-ins for open files) are skipped.
 - **Not tested with an archive made by a genuinely older release.** The
   older-revision path (dropping newer tables, then migrating) was exercised
   with an archive whose manifest was rewritten to an older revision.

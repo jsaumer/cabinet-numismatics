@@ -10,6 +10,18 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **A restore could replace the database and then fail to replace the
+  files.** Found on the first restore on an NFS deployment: photos uploaded
+  before v0.23.1, when the backend still ran as root, sat in folders owned
+  by root, and the unprivileged backend can't move a folder it doesn't own.
+  The files were put back and nothing was lost, but the check belongs at the
+  start. Restore now looks for folders it couldn't move before it does
+  anything (the summary step refuses with the reason, and nothing is
+  changed), and the backend's startup hands over any first-level entry in
+  its data folders that belongs to another user, not only the folders
+  themselves.
+
 ## [0.26.0] - 2026-09-20
 
 ### Added

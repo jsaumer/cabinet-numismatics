@@ -16,6 +16,7 @@ file, not the database, because the database is what was just replaced.
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -321,6 +322,7 @@ def inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str | 
         if staged:
             path.unlink(missing_ok=True)
         raise
+    check_movable(manifest)  # say so now, not after the database has gone
     restore_id = restore_id or uuid.uuid4().hex
     _pending[restore_id] = {"path": path, "name": name, "staged": staged}
     counts = manifest.get("counts") or {}
@@ -371,6 +373,30 @@ def discard(restore_id: str) -> None:
 
 
 # --- the file swap ----------------------------------------------------------
+
+
+def check_movable(manifest: dict) -> None:
+    """Refuse up front when the file swap couldn't work. Moving a folder to
+    another parent needs write permission on the folder itself, so one left
+    owned by root (photos uploaded before v0.23.1, when the backend ran as
+    root) would stop the swap after the database had already been replaced."""
+    for member, _step_name, folder in _file_targets():
+        if member not in manifest["members"] or not folder.is_dir():
+            continue
+        stuck = [folder] if not os.access(folder, os.W_OK | os.X_OK) else []
+        for root, dirs, _files in os.walk(folder):
+            dirs[:] = [d for d in dirs if not d.startswith(backup.RESTORE_PREFIX)]
+            stuck += [
+                Path(root) / d for d in dirs if not os.access(Path(root) / d, os.W_OK | os.X_OK)
+            ]
+        if stuck:
+            raise RestoreError(
+                f"Cabinet can't replace the files in {folder}: {len(stuck)} folder(s) there, such "
+                f"as {stuck[0].name}, aren't writable by the user the backend runs as (usually "
+                "because they were created as root before v0.23.1). Restart the backend on "
+                "v0.26.1 or later, which hands them over on startup, or run chown -R on the "
+                "folder, then try again."
+            )
 
 
 def _live_entries(folder: Path) -> list[Path]:
@@ -622,6 +648,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
         try:
             _step("safety_backup")
             manifest = check_archive(archive)  # again: time has passed since the summary
+            check_movable(manifest)
             counts = manifest.get("counts") or {}
             outcome.update(
                 archive_created_at=manifest.get("created_at"),

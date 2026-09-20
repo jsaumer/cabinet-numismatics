@@ -26,6 +26,11 @@ if [ "$(id -u)" = "0" ]; then
     if [ "$(stat -c %u "$dir" 2>/dev/null)" != "$uid" ]; then
       chown -R "$uid:$gid" "$dir" 2>/dev/null || true
     fi
+    # A folder whose top level was already yours can still hold entries made
+    # as root by releases before v0.23.1. One level is cheap to list, and a
+    # restore can't move a folder it doesn't own.
+    find "$dir" -mindepth 1 -maxdepth 1 ! -user "$uid" \
+      -exec chown -R "$uid:$gid" {} + 2>/dev/null || true
     if ! setpriv --reuid="$uid" --regid="$gid" --clear-groups test -w "$dir"; then
       echo "WARNING:  $dir is not writable by $uid:$gid" >&2
       writable=0
