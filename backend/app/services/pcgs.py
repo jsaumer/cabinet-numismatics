@@ -349,6 +349,34 @@ def _clean(value, limit: int) -> str | None:
     return text[:limit] if text else None
 
 
+US_NAMES = {"the united states of america", "united states of america", "usa", "us", "u.s.a."}
+
+
+def _country(value) -> str:
+    """PCGS spells it out in full; Cabinet's own entries and the Numista fill
+    say "United States", and two spellings are two countries to every filter,
+    breakdown, checklist, and duplicate check."""
+    name = _clean(value, 100)
+    return "United States" if not name or name.lower() in US_NAMES else name
+
+
+def _mint_mark(value, year, denomination: str | None) -> str | None:
+    """PCGS says "P" for every Philadelphia coin, struck with the letter or
+    not. Keep it only where the coin carries it (wartime nickels, the 1979
+    dollar, everything but the cent from 1980, and the 2017 cent), since
+    checklists match mint marks as written and a hand-entered one is blank."""
+    mark = _clean(value, 10)
+    if mark != "P" or not isinstance(year, int):
+        return mark
+    on_the_coin = (
+        (denomination == "5C" and 1942 <= year <= 1945)
+        or (denomination == "$1" and year == 1979)
+        or (year >= 1980 and denomination != "1C")
+        or (denomination == "1C" and year == 2017)
+    )
+    return mark if on_the_coin else None
+
+
 def cert_fields(cert: str, payload: dict) -> dict:
     """Item fields a cert lookup fills in, keyed like the item schema, plus
     the grade and what else PCGS knows about the coin."""
@@ -359,10 +387,10 @@ def cert_fields(cert: str, payload: dict) -> dict:
     variety = " · ".join(dict.fromkeys(v for v in varieties if v))
     fields = {
         "type": "coin",
-        "country": _clean(payload.get("Country"), 100) or "United States",
+        "country": _country(payload.get("Country")),
         "denomination": DENOMINATIONS.get(denomination or "", denomination),
         "year": payload.get("Year") if isinstance(payload.get("Year"), int) else None,
-        "mint_mark": _clean(payload.get("MintMark"), 10),
+        "mint_mark": _mint_mark(payload.get("MintMark"), payload.get("Year"), denomination),
         "series": _clean(payload.get("SeriesName"), 200),
         "variety": variety[:200] or None,
         "composition": _clean(payload.get("MetalContent"), 100),

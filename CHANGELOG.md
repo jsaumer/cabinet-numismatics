@@ -10,6 +10,16 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **A PCGS cert fill now spells things the way the rest of Cabinet does.**
+  PCGS returns "The United States of America" and marks every Philadelphia
+  coin "P", so a filled coin counted as a second country and never matched a
+  checklist slot or a hand-entered duplicate. The country becomes "United
+  States", and "P" is kept only where the coin carries it: wartime nickels,
+  the 1979 dollar, everything but the cent from 1980, and the 2017 cent.
+  Found with the first real cert (an 1864 two cents, PR-65 RB), which also
+  confirmed the grade and designation parsing against the live API.
+
 ## [0.24.4] - 2026-09-20
 
 ### Fixed

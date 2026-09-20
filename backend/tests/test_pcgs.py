@@ -316,6 +316,34 @@ def test_cert_fill_maps_the_coin(client, upstream):
     assert len(upstream) == 1
 
 
+def test_cert_fill_spells_the_country_and_philadelphia_cabinets_way():
+    # As PCGS returned cert 2575126: an 1864 two cents, which carries no letter.
+    shield = {
+        **CERT_FACTS,
+        "Country": "The United States of America",
+        "Year": 1864,
+        "Denomination": "2C",
+        "MintMark": "P",
+    }
+    fields = pcgs.cert_fields("2575126", shield)["fields"]
+    assert fields["country"] == "United States"
+    assert "mint_mark" not in fields
+
+    def mark(year, denomination, letter="P"):
+        facts = {**CERT_FACTS, "Year": year, "Denomination": denomination, "MintMark": letter}
+        return pcgs.cert_fields("1", facts)["fields"].get("mint_mark")
+
+    assert mark(1943, "5C") == "P"  # wartime nickel
+    assert mark(1941, "5C") is None
+    assert mark(1979, "$1") == "P" and mark(1979, "25C") is None
+    assert mark(1980, "25C") == "P" and mark(1999, "1C") is None
+    assert mark(2017, "1C") == "P"
+    assert mark(1864, "2C", "S") == "S"  # other mints are untouched
+    assert (
+        pcgs.cert_fields("1", {**CERT_FACTS, "Country": "Canada"})["fields"]["country"] == "Canada"
+    )
+
+
 def test_cert_fill_grades_and_designations():
     assert pcgs.parse_grade("PR-65 DCAM") == {
         "rank": 65,
