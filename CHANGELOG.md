@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.6] - 2026-09-20
+
 ### Fixed
 - **PCGS: one old auction sale no longer outvotes the price guide.** The
   live API dates auction lots by month (`07-2003`), which Cabinet couldn't

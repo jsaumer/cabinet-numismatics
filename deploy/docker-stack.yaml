@@ -1,7 +1,7 @@
 # Cabinet as a Docker Swarm stack. Deploy from the repo root:
 #
 #   set -a; . ./.env; set +a           # stack deploy reads the shell, not .env
-#   TAG=0.24.5 docker stack deploy -c deploy/docker-stack.yaml cabinet
+#   TAG=0.24.6 docker stack deploy -c deploy/docker-stack.yaml cabinet
 #
 # Differences from docker-compose.yaml, which stays the single-host path:
 #   - images are pulled, never built (stack deploy ignores `build:`), so TAG
