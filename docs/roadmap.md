@@ -24,7 +24,7 @@ owner needs any of it (100–500 pieces to enter by hand, runs and singles,
 mostly held) and demoted the release train to **one next item and a list
 of candidates**, built only when real use asks for them. Since 20 September
 2026 the owner has been entering real pieces, and everything from v0.23.2 to
-v0.24.7 came from that: see "From the data-entry pass" under Phase 5.9.
+v0.24.9 came from that: see "From the data-entry pass" under Phase 5.9.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions: new capability = minor,
@@ -660,6 +660,10 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.24.6: PCGS's month-only lot dates are read, and one 2003 sale no
   longer outvotes a guide value four times higher.
 - ✔ v0.24.7: the first date under a value chart was cut off.
+- ✔ v0.24.8: every document checked against the code and corrected; the
+  repo's Swarm stack file set a broken `DOCUMENT_DIR`.
+- ✔ v0.24.9: the header shifted sideways between a short page and one
+  that scrolls.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
