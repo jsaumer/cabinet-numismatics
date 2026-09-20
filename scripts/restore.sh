@@ -37,6 +37,8 @@ docker compose exec -T db pg_restore -U "${DB_USER:?set in .env}" -d "${DB_NAME:
 if [ -f "$DIR/photos.tar.gz" ]; then
   docker compose exec -T backend sh -c 'find /data/photos -mindepth 1 -delete'
   docker compose exec -T backend sh -c 'tar xzf - -C /data/photos' < "$DIR/photos.tar.gz"
+  # exec runs as root, but the backend doesn't: give the files to whoever owns the volume
+  docker compose exec -T backend sh -c 'chown -R "$(stat -c %u:%g /data/photos)" /data/photos'
 else
   echo "Data-only archive: photos left unchanged"
 fi
@@ -44,6 +46,8 @@ fi
 if [ -f "$DIR/documents.tar.gz" ]; then
   docker compose exec -T backend sh -c 'mkdir -p /data/documents && find /data/documents -mindepth 1 -delete'
   docker compose exec -T backend sh -c 'tar xzf - -C /data/documents' < "$DIR/documents.tar.gz"
+  # exec runs as root, but the backend doesn't: give the files to whoever owns the volume
+  docker compose exec -T backend sh -c 'chown -R "$(stat -c %u:%g /data/documents)" /data/documents'
 else
   echo "No documents.tar.gz: documents left unchanged"
 fi

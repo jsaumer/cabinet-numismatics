@@ -200,6 +200,11 @@ docker compose build --pull && docker compose up -d
   metal symbol or a currency pair.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
+- **The backend runs unprivileged** (from v0.23.1). It re-owns its data
+  directories once on first start; on bind mounts or NFS, set `PUID`/`PGID`
+  to the account that should own the files. A warning in the log that it is
+  "staying root" means a directory couldn't be handed over — usually NFS
+  root squash; fix the ownership on the server.
 - **Alert webhooks and the heartbeat** are outbound requests to the URLs you
   save; allow them if egress is filtered.
 

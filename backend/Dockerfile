@@ -23,20 +23,42 @@ COPY --from=pgclient /etc/apt/sources.list.d/pgdg.sources /etc/apt/sources.list.
 COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
      /usr/share/postgresql-common/pgdg/
 COPY --from=pgclient /pgclient/ /usr/local/lib/pgclient/
+# `upgrade` first: the base image trails Debian's security updates between
+# its own rebuilds (the image scan in security.yml is what notices).
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1 libxxhash0 \
     && rm -rf /var/lib/apt/lists/* \
     && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done
 
+# The unprivileged user the entrypoint drops to, and data directories it
+# owns — a new named volume inherits that ownership from the image.
+RUN groupadd --gid 1000 cabinet \
+    && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin cabinet \
+    && mkdir -p /data/photos /data/state /data/backups /data/documents \
+    && chown -R cabinet:cabinet /data
+ENV PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
+
+# Exactly the versions in the lockfile, verified by hash; regenerate it with
+# the command in docs/security.md when pyproject.toml's dependencies change.
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY pyproject.toml ./
 COPY app ./app
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY scripts ./scripts
+# pip goes last: nothing installs at runtime, and the libraries it bundles
+# (msgpack, setuptools) would otherwise sit in the image unpatched.
+RUN pip install --no-cache-dir --no-deps . \
+    && python -m pip uninstall -y pip
 
-RUN pip install --no-cache-dir .
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -265,6 +265,22 @@ shared fields, through `_build_item`, in one transaction. Mint marks match
 as written (`P` ≠ blank). `POST /api/checklists/generate` and
 `POST /api/items/run` are declared before the `/{id}` routes.
 
+## Security hardening (v0.23.1)
+
+`backend/docker-entrypoint.sh` starts as root, chowns each data directory
+whose top-level owner isn't `PUID` (a one-time hand-over, never a walk on
+every start), and `exec setpriv`s to `PUID:PGID`; if a directory still isn't
+writable it logs that and stays root. `docker compose exec` still enters as
+root, which is why `restore.sh` chowns what it extracts to the volume's
+owner. The image installs `requirements.txt` with `--require-hashes`, then
+the project with `--no-deps`, then uninstalls pip (Trivy flags the msgpack
+and setuptools pip bundles) — so there is no pip in the running container.
+`proxy/nginx.conf`: an `add_header` inside a `location` replaces the
+server-level ones, so `location /` repeats them alongside its CSP; `/api/`
+gets no CSP from nginx (documents set their own, and `/api/docs` loads its
+viewer from a CDN). New inline scripts, external fonts, or iframes will trip
+the CSP — the e2e header test visits the main pages to catch that.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes
