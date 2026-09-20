@@ -10,6 +10,15 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **Dashboard bar charts start at the left edge of their card.** Labels sat
+  right-aligned in a fixed-width gutter, so with short labels the whole
+  chart looked centred in the tile. The label column now fits the longest
+  label and reads from the left.
+- The Pick and Friedberg lookup links didn't appear on a note filled from
+  Numista, which writes Pick as `p: P#109`. The links now recognise the
+  short catalogue names (`p`, `fr`) and search for the bare number.
+
 ## [0.25.0] - 2026-09-20
 
 ### Added

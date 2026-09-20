@@ -396,6 +396,14 @@ National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
   session. The seed has a National Bank Note, a repeater serial, an AH-dated
   coin, and a wishlist target to show them.
 
+## v0.25.1
+
+`components/lookup.tsx` matches a catalogue by several names, because the
+Numista fill writes Pick as `p: P#109` (so `p` and `pick`, `fr`/`f` and
+`friedberg`), and searches for the bare number. `HBars` sizes its label
+column from the longest label (`--hbar-label`, in `ch`) and left-aligns it:
+a fixed right-aligned gutter made short-label charts look centred.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes

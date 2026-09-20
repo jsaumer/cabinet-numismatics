@@ -22,8 +22,11 @@ export interface ChartDatum {
 export function HBars({ data, format }: { data: ChartDatum[]; format: (v: number) => string }) {
   const max = Math.max(...data.map((d) => d.value), 0);
   if (max <= 0) return <p className="muted">Nothing to chart yet.</p>;
+  // The label column is as wide as the longest label (capped), so the rows
+  // start at the card's left edge instead of floating in a fixed gutter.
+  const labelCh = Math.min(Math.max(...data.map((d) => d.key.length)), 24);
   return (
-    <div className="hbars">
+    <div className="hbars" style={{ ["--hbar-label" as string]: `${labelCh}ch` }}>
       {data.map((d) => (
         <div className="hbar-row" key={d.key} title={d.title ?? `${d.key}: ${format(d.value)}`}>
           <span className="hbar-label">{d.key}</span>
