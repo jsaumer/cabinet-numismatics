@@ -1,9 +1,9 @@
 // Every endpoint the frontend calls, one method each.
 
 import { json, req } from "./client";
-import type { Angle, Comparable, ComparableInput, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SetInfo, SimilarItem, TagInfo } from "./types/items";
+import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
-import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, RefreshResult, TrashList, ValueHistory } from "./types/stats";
+import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, RefreshResult, TrashList, ValueHistory } from "./types/stats";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, SourcesReport, StaleReport } from "./types/settings";
 
 export const api = {
@@ -47,6 +47,16 @@ export const api = {
 
   listGrades: (scale?: string) =>
     req<Grade[]>(`/api/grades${scale ? `?scale=${scale}` : ""}`),
+  serialTraits: () => req<SerialTrait[]>("/api/reference/serial-traits"),
+  calendars: () => req<CalendarReference>("/api/reference/calendars"),
+  convertDate: (calendar: string, year: number, era?: string) =>
+    req<ConvertedDate>(
+      `/api/reference/convert-date?${new URLSearchParams({
+        calendar,
+        year: String(year),
+        ...(era ? { era } : {}),
+      })}`,
+    ),
   listTags: () => req<TagInfo[]>("/api/tags"),
   listSets: () => req<SetInfo[]>("/api/sets"),
   createSet: (name: string) => req<SetInfo>("/api/sets", json("POST", { name })),
@@ -117,6 +127,7 @@ export const api = {
   breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),
   gains: () => req<Gains>("/api/stats/gains"),
   valueHistory: (months = 24) => req<ValueHistory>(`/api/stats/value-history?months=${months}`),
+  notesBySignature: () => req<NotesBySignature>("/api/stats/notes-by-signature"),
   refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
 
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),

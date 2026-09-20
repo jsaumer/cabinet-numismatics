@@ -3,10 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   api,
+  CalendarReference,
   certLookupUrl,
   ItemDetail as ItemDetailData,
   ItemEvent,
   money,
+  PRIORITY_LABELS,
   SourceStatus,
 } from "../api";
 import { DocumentsCard } from "../components/documents";
@@ -14,7 +16,26 @@ import { LookupLinks } from "../components/lookup";
 import { PhotoGallery } from "../components/photo-gallery";
 import { latestBySource, timeSince } from "../components/provenance";
 import { SalesLog } from "../components/sales";
+import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 import { ValueHistory } from "../components/value-history";
+
+/** "AH 1340", "Showa 12": the year as written, with its calendar's short name. */
+function struckDate(item: ItemDetailData, reference: CalendarReference | null): string {
+  if (item.struck_calendar === "japanese") {
+    const era = reference?.eras.find((e) => e.key === item.struck_era)?.label ?? item.struck_era;
+    return `${era ?? "Japanese era"} ${item.struck_year}`;
+  }
+  const label = reference?.calendars.find((c) => c.key === item.struck_calendar)?.label;
+  const short = label?.match(/\(([^)]+)\)\s*$/)?.[1] ?? label ?? item.struck_calendar;
+  return `${short} ${item.struck_year}`;
+}
+
+const dieAxis = (degrees: number) =>
+  degrees === 0
+    ? "Medal alignment (0°)"
+    : degrees === 180
+      ? "Coin alignment (180°)"
+      : `${degrees}°`;
 
 export default function ItemDetail() {
   const { id } = useParams();
@@ -24,6 +45,14 @@ export default function ItemDetail() {
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [numistaSales, setNumistaSales] = useState(false);
+  const [calendars, setCalendars] = useState<CalendarReference | null>(null);
+  const traitReference = useSerialTraits();
+  const struckCalendar = item?.struck_calendar ?? null;
+
+  // Calendar names, only for a piece dated in one.
+  useEffect(() => {
+    if (struckCalendar) api.calendars().then(setCalendars).catch(() => setCalendars(null));
+  }, [struckCalendar]);
 
   // Which automatic sources this build offers, and whether they're switched on.
   useEffect(() => {
@@ -152,6 +181,26 @@ export default function ItemDetail() {
             </dd>
           </div>
           {fact("Grade", item.grade ? `${item.grade_label} (${item.grade.label})` : null)}
+          {(item.pcgs_population != null || item.pcgs_pop_higher != null) && (
+            <div>
+              <dt>Population</dt>
+              <dd>
+                {[
+                  item.pcgs_population != null &&
+                    `${item.pcgs_population.toLocaleString()} at this grade`,
+                  item.pcgs_pop_higher != null &&
+                    `${item.pcgs_pop_higher.toLocaleString()} higher`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                <div className="muted fact-note">
+                  PCGS
+                  {item.population_as_of &&
+                    `, ${new Date(item.population_as_of).toLocaleDateString()}`}
+                </div>
+              </dd>
+            </div>
+          )}
           {item.strike !== "business" &&
             fact("Strike", item.strike === "proof" ? "Proof" : "Specimen")}
           {item.cac_sticker &&
@@ -171,6 +220,8 @@ export default function ItemDetail() {
               )}
             </dd>
           </div>
+          {item.struck_calendar && item.struck_year != null &&
+            fact("Date as struck", `${struckDate(item, calendars)} (${item.year})`)}
           {fact("Composition", item.composition)}
           {item.type === "coin" &&
             fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}
@@ -179,12 +230,25 @@ export default function ItemDetail() {
           {item.thickness_mm != null && fact("Thickness", `${item.thickness_mm} mm`)}
           {item.edge && fact("Edge", item.edge)}
           {item.shape && fact("Shape", item.shape)}
+          {item.die_axis != null && fact("Die axis", dieAxis(item.die_axis))}
           {item.mintage != null &&
             fact(item.type === "note" ? "Print run" : "Mintage", item.mintage.toLocaleString())}
-          {item.serial_number && fact("Serial number", item.serial_number)}
+          {(item.serial_number || (item.serial_traits ?? []).length > 0) && (
+            <div>
+              <dt>Serial number</dt>
+              <dd>
+                {item.serial_number ?? "–"}{" "}
+                <TraitBadges traits={item.serial_traits} reference={traitReference} />
+              </dd>
+            </div>
+          )}
           {item.prefix_block && fact("Prefix / block", item.prefix_block)}
           {item.signatures && fact("Signatures", item.signatures)}
           {item.issuer && fact("Issuer", item.issuer)}
+          {item.charter_number && fact("Charter number", item.charter_number)}
+          {(item.bank_city || item.bank_state) &&
+            fact("Bank location", [item.bank_city, item.bank_state].filter(Boolean).join(", "))}
+          {item.plate_position && fact("Plate / position", item.plate_position)}
           {item.replacement_note && fact("Replacement note", "Yes")}
           {fact("Quantity", item.quantity)}
           {fact("Acquired", item.acquisition_date)}
@@ -195,6 +259,24 @@ export default function ItemDetail() {
             fact("Cost basis", money(item.cost_basis, item.currency))}
           {fact("From", item.acquired_from)}
           {fact("Storage", item.storage_location)}
+          {item.priority != null && fact("Priority", PRIORITY_LABELS[item.priority])}
+          {item.target_price != null && (
+            <div>
+              <dt>Target</dt>
+              <dd>
+                {money(item.target_price, item.currency)}
+                {item.target_gap != null && (
+                  <div className={item.target_gap <= 0 ? "gain fact-note" : "muted fact-note"}>
+                    {item.target_gap === 0
+                      ? "at target"
+                      : `${money(Math.abs(item.target_gap), item.currency)} ${
+                          item.target_gap < 0 ? "under" : "over"
+                        } target`}
+                  </div>
+                )}
+              </dd>
+            </div>
+          )}
           {item.status === "sold" && fact("Sold on", item.sold_date)}
           {item.status === "sold" && fact("Sold for", money(item.sold_price, item.currency))}
           {item.status === "sold" && item.sold_fees != null &&

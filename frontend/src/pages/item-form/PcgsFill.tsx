@@ -19,6 +19,8 @@ const CERT_FIELDS: Partial<Record<TextField, string>> = {
   mintage: "mintage",
   cert_service: "cert service",
   cert_number: "cert number",
+  pcgs_population: "population",
+  pcgs_pop_higher: "graded higher",
 };
 
 /** The item form's "Fill from a PCGS cert" card. Fills only empty fields

@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.24.9-informational)
+![Version](https://img.shields.io/badge/version-0.25.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.24.9, feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.25.0, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
 1.0 will mean a stable HTTP API. There is no application login yet, so
 Cabinet belongs on a trusted network or behind an authenticating reverse
@@ -46,26 +46,40 @@ Dark is the default; the header toggle switches to light and remembers it.
 ### Cataloging
 - Coins and notes with full numismatic detail: country, denomination, year,
   mint mark, series, variety/sub-type, strike (business, proof, specimen),
-  composition, weight, fineness, diameter, thickness, edge, shape, mintage,
-  quantity, and free-text notes (banknotes add serial number, prefix/block,
-  signatures, issuer, and replacement notes), plus up to 20 custom fields per
-  item.
+  composition, weight, fineness, diameter, thickness, edge, shape, die axis,
+  mintage, quantity, and free-text notes (banknotes add serial number,
+  prefix/block, signatures, issuer, and replacement notes), plus up to 20
+  custom fields per item.
+- **Dates as struck**: a coin dated in another calendar (Islamic, Persian,
+  Thai Buddhist, Hebrew, Japanese eras, Vikram Samvat, Saka, Minguo, Chula
+  Sakarat, Rattanakosin, Ethiopian) keeps the year as written, and the
+  Gregorian year is worked out for you unless you type one.
+- **Paper money depth**: National Bank Note charter number, bank city and
+  state, and plate position; Pick and Friedberg catalogue references with a
+  web-search link; and fancy serial numbers (solid, ladder, radar, repeater,
+  binary, low and high numbers, dates, star notes, and more) badged on the
+  item and in the list, with a filter for any of them.
 - **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with proof
   and specimen strikes, plus grades, stars, designations (CAM/DCAM, PL/DMPL,
   RD/RB/BN, EPQ…), CAC stickers, and details grades, shown the way the holder
   reads, e.g. `PR-69 DCAM ★`. Certification tracking (service + cert number)
-  links to the grading service's verification.
+  links to the grading service's verification. A PCGS coin keeps its
+  population (graded at this grade, and higher) with the date it was read.
 - **Provenance & location**: acquisition date, price and fees, source
   (dealer, show, auction, inheritance), and storage location (album, slab
   box, safe).
 - **Lifecycle**: `owned` / `sold` / `wishlist` status with sold date and
   realized price; sets/lots for pieces held or sold together; catalog
   references (Krause, Numista, Red Book…); free-form tags.
+- **Wish list**: a target price and a priority per piece, the gap between
+  the newest estimate and the target, a "target reached" filter, and one
+  webhook message when an estimate first reaches the target.
 - **Working at scale**: search across notes/series/variety/certs/refs/tags,
   combined filters (type, status, country, year ranges, grade ranges,
-  latest-value ranges, tag, set), sortable columns, clone-item, bulk edit,
-  per-item edit history, and completeness checklists for target sets (e.g. a
-  date/mint run), written by hand or generated, with progress tracking.
+  latest-value ranges, tag, set, fancy serials, targets reached), sortable
+  columns, clone-item, bulk edit, per-item edit history, and completeness
+  checklists for target sets (e.g. a date/mint run), written by hand or
+  generated, with progress tracking.
 - List filters and paging persist in the URL, so back-navigation keeps your
   place.
 - **Fill from Numista**: enter a Numista number or search by name, and the
@@ -73,8 +87,9 @@ Dark is the default; the header toggle switches to light and remembers it.
   dimensions, catalogue references, and the issue's year, mint, and mintage.
   Needs a free Numista API key in Settings.
 - **Fill from a PCGS cert number**: a slabbed coin's type, date, mint,
-  denomination, grade, designations, variety, and PCGS number come from the
-  cert lookup (needs a free PCGS API token). Only empty fields are filled.
+  denomination, grade, designations, variety, PCGS number, and population
+  come from the cert lookup (needs a free PCGS API token). Only empty fields
+  are filled.
 - **Duplicate warning** while entering anything already here: by cert,
   catalogue reference, or country, denomination, year, and mint. The trash
   is checked too, and the importer notes lookalikes in its preview.
@@ -108,9 +123,10 @@ Dark is the default; the header toggle switches to light and remembers it.
   quantity, keyless), Numista (coins and notes, priced by catalog ref +
   grade), and PCGS (US coins, by cert number or catalog ref + grade,
   preferring auction prices realized in the last five years over the price
-  guide). One-click and scheduled refresh for all three, with Numista and
-  PCGS off by default, Numista's cadence (7/14/30 days) shown against its
-  2,000/month quota, and PCGS weekly within its 100 calls a day.
+  guide; the same answer keeps the coin's population current). One-click
+  and scheduled refresh for all three, with Numista and PCGS off by default,
+  Numista's cadence (7/14/30 days) shown against its 2,000/month quota, and
+  PCGS weekly within its 100 calls a day.
 - **Sold comparables**: log what pieces like yours actually sold for (eBay
   sold listings, auction archives, dealer sales) and get a comps estimate:
   the median of recent sales in your currency, with confidence from how many
@@ -135,8 +151,9 @@ Dark is the default; the header toggle switches to light and remembers it.
 ### Insights & reporting
 - Dashboard (the home page): collection value, cost basis, unrealized and
   realized gain/loss, breakdowns by country/decade/grade/tag, acquisitions
-  by year, top-movers tables, and a setup checklist that says what is still
-  off (scheduled backups, the alert webhook, a price-source key).
+  by year, top-movers tables, owned notes by series and signature pair, and
+  a setup checklist that says what is still off (scheduled backups, the
+  alert webhook, a price-source key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
 - Deleting is recoverable: items go to a trash with their photos, documents,
@@ -167,7 +184,8 @@ Dark is the default; the header toggle switches to light and remembers it.
   through the API (see [docs/security.md](docs/security.md)).
 - **Alerts and metrics**: a webhook (n8n, ntfy, Discord, Slack, Gotify) when
   a backup fails, a price source rejects its key or runs out of quota, or a
-  refresh fails, and when it recovers; an Uptime Kuma heartbeat;
+  refresh fails, and when it recovers, and when a wish-list target is
+  reached; an Uptime Kuma heartbeat;
   Prometheus metrics; and a recipe for a [Homepage](https://gethomepage.dev)
   tile. See [docs/monitoring.md](docs/monitoring.md).
 - **Hardened by default**: the backend container drops to an unprivileged

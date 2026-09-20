@@ -10,6 +10,48 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-20
+
+### Added
+- **The PCGS population on the item page.** A coin keeps how many PCGS has
+  graded at its grade and how many higher, shown beside the grade with the
+  date the figures were read. The cert fill brings them in, a PCGS estimate
+  refreshes them from the response it already fetched (no extra call), and
+  the form has the two fields for typing them in. Both are in the CSV and
+  Excel export.
+- **A wish list with targets.** A wishlist item takes a target price (in its
+  own currency) and a priority (high, medium, low). The item page shows how
+  far the newest estimate is over or under the target; the collection list,
+  filtered to the wishlist, shows Priority and Target columns with a
+  "reached" badge, sorts by either, and has a "Target reached" filter. Bulk
+  edit sets a priority. When an estimate first comes in at or under the
+  target, the alert webhook says so once. The comparison is never converted:
+  it needs an estimate in the item's currency. Both fields stay with a piece
+  after it is bought.
+- **Paper money depth.** Notes gain a charter number, bank city, bank state,
+  and plate position for National Bank Notes; search matches the charter
+  number and the bank city as well as the issuer. The form suggests `pick`
+  and `friedberg` as catalogues for a note, and the item page links to a web
+  search for either number. The dashboard lists owned notes by series and
+  signature pair.
+- **Fancy serial numbers.** Cabinet reads a note's serial number and badges
+  what collectors look for: solid, ladder, radar and super radar, repeater
+  and super repeater, binary, trinary, low and high numbers, double quad, a
+  date, and star notes. Badges show on the item page and in the list, and
+  "More…" filters by any fancy serial or by one trait. Serial numbers
+  already entered are read during the upgrade.
+- **Die axis and dates as struck.** A coin records its die axis (medal
+  alignment, coin alignment, or degrees) and, for a date written in another
+  calendar, the calendar and the year as struck: Islamic, Persian, Thai
+  Buddhist, Hebrew, Japanese eras (Meiji to Reiwa), Vikram Samvat, Saka,
+  Minguo, Chula Sakarat, Rattanakosin, and Ethiopian. The form shows the
+  Gregorian year and fills Year with it when Year is empty; a year you typed
+  is never replaced. The item page reads "AH 1335 (1917)".
+- Migration `0018` adds the columns (all optional) and fills in the serial
+  traits. The upgrade needs nothing but the tag bump. The demo collection
+  swaps two pieces for a 1902 National Bank Note and an Egyptian 20 qirsh
+  dated AH 1335.
+
 ### Changed
 - **The roadmap has a next phase again: Phase 7, parity with other
   collection tools**, chosen by the owner from a survey of fourteen product

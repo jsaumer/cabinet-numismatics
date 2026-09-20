@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Table,
     Text,
@@ -125,6 +126,11 @@ class Item(Base):
     edge: Mapped[str | None] = mapped_column(String(100))  # reeded, plain, lettered…
     shape: Mapped[str | None] = mapped_column(String(50))
     mintage: Mapped[int | None] = mapped_column(BigInteger)
+    die_axis: Mapped[int | None] = mapped_column(SmallInteger)  # degrees; 0 medal, 180 coin
+    # The date as written on the piece, when it isn't Gregorian (services/calendars.py).
+    struck_calendar: Mapped[str | None] = mapped_column(String(20))
+    struck_year: Mapped[int | None] = mapped_column(Integer)
+    struck_era: Mapped[str | None] = mapped_column(String(20))  # Japanese dates only
     grade_id: Mapped[int | None] = mapped_column(ForeignKey("grades.id"))
     cert_service: Mapped[str | None] = mapped_column(String(50))  # PCGS, NGC, PMG…
     cert_number: Mapped[str | None] = mapped_column(String(50))
@@ -133,12 +139,24 @@ class Item(Base):
     designations: Mapped[list[str] | None] = mapped_column(JSON)  # DCAM, RD, EPQ…
     grade_details: Mapped[str | None] = mapped_column(String(100))  # the problem, if any
     cac_sticker: Mapped[str | None] = mapped_column(String(10))  # green | gold
+    # PCGS population report: graded at this grade, and higher. The server
+    # stamps `population_as_of` whenever either changes.
+    pcgs_population: Mapped[int | None] = mapped_column(Integer)
+    pcgs_pop_higher: Mapped[int | None] = mapped_column(Integer)
+    population_as_of: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Banknotes
     serial_number: Mapped[str | None] = mapped_column(String(50))
     prefix_block: Mapped[str | None] = mapped_column(String(50))
     signatures: Mapped[str | None] = mapped_column(String(200))
     issuer: Mapped[str | None] = mapped_column(String(200))  # issuing bank or authority
     replacement_note: Mapped[bool] = mapped_column(Boolean, default=False)  # star/replacement
+    charter_number: Mapped[str | None] = mapped_column(String(10))  # National Bank Notes
+    bank_city: Mapped[str | None] = mapped_column(String(100))
+    bank_state: Mapped[str | None] = mapped_column(String(50))
+    plate_position: Mapped[str | None] = mapped_column(String(20))
+    # Fancy-serial traits as `,radar,binary,`, kept in step with the serial
+    # number by the server (services/serials.py); never taken from the client.
+    serial_traits: Mapped[str | None] = mapped_column(String(200))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     acquisition_date: Mapped[date | None] = mapped_column(Date)
     acquisition_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
@@ -152,6 +170,9 @@ class Item(Base):
     sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # gross, before fees
     sold_fees: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # commission, listing fees
     sold_to: Mapped[str | None] = mapped_column(String(200))  # venue or buyer
+    # Wish list: what to pay at most (in `currency`), and 1 high / 2 medium / 3 low.
+    target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    priority: Mapped[int | None] = mapped_column(SmallInteger)
     set_id: Mapped[int | None] = mapped_column(ForeignKey("sets.id", ondelete="SET NULL"))
     custom_fields: Mapped[dict | None] = mapped_column(JSON)  # user-defined key→value
     notes: Mapped[str | None] = mapped_column(Text)
@@ -223,6 +244,23 @@ class Item(Base):
             parts.append("★")
         label = " ".join(parts)
         return f"{label} Details ({self.grade_details})" if self.grade_details else label
+
+    @property
+    def target_gap(self) -> Decimal | None:
+        """The newest estimate less the target price; zero or less means the
+        target is reached. None without both, or when their currencies differ
+        (nothing is converted)."""
+        if self.target_price is None or not self.estimates:
+            return None
+        latest = self.estimates[0]
+        if latest.currency != self.currency:
+            return None
+        return Decimal(latest.estimated_value) - Decimal(self.target_price)
+
+    @property
+    def target_reached(self) -> bool:
+        gap = self.target_gap
+        return gap is not None and gap <= 0
 
     @property
     def cost_basis(self) -> Decimal | None:
