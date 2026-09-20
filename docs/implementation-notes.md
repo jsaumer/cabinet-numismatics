@@ -292,9 +292,12 @@ sliders because a gear that small reads as a sun. `components/controls.tsx`
 has `FileButton` (the real input stays inside the label, visually hidden
 but focusable, so keyboard and Playwright's `setInputFiles` still work) and
 `Menu`. The palette is the `:root` tokens in `styles.css` (bronze `--accent`,
-warm surfaces, `--serif` from system fonts only, since the CSP's `font-src`
-is `'self'`); `.site-header a` sets the serif wordmark, so the nav links
-reset `font-family`. No em dashes anywhere; see CLAUDE.md.
+warm surfaces, `--font`: a Calibri-first system stack with
+`font-size-adjust`, since the CSP's `font-src` is `'self'`; the serif titles
+of v0.24.0 lasted one release). The theme defaults to dark
+(`components/theme.ts`, and `data-theme="dark"` on `<html>` so there's no
+light flash before the script runs); only `localStorage` overrides it, so
+screenshots set that key (`docs/screenshots/capture.cjs`). No em dashes anywhere; see CLAUDE.md.
 
 ## Releases
 
