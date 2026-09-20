@@ -46,6 +46,9 @@ DEFAULTS: dict = {
     "backup_last_run": None,
     "refresh_last_run": None,  # {source: {at, updated, skipped, failed, ...}}
     "alert_state": None,  # {condition: {failing, since, message}}
+    # The dashboard layout (services/dashboard.py). Written by its own
+    # endpoints (routers/dashboard.py), never by PUT /api/settings.
+    "dashboard_layout": None,
 }
 
 SECRET_KEYS = {"numista_api_key", "pcgs_api_token", "alert_webhook_url", "heartbeat_url"}

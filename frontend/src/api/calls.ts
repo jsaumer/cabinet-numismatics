@@ -4,6 +4,7 @@ import { json, req } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, RefreshResult, TrashList, ValueHistory } from "./types/stats";
+import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 
 export const api = {
@@ -124,13 +125,27 @@ export const api = {
     req<SalesFetchResult>(`/api/items/${itemId}/comparables/numista`, { method: "POST" }),
 
   collectionStats: () => req<CollectionStats>("/api/stats/collection"),
-  breakdowns: () => req<Breakdowns>("/api/stats/breakdowns"),
+  /** Every breakdown, optionally scoped to one tag or set. */
+  breakdowns: (scope?: { tag?: string | null; set_id?: number | null }) => {
+    const params = new URLSearchParams();
+    if (scope?.tag) params.set("tag", scope.tag);
+    if (scope?.set_id != null) params.set("set_id", String(scope.set_id));
+    const query = params.toString();
+    return req<Breakdowns>(`/api/stats/breakdowns${query ? `?${query}` : ""}`);
+  },
   gains: () => req<Gains>("/api/stats/gains"),
   valueHistory: (months = 24) => req<ValueHistory>(`/api/stats/value-history?months=${months}`),
   notesBySignature: () => req<NotesBySignature>("/api/stats/notes-by-signature"),
   refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
 
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
+
+  dashboardLayout: () => req<DashboardLayout>("/api/dashboard/layout"),
+  saveDashboardLayout: (widgets: DashboardWidget[]) =>
+    req<DashboardLayout>("/api/dashboard/layout", json("PUT", { widgets })),
+  /** Forgets the saved layout: the default comes back. */
+  resetDashboardLayout: () =>
+    req<DashboardLayout>("/api/dashboard/layout", { method: "DELETE" }),
 
   listChecklists: () => req<ChecklistSummary[]>("/api/checklists"),
   createChecklist: (name: string, slots: string[]) =>

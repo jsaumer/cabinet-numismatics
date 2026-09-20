@@ -84,3 +84,50 @@ export const ChevronDownIcon = () => (
     <path d="M6 9.5l6 6 6-6" />
   </Icon>
 );
+
+/** The only place a dashboard widget can be picked up and dragged. */
+export const GripIcon = () => (
+  <Icon>
+    <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" strokeWidth="2.6" />
+  </Icon>
+);
+
+export const ArrowUpIcon = () => (
+  <Icon>
+    <path d="M12 20V5M6 11l6-6 6 6" />
+  </Icon>
+);
+
+export const ArrowDownIcon = () => (
+  <Icon>
+    <path d="M12 4v15M6 13l6 6 6-6" />
+  </Icon>
+);
+
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
+export const CloseIcon = () => (
+  <Icon>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </Icon>
+);
+
+/** Duplicate: one card copied from another. */
+export const CopyIcon = () => (
+  <Icon>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 5.5H6a1.5 1.5 0 0 0-1.5 1.5v9" />
+  </Icon>
+);
+
+export const SlidersIcon = () => (
+  <Icon>
+    <path d="M4 8h10M18 8h2M4 16h4M12 16h8" />
+    <circle cx="16" cy="8" r="2.2" />
+    <circle cx="10" cy="16" r="2.2" />
+  </Icon>
+);

@@ -7,6 +7,20 @@ export const SOURCE_LABELS: Record<string, string> = {
   comps: "Comps value",
 };
 
+/** The same sources named for a table column or a chip, where "value" is
+ * already implied (the pricing reports and the dashboard's pricing widgets). */
+export const SOURCE_NAMES: Record<string, string> = {
+  melt: "Melt",
+  numista: "Numista",
+  pcgs: "PCGS",
+  comps: "Comps",
+  manual: "Manual",
+  average: "Average",
+  blended: "Shown value",
+};
+
+export const sourceName = (key: string) => SOURCE_NAMES[key] ?? key;
+
 export function timeSince(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diffMs / 60000);

@@ -10,16 +10,7 @@ import {
   SourcesReport,
   StaleReport,
 } from "../api";
-
-const SOURCE_NAMES: Record<string, string> = {
-  melt: "Melt",
-  numista: "Numista",
-  pcgs: "PCGS",
-  comps: "Comps",
-  manual: "Manual",
-  average: "Average",
-  blended: "Shown value",
-};
+import { sourceName } from "../components/provenance";
 
 const STATUS_LABELS: Record<CoverageStatus, string> = {
   priced: "priced",
@@ -37,7 +28,6 @@ const STRATEGY_LABELS: Record<string, string> = {
 
 const STALE_DAYS = [7, 30, 90, 365];
 
-const sourceName = (key: string) => SOURCE_NAMES[key] ?? key;
 const pct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
 export default function Pricing() {
