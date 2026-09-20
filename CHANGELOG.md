@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.2] - 2026-09-20
+
 ### Added
 - **A logo**: a bronze coin with a C, in the header, as the browser-tab icon
   (`favicon.ico` with 16 to 256 px, plus SVG and an Apple touch icon), and
