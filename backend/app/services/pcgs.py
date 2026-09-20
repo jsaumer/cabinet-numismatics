@@ -13,7 +13,8 @@ straight through.
 Coins only. PCGS Banknote has its own endpoints, but their responses carry no
 price fields at all, so notes have nothing to read here.
 
-Daily limit is 1,000 calls; responses are cached in `source_cache` for 7 days.
+Daily limit is 100 calls by default (PCGS raises it on request; its older
+documentation said 1,000); responses are cached in `source_cache` for 7 days.
 """
 
 import re

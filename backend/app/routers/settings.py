@@ -155,7 +155,7 @@ def _build(db: Session) -> SettingsOut:
             secret_hint=store.secret_hint(pcgs_token),
             note="US coins by cert number, or PCGS number + grade. Auction sales when "
             "PCGS has them, price guide otherwise. Token from pcgs.com/publicapi "
-            "(1,000 calls/day); responses cached 7 days.",
+            "(100 calls/day by default, more on request); responses cached 7 days.",
         ),
         SourceStatus(
             key="comps",
