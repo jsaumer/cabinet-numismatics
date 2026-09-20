@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-09-20
+
 ### Changed
 - **One clean typeface.** The serif titles are gone: the whole interface
   uses a Calibri-style humanist sans (Calibri on Windows, Carlito where it's
