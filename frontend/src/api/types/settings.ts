@@ -1,5 +1,7 @@
 // Settings, alerts, backups, pricing reports, and health.
 
+import type { SpotAlert } from "./stack";
+
 export interface SourceStatus {
   key: string;
   name: string;
@@ -45,6 +47,7 @@ export interface AppSettings {
   refresh_last_run: Record<string, RefreshRun>;
   sources: SourceStatus[];
   cached: CachedValue[];
+  spot_alerts: SpotAlert[]; // met is set on read only
 }
 
 export interface AppSettingsUpdate {
@@ -69,6 +72,7 @@ export interface AppSettingsUpdate {
   alert_webhook_format?: AlertFormat;
   heartbeat_url?: string; // "" clears
   metrics_enabled?: boolean;
+  spot_alerts?: Omit<SpotAlert, "met">[];
 }
 
 export type AlertFormat = "generic" | "ntfy" | "discord" | "slack" | "gotify";

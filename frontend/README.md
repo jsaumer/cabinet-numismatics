@@ -52,7 +52,7 @@ src/
                       mode, the drag, the catalogue and options dialogs)
   pages/              one file per route: Dashboard, ItemList (/collection),
                       ItemDetail, ItemForm, AddRun, Checklists, Pricing,
-                      Report, Import, Trash, Settings
+                      Stack, Report, Import, Trash, Settings
     item-form/          the item form's parts: model.ts (form state,
                         toPayload, fromItem, the designation and problem
                         lists), NumistaFill.tsx, PcgsFill.tsx
@@ -88,7 +88,7 @@ playwright.config.ts, vite.config.ts, tsconfig.json
 
 Routes: `/` is the dashboard, `/collection` the list (its filters, sort, and
 page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
-`/items/:id/edit`, `/pricing`, `/report`, `/checklists`, `/import`,
+`/items/:id/edit`, `/pricing`, `/stack`, `/report`, `/checklists`, `/import`,
 `/trash`, and `/settings`. `/dashboard` redirects to `/`.
 
 ## Styling conventions
@@ -135,12 +135,14 @@ an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
 number getting its badge, a wishlist coin showing its target price, an
-undated piece taking ND with no year, the
+undated piece taking ND with no year, a silver piece showing its fine ounces
+on the Stack page, the
 security headers, every Settings section, and, last, an in-app restore of a
 backup taken a moment earlier (last so a failure can't disturb the others;
 it leaves the collection as it found it, plus a safety backup). The tests
 run against a running stack (`docker compose up`), not the dev server, and
-they create and delete their own items.
+they create and delete their own items; the stack test asserts on ounces
+and cost only, never on a live spot price.
 
 ```bash
 npm run e2e                            # http://localhost, through the proxy

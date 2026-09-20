@@ -1,5 +1,7 @@
 // Items, photos, estimates, sales, documents, and the item payload.
 
+import type { SpotAtPurchaseSource } from "./stack";
+
 export type ItemType = "coin" | "note";
 export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
@@ -104,6 +106,10 @@ export interface Item {
   struck_era: string | null;
   acquisition_fees: number | null;
   cost_basis: number | null;
+  spot_at_purchase: number | null; // the metal's spot price per oz, in this item's currency
+  spot_at_purchase_source: SpotAtPurchaseSource | null; // set by the server
+  fine_oz: number | null; // set by the server; null when not a stack item
+  premium_paid_pct: number | null; // set by the server; null when spot_at_purchase is unknown
   sold_fees: number | null;
   sold_to: string | null;
   sale_proceeds: number | null;
@@ -278,6 +284,7 @@ export interface ItemPayload {
   struck_year: number | null;
   struck_era: string | null;
   acquisition_fees: number | null;
+  spot_at_purchase: number | null;
   sold_fees: number | null;
   sold_to: string | null;
   status: ItemStatus;

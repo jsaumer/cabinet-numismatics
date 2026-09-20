@@ -144,12 +144,29 @@ Added in v0.25.0, all optional and accepted on create, update, and bulk
   is answered with the converted year, and `"year": null` without them is
   422.
 
+**Bullion stack fields (v0.28.0, roadmap Phase 7, P7)**: `spot_at_purchase`
+(above 0), the metal's spot price per troy ounce on the day the piece was
+bought, in the item's own `currency`. Not accepted in a bulk `set` (it's per
+piece, and looked up per piece). The response adds `spot_at_purchase_source`
+(`manual` when a client sent a value, `auto` when
+`POST /api/stack/backfill` or the hourly loop filled it, `null` when empty),
+server-set and never accepted from a client; clearing `spot_at_purchase`
+clears its source too. Also read-only: `fine_oz` (fine troy ounces:
+`weight_g * fineness * quantity / TROY_OUNCE_G`, null unless the composition
+names a precious metal and both weight and fineness are known, which is also
+what puts a piece in the stack) and `premium_paid_pct` (how far the cost
+basis ran over `fine_oz * spot_at_purchase`, as a percentage in the item's
+own currency; null without a purchase-day spot price or a cost). See
+[Bullion stack](#bullion-stack) below.
+
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
 `pcgs_population`, `pcgs_pop_higher`, `charter_number`, `bank_city`,
-`bank_state`, `plate_position`, `target_price`, and `priority`. An export
-from an older version imports as before. `serial_traits` and
-`population_as_of` are not exported: the import recomputes them.
+`bank_state`, `plate_position`, `target_price`, `priority`, and (v0.28.0)
+`spot_at_purchase`. An export from an older version imports as before.
+`serial_traits`, `population_as_of`, and `spot_at_purchase_source` are not
+exported: the import recomputes them (a `spot_at_purchase` cell always
+imports as `manual`).
 
 The export also carries `year_nd` (`true` or empty like the other flags,
 next to `year`; the
@@ -351,6 +368,7 @@ parentheses):
 | `wishlist` | `mode`: `priority`, `reached` (`priority`); `count`: 3-20 (6) | half |
 | `fancy_serials` | `count`: 3-20 (6) | half |
 | `checklists` | `count`: 3-20 (6) | half |
+| `stack` | `metal`: `all`, `gold`, `silver`, `platinum`, `palladium` (`all`); `tag`: a tag name or `null` (`null`) | half |
 | `pricing_coverage` | none | third |
 | `stale_estimates` | `days`: 7, 30, 90, or 365 (30); `count`: 3-20 (6) | half |
 | `source_disagreements` | `count`: 3-20 (5) | half |
@@ -383,6 +401,7 @@ in that order, 11 widgets in all.
 | `GET`    | `/api/reference/serial-traits` | The fancy-serial traits, in order   |
 | `GET`    | `/api/reference/calendars`     | Calendars for a date as struck, and the Japanese eras |
 | `GET`    | `/api/reference/convert-date`  | A struck year as a Gregorian year   |
+| `GET`    | `/api/reference/historic-spot` | A metal's spot price on a past day (see [Bullion stack](#bullion-stack)) |
 
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint;
@@ -431,6 +450,67 @@ Answers `201` with `created`, `skipped`, and `item_ids`; everything is one
 transaction. Needs a Numista API key (`422`); an unknown type is `404`, an
 unreachable Numista `502`, and an issue that doesn't validate `422`, naming
 the year (or `ND`) and field.
+
+## Bullion stack
+
+Roadmap Phase 7, P7. The stack is owned, untrashed items with a detected
+precious metal (gold, silver, platinum, palladium), a `weight_g`, and an
+`effective_fineness`; that's the same set melt value can price.
+
+| Method | Path                              | Purpose                                     |
+|--------|-----------------------------------|----------------------------------------------|
+| `GET`  | `/api/stack`                      | Fine ounces, melt value, cost, gain, and premium, by metal and by item |
+| `POST` | `/api/stack/backfill`             | Look up purchase-day spot for pieces that qualify and have none (at most 50) |
+| `GET`  | `/api/reference/historic-spot`    | A metal's spot price per troy ounce on a past day |
+
+`GET /api/stack?currency=&tag=&set_id=` scopes to a tag or a set (default:
+everything that qualifies) and answers all money in one currency (the
+app-wide display currency unless `currency` overrides), converted at the
+cached daily rates exactly as `/api/stats/collection` does: an amount with no
+rate is left out of the money figures and counted in
+`excluded_other_currency`, but its ounces always count, and each item's own
+`spot_at_purchase` stays in its own currency (`items[].converted` says
+whether its other money was converted). It answers:
+
+- `metals`: one row per metal that has ounces, with `items` and `pieces`
+  (quantity summed) counted, `fine_oz` and `fine_g`, the current
+  `spot_per_oz` (`null` when the spot price can't be had; a metal without one
+  still lists its ounces) with `spot_fetched_at` and `spot_stale`,
+  `melt_value` (fine ounces × spot), `cost_basis` and `costed_oz` (the
+  ounces of pieces that have a cost: uncosted pieces count toward `fine_oz`
+  but not `cost_basis`/`costed_oz`), `cost_per_oz` (cost basis ÷ costed
+  ounces, **which is also the break-even spot price**), `gain` and
+  `gain_pct` (melt value of the costed ounces less their cost), and
+  `premium_paid_pct` (the same ratio as the item field, below, but summed
+  over the pieces whose purchase-day spot is known, in the report currency)
+  with `premium_known_oz` (how many of the metal's ounces that covers; `null`
+  when none do).
+- `totals`: `melt_value`, `cost_basis`, `gain` across every metal, and
+  `fine_oz_by_metal`.
+- `items`: one row per piece, sorted by metal then `fine_oz` descending:
+  `item_id`, `label`, `metal`, `quantity`, `fine_oz`, `cost_basis`,
+  `cost_per_oz`, `spot_at_purchase` and `spot_at_purchase_source` (in the
+  item's own `currency`), `premium_paid_pct`, `melt_value`, `gain`, and
+  `converted`.
+- `missing_spot`: pieces eligible for the purchase-day-spot backfill.
+  `skipped`: pieces with a detected metal but no weight or fineness (so
+  they're not in `metals`/`items` at all). `history_start`: the earliest
+  date the purchase-day lookup covers (`2024-03-02`).
+
+`POST /api/stack/backfill` looks up the purchase-day spot for eligible
+pieces (in the stack, no `spot_at_purchase` yet, an `acquisition_date` on or
+after `history_start` and before today, and a cost basis above 0), at most
+50 per call; a value typed in by hand is never overwritten. Answers
+`{"filled", "failed", "remaining"}`. The same lookup, at most 20 items, runs
+in the hourly background loop.
+
+`GET /api/reference/historic-spot?metal=silver&date=2025-01-15&currency=USD`
+answers `{"metal", "date", "currency", "per_oz", "source"}`. It's a past day
+only: before `2024-03-02` or today or later is `422` with a plain reason (use
+the current spot price for today; type the figure by hand for an earlier
+purchase), an unknown metal or currency is `422`, and both source hosts
+failing is `502`. See [price-sources.md](price-sources.md) for where the
+price comes from and why.
 
 ## Numista catalogue lookup
 
@@ -712,6 +792,19 @@ serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed:
 `detail`), and `refresh_last_run` (per source: `at`, `updated`, `skipped`,
 `failed`, and `error` or `stopped` when set).
 
+`spot_alerts` (v0.28.0): a list of at most 12 spot-price thresholds,
+`{"metal": "gold"|"silver"|"platinum"|"palladium", "direction":
+"above"|"below", "price": number, "currency": "USD"}`; `price` must be above
+0, `currency` a 3-letter code, upper-cased on the way in. On read, each entry
+also carries `met` (`true`/`false` once it has been checked by the hourly
+loop, `null` before that); `met` is never accepted on write. Saving the list
+drops the checked state of any threshold that is no longer in it, so
+re-adding one alerts again rather than staying quiet. The service-written
+`spot_alert_state` (per threshold, whether it is currently met) is never
+returned by `GET` or accepted by `PUT`. See
+[Bullion stack](#bullion-stack) and [monitoring.md](monitoring.md) for how
+the alert fires.
+
 ## Backups
 
 | Method | Path                    | Purpose                                              |
@@ -836,9 +929,12 @@ The test answers `200` either way, with `at`, `ok`, and `detail`: `HTTP 404`,
 a connection error, or `No webhook URL is saved` (`No heartbeat URL is saved`
 for the heartbeat); a detail never repeats the URL. Metrics are cached for a
 minute. What alerts fire, the payload of each format, and every metric are in
-[monitoring.md](monitoring.md). Besides the failing/recovered checks there is
-one event, sent once and never listed under `alerts`: a wish-list target
-reached (generic JSON `alert` `wishlist_target`, `status` `event`).
+[monitoring.md](monitoring.md). Besides the failing/recovered checks there
+are events, sent once and never listed under `alerts`: a wish-list target
+reached (generic JSON `alert` `wishlist_target`, `status` `event`), and a
+spot-price threshold crossed (`alert` `spot_gold` / `spot_silver` /
+`spot_platinum` / `spot_palladium`, `status` `event`, one per metal that has
+a saved threshold).
 
 ## Checklists (completeness tracking)
 

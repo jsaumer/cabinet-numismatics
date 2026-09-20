@@ -84,7 +84,8 @@ def estimate_row(item_id: uuid.UUID, result: EstimateResult) -> PriceEstimate:
 MONEY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£", "CAD": "CA$", "AUD": "A$", "JPY": "¥"}
 
 
-def _money(amount, currency: str) -> str:
+def money(amount, currency: str) -> str:
+    """An amount for a human: a symbol where there is one, else the code."""
     symbol = MONEY_SYMBOLS.get(currency)
     text = f"{Decimal(amount):,.2f}"
     return f"{symbol}{text}" if symbol else f"{text} {currency}"
@@ -124,8 +125,8 @@ def add_estimate(db: Session, item: Item, row: PriceEstimate) -> PriceEstimate:
             db,
             "wishlist_target",
             "Wish-list target reached",
-            f"{item.label}: estimate {_money(value, row.currency)} is at or under your "
-            f"{_money(target, item.currency)} target",
+            f"{item.label}: estimate {money(value, row.currency)} is at or under your "
+            f"{money(target, item.currency)} target",
         )
     return row
 

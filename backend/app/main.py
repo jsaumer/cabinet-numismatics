@@ -25,6 +25,7 @@ from app.routers import (
     reference,
     restore,
     settings,
+    stack,
     stats,
     trash,
 )
@@ -137,3 +138,4 @@ app.include_router(trash.router)
 app.include_router(monitoring.router)
 app.include_router(restore.router)
 app.include_router(dashboard.router)
+app.include_router(stack.router)

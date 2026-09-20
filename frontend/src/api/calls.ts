@@ -6,6 +6,7 @@ import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, Impor
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, RefreshResult, TrashList, ValueHistory } from "./types/stats";
 import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
+import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
 
 export const api = {
   listItems: (params: URLSearchParams) => req<ItemPage>(`/api/items?${params}`),
@@ -194,6 +195,20 @@ export const api = {
     ),
   discardRestore: (restoreId: string) =>
     req<void>(`/api/restore/${encodeURIComponent(restoreId)}`, { method: "DELETE" }),
+
+  getStack: (scope?: { currency?: string; tag?: string | null; set_id?: number | null }) => {
+    const params = new URLSearchParams();
+    if (scope?.currency) params.set("currency", scope.currency);
+    if (scope?.tag) params.set("tag", scope.tag);
+    if (scope?.set_id != null) params.set("set_id", String(scope.set_id));
+    const query = params.toString();
+    return req<StackReport>(`/api/stack${query ? `?${query}` : ""}`);
+  },
+  backfillStack: () => req<StackBackfillResult>("/api/stack/backfill", { method: "POST" }),
+  historicSpot: (metal: string, date: string, currency: string) =>
+    req<HistoricSpot>(
+      `/api/reference/historic-spot?${new URLSearchParams({ metal, date, currency })}`,
+    ),
 
   pricingCoverage: () => req<PricingCoverage>("/api/pricing/coverage"),
   pricingStale: (days: number) => req<StaleReport>(`/api/pricing/stale?days=${days}`),

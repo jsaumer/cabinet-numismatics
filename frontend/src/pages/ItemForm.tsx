@@ -5,11 +5,13 @@ import { api, CalendarReference, CatalogRef, Grade, gradeScaleFor, ItemType, Set
 import {
   CustomField,
   DESIGNATIONS,
+  detectMetal,
   EDGES,
   EMPTY,
   FlagField,
   FormState,
   fromItem,
+  inHistoricCoverage,
   PROBLEMS,
   SHAPES,
   TextField,
@@ -42,6 +44,8 @@ export default function ItemForm() {
   // The date as struck in Gregorian years, or why it couldn't be converted.
   const [converted, setConverted] = useState<number | null>(null);
   const [convertError, setConvertError] = useState<string | null>(null);
+  const [spotBusy, setSpotBusy] = useState(false);
+  const [spotError, setSpotError] = useState<string | null>(null);
   const autoYear = useRef(""); // the Year this form filled in itself, which it may replace
 
   useEffect(() => {
@@ -118,6 +122,22 @@ export default function ItemForm() {
 
   const set = (field: TextField) => (value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  async function lookUpSpot() {
+    const metal = detectMetal(form.composition);
+    if (!metal || !form.acquisition_date) return;
+    setSpotBusy(true);
+    setSpotError(null);
+    try {
+      const currency = form.currency.trim().toUpperCase() || "USD";
+      const found = await api.historicSpot(metal, form.acquisition_date, currency);
+      setForm((f) => ({ ...f, spot_at_purchase: String(found.per_oz) }));
+    } catch (e) {
+      setSpotError((e as Error).message);
+    } finally {
+      setSpotBusy(false);
+    }
+  }
 
   const setRef = (index: number, field: keyof CatalogRef, value: string) =>
     setRefs((rs) => rs.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
@@ -205,6 +225,7 @@ export default function ItemForm() {
       : g.code;
 
   const isCoin = form.type === "coin";
+  const metal = detectMetal(form.composition);
   const hasStruckDate = isCoin && form.struck_calendar !== "" && form.struck_year !== "";
   const axisChoice =
     axisOther || !["", "0", "180"].includes(form.die_axis) ? "other" : form.die_axis;
@@ -430,7 +451,7 @@ export default function ItemForm() {
             })}
             {isCoin && (
               <>
-                {text("weight_g", "Weight (g)", { type: "number", step: "0.001", min: 0 })}
+                {text("weight_g", "Weight (g)", { type: "number", step: "0.0001", min: 0 })}
                 {text("fineness", "Fineness", {
                   type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.900",
                 })}
@@ -500,6 +521,27 @@ export default function ItemForm() {
             {text("acquisition_fees", "Fees, shipping & tax", {
               type: "number", step: "0.01", min: 0, title: "Counted in cost basis and gains",
             })}
+            {metal && (
+              <label className="field">
+                Spot at purchase (per oz)
+                <span style={{ display: "flex", gap: "0.3rem" }}>
+                  <input
+                    type="number" step="0.01" min={0} style={{ flex: 1 }}
+                    value={form.spot_at_purchase}
+                    onChange={(e) => set("spot_at_purchase")(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    disabled={spotBusy || !form.acquisition_date || !inHistoricCoverage(form.acquisition_date)}
+                    title="The metal's spot price that day, per troy ounce. Looked up automatically for purchases from 2 March 2024."
+                    onClick={lookUpSpot}
+                  >
+                    {spotBusy ? "Looking up…" : "Look up"}
+                  </button>
+                </span>
+                {spotError && <span className="muted">{spotError}</span>}
+              </label>
+            )}
             {text("currency", "Currency", { maxLength: 3 })}
             {text("acquired_from", "Acquired from", { placeholder: "dealer, show, auction…" })}
             {text("storage_location", "Storage location", { placeholder: "album, slab box, safe…" })}

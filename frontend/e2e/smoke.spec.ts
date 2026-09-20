@@ -247,6 +247,33 @@ test("an undated piece takes ND with no year", async ({ page }) => {
   await deleteForGood(page, url, country);
 });
 
+test("a silver piece counts toward the stack", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `E2E stack ${Date.now()}`;
+  await page.goto("/items/new");
+  await page.getByLabel("Country *").fill(country);
+  await page.getByLabel("Denomination *").fill("1 dollar");
+  await page.getByLabel("Year *").fill("1986");
+  await page.getByLabel("Composition", { exact: true }).fill("Silver");
+  await page.getByLabel("Weight (g)").fill("31.1035");
+  await page.getByLabel("Fineness", { exact: true }).fill("0.999");
+  await page.getByLabel("Quantity", { exact: true }).fill("2");
+  await page.getByLabel("Price paid").fill("70");
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+
+  // Assert on ounces and cost, computed from what was entered: no network call.
+  await page.goto("/stack");
+  await expect(page.getByRole("heading", { level: 2, name: "Silver" })).toBeVisible();
+  const row = page.getByRole("row", { name: new RegExp(country) });
+  await expect(row).toContainText("2"); // fine oz, ~2 troy oz of .999 fine silver
+  await expect(row).toContainText("$70.00"); // cost basis of the lot
+
+  await deleteForGood(page, url, country);
+});
+
 // Last on purpose: a restore replaces the whole collection, so a failure here
 // can't disturb the tests above. Restoring a backup taken a moment earlier
 // leaves everything as it was.

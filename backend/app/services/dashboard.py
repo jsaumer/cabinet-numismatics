@@ -61,6 +61,10 @@ WIDGET_OPTIONS: dict[str, dict[str, dict]] = {
     "checklists": {
         "count": {"kind": "int", "min": 3, "max": 20, "default": 6},
     },
+    "stack": {
+        "metal": {"choices": ["all", "gold", "silver", "platinum", "palladium"], "default": "all"},
+        "tag": {"kind": "str_or_null", "max": 64, "default": None},
+    },
     "pricing_coverage": {},
     "stale_estimates": {
         "days": {"choices": [7, 30, 90, 365], "default": 30},
@@ -91,6 +95,7 @@ DEFAULT_SIZES: dict[str, str] = {
     "wishlist": "half",
     "fancy_serials": "half",
     "checklists": "half",
+    "stack": "half",
     "pricing_coverage": "third",
     "stale_estimates": "half",
     "source_disagreements": "half",

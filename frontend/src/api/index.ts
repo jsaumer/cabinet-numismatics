@@ -5,6 +5,7 @@ export * from "./types/imports";
 export * from "./types/stats";
 export * from "./types/settings";
 export * from "./types/dashboard";
+export * from "./types/stack";
 export { api } from "./calls";
 
 import type { ItemType } from "./types/items";

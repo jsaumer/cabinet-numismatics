@@ -185,6 +185,9 @@ class ItemBase(BaseModel):
     struck_calendar: str | None = Field(default=None, max_length=20)
     struck_year: int | None = Field(default=None, ge=1, le=9999)
     struck_era: str | None = Field(default=None, max_length=20)
+    # v0.28.0: the metal's spot price per troy ounce on the purchase day, in
+    # `currency`. Not bulk-editable; the router drops it there.
+    spot_at_purchase: float | None = Field(default=None, gt=0, lt=10**8)
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -292,6 +295,8 @@ class ItemUpdate(BaseModel):
     struck_calendar: str | None = Field(default=None, max_length=20)
     struck_year: int | None = Field(default=None, ge=1, le=9999)
     struck_era: str | None = Field(default=None, max_length=20)
+    # v0.28.0: not bulk-editable; the router drops it there.
+    spot_at_purchase: float | None = Field(default=None, gt=0, lt=10**8)
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -577,6 +582,9 @@ class ItemOut(ItemBase):
     serial_traits: list[str] = []  # fancy-serial traits, server-set from the serial
     target_gap: float | None = None  # newest estimate less target_price; same currency only
     target_reached: bool = False  # target_gap is zero or less
+    spot_at_purchase_source: str | None = None  # manual | auto, server-set
+    fine_oz: float | None = None  # fine troy ounces, null when not in the stack's terms
+    premium_paid_pct: float | None = None  # cost over the metal's value on the purchase day
     set: SetOut | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefOut] = []
@@ -1050,3 +1058,73 @@ class RefreshResult(BaseModel):
     updated: int
     skipped: int
     failed: int
+
+
+# The bullion stack (roadmap Phase 7, P7). All money is in the report's
+# currency; ounces and each item's own spot at purchase are not converted.
+class StackMetal(BaseModel):
+    metal: str
+    items: int
+    pieces: int  # quantity, summed
+    fine_oz: float
+    fine_g: float
+    spot_per_oz: float | None = None
+    spot_fetched_at: datetime | None = None
+    spot_stale: bool = False
+    melt_value: float | None = None
+    cost_basis: float
+    costed_oz: float  # ounces of the pieces that have a cost
+    cost_per_oz: float | None = None  # also the break-even spot price
+    gain: float | None = None  # melt value of the costed ounces less their cost
+    gain_pct: float | None = None
+    premium_paid_pct: float | None = None
+    premium_known_oz: float
+
+
+class StackItem(BaseModel):
+    item_id: uuid.UUID
+    label: str
+    metal: str
+    quantity: int
+    fine_oz: float
+    cost_basis: float | None = None
+    cost_per_oz: float | None = None
+    spot_at_purchase: float | None = None  # in the item's own currency
+    spot_at_purchase_source: str | None = None
+    premium_paid_pct: float | None = None
+    melt_value: float | None = None
+    gain: float | None = None
+    currency: str  # the item's own currency
+    converted: bool  # its money was converted into the report's currency
+
+
+class StackTotals(BaseModel):
+    melt_value: float
+    cost_basis: float
+    gain: float
+    fine_oz_by_metal: dict[str, float]
+
+
+class StackReport(BaseModel):
+    currency: str
+    metals: list[StackMetal]
+    totals: StackTotals
+    items: list[StackItem]
+    missing_spot: int  # pieces whose purchase-day spot could be looked up
+    skipped: int  # precious-metal pieces with no weight or fineness
+    excluded_other_currency: int
+    history_start: date
+
+
+class BackfillResult(BaseModel):
+    filled: int
+    failed: int
+    remaining: int
+
+
+class HistoricSpot(BaseModel):
+    metal: str
+    date: date
+    currency: str
+    per_oz: float
+    source: str

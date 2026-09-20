@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
 from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
-from app.services import alerts, numista, pcgs
+from app.services import alerts, numista, pcgs, stack
 from app.services import app_settings as store
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -42,6 +42,26 @@ class RefreshRun(BaseModel):
 
 
 AlertFormat = Literal["generic", "ntfy", "discord", "slack", "gotify"]
+MetalName = Literal["gold", "silver", "platinum", "palladium"]
+
+
+class SpotAlert(BaseModel):
+    """A spot-price threshold, per troy ounce in `currency` (converted from the
+    USD spot price at daily rates)."""
+
+    metal: MetalName
+    direction: Literal["above", "below"]
+    price: float = Field(gt=0, lt=10**8)
+    currency: str = Field(min_length=3, max_length=3)
+
+    @field_validator("currency")
+    @classmethod
+    def _upper(cls, value: str) -> str:
+        return value.upper()
+
+
+class SpotAlertOut(SpotAlert):
+    met: bool | None = None  # whether it is met right now; null until checked
 
 
 class SettingsOut(BaseModel):
@@ -64,6 +84,7 @@ class SettingsOut(BaseModel):
     alert_webhook_format: AlertFormat
     heartbeat_hint: str | None
     metrics_enabled: bool
+    spot_alerts: list[SpotAlertOut]
     alerts: list[AlertStatus]
     alert_delivery: Outcome | None  # last webhook delivery (since the backend started)
     heartbeat: Outcome | None  # last heartbeat push (since the backend started)
@@ -94,6 +115,7 @@ class SettingsUpdate(BaseModel):
     alert_webhook_format: AlertFormat | None = None
     heartbeat_url: str | None = Field(default=None, max_length=2000)  # "" clears
     metrics_enabled: bool | None = None
+    spot_alerts: list[SpotAlert] | None = Field(default=None, max_length=stack.MAX_SPOT_ALERTS)
 
     @field_validator("alert_webhook_url", "heartbeat_url")
     @classmethod
@@ -188,6 +210,14 @@ def _build(db: Session) -> SettingsOut:
         ).scalars()
     ]
 
+    # Whether each threshold is met is the service's own state, reported here
+    # for display; the state itself never comes back through the API.
+    met = stack.alert_state(db)
+    spot_alerts = [
+        SpotAlertOut(**threshold, met=met.get(stack.alert_key(threshold)))
+        for threshold in stack.spot_alerts(db)
+    ]
+
     numista_priceable, pcgs_priceable = _priceable_counts(db)
     return SettingsOut(
         display_currency=store.display_currency(db),
@@ -208,6 +238,7 @@ def _build(db: Session) -> SettingsOut:
         alert_webhook_format=str(store.get_setting(db, "alert_webhook_format")),
         heartbeat_hint=alerts.url_hint(str(store.get_setting(db, "heartbeat_url"))),
         metrics_enabled=bool(store.get_setting(db, "metrics_enabled")),
+        spot_alerts=spot_alerts,
         alerts=alert_statuses(db),
         alert_delivery=alerts.last_delivery(),
         heartbeat=alerts.last_heartbeat(),
@@ -229,5 +260,9 @@ def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
         fields["display_currency"] = fields["display_currency"].upper()
     for key, value in fields.items():
         store.set_setting(db, key, value)
+    if "spot_alerts" in fields:
+        # A threshold that is gone forgets whether it was met, so re-adding it
+        # alerts again rather than staying quiet.
+        stack.prune_alert_state(db)
     db.commit()
     return _build(db)

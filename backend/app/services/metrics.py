@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app import __version__
 from app.models import Document, EstimateAttempt, Item, ItemPhoto
-from app.services import alerts, schema
+from app.services import alerts, schema, stack
 from app.services import app_settings as store
 from app.services import backup as backups
 
@@ -123,6 +123,15 @@ def collect(db: Session) -> list:
             stats.excluded_other_currency,
         )
     )
+
+    ounces = _gauge(
+        "cabinet_stack_fine_ounces",
+        "Fine troy ounces of owned precious metal, by metal",
+        labels=("metal",),
+    )
+    for metal, fine_oz in stack.fine_ounces_by_metal(db).items():
+        ounces.add_metric([metal], fine_oz)
+    families.append(ounces)
 
     families.extend(_backup_families(db))
     families.extend(_refresh_families(db))
