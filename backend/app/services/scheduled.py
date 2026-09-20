@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.services import alerts, pricing, trash
+from app.services import alerts, maintenance, pricing, trash
 from app.services import app_settings as store
 from app.services import backup as backups
 
@@ -18,7 +18,16 @@ SOURCE_NAMES = {"melt": "Melt", "numista": "Numista", "pcgs": "PCGS"}
 
 def refresh(db: Session) -> dict:
     """Run each enabled source's scheduled refresh, record its outcome in
-    `refresh_last_run`, and raise or clear its alert. Returns the outcomes."""
+    `refresh_last_run`, and raise or clear its alert. Returns the outcomes.
+    Sits out while a restore is replacing the database."""
+    with maintenance.scheduled_task() as go:
+        if not go:
+            logger.info("Scheduled refresh skipped: a restore is running")
+            return {}
+        return _refresh(db)
+
+
+def _refresh(db: Session) -> dict:
     runs = {}
     days = store.effective_reestimate_days(db)
     if days > 0 and store.get_setting(db, "melt_enabled"):
@@ -59,7 +68,16 @@ def _record(db: Session, source: str, outcome: dict) -> None:
 
 def hourly(db: Session) -> None:
     """Back up if one is due, empty the trash of expired items, then push the
-    heartbeat (last, so it reports what this tick found)."""
+    heartbeat (last, so it reports what this tick found). Sits out while a
+    restore is replacing the database."""
+    with maintenance.scheduled_task() as go:
+        if not go:
+            logger.info("Hourly tasks skipped: a restore is running")
+            return
+        _hourly(db)
+
+
+def _hourly(db: Session) -> None:
     try:
         if outcome := backups.run_scheduled(db):
             logger.info("Scheduled backup: %s", outcome)

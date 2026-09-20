@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.25.1**, with versioned images
+**Status (September 2026): released as v0.26.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -19,8 +19,9 @@ September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
 depth, fancy serial numbers, die axis and foreign dates) shipped together in
-v0.25.0; in-app restore (P2), the stack figures (P7), authentication (P8),
-and the share view (P9) remain.
+v0.25.0, and in-app restore (P2) in v0.26.0; the customisable dashboard
+(P10, next), the stack figures (P7), authentication (P8), and the share
+view (P9) remain.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -216,6 +217,9 @@ guidance, not appraisals.
 
 - ✔ **[Core]** Dashboard: counts, total cost basis, total estimated value,
   and top-level breakdowns.
+- **[Core]** A customisable dashboard: choose, reorder, and size its cards,
+  with the layout saved on the server. **Planned: Phase 7, P10**,
+  prioritised by the owner to follow in-app restore.
 - ✔ **[Core]** Breakdowns by country, type, decade, grade, and tag, plus
   acquisitions by year.
 - ✔ **[Core]** Cost-basis vs. estimated-value comparison: unrealized (owned)
@@ -257,8 +261,11 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Nice]** Backup from inside the app: download the collection as one
   `.zip` from Settings, and scheduled backups with retention. The scripts
   stay as the disaster-recovery path. See Phase 5.6. **Shipped in v0.12.0**
-  (B1 download + B2 scheduled/retention; B3 restore is **planned: Phase 7,
-  P2**, no longer blocked on authentication).
+  (B1 download + B2 scheduled/retention).
+- ✔ **[Core]** Restore from inside the app: a stored or uploaded archive,
+  verified, with a summary, an automatic safety backup first, a typed
+  confirmation, and a deployment switch (`RESTORE_ENABLED`). Phase 5.6's
+  B3, built as Phase 7, P2. **Shipped in v0.26.0.**
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
@@ -490,7 +497,8 @@ estimate, and you can see where pricing is thin.*
 
 B1 + B2 ✔ **shipped in v0.12.0**, pulled ahead of pricing M5 once real data
 started going into the live instance. B3 restore was blocked on the auth
-decision until 20 September 2026; it is now Phase 7, P2.
+decision until 20 September 2026, became Phase 7, P2, and ✔ **shipped in
+v0.26.0**.
 
 `scripts/backup.sh` needs a shell, the host, and Docker. That is the right
 tool for disaster recovery and the wrong one for "I just entered forty items
@@ -511,12 +519,12 @@ stay the documented recovery path.
   it and prunes the oldest; Settings reports last run, size, and outcome.
   Pointing the destination at a NAS bind mount gets backups off the box with
   no new service; see the "no cut services" rule in CLAUDE.md.
-- **B3: Restore from an upload.** Upload an archive, validate the manifest
+- ✔ **B3: Restore from an upload.** Upload an archive, validate the manifest
   (schema revision compatible, checksums intact), show what would change,
   then restore behind an explicit typed confirmation. It was blocked on a
   decision (restore is destructive and the app has no auth) until the owner
-  unblocked it on 20 September 2026: see **Phase 7, P2**, which adds an
-  automatic safety backup and a deployment switch.
+  unblocked it on 20 September 2026: see **Phase 7, P2**, which added an
+  automatic safety backup and a deployment switch. **Shipped in v0.26.0.**
 
 Implementation notes:
 
@@ -749,8 +757,9 @@ checklist:
 - A README and quick-start pass (the screenshots are current as of
   v0.24.2).
 
-In-app restore (Phase 5.6, B3) is no longer blocked on authentication: it
-is Phase 7, P2. The share view is Phase 7, P9.
+In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
+the rest of the app until authentication makes it admin-only. The share
+view is Phase 7, P9.
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -793,14 +802,15 @@ decision against application login are reopened here.
 
 In the proposed order; each was to ship alone as a minor release, and
 versions are illustrative. In the event P1 and P3 to P6 shipped together as
-v0.25.0 (one migration, `0018`), ahead of P2.
+v0.25.0 (one migration, `0018`), ahead of P2, which followed alone as
+v0.26.0.
 
 - ✔ **P1: Population on the item page** (S). PCGS population and population
   higher, which the cert fill already fetches and then drops, kept with the
   item (a migration), shown beside the grade with the date fetched, and
   refreshed with the PCGS estimate at no extra request. PCGS, NGC, and PMG
   all show it. **Shipped in v0.25.0.**
-- **P2: In-app restore** (M–L). Phase 5.6's B3, no longer blocked on
+- ✔ **P2: In-app restore** (M–L). Phase 5.6's B3, no longer blocked on
   authentication (the owner's decision, 20 September 2026). The block was a
   matter of principle more than of risk: anyone who can reach an open
   Cabinet can already download the whole collection and delete every item
@@ -818,7 +828,16 @@ v0.25.0 (one migration, `0018`), ahead of P2.
   page off (`RESTORE_ENABLED=false`), and it becomes admin-only when
   authentication ships. `restore.sh` stays the disaster-recovery path for
   when the app itself won't start, and CI's restore drill gains the in-app
-  route.
+  route. **Shipped in v0.26.0**, no migration. As built: the archive's files
+  are unpacked beside the live ones first, the database is restored in one
+  transaction, and the files are swapped in by renames only after it
+  commits, so a failure before that changes nothing and a failed swap is
+  put back; a journal on the state volume finishes an interrupted swap on
+  the next start. Safety backups (`-prerestore`) sit outside the retention
+  count, newest three kept. During the run everything but health and the
+  restore status answers 503, and health doesn't touch the database. Not
+  yet tried on NFS or with an archive from a genuinely older release; see
+  [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 - ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
   items, a wish-list view sorted by either, the gap between target and the
   current estimate, and an alert through the existing webhook when an
@@ -905,6 +924,28 @@ v0.25.0 (one migration, `0018`), ahead of P2.
   with when it was last opened. **Blocked on P8**: it is the first
   deliberately public page, and everything else has to be closed before
   one door is opened.
+
+- **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
+  September 2026: next, now that in-app restore has shipped**, ahead of P7
+  to P9. The dashboard today is a fixed page; the owner wants to decide what
+  is on it.
+  Proposed: every card becomes a widget that can be shown or hidden,
+  reordered, and sized (full, half, or a third of the row); a catalogue of
+  widgets to add (the value hero, value over time, value by country, tag,
+  decade, grade, acquisitions by year, gains, the notes report, the wish
+  list with targets reached, recent additions, fancy serials, pricing
+  coverage, backup and alert status); per-widget options where they make
+  sense (top N, a tag or set to scope it to, the time range); an "Edit
+  dashboard" mode with drag to reorder and a reset to the default layout;
+  the layout saved on the server in settings, so it follows the collection
+  rather than the browser. No new chart library: the widgets are the cards
+  that exist, made movable. To settle in its research: drag and drop without
+  a dependency (pointer events and keyboard moves), and how a saved layout
+  survives a release that adds or retires a widget.
+
+**The order from here** (P2 in-app restore shipped in v0.26.0): P10 the
+customisable dashboard, P7 bullion stack figures, P8 authentication, P9 the
+share view.
 
 Optional, after the above and only if still wanted:
 

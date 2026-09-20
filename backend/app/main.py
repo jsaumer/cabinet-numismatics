@@ -22,11 +22,14 @@ from app.routers import (
     photos,
     pricing_reports,
     reference,
+    restore,
     settings,
     stats,
     trash,
 )
+from app.services import restore as restores
 from app.services import scheduled, schema
+from app.services.maintenance import MaintenanceMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,9 @@ async def _hourly_loop() -> None:
 async def lifespan(app: FastAPI):
     config = get_settings()
     Path(config.photo_dir).mkdir(parents=True, exist_ok=True)
+    # A restore the last process didn't finish: roll its file swap forward,
+    # or clear what it had unpacked.
+    await asyncio.to_thread(restores.recover)
     if config.auto_migrate:
         # Before serving anything: new code must not run against an old schema.
         # A failure raises here and stops startup rather than limping along.
@@ -107,6 +113,9 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# While a restore runs, everything but health and the restore status is 503.
+app.add_middleware(MaintenanceMiddleware)
+
 app.include_router(health.router)
 app.include_router(items.router)
 app.include_router(photos.router)
@@ -125,3 +134,4 @@ app.include_router(imports.router)
 app.include_router(documents.router)
 app.include_router(trash.router)
 app.include_router(monitoring.router)
+app.include_router(restore.router)

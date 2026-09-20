@@ -205,7 +205,67 @@ export interface BackupList {
   directory: string;
   free_bytes: number | null;
   last_run: BackupRun | null;
-  backups: { name: string; size: number; created_at: string }[];
+  backups: BackupFile[];
+}
+
+export interface BackupFile {
+  name: string;
+  size: number;
+  created_at: string;
+  prerestore?: boolean; // the safety backup taken before a restore
+}
+
+export type RestoreStep =
+  | "safety_backup"
+  | "database"
+  | "migrations"
+  | "photos"
+  | "documents"
+  | "finishing";
+
+export interface RestoreOutcome {
+  at: string;
+  ok: boolean;
+  archive: string | null;
+  archive_created_at: string | null;
+  safety_backup: string | null;
+  error: string | null;
+  items: number | null;
+  photos: number | null;
+  documents: number | null;
+}
+
+export interface RestoreStatus {
+  enabled: boolean;
+  state: "idle" | "running" | "done" | "failed" | null;
+  step: string | null; // a RestoreStep while running
+  started_at: string | null;
+  last: RestoreOutcome | null;
+  confirm_phrase: string | null;
+}
+
+export interface RestoreCounts {
+  revision: string | null;
+  items: number | null;
+  photos: number | null;
+  documents: number | null;
+  trashed: number | null;
+}
+
+export interface RestoreInspection {
+  restore_id: string;
+  archive: RestoreCounts & {
+    name: string;
+    size: number;
+    created_at: string | null;
+    app_version: string | null;
+    includes_photos: boolean;
+    includes_documents: boolean;
+  };
+  current: RestoreCounts;
+  will_migrate: boolean;
+  replaces_files: boolean;
+  secrets_note: string | null;
 }
 
 export interface Health {

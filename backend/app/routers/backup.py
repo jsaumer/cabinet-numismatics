@@ -23,6 +23,8 @@ class StoredBackup(BaseModel):
     name: str
     size: int
     created_at: datetime
+    # The safety archive an in-app restore took first.
+    prerestore: bool = False
 
 
 class BackupList(BaseModel):
@@ -69,6 +71,7 @@ def list_backups(db: Session = Depends(get_db)):
                 created_at=datetime.strptime(p.name[15:30], "%Y%m%d-%H%M%S").replace(
                     tzinfo=timezone.utc
                 ),
+                prerestore=backup.is_prerestore(p),
             )
             for p in backup.stored_backups(dest)
         ],

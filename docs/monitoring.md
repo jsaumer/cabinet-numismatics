@@ -165,8 +165,8 @@ so scraping more often than that gains nothing.
 | `cabinet_amounts_unconverted` | | Amounts left out of totals for lack of an exchange rate |
 | `cabinet_backup_scheduled` | | 1 when scheduled backups are on |
 | `cabinet_backup_last_run_timestamp_seconds`, `cabinet_backup_last_run_success` | | The last backup run |
-| `cabinet_backup_archives` | | Archives in the backup directory |
-| `cabinet_backup_newest_timestamp_seconds`, `cabinet_backup_newest_size_bytes` | | The newest archive |
+| `cabinet_backup_archives` | | Archives in the backup directory, the safety backups taken before a restore (`-prerestore`) included |
+| `cabinet_backup_newest_timestamp_seconds`, `cabinet_backup_newest_size_bytes` | | The newest archive, which may be one of those safety backups |
 | `cabinet_refresh_last_run_timestamp_seconds` | `source` | Last scheduled refresh |
 | `cabinet_refresh_last_run_items` | `source`, `outcome` | Its updated / skipped / failed items |
 | `cabinet_estimate_attempts` | `source`, `outcome` | Each item's latest automatic attempt (`ok`, `not_applicable`, `unavailable`) |
@@ -204,3 +204,16 @@ Scraping through the public hostname works too, but an authenticating proxy
 **Like the rest of the API, `/api/metrics` has no login**, and it includes the
 collection's value. That's the reason it's off by default. See
 [security.md](security.md).
+
+## During a restore
+
+While a restore from Settings → Backups runs (usually a minute or two),
+`/api/health` keeps answering 200, with `db: "restoring"`, so an uptime
+monitor or a container healthcheck on it stays green. Everything else
+answers 503: a scrape of `/api/metrics` fails, the Homepage tile shows an
+error, and an hourly tick that falls inside the restore is skipped, the
+heartbeat push with it (the next tick sends it). Afterwards the alert state
+and the "last backup" and "last refresh" records are whatever the restored
+archive held, so a check may report a failure or an age from the day the
+archive was made until its next run. The in-memory results (the last alert
+delivery and heartbeat push) and the metrics cache start afresh.
