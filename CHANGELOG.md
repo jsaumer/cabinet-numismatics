@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.5] - 2026-09-20
+
 ### Fixed
 - **A PCGS cert fill now spells things the way the rest of Cabinet does.**
   PCGS returns "The United States of America" and marks every Philadelphia
