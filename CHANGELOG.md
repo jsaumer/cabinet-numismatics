@@ -10,6 +10,58 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-20
+
+### Added
+- **Restore from inside the app.** Settings → Backups gains a Restore block:
+  pick a stored archive, or upload one, and Cabinet replaces the whole
+  collection (the database, and the photos and documents when the archive
+  carries them) with it. An archive from an older Cabinet is migrated
+  afterwards; one from a newer Cabinet is refused. Restore is destructive
+  and Cabinet has no login yet, so it is fenced:
+  - The archive is verified first (its manifest, a checksum for every
+    member, a schema revision this build knows, and nothing but plain files
+    and folders inside), and a summary shows what it holds beside what is
+    here now.
+  - A **safety backup** of the current state is written to the backup
+    directory first (`cabinet-backup-…-prerestore.zip`) and checked. If it
+    fails, the restore doesn't start. Safety backups are listed with a
+    "before restore" badge, restore like any archive, sit outside **Keep
+    newest**, and the newest three are kept.
+  - You type `RESTORE` to confirm.
+  - Nothing live changes until the archive's files are unpacked beside the
+    current ones; the database is then restored in one transaction, and the
+    files are swapped in only after it commits. A failure before that ends
+    "Nothing was changed."; a failed file swap puts the previous files back
+    and names the safety backup.
+  - While it runs the rest of the app answers "restoring, try again in a
+    moment", scheduled backups and price refreshes sit out, and a restore
+    is refused while a backup or a scheduled task is running.
+  - `RESTORE_ENABLED=false` switches the feature off: the block disappears
+    and the endpoints answer 404. `RESTORE_MAX_GB` (default 20) caps an
+    uploaded archive.
+
+  `scripts/restore.sh` stays the path for when the app itself won't start.
+  Saved API keys in a restored database work only with the `SECRET_KEY` in
+  use when the archive was made, as with the script. Upgrading needs only
+  the tag bump: there is no migration. Behind your own reverse proxy, allow
+  large uploads and long timeouts under `/api/restore`
+  (see docs/deployment.md). Not yet tried on NFS-backed volumes or with an
+  archive made by a genuinely older release; see docs/backup-restore.md.
+
+### Changed
+- `GET /api/health` answers `db: "restoring"` (with `schema.status`
+  `unknown`) while a restore runs, without touching the database, so a
+  container healthcheck doesn't hang behind it.
+- `GET /api/backups` rows carry `prerestore`, and stored archive names may
+  end `-prerestore.zip`. Safety backups count in the
+  `cabinet_backup_archives` and newest-archive metrics.
+- During a restore every other API request answers `503` with
+  `Retry-After: 5`.
+- nginx answers 404 for any dot-name under `/photos/` (a restore's working
+  folders sit inside the photo volume for a moment), and photo and document
+  archives leave those folders out.
+
 ## [0.25.1] - 2026-09-20
 
 ### Fixed

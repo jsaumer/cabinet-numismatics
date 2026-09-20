@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { AlertsCard } from "../components/alerts";
 import { LockIcon } from "../components/icons";
+import { RestoreBlock, useRestore } from "../components/restore";
 
 function formatBytes(bytes: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -66,10 +67,12 @@ export default function Settings() {
       .catch((e: Error) => setBackupError(e.message));
   }
 
-  useEffect(() => {
+  function loadAbout() {
     api.health().then(setHealth).catch(() => setHealth(null));
     loadBackups();
-  }, []);
+  }
+
+  useEffect(loadAbout, []);
 
   async function backUpNow() {
     setBackingUp(true);
@@ -87,10 +90,11 @@ export default function Settings() {
     }
   }
 
-  useEffect(() => {
+  function loadSettings() {
     api
       .getSettings()
       .then((s) => {
+        setError(null);
         setSettings(s);
         setCurrency(s.display_currency);
         setCadence(String(s.reestimate_days));
@@ -99,7 +103,17 @@ export default function Settings() {
         setKeep(String(s.backup_keep));
       })
       .catch((e: Error) => setError(e.message));
-  }, []);
+  }
+
+  useEffect(loadSettings, []);
+
+  // A restore replaced the database: everything on this page is stale.
+  const restore = useRestore(() => {
+    setBackupError(null);
+    setBackupNote(null);
+    loadSettings();
+    loadAbout();
+  });
 
   async function apply(payload: AppSettingsUpdate, message: string): Promise<boolean> {
     setSaving(true);
@@ -123,6 +137,15 @@ export default function Settings() {
     }
   }
 
+  // Opened mid-restore: the settings call got a 503, the status call didn't.
+  if (!settings && restore.running) {
+    return (
+      <div className="card">
+        <h2>Backups</h2>
+        <RestoreBlock restore={restore} />
+      </div>
+    );
+  }
   if (error && !settings) return <p className="error">{error}</p>;
   if (!settings) return <p className="muted">Loading…</p>;
 
@@ -427,7 +450,7 @@ export default function Settings() {
         <h2>Backups</h2>
         <p className="muted" style={{ marginTop: 0 }}>
           An archive holds the database, the photos, and a manifest with checksums. Restore
-          it with <code>scripts/restore.sh</code> (see docs/backup-restore.md). Stored API
+          it below, or with <code>scripts/restore.sh</code> (see docs/backup-restore.md). Stored API
           keys stay encrypted, and the encryption key is not in the archive.
         </p>
         <div className="estimate-form" style={{ marginTop: 0 }}>
@@ -517,16 +540,32 @@ export default function Settings() {
             {backups.backups.length > 0 && (
               <table className="estimates">
                 <thead>
-                  <tr><th>Archive</th><th>Size</th><th>Created</th></tr>
+                  <tr>
+                    <th>Archive</th><th>Size</th><th>Created</th>
+                    {restore.enabled && <th></th>}
+                  </tr>
                 </thead>
                 <tbody>
                   {backups.backups.map((b) => (
                     <tr key={b.name}>
                       <td>
                         <a href={`/api/backups/${b.name}`} download>{b.name}</a>
+                        {b.prerestore && (
+                          <span className="badge status-wishlist">before restore</span>
+                        )}
                       </td>
                       <td>{formatBytes(b.size)}</td>
                       <td className="muted">{new Date(b.created_at).toLocaleString()}</td>
+                      {restore.enabled && (
+                        <td className="provenance-toggle">
+                          <button
+                            disabled={restore.busy || backingUp}
+                            onClick={() => restore.inspectArchive(b.name)}
+                          >
+                            Restore…
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -534,6 +573,7 @@ export default function Settings() {
             )}
           </>
         )}
+        <RestoreBlock restore={restore} appVersion={health?.version} />
       </div>
 
       <AlertsCard settings={settings} saving={saving} apply={apply} />

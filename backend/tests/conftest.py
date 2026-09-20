@@ -43,10 +43,11 @@ def _no_network_rates(monkeypatch):
 @pytest.fixture(autouse=True)
 def _fresh_monitoring_state():
     """Alert outcomes and the metrics cache live in memory, per process."""
-    from app.services import alerts, metrics
+    from app.services import alerts, metrics, restore
 
     alerts.reset_memory()
     metrics.reset_cache()
+    restore.reset_memory()
     yield
 
 
@@ -80,6 +81,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("REQUIRE_DOCUMENT_MOUNT", "false")
     # Beside the photo dir, never inside it (the backup service refuses that).
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path.with_name(tmp_path.name + "-backups")))
+    # The restore outcome file is written beside the key file.
+    monkeypatch.setenv(
+        "SECRET_KEY_FILE", str(tmp_path.with_name(tmp_path.name + "-state") / "secret.key")
+    )
     get_settings.cache_clear()
     crypto.reset_cache()
     app.dependency_overrides[get_db] = override_get_db

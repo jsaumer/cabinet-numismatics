@@ -13,7 +13,13 @@ There are two ways to make one:
 - **From the host**: `scripts/backup.sh`. Needs Docker on the host; stays the
   disaster-recovery path.
 
-`scripts/restore.sh` restores either kind.
+And two ways to restore one:
+
+- **From the app**: Settings → Backups → Restore, for an in-app archive
+  (stored or uploaded). See
+  [Restore from inside the app](#restore-from-inside-the-app).
+- **From the host**: `scripts/restore.sh` restores either kind, and is the
+  disaster-recovery path for when the app itself won't start.
 
 ## In-app backups
 
@@ -43,7 +49,10 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
 - **Back up now** writes one immediately and counts toward the same
   retention. **Include photos** applies to scheduled and on-demand archives,
   and covers the documents too.
-- Stored archives are listed with download links.
+- Stored archives are listed with download links and a **Restore…** button.
+- The safety backups an in-app restore takes (`-prerestore`, below) are
+  listed with a "before restore" badge. They don't count toward **Keep
+  newest** and aren't removed by it; the newest three are kept.
 
 The backup directory must not be inside the photo directory (nginx serves
 that publicly), and the backend refuses to write there.
@@ -51,7 +60,8 @@ that publicly), and the backend refuses to write there.
 ### What an archive contains
 
 Named `cabinet-backup-YYYYMMDD-HHMMSS.zip` (UTC), with a `-data` suffix when
-photos are left out:
+photos are left out, or `-prerestore` for the safety backup taken before an
+in-app restore:
 
 | Member | Contents |
 |--------|----------|
@@ -68,6 +78,10 @@ photos are left out:
 unzip cabinet-backup-20260914-031500.zip -d check
 (cd check && sha256sum -c SHA256SUMS)
 ```
+
+`manifest.json` itself is not listed in `SHA256SUMS` (the format has always
+worked that way): the checksums catch a corrupted or truncated archive, not
+one that was deliberately rewritten.
 
 The backend image carries PostgreSQL 14–18 clients and dumps with the one
 matching the server's major version, so an archive restores with that
@@ -93,7 +107,142 @@ On Windows run the scripts from Git Bash. `backups/` is gitignored; copy
 backups somewhere off the machine (NAS, cloud): a backup on the same disk as
 the data protects against mistakes, not disk failure.
 
-## Restoring
+## Restore from inside the app
+
+Settings → Backups → **Restore** replaces the whole collection with a
+Cabinet archive: the database, and the photos and documents when the archive
+carries them. A data-only archive restores the database and leaves the files
+as they are. It takes archives made by the app (download, **Back up now**,
+scheduled, or an earlier safety backup), not `backup.sh` directories.
+
+**Destructive**, and as open as the rest of the app until login ships (see
+[security.md](security.md)), so it is fenced, and a deployment can switch it
+off.
+
+### The procedure
+
+1. Click **Restore…** on a stored archive, or **Restore from a file** to
+   upload one. An upload is written straight into
+   `BACKUP_DIR/.restore-staging/`, never through the container's temp
+   folder, and may be up to `RESTORE_MAX_GB` (default 20).
+2. Cabinet verifies the archive and changes nothing: it must be a zip with a
+   `cabinet-backup` manifest, every member must match its checksum, the
+   schema revision must be one this build knows, and the photo and document
+   archives may hold only plain files and folders (links, devices, absolute
+   paths, and `..` are refused). An archive from a **newer** Cabinet is
+   refused: upgrade first. An **older** one is fine: it is migrated after
+   the restore. An upload that fails the check is deleted at once.
+3. A summary shows the archive beside what is here now: items, photos,
+   documents, trashed items, schema revision, app version, and the archive's
+   date, with notes when it will be migrated or carries no files.
+4. Type `RESTORE` and click **Restore this archive**. **Cancel** discards a
+   staged upload; it never deletes a stored archive.
+5. The page follows the run and reloads its data when it ends.
+
+### What a run does, in order
+
+1. **Safety backup.** The app goes into maintenance (below), the archive is
+   verified again, and the current state is written to the backup directory
+   as `cabinet-backup-YYYYMMDD-HHMMSS-prerestore.zip`, with photos and
+   documents whenever the incoming archive replaces them, and verified. If
+   it fails, the restore doesn't start.
+2. **Photos, documents.** The archive's files are unpacked into a hidden
+   `.restore-new` folder inside each volume, after a free-space check.
+   Nothing live is touched.
+3. **Database.** `pg_restore --clean --if-exists --no-owner
+   --single-transaction`, with the client matching the server and a
+   120-second lock timeout: it either commits whole or leaves the database
+   as it was. One change is made just before it, outside that transaction:
+   tables that exist here but not in the dump (added by a migration newer
+   than the archive) are dropped, because they would block the restore and
+   collide with the migration later.
+4. **Migrations**, when the archive's revision is older than this build's.
+5. **Finishing.** Only now, with the database committed, are the files
+   swapped in, by renames inside each volume: the current entries move to
+   `.restore-old`, the unpacked ones move in, and `.restore-old` is deleted
+   once everything held.
+
+The outcome (archive, counts, safety backup, or the error) is written to
+`restore_last.json` on the state volume beside the key file, not to the
+database, which was just replaced. Settings shows it as the last restore. A
+staged upload is removed after a successful run and kept after a failed one,
+for a retry; uploads left staged are cleared after a day.
+
+### While it runs
+
+- Every API request except `GET /api/health` and `GET /api/restore/status`
+  answers `503` ("Cabinet is restoring a backup; try again in a moment").
+  Requests already in flight get up to 30 seconds to finish first.
+- The scheduled loops (backups, price refreshes, the trash clear-out, the
+  heartbeat) skip their turn.
+- `/api/health` answers `db: "restoring"` with the schema `unknown`, without
+  touching the database, so a container healthcheck doesn't hang behind
+  `pg_restore`'s locks and get the backend killed mid-restore.
+- A restore is refused (`409`) while another restore, a backup, or a
+  scheduled task is running, and no backup starts until it ends.
+
+### When it fails
+
+- **Before or in the database step** (a bad archive, a failed safety backup,
+  no room to unpack, `pg_restore` failing): the unpacked files are removed
+  and the error ends "Nothing was changed."
+- **The one exception**: if `pg_restore` fails after tables newer than the
+  archive were dropped, the error names those tables and the safety backup
+  to restore. The rest of the database is as it was.
+- **The file swap fails**: the previous files are put back, and the error
+  says so and names the safety backup, since the database has already been
+  replaced.
+- **A migration fails** after the restore: the files are still swapped in
+  (they belong to the restored database), the run is reported failed, and
+  the error says to restart the backend to try the migration again, or
+  restore the safety backup.
+- **The backend stops mid-run**: a journal on the state volume
+  (`restore_journal.json`) lets the next start finish a swap that was cut
+  short, or clear the unpacked files if the database hadn't been replaced
+  yet. If putting files back ever failed, a non-empty `.restore-old` is
+  left in the volume and the next restore refuses until a person has moved
+  those files back or removed the folder: it may hold the only copy.
+
+To go back after a restore you regret, restore the `-prerestore` archive.
+
+### Switching it off, and limits
+
+| Variable | Default | |
+|----------|---------|---|
+| `RESTORE_ENABLED` | `true` | `false`: the restore endpoints answer 404, `GET /api/restore/status` says `enabled: false`, and the Restore block disappears. `restore.sh` is then the only way |
+| `RESTORE_MAX_GB` | `20` | Largest archive that may be uploaded. The bundled nginx allows 20 GB under `/api/restore`; raising this means raising that too |
+
+A reverse proxy in front of the stack needs the same allowance for large
+bodies and long requests; see
+[deployment.md](deployment.md#3-reverse-proxy-tls-and-authentication).
+
+### What to know before relying on it
+
+- After a restore, everything in the database is the archive's, settings
+  included: the backup schedule, the "last backup" line, and alert state are
+  whatever they were when the archive was made. The safety backup is never
+  recorded as the last backup run.
+- Saved API keys and webhook addresses work only with the `SECRET_KEY` in
+  force when the archive was made; see
+  [Secrets in backups](#secrets-in-backups).
+- The volumes need room for a second copy of the photos and documents while
+  the swap is pending, and the backup directory room for the safety backup
+  (and an upload).
+- The checksums catch corruption, not tampering: the manifest isn't itself
+  signed or summed. Restore archives you made.
+- **Not tested on NFS.** The swap is renames within one volume, and `.nfs*`
+  placeholder files (an NFS client's stand-ins for open files) are skipped,
+  but it has only been run on local volumes.
+- **Not tested with an archive made by a genuinely older release.** The
+  older-revision path (dropping newer tables, then migrating) was exercised
+  with an archive whose manifest was rewritten to an older revision.
+- Rehearsed in CI on every push, against real Postgres (see Notes). If it
+  goes wrong, or the app won't start, use the script below.
+
+## Restoring from the host
+
+The disaster-recovery path: it needs only the host, Docker, and a running
+`db` container, not a working app.
 
 ```bash
 ./scripts/restore.sh backups/<timestamp>                  # a backup.sh directory
@@ -106,7 +255,9 @@ stack must be running, and restoring an archive needs `unzip` and
 `sha256sum` on the host. After a restore, the app reflects the backup
 immediately, with no restart needed. The backend runs unprivileged while
 `docker compose exec` enters as root, so the script gives the extracted
-files to whoever owns the volume.
+files to whoever owns the volume. Unlike the in-app restore, the script
+takes no safety backup and doesn't pause the app: take a backup first if
+the current state matters, and don't use the app while it runs.
 
 For an archive, the script verifies the checksums first and restores nothing
 if any member doesn't match. A data-only archive restores the database and
@@ -115,11 +266,7 @@ which has no `documents.tar.gz`, leaves the documents as they are.
 
 Restoring into a *fresh* deployment works the same way: bring the stack up,
 wait until `/api/health` reports `schema.status: "ok"` (the backend creates
-the schema on startup), then restore.
-
-There is no restore button in the app yet; one is planned (roadmap Phase 7,
-P2), with an automatic safety backup first and a typed confirmation. Until
-then, and whenever the app itself won't start, restore is a host-side step.
+the schema on startup), then restore, from the app or with the script.
 
 ### On a Swarm
 
@@ -153,9 +300,9 @@ The database dump contains price-source API credentials, and the alert
 webhook and heartbeat URLs, **encrypted at rest** (see
 [security.md](security.md)); the encryption key is *not* in the backup:
 it lives in `.env` (`SECRET_KEY`) or on the private `backend_state` volume.
-Restoring onto a host without the matching key works fine; the affected
-sources and alerts simply show as not configured, and you re-enter them in
-Settings.
+Restoring onto a host without the matching key works fine, from the app or
+with the script; the affected sources and alerts simply show as not
+configured, and you re-enter them in Settings.
 
 Back up `.env` separately and treat it as sensitive: it holds both the
 database password and the encryption key.
@@ -169,4 +316,9 @@ database password and the encryption key.
 - Restore is rehearsed: CI attaches a PDF to an item, downloads an in-app
   archive, deletes the item for good, restores the archive with
   `restore.sh`, and checks the item is back and the PDF matches byte for
-  byte, on every push. An untested backup is a hope, not a backup.
+  byte, on every push. It then rehearses the in-app route: back up, add a
+  marker item, restore that backup through `/api/restore` (a wrong phrase is
+  refused first), and check the marker is gone, the earlier items are
+  still there, a `-prerestore` archive is listed, and health is back to
+  `ok`. A Playwright test does the same from Settings. An untested backup is
+  a hope, not a backup.
