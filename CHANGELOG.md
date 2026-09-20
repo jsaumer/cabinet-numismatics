@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-09-19
+
 ### Added
 - **Add a run.** Collection → **Add a run**: look a type up on Numista, tick
   the dates and mints you have, fill in what they share — status, grade,
