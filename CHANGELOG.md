@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-09-20
+
 ### Security
 - **The backend no longer runs as root.** Its container starts as root only
   long enough to hand the data directories (photos, state, backups,
