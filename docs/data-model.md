@@ -21,8 +21,11 @@ later grew `value_strategy`/`preferred_source` for the blended-value display,
 for in-app backups, `trash_retention_days` for the trash, and
 `alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
 plus the service-written `refresh_last_run`/`alert_state` for alerts and
-metrics, with no migration needed, since it's a generic key/value table),
-read through `app/services/app_settings.py` with defaults and env fallbacks.
+metrics, and `dashboard_layout` (v0.27.0, the customisable dashboard) for
+the saved widget layout, written only by `/api/dashboard/layout`, never by
+`PUT /api/settings`, with no migration needed, since it's a generic
+key/value table), read through `app/services/app_settings.py` with defaults
+and env fallbacks.
 The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
 `heartbeat_url`) are stored encrypted; see [security.md](security.md).
 Revision `0009` (M2) added `source_cache`; `0010` (M4) added

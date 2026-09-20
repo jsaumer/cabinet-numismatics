@@ -5,6 +5,7 @@ import {
   AppSettings,
   AppSettingsUpdate,
   BackupList,
+  formatBytes,
   Health,
   SourceStatus,
   ValueStrategy,
@@ -12,17 +13,6 @@ import {
 import { AlertsCard } from "../components/alerts";
 import { LockIcon } from "../components/icons";
 import { RestoreBlock, useRestore } from "../components/restore";
-
-function formatBytes(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
 
 function schemaLabel({ current, expected, status }: Health["schema"]): string {
   if (status === "ok") return `${current} (up to date)`;

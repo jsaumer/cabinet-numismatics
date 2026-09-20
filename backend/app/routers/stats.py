@@ -115,11 +115,16 @@ def _entry(key: str, b: _Bucket) -> BreakdownEntry:
 @router.get("/breakdowns", response_model=Breakdowns)
 def breakdowns(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
+    tag: str | None = Query(default=None, max_length=64),
+    set_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Owned items grouped by country, type, decade, grade, and tag, plus
     acquisitions by year. Counts include every owned item; money sums are
-    converted into the display currency (unconvertible amounts excluded)."""
+    converted into the display currency (unconvertible amounts excluded).
+    `tag` / `set_id` scope every breakdown to items carrying that tag or
+    belonging to that set; an unknown tag or set gives empty breakdowns,
+    not an error."""
     currency = _resolve_currency(db, currency)
     conv = Converter(db, currency)
     strategy, preferred_source = _resolve_strategy(db)
@@ -129,6 +134,10 @@ def breakdowns(
 
     for item in _load_items(db):
         if item.status != "owned":
+            continue
+        if tag is not None and not any(t.name == tag for t in item.tags):
+            continue
+        if set_id is not None and item.set_id != set_id:
             continue
         resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
         cost = conv.convert(item.cost_basis, item.currency) or 0.0

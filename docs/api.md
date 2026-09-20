@@ -229,7 +229,7 @@ right now.
 | Method | Path                     | Purpose                                        |
 |--------|--------------------------|------------------------------------------------|
 | `GET`  | `/api/stats/collection`  | Totals in a display currency (`?currency=`)    |
-| `GET`  | `/api/stats/breakdowns`  | Owned items grouped by country/type/decade/grade/tag + acquisitions by year |
+| `GET`  | `/api/stats/breakdowns`  | Owned items grouped by country/type/decade/grade/tag + acquisitions by year (`?tag=`, `?set_id=`) |
 | `GET`  | `/api/stats/gains`       | Per-item unrealized (owned) and realized (sold) gain/loss |
 | `GET`  | `/api/stats/value-history` | Month-end collection value over time (`?months=`, default 24, 1–120) |
 | `GET`  | `/api/stats/notes-by-signature` | Owned notes grouped by series and signature pair |
@@ -243,7 +243,9 @@ and `realized_gain` (sold items, net of fees). A count is a row, not its
 `quantity`. [monitoring.md](monitoring.md) builds a Homepage tile from this
 endpoint. `/breakdowns` answers `by_country`, `by_type`, `by_decade`,
 `by_grade`, `by_tag`, and `acquisitions_by_year`, each a list of `key`,
-`count`, `cost_basis`, and `estimated_value`; `/gains` answers `unrealized`
+`count`, `cost_basis`, and `estimated_value`; `?tag=` and `?set_id=` scope
+every breakdown to items carrying that tag or belonging to that set (an
+unknown tag or set gives empty breakdowns, not an error); `/gains` answers `unrealized`
 and `realized` lists of `item_id`, `label`, `cost_basis`, `value`, and
 `gain`; `/value-history` answers `points` of `date`, `value`, and
 `estimated_items`, starting at the first month with an estimate. All take
@@ -261,6 +263,78 @@ by series, then signatures, ignoring case, with `null` last.
 
 The dashboard and the printable insurance report (`/report` in the UI;
 export to PDF via the browser's print dialog) are built on these endpoints.
+
+## Dashboard
+
+| Method   | Path                    | Purpose                                  |
+|----------|-------------------------|-------------------------------------------|
+| `GET`    | `/api/dashboard/layout` | The dashboard's widget layout            |
+| `PUT`    | `/api/dashboard/layout` | Save a layout                            |
+| `DELETE` | `/api/dashboard/layout` | Forget the saved layout (back to default) |
+
+A layout is `{"version": 1, "widgets": [...]}`, plus `is_default` on the
+response. A widget is `{"id", "type", "size", "title", "options"}`: `id` is
+1 to 36 characters of `a`-`z`, `0`-`9`, and `-`, unique in the layout; `size`
+is `full`, `half`, or `third`; `title` is an optional override (max 80
+characters, `null` for the widget's own); `options` are per type, below. A
+layout holds at most 40 widgets.
+
+`GET` is **lenient**: a widget of a type this build no longer knows is
+dropped silently, a missing option takes its default, and an invalid stored
+value is replaced by its default, so a release that retires a widget or
+narrows an option never breaks the page. Nothing saved yet answers the
+built-in default layout with `is_default: true`. A layout saved by an older
+Cabinet is migrated forward on read.
+
+`PUT` takes `{"widgets": [...]}` and is **strict**: a `422` names the
+widget's `id` and, for a bad option, the option's name. It rejects an
+unknown type, an invalid size, a duplicate or malformed id, more than 40
+widgets, a title over 80 characters, or an option value outside its
+choices, range, or type.
+
+`DELETE` removes the saved layout and returns the default, same shape as
+`GET`.
+
+The layout is stored under the `dashboard_layout` key in `app_settings` (see
+[data-model.md](data-model.md)), so it is carried by backups, but it is
+**not** part of `GET`/`PUT /api/settings`: it has its own endpoints because
+it changes far more often and in a different shape.
+
+**Widget types and options** (unlisted options take the default in
+parentheses):
+
+| Type | Options | Default size |
+|---|---|---|
+| `setup` | none | full |
+| `value_summary` | none | full |
+| `value_history` | `months`: 12, 24, 60, or 120 (24) | full |
+| `breakdown` | `dimension`: `country`, `type`, `decade`, `grade`, `tag`, `acquisition_year` (`country`); `measure`: `value`, `count`, `cost` (`value`); `top_n`: 3-20 (8); `tag`: a tag name or `null` (`null`); `set_id`: a set id or `null` (`null`) | third |
+| `notes_by_signature` | none | full |
+| `unrealized_movers` | `top_n`: 3-25, best and worst each (5) | full |
+| `realized_gains` | `top_n`: 3-50 (20) | full |
+| `counts` | none | third |
+| `recent_additions` | `count`: 3-20 (6) | half |
+| `wishlist` | `mode`: `priority`, `reached` (`priority`); `count`: 3-20 (6) | half |
+| `fancy_serials` | `count`: 3-20 (6) | half |
+| `checklists` | `count`: 3-20 (6) | half |
+| `pricing_coverage` | none | third |
+| `stale_estimates` | `days`: 7, 30, 90, or 365 (30); `count`: 3-20 (6) | half |
+| `source_disagreements` | `count`: 3-20 (5) | half |
+| `estimate_accuracy` | none | half |
+| `backup_status` | none | third |
+| `alerts_status` | none | third |
+| `market_data` | none | third |
+| `trash` | `count`: 3-20 (5) | third |
+
+`breakdown`'s `top_n` trims only the dimensions sorted by size (`country`,
+`type`, `grade`, `tag`) into an "Other" bucket; `decade` and
+`acquisition_year` run in time order and keep every bucket.
+
+The default layout reproduces the dashboard as it was before this feature:
+`setup`, `value_summary`, `value_history` (24 months), five `breakdown`
+widgets (country/value, tag/value, decade/count, acquisition_year/count,
+grade/count), `notes_by_signature`, `unrealized_movers`, `realized_gains`,
+in that order, 11 widgets in all.
 
 ## Reference data
 

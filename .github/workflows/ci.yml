@@ -122,6 +122,12 @@ jobs:
             echo "the item survived a permanent delete"; exit 1
           fi
           curl -fsS http://localhost/api/settings > /dev/null
+          curl -fsS http://localhost/api/dashboard/layout | python3 -c '
+          import json, sys
+          layout = json.load(sys.stdin)
+          assert layout["is_default"] is True, layout
+          assert len(layout["widgets"]) == 11, layout
+          '
           # metrics: off by default, then served on real Postgres
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/metrics)" = 404
           curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \

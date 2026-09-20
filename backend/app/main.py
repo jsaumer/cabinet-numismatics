@@ -13,6 +13,7 @@ from app.routers import (
     catalogue,
     checklists,
     comparables,
+    dashboard,
     documents,
     estimates,
     health,
@@ -135,3 +136,4 @@ app.include_router(documents.router)
 app.include_router(trash.router)
 app.include_router(monitoring.router)
 app.include_router(restore.router)
+app.include_router(dashboard.router)

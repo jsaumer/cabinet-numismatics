@@ -10,6 +10,25 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-20
+
+### Added
+- **A customisable dashboard** (roadmap Phase 7, P10). The dashboard is now
+  an ordered list of widgets you can add, remove, resize (full, half, or a
+  third of the row), duplicate, retitle, and set options on, then arrange by
+  drag or with move-earlier/move-later buttons; a keyboard path (Space or
+  Enter to pick up, arrows to move, Space or Enter to drop, Escape to put
+  back) with aria-live announcements does the same without a pointer. Twenty
+  widget types cover value, breakdowns, the collection, pricing, and
+  operations, including a breakdown chart that can be scoped to one tag or
+  set. Nothing is saved until you press Save; Cancel discards the draft, and
+  Reset to default puts back today's fixed dashboard, which is exactly what
+  a fresh install now starts from. The layout is saved on the server
+  (`GET`/`PUT`/`DELETE /api/dashboard/layout`), so it follows the
+  collection, not the browser, and is carried by backups like any other
+  setting. `GET /api/stats/breakdowns` gained optional `tag` and `set_id`
+  filters for the breakdown widget.
+
 ## [0.26.1] - 2026-09-20
 
 ### Fixed

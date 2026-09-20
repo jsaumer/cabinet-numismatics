@@ -206,6 +206,7 @@ Two more kinds of caller are not accounts:
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
 | Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes | view only | no | no | no |
+| Save, reset, or delete the dashboard layout | yes | no | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
 | Backups: download, run now, schedule | yes | no | no | no | no |
 | Restore from an archive | yes | no | no | no | no |
