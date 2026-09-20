@@ -301,6 +301,14 @@ of v0.24.0 lasted one release). The theme defaults to dark
 light flash before the script runs); only `localStorage` overrides it, so
 screenshots set that key (`docs/screenshots/capture.cjs`). No em dashes anywhere; see CLAUDE.md.
 
+## PCGS fill normalisation (v0.24.5)
+
+Confirmed against the live API with a real cert: `parse_grade` and
+`cert_fields` read PCGS's answer correctly. `pcgs._country` and
+`pcgs._mint_mark` then bring it into line with hand entry and the Numista
+fill ("United States"; "P" only where it is on the coin), because matching
+everywhere is by the text as written.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes
