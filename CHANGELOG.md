@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-09-20
+
 ### Fixed
 - **Dashboard bar charts start at the left edge of their card.** Labels sat
   right-aligned in a fixed-width gutter, so with short labels the whole

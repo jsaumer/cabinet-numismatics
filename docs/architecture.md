@@ -130,7 +130,7 @@ app's Settings page and stored in the database.
 | `REQUIRE_DOCUMENT_MOUNT` | Refuse document uploads unless `DOCUMENT_DIR` is a mounted volume (default `true`; `false` for local development) |
 | `PUID` / `PGID`   | The unprivileged user the backend runs as, and that owns its files (default `1000`:`1000`) |
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
-| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.25.0`) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.25.1`) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
