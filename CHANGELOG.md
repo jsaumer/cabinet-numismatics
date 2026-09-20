@@ -10,6 +10,15 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **PCGS's daily limit is 100 calls, not 1,000.** PCGS cut its documented
+  default; Settings, the cert fill, and the docs now say 100 (more on
+  request from PCGS), and Settings warns when a weekly refresh would need
+  more than a day allows.
+- The docs cited the wrong clause of Numista's API licence for the 7-day
+  cache: §8.3 covers only catalogue metadata, and §8.4 (personal projects)
+  is what permits a self-hosted cache at all.
+
 ## [0.24.3] - 2026-09-20
 
 ### Fixed

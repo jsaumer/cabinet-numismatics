@@ -140,7 +140,7 @@ export function PcgsFill({
           {note && <p className="muted">{note}</p>}
           <p className="muted" style={{ marginBottom: 0 }}>
             Fills the coin, its grade and designations, the cert, and the PCGS number, empty
-            fields only. One request from the 1,000/day quota; pricing the item afterwards reuses
+            fields only. One request from the 100/day quota; pricing the item afterwards reuses
             the answer.
           </p>
         </>

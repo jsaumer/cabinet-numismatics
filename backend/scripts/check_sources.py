@@ -12,7 +12,7 @@ Nothing is written to `price_estimates`: this only looks.
     docker compose exec backend python scripts/check_sources.py -s numista-sales -i <item-id>
 
 `--fresh` ignores the `source_cache` TTL to force a real request, and each one
-counts against the source's quota (Numista 2,000/month, PCGS 1,000/day).
+counts against the source's quota (Numista 2,000/month, PCGS 100/day).
 Without it, a cached response is reused and the run costs nothing.
 `numista-sales` fetches the item's auction sales without adding them to its
 sales log; on Numista's paid plan each uncached request is billed.

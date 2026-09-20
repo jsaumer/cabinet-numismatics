@@ -346,5 +346,6 @@ def test_numista_sales_need_a_catalogue_reference(client, numista_http):
 
 
 def test_catalogue_data_is_cached_for_seven_days():
-    # Numista's API licence (§8.3) caps catalogue caching at seven days.
+    # Licence §8.4 (personal projects) permits the cache; seven days is §8.3's
+    # limit for catalogue metadata, which Cabinet applies to everything.
     assert numista.CATALOG_TTL == timedelta(days=7)

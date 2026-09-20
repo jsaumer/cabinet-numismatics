@@ -166,8 +166,9 @@ guidance, not appraisals.
   stale melt estimates (window set by `REESTIMATE_DAYS`; manual values are
   never superseded), and (independently, per source, off by default)
   Numista (7/14/30-day cadence, with the projected monthly call count shown
-  against its 2,000/month free tier) and PCGS (fixed weekly; its 1,000/day
-  quota needs no such caveat) once switched on in Settings. Each source keeps
+  against its 2,000/month free tier) and PCGS (fixed weekly; 100 calls a day by
+  default, which Settings flags past 100 priceable items) once switched on
+  in Settings. Each source keeps
   its own data current regardless of which source is currently an item's
   overall-latest estimate, since `value_strategy` may prefer or average a
   source that isn't "winning" right now. On-demand refresh from the
@@ -415,7 +416,8 @@ reports. Staged so each milestone is independently useful.
   Sheldon grade. CoinFacts returns both numbers in one response: Auction
   Prices Realized win when present (median of up to ten recent lots, 0.75, or
   0.85 with five or more sales), price guide otherwise (0.60). Token from the
-  PCGS public API program, 1,000 calls/day, cached 7 days. Coins only:
+  PCGS public API program, 100 calls/day by default (1,000 when this was
+  built), cached 7 days. Coins only:
   PCGS Banknote responses carry no price fields.
   `POST /api/items/{id}/estimate?source=pcgs`.
 - **M4: Estimate provenance.** ✔ Each source's response summary is stored

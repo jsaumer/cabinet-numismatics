@@ -276,9 +276,14 @@ export default function Settings() {
               />
               Auto-refresh weekly
             </label>
-            <p className="muted" style={{ margin: 0 }}>
-              {settings.pcgs_priceable_items} priceable item(s), comfortably within the 1,000
-              calls/day quota at any realistic collection size.
+                        <p className={settings.pcgs_priceable_items > 100 ? "error" : "muted"}
+              style={{ margin: 0 }}>
+              {settings.pcgs_priceable_items} priceable item(s), one call each. PCGS allows 100
+              calls a day by default
+              {settings.pcgs_priceable_items > 100
+                ? ", so a refresh stops at the limit and raises the quota alert. PCGS raises " +
+                  "the limit on request (apis@pcgs.com)."
+                : "."}
             </p>
           </div>
         )}

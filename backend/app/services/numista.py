@@ -7,8 +7,10 @@ item's year (and mint mark), and the item's grade is mapped onto Numista's
 seven buckets.
 
 Free API keys allow 2,000 requests a month, so every upstream response is
-cached in `source_cache` (catalogue data and prices for 7 days, the longest
-Numista's API licence (§8.3) allows for catalogue data), and a stale entry is
+cached in `source_cache` (catalogue data and prices for 7 days: the API
+licence's personal-project exception (§8.4) is what lets a self-hosted tool
+keep them at all, and 7 days is the limit §8.3 sets for catalogue metadata,
+applied here to everything), and a stale entry is
 preferred over a failed request, the same discipline spot prices and exchange
 rates use.
 

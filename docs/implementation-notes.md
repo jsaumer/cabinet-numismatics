@@ -41,7 +41,8 @@ everywhere else: items list (with a `SOURCE` column showing which source or
 "average" produced it), CSV/XLSX export, dashboard totals, all via one shared
 `pricing.resolve_display_value`. Scheduled refresh covers Numista (7/14/30-
 day cadence with projected monthly-call-count shown against its 2,000/month
-quota) and PCGS (fixed weekly; generous 1,000/day quota) in addition to melt,
+quota) and PCGS (fixed weekly; 1,000/day when built, 100/day by default since) in
+addition to melt,
 off by default, each kept fresh independent of whichever source currently
 wins an item, necessary since `value_strategy` may prefer or average a
 source that isn't "latest." Manual per-item refresh shows a success message.
@@ -137,7 +138,8 @@ grade-bucket-matching sales from the last 3 years (older if fewer than 3),
 converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there means
 no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
-day. Numista catalogue caching dropped to 7 days (licence §8.3).
+day. Numista catalogue caching dropped to 7 days (licence §8.3's limit for
+catalogue metadata; §8.4, personal projects, is what permits the cache).
 PriceCharting/Greysheet were researched and not planned.
 
 ## Import from other tools (v0.18.0–v0.18.2)

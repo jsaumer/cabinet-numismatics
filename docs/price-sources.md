@@ -89,8 +89,11 @@ Requirements and limits:
 - A free API key (numista.com), stored encrypted in Settings; the source is
   disabled until you switch it on.
 - 2,000 requests a month, so every response is cached in `source_cache`:
-  issues and prices for 7 days, the longest the API licence (§8.3) allows for
-  catalogue data. A stale entry is used when the upstream fails. An item
+  issues and prices for 7 days. The licence forbids storing its data (§8.1)
+  apart from identifiers (§8.2), catalogue metadata for seven days (§8.3),
+  and an individual's personal project (§8.4); §8.4 is what covers a
+  self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
+  does not cover publishing the data or running a public service. A stale entry is used when the upstream fails. An item
   missing its prerequisites (no ref, no grade) costs no request at all.
 - Confidence is medium by design: these are collector estimates, not realized
   auction prices. Melt remains the higher-confidence floor for bullion.
@@ -151,15 +154,18 @@ Requirements and limits:
 
 - An access token (pcgs.com/publicapi, OAuth against your PCGS login), stored
   encrypted in Settings; the source is disabled until you switch it on.
-- 1,000 calls a day; responses are cached in `source_cache` for 7 days.
+- 100 calls a day by default (PCGS's documentation said 1,000 until it was
+  cut; a larger limit is available by emailing apis@pcgs.com); responses are
+  cached in `source_cache` for 7 days. PCGS documents no usage endpoint, no
+  quota headers, and no reset time.
 - PCGS signals failure in the body, not the status: `IsValidRequest: false`
   means the request values were malformed, and `"No data found"` means no such
   coin. Both surface as 422 with the reason. A 500 usually means the token has
   expired, which surfaces as 502 saying so.
 - **Scheduled refresh** (off by default): a simple weekly on/off toggle in
-  Settings, no cadence choice needed. One call per estimate against a
-  1,000/day quota comfortably covers weekly refresh at any realistic
-  collection size, so Settings shows no quota caveat here (unlike Numista's).
+  Settings, no cadence choice needed. One call per estimate: with more
+  than about 100 priceable items a refresh reaches the default daily limit,
+  stops there, and raises the quota alert, and Settings says so.
 
 ### Checking a source against the live API
 
