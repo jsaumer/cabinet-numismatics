@@ -37,7 +37,7 @@ def _run(client, upload, **options):
 
 def _items(client):
     return {
-        f"{i['country']} {i['denomination']} {i['year']}": client.get(
+        f"{i['country']} {i['denomination']} {i['year_label']}": client.get(
             f"/api/items/{i['id']}"
         ).json()
         for i in client.get("/api/items", params={"limit": 200}).json()["items"]
@@ -148,11 +148,12 @@ def test_opennumismat_preview_writes_nothing(client, tmp_path):
     upload = _upload(client, samples.opennumismat(tmp_path / "c.db", 10))
     body = _preview(client, upload)
     assert body["format"] == "opennumismat"
-    assert (body["total"], body["new"], body["duplicates"], body["errors"]) == (7, 5, 0, 2)
+    assert (body["total"], body["new"], body["duplicates"], body["errors"]) == (7, 6, 0, 1)
     assert body["photos"] == 2
     errors = {r["row"]: r["error"] for r in body["rows"] if r["status"] == "error"}
     assert "lost at auction" in errors[5]
-    assert "year" in errors[6]
+    # Row 6 has no year anywhere: an undated piece, not an error.
+    assert next(r["label"] for r in body["rows"] if r["row"] == 6) == "Nowhere 1 Token ND"
     assert client.get("/api/items").json()["total"] == 0
 
 
@@ -160,8 +161,8 @@ def test_opennumismat_preview_writes_nothing(client, tmp_path):
 def test_opennumismat_import(client, tmp_path, version):
     upload = _upload(client, samples.opennumismat(tmp_path / f"c{version}.db", version))
     result = _run(client, upload)
-    assert (result["created"], result["skipped"], result["photos_added"]) == (5, 0, 2)
-    assert [e["row"] for e in result["errors"]] == [5, 6]
+    assert (result["created"], result["skipped"], result["photos_added"]) == (6, 0, 2)
+    assert [e["row"] for e in result["errors"]] == [5]
 
     items = _items(client)
     ike = items["United States 1 Dollar 1978"]
@@ -204,7 +205,7 @@ def test_opennumismat_import(client, tmp_path, version):
     assert proof["currency"] == ("EUR" if version == 11 else "USD")
 
     again = _run(client, upload)
-    assert (again["created"], again["skipped"]) == (0, 5)
+    assert (again["created"], again["skipped"]) == (0, 6)
 
 
 def test_opennumismat_defaults_set_the_currency(client, tmp_path):
@@ -221,7 +222,7 @@ def test_imported_items_record_their_origin_and_clones_do_not(client, tmp_path):
     assert history[-1]["changes"]["via"] == ["import", "OpenNumismat: c.db"]
     copy = client.post(f"/api/items/{ike['id']}/clone")
     assert copy.status_code == 201  # the origin isn't copied, so no unique clash
-    assert _run(client, upload)["skipped"] == 5
+    assert _run(client, upload)["skipped"] == 6
 
 
 # ---------------------------------------------------------------- Numista export file
@@ -260,7 +261,8 @@ def test_numista_export(client, tmp_path, builder):
         "60",
     )
     assert note["diameter_mm"] is None
-    assert items["France 1 Franc 1960"]["year"] == 1960
+    undated = items["France 1 Franc ND (1960)"]  # a year range, no year of its own
+    assert (undated["year"], undated["year_nd"]) == (1960, True)
     assert _run(client, upload)["skipped"] == 4
 
 
@@ -284,14 +286,15 @@ def test_spreadsheet_suggests_a_mapping(client, tmp_path):
         "notes": "Notes",
     }
     assert {f["key"] for f in body["fields"]} >= {"country", "grade", "numista"}
-    assert (body["total"], body["new"], body["errors"]) == (4, 3, 1)
+    assert (body["total"], body["new"], body["errors"]) == (4, 4, 0)  # the last row is undated
 
 
 def test_spreadsheet_import(client, tmp_path):
     upload = _upload(client, samples.hand_sheet(tmp_path / "sheet.csv"))
     result = _run(client, upload)
-    assert result["created"] == 3
+    assert result["created"] == 4
     items = _items(client)
+    assert items["United States 1 Dollar ND"]["year"] is None  # the row with no year
     cent = items["United States 1 Cent 1909"]
     assert (cent["acquisition_price"], cent["acquisition_date"], cent["grade"]["code"]) == (
         1250,

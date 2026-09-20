@@ -10,6 +10,47 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **Undated pieces (ND).** Year is now optional: tick "ND (no date on the
+  piece)" on the item form for a piece that carries no date, with an
+  optional attributed year the way catalogues write it ("ND" or
+  "ND (1951)"). Migration `0019` makes `items.year` nullable and adds
+  `items.year_nd`; a year of 0, the workaround people typed when the field
+  was required, becomes `year_nd = true` with a null year on upgrade. Every
+  item response gains `year_label` (`"1922"`, `"ND"`, or `"ND (1922)"`),
+  used everywhere a year is printed (the item title, the collection list,
+  the trash, the reports, the dashboard, duplicate warnings, import
+  previews). The collection list gained an Undated filter (`nd=`) and sorts
+  undated pieces last in either direction; the decade breakdown puts them
+  in their own `Undated` bucket, after the decades. `GET /api/items/similar`
+  accepts `nd` and matches an undated candidate against undated items with
+  no year. CSV/XLSX export gained a `year_nd` column; import (the Cabinet
+  format, a spreadsheet mapping, a Numista export file or account, and
+  OpenNumismat) now reads `ND`, `N.D.`, `undated`, and `ND (1951)` /
+  `(1951)` year cells, and an empty year cell imports as ND instead of
+  failing the row. Fill from Numista and Add a run show `ND` / `ND (1951)`
+  for an undated issue, plus its reference and comment when Numista gives
+  them, and can fill or add an undated item.
+
+### Fixed
+- **A same-year Numista variety could be priced as the wrong issue.** A
+  type can list more than one issue for the same year, such as a
+  replacement note beside the regular one; the adapter took whichever came
+  first, which for N#223126 (a 1951 Military Payment Certificate) was the
+  rare, unpriced replacement note, and the estimate failed with "no priced
+  grade" even though the common issue was priced. Same-year issues are now
+  ranked (mint letter, replacement agreement with the item's own
+  replacement flag, a match on the item's catalogue reference, variety, or
+  signatures, then ND agreement) and tried in order, up to four, until one
+  prices; the estimate's details record which one it used ("Priced as" on
+  the item page).
+- **An undated Numista issue had no way into the collection.** A German
+  notgeld note Numista lists with no year (N#228576) could only be saved
+  by typing year 0, which broke both its title and its Numista pricing. An
+  ND item now pools against Numista's own undated issues, or against a
+  type's single issue when nothing else matches (recorded as a year
+  mismatch in the estimate's details).
+
 ## [0.27.0] - 2026-09-20
 
 ### Added

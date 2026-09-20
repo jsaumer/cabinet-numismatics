@@ -67,7 +67,7 @@ export default function Report() {
               </td>
               <td>
                 <b>
-                  {item.country} {item.denomination}, {item.year}
+                  {item.country} {item.denomination}, {item.year_label}
                   {item.mint_mark ? ` "${item.mint_mark}"` : ""}
                 </b>
                 {item.series && <div className="muted">{item.series}</div>}

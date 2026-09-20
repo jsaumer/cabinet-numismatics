@@ -109,7 +109,7 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
   function share(doc: ItemDocument, target: ItemListEntry) {
     run("share", async () => {
       await api.linkDocument(doc.id, [target.id]);
-      return `Also attached to ${target.country} ${target.denomination} ${target.year}.`;
+      return `Also attached to ${target.country} ${target.denomination} ${target.year_label}.`;
     });
   }
 
@@ -252,7 +252,7 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
                               const linked = doc.items.some((i) => i.id === m.id);
                               return (
                                 <li key={m.id}>
-                                  {m.country} {m.denomination} {m.year}
+                                  {m.country} {m.denomination} {m.year_label}
                                   {m.mint_mark ? ` "${m.mint_mark}"` : ""}
                                   {m.series && <span className="muted"> · {m.series}</span>}{" "}
                                   {linked ? (

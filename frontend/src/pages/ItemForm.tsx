@@ -158,7 +158,7 @@ export default function ItemForm() {
       setRefs([]);
       setCustomFields([]);
       setAxisOther(false);
-      setSavedNote(`Added ${saved.country} ${saved.denomination}, ${saved.year}.`);
+      setSavedNote(`Added ${saved.country} ${saved.denomination}, ${saved.year_label}.`);
       window.scrollTo(0, 0);
       setSaving(false);
     } catch (err) {
@@ -223,6 +223,7 @@ export default function ItemForm() {
           country={form.country}
           denomination={form.denomination}
           year={form.year}
+          yearNd={form.year_nd}
           mintMark={form.mint_mark}
           certNumber={form.cert_number}
           refs={refs}
@@ -260,9 +261,23 @@ export default function ItemForm() {
               ))}
             </datalist>
             {text("denomination", "Denomination *", { required: true, placeholder: 'e.g. "25 cents"' })}
-            {text("year", hasStruckDate ? "Year" : "Year *", {
-              required: !hasStruckDate, type: "number",
-            })}
+            {/* The ND box sits under the year it changes the meaning of. */}
+            <div className="field">
+              <label className="field">
+                {form.year_nd ? "Attributed year" : hasStruckDate ? "Year" : "Year *"}
+                <input
+                  type="number"
+                  required={!hasStruckDate && !form.year_nd}
+                  value={form.year}
+                  placeholder={form.year_nd ? "optional" : undefined}
+                  title={
+                    form.year_nd ? "The year it is known or believed to be from" : undefined
+                  }
+                  onChange={(e) => set("year")(e.target.value)}
+                />
+              </label>
+              {flag("year_nd", "ND (no date on the piece)", "The piece carries no date")}
+            </div>
             {isCoin && (
               <>
                 <label className="field" title="For a date written in another calendar">

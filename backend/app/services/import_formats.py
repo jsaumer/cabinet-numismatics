@@ -24,18 +24,19 @@ from datetime import date, datetime, time
 from functools import partial
 from pathlib import Path
 
+from app.services import numista
 from app.services.importing import (
     Candidate,
     clean,
     fingerprint_keys,
     parse_refs,
+    parse_year,
     split_title,
     title_series,
     to_date,
     to_decimal,
     to_float,
     to_int,
-    to_year,
 )
 
 FORMATS = ("spreadsheet", "cabinet", "numista_file", "opennumismat")
@@ -293,8 +294,11 @@ def spreadsheet_candidates(
                 if (text := clean(value)) is not None:
                     f[key] = text
             elif kind == "year":
-                if (year := to_year(value)) is not None:
+                year, undated = parse_year(value)
+                if year is not None:
                     f[key] = year
+                if undated:
+                    f["year_nd"] = True
             elif kind == "int":
                 if (number := to_int(value)) is not None:
                     f[key] = number
@@ -354,7 +358,8 @@ def _column_getter(row: sqlite3.Row, columns: set[str]):
 
 
 def _require(cand: Candidate) -> None:
-    missing = [k for k in ("country", "denomination", "year") if cand.fields.get(k) in (None, "")]
+    # No year is not an error: the piece is recorded as undated (ND).
+    missing = [k for k in ("country", "denomination") if cand.fields.get(k) in (None, "")]
     if missing:
         cand.error = "Missing " + ", ".join(m.replace("_", " ") for m in missing)
 
@@ -392,8 +397,12 @@ def cabinet_candidates(rows: list[dict], db) -> list[Candidate]:
         for key in ("country", "denomination", "mint_mark"):
             if value := clean(row.get(key)):
                 cand.fields[key] = value
-        if (year := to_year(row.get("year"))) is not None:
+        year, undated = parse_year(row.get("year"))
+        if year is not None:
             cand.fields["year"] = year
+        flagged = clean(row.get("year_nd", "")) or ""
+        if undated or flagged.lower() in ("true", "1", "yes"):
+            cand.fields["year_nd"] = True
         try:
             with db.no_autoflush:
                 cand.ready = _row_to_payload(row, db)
@@ -426,9 +435,16 @@ def numista_file_candidates(rows: list[dict], defaults: dict) -> list[Candidate]
         f["country"] = clean(get("country", "issuer", "ruling authority"))
         face, unit = clean(get("face value")), clean(get("currency"))
         f["denomination"] = " ".join(p for p in (face, unit) if p) or clean(get("title"))
-        f["year"] = to_year(get("gregorian year", "year", "year range"))
-        if clean(get("year range")) and not clean(get("year", "gregorian year")):
-            cand.messages.append(f"Undated issue ({get('year range')}), recorded as its first year")
+        year, undated = parse_year(get("gregorian year", "year", "year range"))
+        if year is not None:
+            f["year"] = year
+        span = clean(get("year range"))
+        if span and not clean(get("year", "gregorian year")):
+            # Numista gives a range instead of a year for an undated issue.
+            undated = True
+            cand.messages.append(f"Undated issue ({span}), recorded as ND with {year} attributed")
+        if undated:
+            f["year_nd"] = True
         if mark := clean(get("mintmark", "mint mark")):
             f["mint_mark"] = mark
         if series := title_series(get("title")):
@@ -617,7 +633,13 @@ def _opennumismat(
         amount, unit = to_decimal(v("value")), clean(v("unit"))
         amount_text = format(amount.normalize(), "f") if amount is not None else None
         f["denomination"] = " ".join(p for p in (amount_text, unit) if p) or clean(v("title"))
-        f["year"] = to_year(v("year")) or to_year(v("issuedate")) or to_year(v("dateemis"))
+        for raw in (v("year"), v("issuedate"), v("dateemis")):
+            year, undated = parse_year(raw)
+            if year is not None:
+                f["year"] = year
+                break
+        if year is None or undated:
+            f["year_nd"] = True
         for key, col in (
             ("mint_mark", "mintmark"), ("variety", "variety"), ("edge", "edge"),
             ("shape", "shape"), ("storage_location", "storage"), ("issuer", "emitent"),
@@ -760,13 +782,16 @@ def numista_account_candidates(
                 cand.messages.append("Denomination taken from the type's title")
         if not f.get("series") and name and name != f.get("denomination"):
             f["series"] = name
-        f["year"] = (
+        year = (
             _int(issue.get("gregorian_year"))
             or _int(issue.get("year"))
             or _int(issue.get("min_year"))
         )
-        if not issue.get("is_dated", True) and issue.get("min_year"):
-            cand.messages.append("Undated issue, recorded as its first year")
+        f["year"] = year
+        if numista.issue_nd(issue) or year is None:
+            f["year_nd"] = True
+            if year is not None:
+                cand.messages.append(f"Undated issue, recorded as ND with {year} attributed")
         if mark := clean(issue.get("mint_letter")):
             f["mint_mark"] = mark
         if isinstance(issue.get("mintage"), int) and issue["mintage"] >= 0:

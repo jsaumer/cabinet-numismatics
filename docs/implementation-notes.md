@@ -570,6 +570,69 @@ What a later change has to respect:
   widget has its own error boundary, so one broken widget shows its error in
   its own card rather than blanking the page.
 
+## Undated pieces and Numista varieties (v0.27.1)
+
+Two bugs found on the owner's own pieces. Migration `0019` makes
+`items.year` nullable and adds `items.year_nd` (not nullable, default
+false); a data step turns an existing `year = 0` into `year = NULL,
+year_nd = true`. There is no service logic in the migration to freeze
+(unlike `0018`'s serial traits): the data step is a plain column update, so
+a later change to the ND rule needs no matching migration.
+
+- **The year-or-ND rule lives in the schema and `_apply_struck_date`, in one
+  place each.** `ItemBase`'s `_year_or_nd` model validator (create) and
+  `routers/items._apply_struck_date` (update, checked against the item as
+  it will be after the patch) are the only places that enforce it; a new
+  path that writes `year`/`year_nd` must go through one of them, not
+  duplicate the check. Bulk edit deliberately skips both: `year_nd` isn't
+  bulk-editable, so a bulk `year: null` is refused outright rather than
+  checked against ND.
+- **`item.year` can be `None` everywhere now.** Anything that does
+  arithmetic on it (`stats.breakdowns`'s decade bucket, `pcgs._mint_mark`,
+  `checklists.owned_by_issue`'s key, the insurance report, `metrics`, a
+  serial "date note" trait that looks at the year) has to guard it. The
+  decade breakdown puts a null year in its own `Undated` bucket
+  (`routers/stats.UNDATED`), sorted after every decade.
+- **Always print `year_label`, never `year` or `str(year)`.** `Item.year_label`
+  (`"1922"`, `"ND"`, or `"ND (1922)"`) is what `Item.label` ends with, and
+  what the frontend prints everywhere a year appears (title, list, trash,
+  reports, dashboard widgets, duplicate warning, import preview); a list
+  entry carries its own `year_label` for the same reason. A raw `item.year`
+  in a template or an f-string will crash or print `None` on an ND item.
+- **`importing.parse_year(value) -> tuple[int | None, bool]` is the one year
+  parser for every import path** (the Cabinet CSV, the spreadsheet mapping,
+  a Numista export file, `to_year` stays underneath it for the numeric
+  read). An unparseable cell, an empty cell, and a literal `0` all read as
+  undated; `"ND (1951)"` / `"(1951)"` read as undated with `1951`
+  attributed. The Numista account import doesn't go through it (it works
+  from the API's own `is_dated`/year fields via `numista.issue_nd`), but
+  follows the same result shape.
+- **Numista's candidate order and the 4-try cap.** `numista.candidate_issues`
+  pools same-year issues (or same-ND issues for an ND item with no year, or
+  a type's lone issue as a last resort, flagged `year_mismatch`), ranks the
+  pool (mint letter, replacement agreement, a reference/variety/signatures
+  text match, ND agreement, original order), and `numista_estimate` tries
+  the ranked list, best first, capped at `MAX_CANDIDATES = 4`: each untried
+  issue costs one Numista request for its prices. A 404 on one candidate's
+  prices, or an issue with no priced grade at all, moves to the next (a
+  price in another grade still stands in through `resolve_grade`); only the
+  first success is used. Every candidate's prices sit under the same
+  `prices:{type}:{issue}:{currency}` cache key as before, an empty price
+  list included, so walking the list again inside the TTL costs no request
+  (a 404 is an exception, never cached, and costs one each time). `pick_issue` still returns
+  the first candidate, for `fetch_sales` and any other caller that wants
+  one issue rather than a ranked list.
+- **The web-search lookup links (`components/lookup.tsx`) still use the raw
+  year.** An ND item's Friedberg/Pick/eBay search links carry the
+  attributed year if there is one, or none; they were not taught the "ND"
+  convention, since a search engine wouldn't understand it either.
+- **"Add a run" still keys owned-issue matching on `(year, mint)`.** Two
+  undated varieties of the same type with the same attributed year and
+  mint mark collapse into one slot in `checklists.owned_by_issue` and one
+  skip in a run, same as two dated varieties would; nothing in this release
+  changed that key to include the reference or comment that tells them
+  apart.
+
 ## Releases
 
 

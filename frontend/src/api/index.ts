@@ -51,6 +51,11 @@ export const money = (value: number | null | undefined, currency: string | null 
 
 export const gradeScaleFor = (type: ItemType) => (type === "coin" ? "sheldon" : "pmg");
 
+/** "1922", "ND", or "ND (1922)": the same convention as `Item.year_label`,
+ * for a catalogue issue that isn't an item yet (a Numista issue, a run pick). */
+export const ndYearLabel = (issue: { nd: boolean; year: number | null }) =>
+  issue.nd ? (issue.year != null ? `ND (${issue.year})` : "ND") : String(issue.year);
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"];
 
 /** A file size in the largest unit that keeps it above 1 (1.4 GB, 812 KB). */

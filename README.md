@@ -44,8 +44,9 @@ Dark is the default; the header toggle switches to light and remembers it.
 ## Features
 
 ### Cataloging
-- Coins and notes with full numismatic detail: country, denomination, year,
-  mint mark, series, variety/sub-type, strike (business, proof, specimen),
+- Coins and notes with full numismatic detail: country, denomination, year
+  (or ND, with an optional attributed year, for an undated piece), mint
+  mark, series, variety/sub-type, strike (business, proof, specimen),
   composition, weight, fineness, diameter, thickness, edge, shape, die axis,
   mintage, quantity, and free-text notes (banknotes add serial number,
   prefix/block, signatures, issuer, and replacement notes), plus up to 20
@@ -233,7 +234,7 @@ again; Settings → About shows the version and whether the schema is current.
 To run the published images instead of building, see
 [docs/deployment.md](docs/deployment.md).
 
-**Want something to look at first?** Load a small demo collection (13 items
+**Want something to look at first?** Load a small demo collection (14 items
 across several countries, decades, and grades, with value history):
 
 ```bash

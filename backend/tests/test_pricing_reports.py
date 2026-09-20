@@ -31,7 +31,8 @@ def numista_api(monkeypatch):
             raise pricing.SourceUnavailable("Numista request failed: timeout")
         if path.endswith("/prices"):
             return {"currency": "USD", "prices": [{"grade": "vf", "price": 30.0}]}
-        return {"items": [{"id": 55, "year": 1932, "mint_letter": "D"}]}
+        # Two issues, so an item of neither year has no candidate to fall back on.
+        return {"items": [{"id": 55, "year": 1932, "mint_letter": "D"}, {"id": 56, "year": 1933}]}
 
     monkeypatch.setattr(numista, "_request", fake)
     return state

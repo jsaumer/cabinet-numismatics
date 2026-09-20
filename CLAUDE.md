@@ -101,7 +101,10 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 ## Current status & next step
 
 Released as v0.27.0: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0018`. What each release added, and the rules it left behind, is in
+`0001`–`0019`. v0.27.1 fixed two bugs found entering real pieces: a year is
+now optional (an ND checkbox with an optional attributed year), and a
+same-year Numista variety with no prices no longer blocks the one that has
+them. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
 
@@ -125,6 +128,10 @@ rules that bite most often:
 - Every new `price_estimates` row goes through `pricing.add_estimate` (it
   notices a wish-list target). `serial_traits` and `population_as_of` are
   server-set, on every path that changes their inputs (`items._sync_derived`).
+- `item.year` can be `None`: an undated piece is `year_nd` true, with an
+  optional attributed year. Guard `None` anywhere that does arithmetic on
+  it, and print `year_label` (`"1922"`, `"ND"`, `"ND (1922)"`), never `year`
+  itself.
 - Adding or retiring a dashboard widget touches both sides: the frontend
   `REGISTRY` in `frontend/src/dashboard/registry.tsx` and the backend
   `WIDGET_OPTIONS`/`DEFAULT_SIZES` in `backend/app/services/dashboard.py`

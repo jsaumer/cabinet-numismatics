@@ -125,6 +125,17 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
     ),
     (
         {
+            # Undated (ND), with the year it is attributed to: German notgeld.
+            "type": "note", "country": "Germany", "denomination": "50 pfennig",
+            "year": 1921, "year_nd": True, "series": "Notgeld, Stadt Bielefeld",
+            "issuer": "Stadt Bielefeld", "grade_scale": "pmg", "grade_code": "55",
+            "acquisition_date": "2026-01-14", "acquisition_price": 14.0,
+            "storage_location": "Album 2", "tags": ["notes", "world"],
+        },
+        [(18.0, "manual")],
+    ),
+    (
+        {
             # Dated in the Hijri calendar; the year the coin also carries is kept as entered.
             "type": "coin", "country": "Egypt", "denomination": "20 qirsh", "year": 1917,
             "struck_calendar": "hijri", "struck_year": 1335, "series": "Hussein Kamel",

@@ -9,6 +9,7 @@ export function DuplicateWarning({
   country,
   denomination,
   year,
+  yearNd,
   mintMark,
   certNumber,
   refs,
@@ -17,6 +18,7 @@ export function DuplicateWarning({
   country: string;
   denomination: string;
   year: string;
+  yearNd: boolean;
   mintMark: string;
   certNumber: string;
   refs: CatalogRef[];
@@ -29,7 +31,8 @@ export function DuplicateWarning({
     .join("\n");
 
   useEffect(() => {
-    const identity = country.trim() && denomination.trim() && /^-?\d+$/.test(year.trim());
+    const yearOk = yearNd || /^-?\d+$/.test(year.trim());
+    const identity = country.trim() && denomination.trim() && yearOk;
     if (!identity && !certNumber.trim() && !refKey) {
       setFound([]);
       return;
@@ -38,8 +41,9 @@ export function DuplicateWarning({
     if (identity) {
       params.set("country", country.trim());
       params.set("denomination", denomination.trim());
-      params.set("year", year.trim());
+      if (year.trim()) params.set("year", year.trim());
       params.set("mint_mark", mintMark.trim());
+      if (yearNd) params.set("nd", "true");
     }
     if (certNumber.trim()) params.set("cert_number", certNumber.trim());
     for (const ref of refKey.split("\n").filter(Boolean)) params.append("ref", ref);
@@ -59,7 +63,7 @@ export function DuplicateWarning({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [country, denomination, year, mintMark, certNumber, refKey, excludeId]);
+  }, [country, denomination, year, yearNd, mintMark, certNumber, refKey, excludeId]);
 
   if (found.length === 0) return null;
   return (

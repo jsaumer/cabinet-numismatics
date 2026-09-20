@@ -74,15 +74,31 @@ The chain an estimate follows:
 
 1. The item's `numista` catalog reference gives the **type** id (`N#1234`,
    `N# 1234`, and a bare `1234` all parse).
-2. `GET /types/{type}/issues` gives the type's issues; the one matching the
-   item's **year** is chosen, preferring a matching mint letter when the item
-   has a mint mark.
+2. `GET /types/{type}/issues` gives the type's issues. The pool is the ones
+   matching the item's **year** (an ND item with no year pools Numista's own
+   undated issues); if nothing pools and the type has exactly one issue,
+   that issue stands in anyway (recorded as a year mismatch). The pool is
+   then ranked, best first: a matching mint letter, then replacement
+   agreement (does the issue look like a replacement note, the same way the
+   item's own `replacement_note` flag does), then a match on the item's
+   catalogue reference, variety, or signatures, then ND agreement, then
+   Numista's own order. A type can list more than one issue for the same
+   year, a replacement note beside the regular one being the case that
+   prompted this: the ranking is what tells them apart.
 3. `GET /types/{type}/issues/{issue}/prices` gives prices per grade bucket, in
-   the app's display currency.
+   the app's display currency. The ranked issues are tried in turn, up to
+   four, until one has a priced grade; an issue with no prices at all (a 404, or an empty list) costs one
+   request and moves on to the next; one priced in another grade is used,
+   with the nearest grade standing in as before.
 4. The item's grade is mapped onto Numista's seven buckets by rank (Sheldon
    and PMG share the 1–70 scale, so one mapping serves coins and notes):
    `<8 → g`, `<12 → vg`, `<20 → f`, `<40 → vf`, `<50 → xf`, `<60 → au`,
    `≥60 → unc`.
+
+The estimate's `details` record which issue was used (`issue_comment`,
+`issue_reference`, `issue_nd`, `candidates_tried`, and `year_mismatch` when
+the year had to be given up on), shown on the item page as "Priced as:
+{reference}, {comment}".
 
 If the exact bucket isn't priced, the nearest one is used: the lower of two
 equally close buckets, so a substitution errs low. The estimate's `source`

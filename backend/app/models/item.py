@@ -113,7 +113,10 @@ class Item(Base):
     status: Mapped[str] = mapped_column(ItemStatus, default="owned", index=True)
     country: Mapped[str] = mapped_column(String(100), index=True)
     denomination: Mapped[str] = mapped_column(String(100))
-    year: Mapped[int] = mapped_column(Integer, index=True)
+    # Null for an undated piece with no attributed year; `year_nd` says the
+    # piece carries no date, and then `year` is the attributed one, if any.
+    year: Mapped[int | None] = mapped_column(Integer, index=True)
+    year_nd: Mapped[bool] = mapped_column(Boolean, default=False)
     mint_mark: Mapped[str | None] = mapped_column(String(20))
     series: Mapped[str | None] = mapped_column(String(200))
     variety: Mapped[str | None] = mapped_column(String(200))  # die variety, overdate…
@@ -215,9 +218,16 @@ class Item(Base):
     )
 
     @property
+    def year_label(self) -> str:
+        """The year as catalogues write it: "1922", "ND", or "ND (1922)"."""
+        if self.year is None:
+            return "ND"
+        return f"ND ({self.year})" if self.year_nd else str(self.year)
+
+    @property
     def label(self) -> str:
         """Short display label, e.g. `United States 25 cents 1932 "D"`."""
-        parts = [self.country, self.denomination, str(self.year)]
+        parts = [self.country, self.denomination, self.year_label]
         if self.mint_mark:
             parts.append(f'"{self.mint_mark}"')
         return " ".join(parts)
