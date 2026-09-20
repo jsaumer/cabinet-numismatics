@@ -141,10 +141,15 @@ The same cert response fills an item in (`GET /api/pcgs/cert/{cert}`,
 `AU58` + `FB`), and the PCGS number as a `pcgs` reference; denominations
 are translated from label form (`25C` → `25 cents`).
 
-Realized auction prices win when PCGS has any: the median of up to the ten most
-recent lots, confidence 0.85 with five or more sales and 0.75 below that, with
-`sample_size` recording how many informed it. With no sales, the price-guide
-value is used at confidence 0.60. The estimate's `source` says which
+Realized auction prices win when PCGS has recent ones: the median of up to the
+ten most recent lots from the last five years, at confidence 0.85 with five or
+more sales, 0.75 with three or four, and 0.65 with one or two, with
+`sample_size` recording how many informed it. Older and undated lots are kept
+in the estimate's details (`older_lots`) but not counted: the first real cert
+looked up returned a single 2003 sale at $43,700 against a $160,000 guide
+value. With no recent sales, the price-guide value is used at confidence 0.60;
+with no guide value either, the median of the old lots at 0.35
+(`pcgs:apr-old`). The live API dates a lot by month (`07-2003`). The estimate's `source` says which
 (`pcgs:apr cert 12345678`, `pcgs:guide #5960 MS-65`). Values are USD.
 
 **Coins only.** PCGS Banknote has its own endpoints, but their responses carry

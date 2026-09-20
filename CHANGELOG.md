@@ -10,6 +10,19 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- **PCGS: one old auction sale no longer outvotes the price guide.** The
+  live API dates auction lots by month (`07-2003`), which Cabinet couldn't
+  read, so the first real coin priced was valued from a single 2003 sale at
+  a quarter of its guide value, at 75% confidence. Dates are read now; only
+  sales from the last five years count (85% with five or more, 75% with
+  three or four, 65% with one or two); otherwise the price guide is used,
+  and old sales alone only when there is no guide value (35%). Older lots
+  still appear in the estimate's details, marked as not counted. Re-run
+  "PCGS value" on an item to replace an estimate made before this.
+- `check_sources.py -i` takes a cert number as well as an item id, and says
+  so plainly when it finds neither.
+
 ## [0.24.5] - 2026-09-20
 
 ### Fixed

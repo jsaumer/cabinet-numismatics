@@ -118,8 +118,26 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
 
   if (key === "pcgs") {
     const lots = Array.isArray(d.lots) ? (d.lots as Details[]) : [];
+    const older = Array.isArray(d.older_lots) ? (d.older_lots as Details[]) : [];
     const guide = num(d.price_guide_value);
     const coinfacts = text(d.coinfacts_url);
+    const lotLine = (lot: Details, index: number) => {
+      const url = text(lot.url);
+      return (
+        <li key={index}>
+          {text(lot.date) ?? "undated"}: {money(num(lot.price), "USD")}
+          {text(lot.auctioneer) && <span className="muted"> · {text(lot.auctioneer)}</span>}
+          {url && (
+            <>
+              {" · "}
+              <a href={externalUrl(url)} target="_blank" rel="noreferrer">
+                lot
+              </a>
+            </>
+          )}
+        </li>
+      );
+    };
     return (
       <div className="provenance">
         <div>
@@ -129,7 +147,10 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
           {" · "}
           {d.basis === "apr"
             ? `median of ${lots.length} recent auction sale${lots.length === 1 ? "" : "s"}`
-            : "price guide (no recent auction sales)"}
+            : d.basis === "apr_old"
+              ? `median of ${lots.length} old auction sale${lots.length === 1 ? "" : "s"} ` +
+                "(nothing recent, and no price guide value)"
+              : "price guide (no auction sales in the last five years)"}
           {guide != null && <span className="muted"> · guide {money(guide, "USD")}</span>}
           {coinfacts && (
             <>
@@ -141,26 +162,14 @@ export function Provenance({ estimate }: { estimate: Estimate }) {
           )}
           <DataAge details={d} />
         </div>
-        {lots.length > 0 && (
-          <ul className="provenance-lots">
-            {lots.map((lot, index) => {
-              const url = text(lot.url);
-              return (
-                <li key={index}>
-                  {text(lot.date) ?? "undated"}: {money(num(lot.price), "USD")}
-                  {text(lot.auctioneer) && <span className="muted"> · {text(lot.auctioneer)}</span>}
-                  {url && (
-                    <>
-                      {" · "}
-                      <a href={externalUrl(url)} target="_blank" rel="noreferrer">
-                        lot
-                      </a>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+        {lots.length > 0 && <ul className="provenance-lots">{lots.map(lotLine)}</ul>}
+        {older.length > 0 && (
+          <>
+            <div className="muted">
+              Not counted (more than five years old, or undated):
+            </div>
+            <ul className="provenance-lots">{older.map(lotLine)}</ul>
+          </>
         )}
       </div>
     );

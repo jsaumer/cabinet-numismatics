@@ -1,5 +1,6 @@
 """Pricing program M3: the PCGS adapter."""
 
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -8,14 +9,25 @@ from app.services import pcgs
 from app.services.pricing import SourceUnavailable
 from tests.conftest import COIN
 
+
+def ago(days: int) -> str:
+    """A sale date that many days back, as PCGS writes a full date."""
+    return (date.today() - timedelta(days=days)).strftime("%m-%d-%Y")
+
+
+def iso(days: int) -> str:
+    return (date.today() - timedelta(days=days)).isoformat()
+
+
 FACTS = {
     "PCGSNo": "5960",
     "Name": "1932-D 25C",
     "PriceGuideValue": 400.0,
     "AuctionList": [
-        {"Date": "03-14-2026", "Price": 520.0, "Auctioneer": "Heritage"},
-        {"Date": "11-02-2025", "Price": 480.0, "Auctioneer": "Stack's"},
-        {"Date": "01-09-2019", "Price": 200.0, "Auctioneer": "Heritage"},
+        {"Date": ago(190), "Price": 520.0, "Auctioneer": "Heritage"},
+        {"Date": ago(320), "Price": 480.0, "Auctioneer": "Stack's"},
+        {"Date": ago(400), "Price": 470.0, "Auctioneer": "Heritage"},
+        {"Date": ago(2800), "Price": 200.0, "Auctioneer": "Heritage"},  # too old to count
     ],
     "IsValidRequest": True,
     "ServerMessage": "Request successful",
@@ -77,7 +89,7 @@ def test_auction_prices_preferred_over_the_guide(client, upstream):
     item = by_number(client)
 
     body = estimate(client, item).json()
-    assert body["estimated_value"] == 480.0  # median of 520/480/200, not the 400 guide
+    assert body["estimated_value"] == 480.0  # median of 520/480/470, not the 400 guide
     assert body["currency"] == "USD"
     assert body["confidence"] == 0.75  # real sales, but only three of them
     assert body["sample_size"] == 3
@@ -87,7 +99,8 @@ def test_auction_prices_preferred_over_the_guide(client, upstream):
     assert details["lookup"] == "grade"
     assert details["pcgs_number"] == "5960" and details["grade"] == "MS-65"
     assert details["basis"] == "apr"
-    assert [lot["date"] for lot in details["lots"]] == ["2026-03-14", "2025-11-02", "2019-01-09"]
+    assert [lot["date"] for lot in details["lots"]] == [iso(190), iso(320), iso(400)]
+    assert [lot["price"] for lot in details["older_lots"]] == [200.0]  # kept, not counted
     assert details["lots"][0]["auctioneer"] == "Heritage"
     assert details["median"] == 480.0
     assert details["price_guide_value"] == 400.0  # recorded even though sales won
@@ -219,6 +232,42 @@ def test_toggle_and_token_are_required(client, upstream):
     assert resp.status_code == 422 and "API token" in resp.json()["detail"]
 
     assert upstream == []
+
+
+def test_one_old_sale_does_not_beat_the_guide(client, upstream):
+    # Cert 2575126 as the live API returned it: a single Heritage lot dated by
+    # month, 23 years back, against a guide value nearly four times higher.
+    configure(client)
+    upstream.body = {
+        **FACTS,
+        "PriceGuideValue": 160000.0,
+        "AuctionList": [{"Date": "07-2003", "Price": 43700.0, "Auctioneer": "Heritage Auctions"}],
+    }
+    body = estimate(client, by_number(client)).json()
+    assert body["estimated_value"] == 160000.0 and body["confidence"] == 0.6
+    assert body["details"]["basis"] == "guide" and body["details"]["lots"] == []
+    assert body["details"]["older_lots"] == [
+        {
+            "date": "2003-07-01",
+            "price": 43700.0,
+            "auctioneer": "Heritage Auctions",
+            "sale": None,
+            "url": None,
+        }
+    ]
+
+
+def test_few_recent_sales_are_trusted_less_and_old_ones_stand_in_last(client, upstream):
+    configure(client)
+    upstream.body = {**FACTS, "AuctionList": FACTS["AuctionList"][:2]}
+    body = estimate(client, by_number(client)).json()
+    assert body["estimated_value"] == 500.0 and body["confidence"] == 0.65
+
+    upstream.body = {**FACTS, "PriceGuideValue": None, "AuctionList": FACTS["AuctionList"][3:]}
+    other = make_item(client, year=1933, catalog_refs=[{"catalog": "pcgs", "ref_code": "5961"}])
+    body = estimate(client, other).json()
+    assert body["estimated_value"] == 200.0 and body["confidence"] == 0.35
+    assert body["details"]["basis"] == "apr_old" and body["source"].startswith("pcgs:apr-old")
 
 
 def test_recent_sales_prefers_newest_and_drops_junk():
