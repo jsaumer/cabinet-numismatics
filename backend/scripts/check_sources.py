@@ -25,6 +25,7 @@ Credentials are read from Settings and are never printed.
 import argparse
 import json
 import sys
+import uuid
 from datetime import timedelta
 from decimal import Decimal
 
@@ -111,9 +112,12 @@ def report_settings(db, source: str) -> None:
 
 
 def probe(db, source: str, item_id: str, fresh: bool, full: bool) -> int:
-    item = db.get(Item, item_id)
+    try:
+        item = db.get(Item, uuid.UUID(item_id))
+    except ValueError:  # not an id: take it as a cert number
+        item = db.scalars(select(Item).where(Item.cert_number == item_id.strip())).first()
     if item is None:
-        print(f"No item {item_id}. Try --list.", file=sys.stderr)
+        print(f"No item with the id or cert number {item_id}. Try --list.", file=sys.stderr)
         return 2
 
     print(f"item       : {item.id}  {describe(item)}")

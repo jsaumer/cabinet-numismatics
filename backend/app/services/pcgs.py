@@ -42,7 +42,11 @@ CACHE_TTL = timedelta(days=7)
 # Auction lots to aggregate: enough to smooth one odd sale, few enough that
 # the answer still reflects the current market rather than a decade of it.
 APR_WINDOW = 10
-DATE_FORMATS = ("%m-%d-%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d")
+# The live API dates a lot by month ("07-2003"); the rest are what its docs show.
+DATE_FORMATS = ("%m-%d-%Y", "%m-%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d")
+# Sales older than this say little about today's price: they are recorded,
+# not counted, and the price guide stands in.
+APR_MAX_AGE = timedelta(days=5 * 365)
 
 
 def pcgs_number(item: Item) -> str | None:
@@ -154,6 +158,15 @@ def recent_lots(payload: dict) -> list[dict]:
     return dated[:APR_WINDOW] + undated[: max(0, APR_WINDOW - len(dated))]
 
 
+def _lot_details(lot: dict) -> dict:
+    """A lot as provenance keeps it: JSON-safe."""
+    return {
+        **lot,
+        "date": lot["date"].date().isoformat() if lot["date"] else None,
+        "price": float(lot["price"]),
+    }
+
+
 def recent_sales(payload: dict) -> list[Decimal]:
     """Prices of the most recent auction lots, newest first."""
     return [lot["price"] for lot in recent_lots(payload)]
@@ -211,21 +224,27 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
     )
     check_payload(payload)
 
-    lots = recent_lots(payload)
+    every_lot = recent_lots(payload)
+    cutoff = datetime.now() - APR_MAX_AGE
+    lots = [lot for lot in every_lot if lot["date"] is not None and lot["date"] >= cutoff]
+    older = [lot for lot in every_lot if lot not in lots]
     guide = _amount(payload.get("PriceGuideValue"))
     if lots:
         per_piece = Decimal(median(lot["price"] for lot in lots))
         # Real sales beat a book value; more of them beat fewer.
-        confidence = Decimal("0.85") if len(lots) >= 5 else Decimal("0.75")
-        source = f"pcgs:apr {matched}"
-        sample_size = len(lots)
+        count = len(lots)
+        confidence = Decimal("0.85" if count >= 5 else "0.75" if count >= 3 else "0.65")
+        basis, source, sample_size = "apr", f"pcgs:apr {matched}", count
+    elif guide is not None:
+        per_piece, confidence = guide, Decimal("0.60")
+        basis, source, sample_size = "guide", f"pcgs:guide {matched}", None
+    elif older:
+        # Nothing recent and no book value: old sales are all there is.
+        lots, older = older, []
+        per_piece, confidence = Decimal(median(lot["price"] for lot in lots)), Decimal("0.35")
+        basis, source, sample_size = "apr_old", f"pcgs:apr-old {matched}", len(lots)
     else:
-        per_piece = guide
-        if per_piece is None:
-            raise NotApplicable(f"PCGS has no auction sales or price-guide value for {matched}")
-        confidence = Decimal("0.60")
-        source = f"pcgs:guide {matched}"
-        sample_size = None
+        raise NotApplicable(f"PCGS has no auction sales or price-guide value for {matched}")
 
     return EstimateResult(
         source=source,
@@ -235,15 +254,9 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
         sample_size=sample_size,
         details={
             **lookup,
-            "basis": "apr" if lots else "guide",
-            "lots": [
-                {
-                    **lot,
-                    "date": lot["date"].date().isoformat() if lot["date"] else None,
-                    "price": float(lot["price"]),
-                }
-                for lot in lots
-            ],
+            "basis": basis,
+            "lots": [_lot_details(lot) for lot in lots],
+            "older_lots": [_lot_details(lot) for lot in older],
             "median": float(per_piece) if lots else None,
             "price_guide_value": float(guide) if guide is not None else None,
             "coinfacts_url": _text(payload.get("CoinFactsLink")),

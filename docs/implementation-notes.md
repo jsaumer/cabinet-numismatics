@@ -307,7 +307,12 @@ Confirmed against the live API with a real cert: `parse_grade` and
 `cert_fields` read PCGS's answer correctly. `pcgs._country` and
 `pcgs._mint_mark` then bring it into line with hand entry and the Numista
 fill ("United States"; "P" only where it is on the coin), because matching
-everywhere is by the text as written.
+everywhere is by the text as written. The same cert showed the live
+`AuctionList` dating lots `MM-YYYY`; `pcgs_estimate` counts only lots inside
+`APR_MAX_AGE` (five years), falls back to the guide, then to old lots
+(`basis` `apr` / `guide` / `apr_old`), and keeps uncounted lots in
+`details.older_lots`. Test fixtures date their lots relative to today so
+they don't age out.
 
 ## Releases
 
