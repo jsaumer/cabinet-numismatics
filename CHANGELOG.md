@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-20
+
 ### Changed
 - **A look of its own.** A bronze accent in place of the blue, a warm
   off-white page (a warm near-black in dark mode), a gold rule under the

@@ -281,7 +281,7 @@ gets no CSP from nginx (documents set their own, and `/api/docs` loads its
 viewer from a CDN). New inline scripts, external fonts, or iframes will trip
 the CSP, and the e2e header test visits the main pages to catch that.
 
-## Interface polish (after v0.23.2)
+## Interface polish (v0.24.0)
 
 `api.money` formats through `Intl.NumberFormat` (currency style, the
 browser's locale, formatters cached per code) and falls back to
