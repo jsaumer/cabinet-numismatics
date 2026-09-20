@@ -32,7 +32,10 @@ export default function App() {
   return (
     <>
       <header className="site-header no-print">
-        <Link to="/">Cabinet</Link>
+        <Link className="brand" to="/">
+          <img src="/logo.svg" alt="" width="26" height="26" />
+          Cabinet
+        </Link>
         <span className="subtitle">Numismatics: Coin &amp; Paper Money Collection Manager</span>
         <nav>
           <NavLink to="/" end>Dashboard</NavLink>

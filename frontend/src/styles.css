@@ -112,6 +112,15 @@ a:hover {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
+.site-header a.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: center;
+}
+.site-header a.brand:hover {
+  text-decoration: none;
+}
 .site-header .subtitle {
   color: var(--header-muted);
   font-size: 0.8rem;

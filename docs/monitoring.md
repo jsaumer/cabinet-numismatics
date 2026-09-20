@@ -80,6 +80,50 @@ red both when Cabinet stops pushing and when something inside it fails.
 Kuma's own `status`, `msg`, and `ping` parameters in the pasted URL are
 replaced. **Push now** sends one immediately.
 
+## Homepage (gethomepage.dev)
+
+Cabinet needs nothing special for a [Homepage](https://gethomepage.dev)
+tile: `GET /api/stats/collection` already returns the owned coins and notes
+and the estimated value, in your display currency, and Homepage's
+`customapi` widget reads it. In `services.yaml`:
+
+```yaml
+- Collections:
+    - Cabinet:
+        icon: https://cabinet.example.com/logo-512.png
+        href: https://cabinet.example.com
+        description: Coin and paper money collection
+        siteMonitor: https://cabinet.example.com/api/health
+        widget:
+          type: customapi
+          url: https://cabinet.example.com/api/stats/collection
+          refreshInterval: 300000 # 5 minutes; the numbers move slowly
+          mappings:
+            - field: counts.coins
+              label: Coins
+              format: number
+            - field: counts.notes
+              label: Notes
+              format: number
+            - field: estimated_value
+              label: Est. value
+              format: float
+              prefix: "$"
+```
+
+The counts are owned pieces (sold and wish-list items are left out, as on
+the dashboard), and the value follows Settings → value strategy. Homepage
+has no currency format, so `prefix` is the symbol of your display currency.
+Other fields the same response carries: `counts.owned`, `counts.wishlist`,
+`cost_basis`, `unrealized_gain`, `estimated_items`.
+
+Homepage fetches from its own server, not your browser. If Cabinet sits
+behind forward-auth, point `url`, `siteMonitor`, and `icon` at the proxy
+service over a Docker network both share (`http://cabinet_proxy/...` on a
+Swarm, `http://proxy/...` in one compose project) so the requests skip the
+login; keep `href` as the public address. The logo is served at
+`/logo.svg`, `/logo-512.png`, and `/favicon.ico`.
+
 ## Metrics (Prometheus)
 
 Turn on **Serve metrics at /api/metrics**. Off, the endpoint answers 404.

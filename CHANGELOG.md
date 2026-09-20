@@ -10,6 +10,14 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **A logo**: a bronze coin with a C, in the header, as the browser-tab icon
+  (`favicon.ico` with 16 to 256 px, plus SVG and an Apple touch icon), and
+  at `/logo.svg` and `/logo-512.png` for dashboards.
+- **A Homepage tile**: docs/monitoring.md has a ready `services.yaml` block
+  for gethomepage.dev showing owned coins, owned notes, and the estimated
+  collection value, read from the existing `/api/stats/collection`.
+
 ## [0.24.1] - 2026-09-20
 
 ### Changed
