@@ -700,6 +700,15 @@ tr.provenance-row td {
 .paid-option .badge {
   margin-left: 0.4rem;
 }
+/* Settings -> Backups -> Restore. */
+.restore-block {
+  margin-top: 1rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border-soft);
+}
+table.restore-summary {
+  max-width: 34rem;
+}
 .import-sources {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));

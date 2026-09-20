@@ -37,7 +37,13 @@ logger = logging.getLogger(__name__)
 
 FORMAT = "cabinet-backup"
 FORMAT_VERSION = 1
-NAME_RE = re.compile(r"^cabinet-backup-\d{8}-\d{6}(-data)?\.zip$")
+NAME_RE = re.compile(r"^cabinet-backup-\d{8}-\d{6}(-data|-prerestore)?\.zip$")
+# Safety archives written before an in-app restore: outside `backup_keep`.
+PRERESTORE_SUFFIX = "-prerestore.zip"
+PRERESTORE_KEEP = 3
+# Working directories a restore makes inside the photo and document volumes
+# (`.restore-new`, `.restore-old`) and the backup directory (`.restore-staging`).
+RESTORE_PREFIX = ".restore-"
 SCHEDULES = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 # The scheduler checks hourly; the slack keeps a daily run from slipping a
 # whole tick when the previous one started a few seconds late.
@@ -66,6 +72,16 @@ def utcnow() -> datetime:
 
 def archive_name(now: datetime, include_photos: bool) -> str:
     return f"cabinet-backup-{now:%Y%m%d-%H%M%S}{'' if include_photos else '-data'}.zip"
+
+
+def is_prerestore(path: Path) -> bool:
+    return path.name.endswith(PRERESTORE_SUFFIX)
+
+
+def _skip_restore_dirs(member: tarfile.TarInfo) -> tarfile.TarInfo | None:
+    """Leave a restore's working directories out of the file archives."""
+    parts = Path(member.name).parts
+    return None if any(part.startswith(RESTORE_PREFIX) for part in parts) else member
 
 
 def backup_dir() -> Path:
@@ -205,7 +221,7 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
                     writer = _HashingWriter(raw)
                     with tarfile.open(fileobj=writer, mode="w|gz") as tar:
                         if folder.is_dir():
-                            tar.add(folder, arcname=".")
+                            tar.add(folder, arcname=".", filter=_skip_restore_dirs)
                     members[member] = writer.summary()
         manifest = {
             "format": FORMAT,
@@ -278,9 +294,14 @@ def stored_backups(dest: Path) -> list[Path]:
 
 def prune(dest: Path, keep: int) -> list[str]:
     """Delete archives beyond the newest `keep`, and leftovers from
-    interrupted runs. Only files matching Cabinet's own names are touched."""
+    interrupted runs. Only files matching Cabinet's own names are touched.
+    Pre-restore safety archives don't count toward `keep`; they have their
+    own limit."""
     removed = []
-    for old in stored_backups(dest)[max(keep, 1) :]:
+    stored = stored_backups(dest)
+    regular = [p for p in stored if not is_prerestore(p)]
+    safety = [p for p in stored if is_prerestore(p)]
+    for old in regular[max(keep, 1) :] + safety[PRERESTORE_KEEP:]:
         old.unlink()
         removed.append(old.name)
     cutoff = (utcnow() - STALE_TEMP_AGE).timestamp()
@@ -290,6 +311,29 @@ def prune(dest: Path, keep: int) -> list[str]:
         if leftover.stat().st_mtime < cutoff:
             leftover.unlink(missing_ok=True)
     return removed
+
+
+def write_prerestore(db: Session, include_photos: bool, protect: Path | None = None) -> Path:
+    """The safety archive a restore takes first. The caller holds `_run_lock`.
+    Nothing is recorded in settings: that database is about to be replaced.
+    `protect` is the archive being restored, never pruned here."""
+    dest = backup_dir()
+    final = dest / f"cabinet-backup-{utcnow():%Y%m%d-%H%M%S}{PRERESTORE_SUFFIX}"
+    partial = final.with_name(final.name + ".partial")
+    try:
+        write_archive(partial, db, include_photos)
+        verify_archive(partial)
+        partial.replace(final)
+    except OSError as exc:
+        partial.unlink(missing_ok=True)
+        raise BackupError(str(exc)) from exc
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    for old in [p for p in stored_backups(dest) if is_prerestore(p)][PRERESTORE_KEEP:]:
+        if old != protect:
+            old.unlink(missing_ok=True)
+    return final
 
 
 def run_backup(db: Session, include_photos: bool | None = None) -> dict:

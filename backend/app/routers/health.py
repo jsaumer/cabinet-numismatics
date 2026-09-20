@@ -3,7 +3,7 @@ from sqlalchemy import text
 
 from app import __version__
 from app.db import engine
-from app.services import documents, schema
+from app.services import documents, maintenance, schema
 
 router = APIRouter(prefix="/api")
 
@@ -12,6 +12,16 @@ router = APIRouter(prefix="/api")
 def health() -> dict:
     expected, known = schema.script_revisions()
     current = None
+    if maintenance.active():
+        # Don't touch the database: pg_restore holds exclusive locks, and a
+        # health check that hangs gets the container killed mid-restore.
+        return {
+            "status": "ok",
+            "db": "restoring",
+            "version": __version__,
+            "schema": schema.describe(None, expected, known, reachable=False),
+            "documents": documents.storage_status(),
+        }
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))

@@ -85,6 +85,35 @@ trusted LAN or behind an authenticating proxy, and a clear reason not to
 expose the stack directly. The backup directory is kept out of the publicly
 served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
 
+**Restore from inside the app** (`/api/restore/…`, v0.26.0) is open in the
+same way, and it is the most destructive thing the API does: it replaces
+the database, the photos, and the documents. The owner chose to ship it
+before login because anyone who can reach an open Cabinet can already
+download everything and delete everything. Until authentication ships
+(when it becomes admin-only, see the table below), what stands in front of
+it:
+
+- **Verification before anything changes**: the manifest, a SHA-256 for
+  every member, a schema revision this build knows, and the tar-member rules
+  under Input handling. The manifest is not itself covered by `SHA256SUMS`,
+  so this catches corruption, not an archive rewritten on purpose; an
+  attacker who can call the API needs no forged archive anyway.
+- **A safety backup first**: the current state is written to `BACKUP_DIR`
+  and verified, and the restore doesn't start without it. Pre-restore
+  archives are outside the retention count, and the newest three are kept.
+- **A typed phrase** (`RESTORE`) on the request that starts it. That guards
+  against accidents, not against an attacker.
+- **An off switch**: `RESTORE_ENABLED=false` makes every restore endpoint
+  answer 404, leaving `scripts/restore.sh` (which needs a shell on the
+  host) as the only way. Set it on any deployment where restore from the
+  browser isn't wanted.
+
+A restored database carries its own encrypted secrets; they decrypt only
+with the `SECRET_KEY` in force when the archive was made, otherwise they
+read as not set. An uploaded archive can therefore replace saved keys and
+webhook addresses only with values it could already have set through
+Settings.
+
 `/api/metrics` is off by default. Turned on, it's as open as the rest of the
 API and includes the collection's value and cost; scrape it over the
 internal Docker network (see [monitoring.md](monitoring.md)) rather than
@@ -118,7 +147,9 @@ for a trusted network, or behind an authenticating reverse proxy. Before exposin
 
 Photos under `/photos/` are served by nginx without going through the API;
 their UUID file names are not guessable, but only the reverse proxy's
-authentication actually protects them, like everything else.
+authentication actually protects them, like everything else. Any path under
+`/photos/` with a segment starting with a dot answers 404, so a restore's
+working folders inside the photo volume are never served.
 
 Do not port-forward the stack to the internet as-is.
 
@@ -242,6 +273,19 @@ Rules that go with the table:
   the same schema validation as the item form, and photos inside it the same
   image validation as uploads. Pictures linked from a Numista collection are
   fetched only when asked, through the guarded photo-URL fetch.
+- **Restore archives** are streamed into `BACKUP_DIR/.restore-staging/`
+  under a random id (never the container's temp folder, never a name the
+  client chose), capped at `RESTORE_MAX_GB` (default 20), deleted at once
+  when they fail verification, and cleared after a day otherwise. That
+  folder is never listed, pruned as an archive, downloadable, or backed up.
+  The photo and document archives inside are unpacked by hand, not with
+  `extractall`: only plain files and folders, no ownership or modes, and
+  links, devices, absolute paths, drive letters, and `..` are refused, when
+  the archive is inspected (422) and again at extraction. Files are unpacked
+  into `.restore-new` inside the volume and the old ones wait in
+  `.restore-old`; both are left out of backups, and nginx serves no
+  dot-name under `/photos/`. `pg_restore` runs with `--no-owner` as the
+  app's own database user, with no shell.
 - **Custom fields** are bounded (20 keys, 50-char names, 500-char string
   values) so arbitrary payloads can't be stashed in the JSON column.
 - **Outbound requests** go to the two keyless market-data APIs

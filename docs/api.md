@@ -10,8 +10,9 @@ auto-generated OpenAPI documentation served at:
 - OpenAPI JSON: `http://localhost/api/openapi.json`
 
 All request and response bodies are JSON unless noted (photo, document, and
-import uploads are multipart; exports, backups, document files, and metrics
-answer files or text). The app has no login yet, so
+import uploads and restore archives are multipart; exports, backups,
+document files, and metrics answer files or text). The app has no login
+yet, so
 endpoints are described without an auth layer; put an authenticating proxy
 in front before exposing it beyond a trusted network. Login is planned
 (roadmap Phase 7, P8), and
@@ -610,10 +611,102 @@ reason (for example, `pg_dump failed: …`) and is recorded as the last run
 (`at`, `ok: false`, `error`); a successful `POST` answers, and records, `at`,
 `ok`, `file`, `size`, `includes_photos`, and `pruned`. `GET /api/backups`
 answers `directory`, `free_bytes`, `last_run`, and `backups` (`name`, `size`,
-`created_at`); a second `POST` while one is running returns `409`. Stored
-archive names must match `cabinet-backup-YYYYMMDD-HHMMSS[-data].zip`; anything
-else is `404`. **These endpoints hand over the whole collection and are
+`created_at`, and `prerestore`: true for the safety archive an in-app
+restore took first); a second `POST` while one is running returns `409`.
+Stored archive names must match
+`cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip`; anything else is
+`404`. Pre-restore archives sit outside `backup_keep`: the newest three are
+kept. **These endpoints hand over the whole collection and are
 unauthenticated**; see [security.md](security.md).
+
+## Restore
+
+Replaces the whole collection with a backup archive; the procedure, the
+safeguards, and what a failure leaves behind are in
+[backup-restore.md](backup-restore.md#restore-from-inside-the-app).
+
+| Method   | Path                              | Purpose                                   |
+|----------|-----------------------------------|-------------------------------------------|
+| `GET`    | `/api/restore/status`             | Whether restore is on, the run in progress, and the last outcome |
+| `POST`   | `/api/restore/inspect`            | Verify an archive and say what restoring it would replace; changes nothing |
+| `POST`   | `/api/restore/{restore_id}/run`   | Start the restore in the background       |
+| `DELETE` | `/api/restore/{restore_id}`       | Discard a staged upload                   |
+
+With `RESTORE_ENABLED=false` every endpoint but the status answers `404`.
+
+`GET /api/restore/status` always answers, during a restore and when the
+feature is off:
+
+```json
+{
+  "enabled": true,
+  "state": "idle",
+  "step": null,
+  "started_at": null,
+  "last": {
+    "at": "2026-09-20T18:04:11+00:00", "ok": true,
+    "archive": "cabinet-backup-20260920-180301.zip",
+    "archive_created_at": "2026-09-20T18:03:01+00:00",
+    "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip",
+    "error": null, "items": 212, "photos": 388, "documents": 9
+  },
+  "confirm_phrase": "RESTORE"
+}
+```
+
+`state` is `idle`, `running`, `done`, or `failed` (kept in memory, so `idle`
+again after a backend restart); `step`, while running, is one of
+`safety_backup`, `photos`, `documents`, `database`, `migrations`,
+`finishing`, in that order (`photos` and `documents` are the unpacking; the
+files are swapped in during `finishing`). `last` is read from a file on the
+state volume and is `null` until a restore has run; `items`, `photos`, and
+`documents` are the archive's counts. Switched off, it answers `enabled:
+false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
+
+`POST /api/restore/inspect` takes either a multipart upload (field `file`),
+streamed into `BACKUP_DIR/.restore-staging/`, or `?name=` of a stored
+archive with no body. It answers:
+
+```json
+{
+  "restore_id": "3f0c…",
+  "archive": {
+    "name": "cabinet-backup-20260920-180301.zip", "size": 48211934,
+    "created_at": "2026-09-20T18:03:01+00:00", "app_version": "0.26.0",
+    "revision": "0018", "includes_photos": true, "includes_documents": true,
+    "items": 212, "photos": 388, "documents": 9, "trashed": 3
+  },
+  "current": {"revision": "0018", "items": 214, "photos": 390,
+              "documents": 9, "trashed": 0},
+  "will_migrate": false,
+  "replaces_files": true,
+  "secrets_note": "Saved API keys and webhook addresses in the archive…"
+}
+```
+
+It answers `422` with a plain reason for a file that isn't a Cabinet archive,
+a checksum that doesn't match, an unexpected member, a schema revision newer
+than this build knows, a tar member that is a link, a device, an absolute
+path, or holds `..`, an unreadable upload, or a request with neither `file`
+nor `name`; `404` for a `name` that isn't a stored archive; `413` for an
+upload over `RESTORE_MAX_GB`. A rejected upload is deleted at once; others
+are cleared after a day. The `restore_id` lives in memory: after a backend
+restart, inspect again.
+
+`POST /api/restore/{restore_id}/run` takes `{"confirm": "RESTORE"}` and
+answers `202` `{"state": "running"}`; poll the status. `404` for an unknown
+id, `422` for a wrong phrase, `409` while a restore, a backup, or a
+scheduled task is running. The outcome, including a failure's `error`
+(ending "Nothing was changed." when that is true), arrives in the status's
+`last`.
+
+`DELETE /api/restore/{restore_id}` answers `204`. It deletes a staged upload
+and only forgets the id of a stored archive, which is never deleted here;
+`404` for an unknown id.
+
+**While a restore runs**, every request except `GET /api/health` and
+`GET /api/restore/status` answers `503` with `Retry-After: 5` and
+`{"detail": "Cabinet is restoring a backup; try again in a moment"}`.
 
 ## Alerts & metrics
 
@@ -669,7 +762,9 @@ also carry `match_catalog`/`match_ref` or `match_country`/
 |--------|----------------|-------------------------------------|
 | `GET`  | `/api/health`  | Liveness/readiness probe            |
 
-Returns `status`, `db` (`ok` / `unreachable`), the app `version`, and
+Returns `status`, `db` (`ok` / `unreachable`, or `restoring` while an in-app
+restore runs: the database isn't touched then, and `schema` is `unknown`
+with a `null` `current`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status`, one of `ok`, `pending` (migrations not yet
 applied), `ahead` (the database was migrated by a newer build), or `unknown`
