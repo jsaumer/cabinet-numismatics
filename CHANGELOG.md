@@ -10,6 +10,13 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Fixed
+- The insurance report's **Acquired** column printed a dash above the source
+  ("— / inherited") when an item had a source but no date.
+- Asking Numista to price an item that has no Numista number — anything
+  entered by hand — now links to where that's fixed ("Find it on Numista",
+  the edit page's fill card) instead of only saying a reference is missing.
+
 ## [0.23.1] — 2026-09-20
 
 ### Security

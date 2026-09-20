@@ -1,4 +1,5 @@
 import { FormEvent, Fragment, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api, ItemDetail, money, SourceStatus } from "../api";
 import { LineChart } from "./charts";
@@ -25,6 +26,7 @@ export function ValueHistory({
   const [estimateSuccess, setEstimateSuccess] = useState<string | null>(null);
   const [historySource, setHistorySource] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [lastTried, setLastTried] = useState<string | null>(null);
 
   // default the manual-estimate currency to the item's own currency
   const itemCurrency = item.currency;
@@ -54,6 +56,7 @@ export function ValueHistory({
 
   async function autoEstimate(source: string) {
     setEstimating(source);
+    setLastTried(source);
     setEstimateError(null);
     setEstimateSuccess(null);
     try {
@@ -66,6 +69,12 @@ export function ValueHistory({
       setEstimating(null);
     }
   }
+
+  // Numista prices by its catalogue number; an item entered by hand has none.
+  const needsNumistaRef =
+    estimateError !== null &&
+    lastTried === "numista" &&
+    !item.catalog_refs.some((r) => r.catalog.trim().toLowerCase() === "numista");
 
   const sourceValues = latestBySource(item.estimates);
   const activeSource =
@@ -178,6 +187,15 @@ export function ValueHistory({
             </button>
           ))}
         {estimateError && <span className="error">{estimateError}</span>}
+        {needsNumistaRef && (
+          <span>
+            <Link to={`/items/${item.id}/edit`}>Find it on Numista</Link>{" "}
+            <span className="muted">
+              — “Fill from Numista” on the edit page looks the piece up and adds its number; what
+              you've already filled in stays as it is.
+            </span>
+          </span>
+        )}
         {estimateSuccess && <span className="gain">{estimateSuccess}</span>}
       </div>
       <form className="estimate-form" onSubmit={addEstimate}>

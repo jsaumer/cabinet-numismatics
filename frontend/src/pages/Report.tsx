@@ -89,7 +89,7 @@ export default function Report() {
               </td>
               <td className="num">{item.quantity}</td>
               <td>
-                {item.acquisition_date ?? "—"}
+                {item.acquisition_date ?? (item.acquired_from ? null : "—")}
                 {item.acquired_from && <div className="muted">{item.acquired_from}</div>}
               </td>
               <td className="num">{money(item.cost_basis, item.currency)}</td>
