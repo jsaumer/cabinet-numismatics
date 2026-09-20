@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.9] - 2026-09-20
+
 ### Fixed
 - The header and page no longer shift sideways between a short page and one
   long enough to scroll: room for the scrollbar is always reserved.
