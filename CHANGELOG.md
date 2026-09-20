@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.7] - 2026-09-20
+
 ### Fixed
 - The first date under a value-history chart was cut off at the left edge.
 
