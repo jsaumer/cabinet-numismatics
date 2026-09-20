@@ -131,19 +131,25 @@ def _title(key: str, status: str) -> str:
     return f"Cabinet: {label} {'failing' if status == 'failing' else 'recovered'}"
 
 
-def build_request(fmt: str, key: str, status: str, message: str) -> dict:
-    """The keyword arguments for httpx.post for one alert in `fmt`."""
-    title = _title(key, status)
+def build_request(fmt: str, key: str, status: str, message: str, title: str | None = None) -> dict:
+    """The keyword arguments for httpx.post for one alert in `fmt`. An event
+    (status "event") brings its own `title`."""
+    label = CONDITIONS.get(key) or title or "Test"
+    title = f"Cabinet: {title}" if title else _title(key, status)
     if fmt == "ntfy":
         # Plain text to the topic URL; titles are ASCII so they fit a header.
         return {
             "content": message.encode(),
             "headers": {
                 "Title": title,
-                "Priority": {"failing": "high", "recovered": "default"}.get(status, "low"),
-                "Tags": {"failing": "warning", "recovered": "white_check_mark"}.get(
-                    status, "test_tube"
+                "Priority": {"failing": "high", "recovered": "default", "event": "default"}.get(
+                    status, "low"
                 ),
+                "Tags": {
+                    "failing": "warning",
+                    "recovered": "white_check_mark",
+                    "event": "dart",
+                }.get(status, "test_tube"),
             },
         }
     if fmt == "discord":
@@ -155,14 +161,14 @@ def build_request(fmt: str, key: str, status: str, message: str) -> dict:
             "json": {
                 "title": title,
                 "message": message,
-                "priority": {"failing": 8, "recovered": 4}.get(status, 2),
+                "priority": {"failing": 8, "recovered": 4, "event": 4}.get(status, 2),
             }
         }
     return {
         "json": {
             "app": "cabinet",
             "alert": key,
-            "label": CONDITIONS.get(key, "Test"),
+            "label": label,
             "status": status,
             "title": title,
             "message": message,
@@ -179,10 +185,12 @@ def _describe(exc: Exception, url: str) -> str:
     return text.replace(url, url_hint(url) or "")
 
 
-def deliver(url: str, fmt: str, key: str, status: str, message: str) -> dict:
+def deliver(
+    url: str, fmt: str, key: str, status: str, message: str, title: str | None = None
+) -> dict:
     """POST one alert. Returns and records {at, ok, detail}."""
     try:
-        resp = httpx.post(url, timeout=TIMEOUT, **build_request(fmt, key, status, message))
+        resp = httpx.post(url, timeout=TIMEOUT, **build_request(fmt, key, status, message, title))
         resp.raise_for_status()
         outcome = {"at": _now(), "ok": True, "detail": f"{status} alert delivered"}
     except httpx.HTTPError as exc:
@@ -203,6 +211,17 @@ def _notify(db: Session, key: str, status: str, message: str) -> None:
         return
     fmt = str(store.get_setting(db, "alert_webhook_format"))
     _spawn(lambda: deliver(url, fmt, key, status, message))
+
+
+def event(db: Session, key: str, title: str, message: str) -> None:
+    """Something happened once (a wish-list target was reached): deliver it if
+    a webhook is saved. Not a condition, so `alert_state` is left alone."""
+    url = str(store.get_setting(db, "alert_webhook_url") or "")
+    if not url:
+        return
+    fmt = str(store.get_setting(db, "alert_webhook_format"))
+    logger.info("Alert: %s: %s", title, message)
+    _spawn(lambda: deliver(url, fmt, key, "event", message, title))
 
 
 def send_test(db: Session) -> dict:

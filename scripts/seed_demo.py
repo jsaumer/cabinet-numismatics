@@ -26,7 +26,7 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
         {
             "type": "coin", "country": "United States", "denomination": "1 dollar",
             "year": 1921, "series": "Morgan Dollar", "composition": "90% silver",
-            "weight_g": 26.73, "fineness": 0.9, "grade_code": "MS-63",
+            "weight_g": 26.73, "fineness": 0.9, "die_axis": 180, "grade_code": "MS-63",
             "acquisition_date": "2023-04-18", "acquisition_price": 62.0, "acquisition_fees": 7.5,
             "acquired_from": "regional coin show", "storage_location": "Slab box 1",
             "tags": ["silver", "type set"],
@@ -100,7 +100,10 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
     (
         {
             "type": "note", "country": "United States", "denomination": "2 dollars",
-            "year": 1976, "series": "Bicentennial", "grade_scale": "pmg", "designations": ["EPQ"],
+            "year": 1976, "series": "Series 1976", "grade_scale": "pmg", "designations": ["EPQ"],
+            # A repeater serial, so the fancy-serial badge and filter have something to show.
+            "serial_number": "B19761976A", "signatures": "Neff / Simon",
+            "issuer": "Federal Reserve Bank of New York",
             "grade_code": "65", "acquisition_date": "2025-03-08",
             "acquisition_price": 9.0, "storage_location": "Album 2", "tags": ["notes"],
         },
@@ -108,18 +111,26 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
     ),
     (
         {
-            "type": "note", "country": "France", "denomination": "50 francs", "year": 1940,
-            "grade_scale": "pmg", "grade_code": "25", "acquisition_date": "2025-05-19",
-            "acquisition_price": 26.0, "tags": ["notes", "world"],
+            # A National Bank Note: charter, bank town, and plate position.
+            "type": "note", "country": "United States", "denomination": "10 dollars",
+            "year": 1902, "series": "Series 1902 Plain Back", "signatures": "Lyons / Roberts",
+            "serial_number": "A541263", "issuer": "The First National Bank of Cooperstown",
+            "charter_number": "280", "bank_city": "Cooperstown", "bank_state": "New York",
+            "plate_position": "B", "grade_scale": "pmg", "grade_code": "25",
+            "acquisition_date": "2025-05-19", "acquisition_price": 410.0,
+            "catalog_refs": [{"catalog": "friedberg", "ref_code": "Fr. 624"}],
+            "tags": ["notes", "national"],
         },
         [],  # deliberately unestimated, so coverage gaps are visible
     ),
     (
         {
-            "type": "coin", "country": "Mexico", "denomination": "1 onza", "year": 1980,
-            "composition": "92.5% silver", "weight_g": 33.62, "fineness": 0.925,
-            "acquisition_date": "2025-07-02", "acquisition_price": 31.0,
-            "tags": ["silver", "bullion"],
+            # Dated in the Hijri calendar; the year the coin also carries is kept as entered.
+            "type": "coin", "country": "Egypt", "denomination": "20 qirsh", "year": 1917,
+            "struck_calendar": "hijri", "struck_year": 1335, "series": "Hussein Kamel",
+            "composition": "83.3% silver", "weight_g": 28.0, "fineness": 0.833, "die_axis": 0,
+            "acquisition_date": "2025-07-02", "acquisition_price": 64.0,
+            "tags": ["silver", "world"],
         },
         [],
     ),
@@ -148,9 +159,10 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
         {
             "type": "coin", "country": "United States", "denomination": "20 dollars",
             "year": 1907, "series": "Saint-Gaudens Double Eagle", "status": "wishlist",
+            "target_price": 2400.0, "priority": 1,
             "notes": "The one to save for.", "tags": ["gold", "wishlist"],
         },
-        [],
+        [(2650.0, "dealer quote")],  # over the target for now
     ),
 ]
 

@@ -316,6 +316,86 @@ everywhere is by the text as written. The same cert showed the live
 `details.older_lots`. Test fixtures date their lots relative to today so
 they don't age out.
 
+## Parity fields (v0.25.0)
+
+Roadmap Phase 7's P1 and P3 to P6 in one release. Migration `0018`: fourteen
+nullable columns on `items` (population, `target_price`/`priority`, the
+National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
+
+- **Two fields are server-set**, never accepted from a client (they are on
+  `ItemOut`, not `ItemBase`/`ItemUpdate`): `serial_traits` and
+  `population_as_of`. `_build_item` sets both (so create, the run, and every
+  import path do), and `items._sync_derived` keeps them in step after an
+  update **and a bulk edit**: traits when `serial_number` or
+  `replacement_note` changed, the date when either population figure changed
+  (cleared when both are). Clone re-stamps the date. A PCGS estimate sets all
+  three population fields from the response it already has, dated by the
+  response's fetch time (`pricing._as_utc(fetched_at)`), and leaves the item
+  alone when PCGS reports none. Any new path that writes a serial number or
+  a population has to do the same.
+- **Traits** come from `services/serials.traits` (digits only, leading zeros
+  kept, four digits at least; `TRAITS` is also the order and the reference
+  endpoint's labels). A solid is only `solid`; `super_radar` and
+  `super_repeater` replace `radar` and `repeater`. They are stored
+  comma-wrapped (`,radar,binary,`, or NULL) so `serial_trait=` is a
+  `LIKE '%,radar,%'` that can't match inside `super_radar`; `ItemOut` splits
+  the string into the API's list. An unknown `serial_trait` is a 422, since
+  the value goes into a LIKE pattern. Migration `0018` backfills with a
+  **frozen copy** of the function: never import the service into a
+  migration, and don't edit that copy when the rules change (rows are
+  recomputed the next time their serial is saved; a rule change that must
+  reach existing rows needs a new data migration).
+- **`pricing.add_estimate(db, item, row)` is the one way a `price_estimates`
+  row is added** (the manual endpoint, `POST .../estimate`, and both
+  scheduled refreshes), because it is where a wish-list target is noticed.
+  Don't `db.add` an estimate anywhere else. It looks up the previous newest
+  estimate before adding the row, and the caller commits.
+- **`alerts.event` is not `fail`/`recover`.** An event is delivered once
+  through the same formats (`status` `event`, its own title, the key as
+  `alert`) if a webhook is saved, and never touches `alert_state`, so it has
+  no recovery, no Settings row, and no metric. The target event fires on the
+  crossing: status `wishlist`, a `target_price`, the new estimate in the
+  item's currency at or under it, and the estimate before it over it, in
+  another currency, or missing.
+- **The gap uses the newest estimate, not the shown value.**
+  `Item.target_gap`/`target_reached`, the list's `target_reached=true`
+  (`_latest_value_subquery` for value and for currency), and the alert all
+  take the newest `price_estimates` row, whatever `value_strategy` says, and
+  only when its currency equals the item's; nothing is converted. Keep the
+  three in agreement.
+- **Target and priority survive a status change** (the owner's decision).
+  The form only hides them off the wishlist; `toPayload` still sends them,
+  so a coin bought later keeps what it was wanted at.
+- **The year and the date as struck.** On create, `ItemCreate`'s
+  before-validator fills a missing `year` from `calendars.to_gregorian`; a
+  given year stands. On update, `_apply_struck_date` checks the era rule
+  against the item as it will be, leaves `year` alone when the `PATCH`
+  doesn't name it, and converts only on an explicit `year: null` beside a
+  struck calendar and year. `japanese` needs an era, and an era without it
+  is a 422. Bulk edit skips this check. The form fills Year from
+  `/api/reference/convert-date` only when Year is empty or still holds the
+  form's own earlier conversion (`autoYear`); a typed year is never
+  overwritten.
+- **Calendar labels are parsed.** The item page takes a calendar's short
+  name from the parentheses that end its label (`Islamic (AH)` gives
+  `AH 1335 (1917)`; `Republic of China (Minguo)` gives `Minguo`), and uses
+  the era's label for `japanese`. A new entry in `calendars.CALENDARS` needs
+  a label ending in `(short name)`, or the whole label is shown.
+- **Nulls-last sorts are portable.** `priority` and `target_price`
+  (`NULLS_LAST`) order by `column IS NULL` first, then the column, which
+  puts empty rows last in both directions on SQLite and Postgres alike;
+  `NULLS LAST` is not used because SQLite's support depends on its version.
+- `q` also matches `charter_number` and `bank_city` (`issuer` already did).
+  `friedberg` and `pick` are only suggestions in the form's datalist and
+  link builders in `components/lookup.tsx`; the catalogue stays free text.
+  `GET /api/stats/notes-by-signature` groups in Python over the ORM select,
+  so the trash is hidden for free.
+- The export gained twelve columns (not `serial_traits` or
+  `population_as_of`, which the import recomputes); an older export still
+  imports. `components/serial-traits.tsx` fetches the trait labels once per
+  session. The seed has a National Bank Note, a repeater serial, an AH-dated
+  coin, and a wishlist target to show them.
+
 ## Releases
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes

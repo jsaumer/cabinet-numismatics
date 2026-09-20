@@ -38,7 +38,8 @@ Each estimate records:
     or `apr_old`), the auction lots behind the median (date, price, auctioneer,
     sale, lot URL), older or undated lots that were recorded but not
     counted (`older_lots`), the median, the price-guide value (recorded even
-    when sales won), and the CoinFacts link.
+    when sales won), the CoinFacts link, and the population at this grade and
+    higher.
   - **comps**: the median and its currency, the sales used (date, venue,
     grade, price as recorded and converted, link, manual or Numista), the
     spread, the grade bucket they were matched on, and whether sales older
@@ -157,6 +158,15 @@ the coin carries it (wartime nickels, the 1979 dollar, everything but the
 cent from 1980, and the 2017 cent). The fill also reports the population and
 the guide value, and costs nothing extra when an estimate follows: both read
 the same cached response.
+
+From v0.25.0 the population is kept with the item (`pcgs_population`,
+`pcgs_pop_higher`) and shown beside the grade: the fill carries both figures
+into the form, and every PCGS estimate, scheduled ones included, rewrites
+them from the response it priced from, at no extra request, dated by when
+that response was fetched (so figures served from the 7-day cache carry the
+cache's date, not today's). A response without a population leaves the
+item's figures as they were. They can also be typed in by hand, for a coin
+looked up on PCGS's site.
 
 Realized auction prices win when PCGS has recent ones: the median of up to the
 ten most recent lots from the last five years, at confidence 0.85 with five or

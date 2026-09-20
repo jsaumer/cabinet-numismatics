@@ -4,7 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Grade, Item, ItemSet, Tag, item_tags
-from app.schemas import GradeOut, SetCreate, SetOut, SetWithCount, TagOut
+from app.schemas import (
+    CalendarReference,
+    ConvertedDate,
+    GradeOut,
+    SerialTraitOut,
+    SetCreate,
+    SetOut,
+    SetWithCount,
+    TagOut,
+)
+from app.services import calendars, serials
 
 router = APIRouter(prefix="/api", tags=["reference"])
 
@@ -77,3 +87,39 @@ def list_tags(db: Session = Depends(get_db)):
         .order_by(Tag.name)
     ).all()
     return [TagOut(name=name, count=count) for name, count in rows]
+
+
+@router.get("/reference/serial-traits", response_model=list[SerialTraitOut])
+def serial_traits():
+    """The fancy-serial traits an item's `serial_traits` can hold, in order."""
+    return [
+        {"key": key, "label": label, "description": description}
+        for key, (label, description) in serials.TRAITS.items()
+    ]
+
+
+@router.get("/reference/calendars", response_model=CalendarReference)
+def list_calendars():
+    """The calendars a date as struck can be in, and the Japanese eras."""
+    return {
+        "calendars": [{"key": k, "label": label} for k, label in calendars.CALENDARS.items()],
+        "eras": [
+            {"key": k, "label": calendars.ERA_LABELS[k], "offset": offset}
+            for k, offset in calendars.ERAS.items()
+        ],
+    }
+
+
+@router.get("/reference/convert-date", response_model=ConvertedDate)
+def convert_date(
+    calendar: str = Query(max_length=20),
+    year: int = Query(ge=1, le=9999),
+    era: str | None = Query(default=None, max_length=20),
+):
+    """The Gregorian year a struck year mostly falls in."""
+    calendar, era = calendar.strip().lower(), (era or "").strip().lower() or None
+    try:
+        gregorian = calendars.to_gregorian(calendar, year, era)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    return {"calendar": calendar, "year": year, "era": era, "gregorian_year": gregorian}

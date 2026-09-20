@@ -37,6 +37,19 @@ skipped, not failed, so they never raise a refresh alert. The same goes for
 a 403 from Numista's paid auction-sales endpoint on a free key: the item
 page says sales records need the paid plan, and no key alert is raised.
 
+### Events
+
+One message is an event, not a check: **Wish-list target reached**. It is
+sent when a new estimate (typed in, run from the item page, or from a
+scheduled refresh) for a wishlist item with a target price comes in at or
+under the target, in the item's own currency (nothing is converted). It is
+sent once, on the crossing: a first estimate already under the target
+counts, and later estimates that stay under it say nothing until one has
+gone back over. The message reads `United States 1 cent 1909 "S": estimate
+$950.00 is at or under your $1,000.00 target`. An event has no recovery, is
+not listed among the checks in Settings, and doesn't affect the heartbeat or
+the `cabinet_alert_failing` metric. Without a saved webhook nothing is sent.
+
 ### Formats
 
 One URL, in one of five formats. The URL is stored encrypted, like the API
@@ -51,9 +64,12 @@ keys, since it usually carries a token; Settings shows only its host.
 | Slack / Mattermost | `POST` `{"text": "*title*\nmessage"}` to an incoming webhook                 |
 | Gotify             | `POST` `{"title", "message", "priority"}` to `/message?token=<app token>`   |
 
-`status` is `failing`, `recovered`, or `test`; `alert` is one of `backup`,
-`numista_key`, `numista_quota`, `pcgs_key`, `pcgs_quota`, `refresh_melt`,
-`refresh_numista`, `refresh_pcgs` (or `test`). An example:
+`status` is `failing`, `recovered`, `test`, or `event`; `alert` is one of
+`backup`, `numista_key`, `numista_quota`, `pcgs_key`, `pcgs_quota`,
+`refresh_melt`, `refresh_numista`, `refresh_pcgs` (or `test`), and
+`wishlist_target` for the event, whose `label` is `Wish-list target reached`
+and `title` `Cabinet: Wish-list target reached`. An event goes out at normal
+priority (ntfy `default` with the `dart` tag, Gotify 4). An example:
 
 ```json
 {
