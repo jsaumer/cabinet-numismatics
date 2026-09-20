@@ -34,6 +34,7 @@ import {
   ValueHistoryWidget,
   ValueSummaryWidget,
 } from "./widgets/value";
+import { StackWidget } from "./widgets/stack";
 
 export type WidgetGroup = "Value" | "Breakdowns" | "Collection" | "Pricing" | "Operations";
 
@@ -169,6 +170,30 @@ export const REGISTRY: Record<string, WidgetSpec> = {
     fields: [countField("top_n", "Best and worst", 3, 25, "This many of each.")],
     title: "Unrealized gain/loss",
     Component: UnrealizedMoversWidget,
+  },
+  stack: {
+    name: "Bullion stack",
+    description: "Fine ounces, melt value, cost per ounce, and gain by metal.",
+    group: "Value",
+    defaultSize: "half",
+    defaultOptions: { metal: "all", tag: null },
+    fields: [
+      {
+        key: "metal",
+        label: "Metal",
+        kind: "choice",
+        choices: [
+          { value: "all", label: "All metals" },
+          { value: "gold", label: "Gold" },
+          { value: "silver", label: "Silver" },
+          { value: "platinum", label: "Platinum" },
+          { value: "palladium", label: "Palladium" },
+        ],
+      },
+      { key: "tag", label: "Only this tag", kind: "tag" },
+    ],
+    title: "Bullion stack",
+    Component: StackWidget,
   },
   realized_gains: {
     name: "Realized gain/loss",

@@ -1,13 +1,14 @@
 """The work the background loops in main.py run: the 12-hourly price refresh,
-and the hourly tick (scheduled backup, trash clear-out, heartbeat). Kept here
-so it can be tested without the loops."""
+and the hourly tick (scheduled backup, trash clear-out, purchase-day spot
+backfill, spot-price alerts, heartbeat). Kept here so it can be tested without
+the loops."""
 
 import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.services import alerts, maintenance, pricing, trash
+from app.services import alerts, maintenance, pricing, stack, trash
 from app.services import app_settings as store
 from app.services import backup as backups
 
@@ -67,7 +68,8 @@ def _record(db: Session, source: str, outcome: dict) -> None:
 
 
 def hourly(db: Session) -> None:
-    """Back up if one is due, empty the trash of expired items, then push the
+    """Back up if one is due, empty the trash of expired items, fill in
+    purchase-day spot prices, check the spot-price thresholds, then push the
     heartbeat (last, so it reports what this tick found). Sits out while a
     restore is replacing the database."""
     with maintenance.scheduled_task() as go:
@@ -89,4 +91,19 @@ def _hourly(db: Session) -> None:
         alerts.fail(db, "backup", "Scheduled backup failed unexpectedly. See the log")
     if purged := trash.purge_expired(db):
         logger.info("Emptied %s item(s) from the trash (past retention)", purged)
+    # Both are best-effort: a missing purchase-day price or spot price is not
+    # worth an alert, so they only reach the log.
+    try:
+        outcome = stack.backfill(db, stack.HOURLY_BACKFILL)
+        if outcome["filled"] or outcome["failed"]:
+            logger.info("Purchase-day spot backfill: %s", outcome)
+    except Exception:
+        db.rollback()
+        logger.exception("Purchase-day spot backfill failed")
+    try:
+        if fired := stack.check_spot_alerts(db):
+            logger.info("Spot price alerts: %s threshold(s) crossed", fired)
+    except Exception:
+        db.rollback()
+        logger.exception("Spot price alert check failed")
     alerts.ping_heartbeat(db)

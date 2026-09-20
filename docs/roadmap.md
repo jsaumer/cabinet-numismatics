@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.27.1**, with versioned images
+**Status (September 2026): released as v0.28.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -19,9 +19,9 @@ September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
 depth, fancy serial numbers, die axis and foreign dates) shipped together in
-v0.25.0, in-app restore (P2) in v0.26.0, and the customisable dashboard
-(P10) in v0.27.0; the stack figures (P7), authentication (P8), and the
-share view (P9) remain.
+v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
+(P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0;
+authentication (P8) and the share view (P9) remain.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -210,9 +210,9 @@ guidance, not appraisals.
 - ✔ **[Nice]** PCGS population and eBay sold-listings / Photograde links on
   the item page. Phase 5.9. Links **shipped in v0.22.0**; population on the
   item page (Phase 7, P1) **shipped in v0.25.0**.
-- **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
+- ✔ **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
-  the alert webhook. **Planned: Phase 7, P7** (was parked).
+  the alert webhook. Phase 7, P7 (was parked). **Shipped in v0.28.0.**
 
 ## 4. Stats, reports & insights
 
@@ -357,7 +357,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0019`, applied by the
+  upgrades: Alembic since Phase 0, revisions `0001`–`0020`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -730,7 +730,7 @@ for it, and new ones found while entering the collection outrank these.
 
 The wish-list targets, population, and the stack view moved from here and
 from Parked into **Phase 7** on 20 September 2026; the targets and the
-population shipped in v0.25.0.
+population shipped in v0.25.0, the stack view in v0.28.0.
 
 **Parked**: real features for a collector this owner isn't; revisit only
 if that changes.
@@ -742,7 +742,6 @@ if that changes.
   already exists.)
 - **Slab barcode/QR scanning.** (Not mostly slabs; the cert fill takes a
   typed number.)
-- **Stack view** for bullion. (Not a stack.)
 
 **The road to v1.0.0.** 1.0 means the HTTP API is stable. On 20 September
 2026 it was first decided to ship 1.0 with no application login; later the
@@ -876,10 +875,27 @@ v0.26.0.
   calendar recorded. OpenNumismat has the first, Exact Change the second.
   **Shipped in v0.25.0**, with eleven calendars; a year the owner types is
   never replaced by the conversion.
-- **P7: Bullion stack figures** (M). Fine ounces by metal, premium over spot
+- ✔ **P7: Bullion stack figures** (M). Fine ounces by metal, premium over spot
   at purchase (from the spot price on the acquisition date where known),
   cost per ounce, break-even spot, and a spot-price threshold alert through
   the webhook. Every stack tracker has these; this is the parked stack view.
+  **Shipped in v0.28.0**, migration `0020`. As built: purchase-day spot comes
+  from the public-domain fawazahmed0 currency-api (daily XAU/XAG/XPT/XPD from
+  2 March 2024, cached for ten years since a past day never changes); LBMA's
+  longer public series was ruled out because its terms need a licence for
+  valuation use, so Cabinet does not use it, and gold-api.com's history needs
+  a key. Older purchases take a hand-typed figure, and a typed figure is
+  never overwritten by the backfill (`POST /api/stack/backfill`, and the
+  hourly loop, at most 20 a run). The stack is owned, untrashed items with a
+  detected precious metal, a weight, and a fineness, scopeable by tag or set;
+  money converts into one currency the way the collection totals do (an
+  unconvertible amount is left out and counted, ounces still count); the
+  premium paid stays in the item's own currency, so nothing has to convert.
+  Spot-price threshold alerts (`spot_alerts` in Settings, at most 12) reuse
+  `alerts.event`: one message on the crossing, silently re-armed when it
+  clears. A `stack` dashboard widget and a `cabinet_stack_fine_ounces{metal}`
+  metrics gauge. `items.weight_g` gained a fourth decimal place (a troy
+  ounce is 31.1035 g) in the same migration.
 - **P8: Authentication** (L, in two parts, with more accounts optional;
   decisions of 20 September 2026 marked ◆).
   - **A1: One admin.** ◆ Single user to start: just the admin, onboarded
@@ -973,8 +989,9 @@ v0.26.0.
   showcase widgets, once P9 exists), which are candidates rather than a
   commitment; bullion widgets arrive with P7.
 
-**The order from here** (P10 the customisable dashboard shipped in
-v0.27.0): P7 bullion stack figures, P8 authentication, P9 the share view.
+**The order from here** (P10 the customisable dashboard shipped in v0.27.0,
+P7 the bullion stack figures in v0.28.0): P8 authentication, then P9 the
+share view.
 
 Optional, after the above and only if still wanted:
 
@@ -1021,7 +1038,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0019`), never create-on-startup.
+  revision (`0001`–`0020`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty, the same reasoning that front-loaded Phase 2's fields.

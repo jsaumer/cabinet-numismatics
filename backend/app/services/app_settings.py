@@ -42,7 +42,10 @@ DEFAULTS: dict = {
     # Uptime Kuma push URL, pinged hourly.
     "heartbeat_url": "",
     "metrics_enabled": False,
+    # Spot-price thresholds: [{metal, direction, price, currency}], at most 12.
+    "spot_alerts": [],
     # Written by the services, not through PUT /api/settings.
+    "spot_alert_state": None,  # {threshold key: met bool}
     "backup_last_run": None,
     "refresh_last_run": None,  # {source: {at, updated, skipped, failed, ...}}
     "alert_state": None,  # {condition: {failing, since, message}}

@@ -122,7 +122,7 @@ class Item(Base):
     variety: Mapped[str | None] = mapped_column(String(200))  # die variety, overdate…
     strike: Mapped[str] = mapped_column(StrikeType, default="business")
     composition: Mapped[str | None] = mapped_column(String(100))
-    weight_g: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    weight_g: Mapped[Decimal | None] = mapped_column(Numeric(9, 4))  # 31.1035 g is a troy ounce
     fineness: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))  # e.g. 0.9000
     diameter_mm: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     thickness_mm: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
@@ -173,6 +173,11 @@ class Item(Base):
     sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # gross, before fees
     sold_fees: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))  # commission, listing fees
     sold_to: Mapped[str | None] = mapped_column(String(200))  # venue or buyer
+    # The metal's spot price per troy ounce on the day it was bought, in
+    # `currency`. `spot_at_purchase_source` is server-set: "manual" for a
+    # figure typed in, "auto" for one services/stack.py looked up.
+    spot_at_purchase: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
+    spot_at_purchase_source: Mapped[str | None] = mapped_column(String(10))
     # Wish list: what to pay at most (in `currency`), and 1 high / 2 medium / 3 low.
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     priority: Mapped[int | None] = mapped_column(SmallInteger)
@@ -285,6 +290,35 @@ class Item(Base):
         if self.sold_price is None:
             return None
         return Decimal(self.sold_price) - Decimal(self.sold_fees or 0)
+
+    @property
+    def fine_oz(self) -> Decimal | None:
+        """Fine troy ounces in the row: weight × fineness × quantity. None
+        unless the composition names a precious metal and both are known,
+        which is also what puts a piece in the bullion stack."""
+        # Imported here: the pricing service imports this module.
+        from app.services.pricing import TROY_OUNCE_G, detect_metal, effective_fineness
+
+        if detect_metal(self.composition) is None or self.weight_g is None:
+            return None
+        fineness = effective_fineness(self)
+        if fineness is None:
+            return None
+        return Decimal(self.weight_g) * fineness * self.quantity / TROY_OUNCE_G
+
+    @property
+    def premium_paid_pct(self) -> Decimal | None:
+        """How far the cost basis ran over the metal's value on the purchase
+        day, as a percentage. Computed in the item's own currency, so nothing
+        is converted. None without a purchase-day spot price or a cost."""
+        oz = self.fine_oz
+        cost = self.cost_basis
+        if oz is None or cost is None or self.spot_at_purchase is None:
+            return None
+        at_spot = oz * Decimal(self.spot_at_purchase)
+        if at_spot <= 0:
+            return None
+        return (cost - at_spot) / at_spot * 100
 
 
 class Document(Base):

@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.27.1, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.28.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -100,8 +100,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.27.1: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0019`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.28.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0020`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. What each release added, and the rules it left behind, is in
@@ -137,6 +137,10 @@ rules that bite most often:
   `WIDGET_OPTIONS`/`DEFAULT_SIZES` in `backend/app/services/dashboard.py`
   have to agree, or the options form and the server's validation disagree
   too.
+- The bullion stack (`services/stack.py`) never calls out from the item save
+  path: `spot_at_purchase` only ever arrives typed in or from the backfill.
+  Purchase-day spot comes only from the CC0 fawazahmed0 currency-api, never
+  LBMA (its terms need a licence for valuation use).
 - In-app restore: only `maintenance.EXEMPT` (health, restore status) answers
   during one, and neither may touch the database; new loops use
   `maintenance.scheduled_task()`; `.restore-*` folders stay excluded from
@@ -182,7 +186,16 @@ P10, a customisable dashboard, shipped in v0.27.0 (no migration):
 page, reading is lenient and writing is strict, and the hand-written drag
 listens on `window` rather than the handle; see "A customisable dashboard"
 in the implementation notes.
-**Next, in order:** P7 bullion stack figures, P8 authentication (decided: one admin first,
+P7, bullion stack figures, shipped in v0.28.0 (migration `0020`):
+`services/stack.py` and `routers/stack.py`, `/api/stack` and
+`/api/stack/backfill`, `/api/reference/historic-spot`, `spot_at_purchase`
+and server-set `spot_at_purchase_source` on the item, `spot_alerts` /
+`spot_alert_state` in settings, and the `stack` dashboard widget;
+purchase-day spot comes only from the CC0 fawazahmed0 currency-api (never
+LBMA, whose terms need a licence for valuation), cached ten years and
+refusing today; a typed value is never overwritten by the hourly backfill;
+see "Bullion stack figures" in the implementation notes.
+**Next, in order:** P8 authentication (decided: one admin first,
 onboarded with a setup code from the backend log, always on, scoped API
 tokens in the first cut, deny by default; then SSO for that admin; more
 accounts and roles are optional; the design and permission table are in

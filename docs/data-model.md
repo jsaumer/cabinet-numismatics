@@ -5,7 +5,7 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0019`. `0001` is an empty baseline;
+**Migration status:** revisions `0001`–`0020`. `0001` is an empty baseline;
 `0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
 Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
 photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
@@ -21,11 +21,13 @@ later grew `value_strategy`/`preferred_source` for the blended-value display,
 for in-app backups, `trash_retention_days` for the trash, and
 `alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
 plus the service-written `refresh_last_run`/`alert_state` for alerts and
-metrics, and `dashboard_layout` (v0.27.0, the customisable dashboard) for
+metrics, `dashboard_layout` (v0.27.0, the customisable dashboard) for
 the saved widget layout, written only by `/api/dashboard/layout`, never by
-`PUT /api/settings`, with no migration needed, since it's a generic
-key/value table), read through `app/services/app_settings.py` with defaults
-and env fallbacks.
+`PUT /api/settings`, and `spot_alerts` (v0.28.0, bullion stack figures: a
+list of spot-price thresholds, at most 12) with the service-written
+`spot_alert_state` (per threshold, whether it is currently met), neither of
+which needed a migration, since it's a generic key/value table), read
+through `app/services/app_settings.py` with defaults and env fallbacks.
 The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
 `heartbeat_url`) are stored encrypted; see [security.md](security.md).
 Revision `0009` (M2) added `source_cache`; `0010` (M4) added
@@ -54,6 +56,10 @@ logic frozen inside the revision. `0019` (v0.27.1, undated pieces) makes
 a data step turns any existing `year = 0` (what got typed when the field was
 required) into `year = NULL, year_nd = true`. Unlike `0018`, this revision
 has no service logic to freeze: the data step is a plain `year = 0` update.
+`0020` (v0.28.0, bullion stack figures) adds `items.spot_at_purchase` and
+`items.spot_at_purchase_source`, and widens `items.weight_g` from
+`Numeric(8, 3)` to `Numeric(9, 4)`: a troy ounce is 31.1035 g, which three
+decimal places could not hold as a round one-ounce weight.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -111,7 +117,7 @@ not as native postgres enum types.
 | `variety`          | text null     | die variety, overdate…                  |
 | `strike`           | enum          | `business` \| `proof` \| `specimen`     |
 | `composition`      | text null     | e.g. "90% silver"                       |
-| `weight_g`         | numeric null  | grams; enables melt value (Phase 3)     |
+| `weight_g`         | numeric(9,4) null | grams; enables melt value (Phase 3); four decimal places since v0.28.0 (a troy ounce is 31.1035 g) |
 | `fineness`         | numeric null  | 0–1, e.g. 0.9000                        |
 | `diameter_mm`      | numeric null  | coins                                   |
 | `thickness_mm`     | numeric null  | coins                                   |
@@ -154,6 +160,8 @@ not as native postgres enum types.
 | `sold_price`       | numeric null  | realized price (gross), in `currency`   |
 | `sold_fees`        | numeric null  | commission, listing fees                |
 | `sold_to`          | text null     | buyer or venue                          |
+| `spot_at_purchase` | numeric(14,4) null | the metal's spot price per troy ounce on the day it was bought, in `currency` |
+| `spot_at_purchase_source` | text null | server-set: `manual` (typed in) or `auto` (the backfill looked it up) |
 | `target_price`     | numeric null  | wish list: the most to pay, in `currency`; kept when the status changes |
 | `priority`         | smallint null | wish list: `1` high, `2` medium, `3` low |
 | `set_id`           | fk → sets null | the set or lot it belongs to; SET NULL when the set is deleted |

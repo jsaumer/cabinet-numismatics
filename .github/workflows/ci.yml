@@ -128,6 +128,12 @@ jobs:
           assert layout["is_default"] is True, layout
           assert len(layout["widgets"]) == 11, layout
           '
+          curl -fsS http://localhost/api/stack | python3 -c '
+          import json, sys
+          report = json.load(sys.stdin)
+          assert isinstance(report["metals"], list), report
+          assert report["history_start"] == "2024-03-02", report
+          '
           # metrics: off by default, then served on real Postgres
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/metrics)" = 404
           curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \

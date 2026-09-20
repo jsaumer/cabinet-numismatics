@@ -633,6 +633,76 @@ a later change to the ND rule needs no matching migration.
   changed that key to include the reference or comment that tells them
   apart.
 
+## Bullion stack figures (v0.28.0)
+
+Roadmap Phase 7, P7. `services/stack.py`, `routers/stack.py`, migration
+`0020`. What a later change here has to respect:
+
+- **What the stack is has one definition, agreed on three sides.**
+  `Item.fine_oz` (weight × fineness × quantity ÷ `TROY_OUNCE_G`, null unless
+  `detect_metal(composition)` and `effective_fineness` both give an answer),
+  `stack.in_scope` (the tag/set filter on top of it), and melt value
+  (`pricing.py`) must never disagree about which pieces are bullion. A new
+  path that changes what counts as a precious metal or a usable fineness has
+  to update `detect_metal`/`effective_fineness` once, not separately in the
+  stack service.
+- **No network call on the item save path.** `spot_at_purchase` only ever
+  arrives from a client (`manual`) or from `stack.backfill`/the hourly loop
+  (`auto`); creating or updating an item never itself fetches a spot price.
+  Filling one in is `POST /api/stack/backfill` (button) or the hourly tick,
+  at most 20/50 items at a time.
+- **Purchase-day spot comes only from the CC0 fawazahmed0 currency-api,
+  never LBMA.** LBMA's public JSON price series goes back to 1968, further
+  than the currency-api's 2024-03-02 start, but LBMA and ICE Benchmark
+  Administration require a licence to use benchmark data for valuation, so
+  Cabinet does not fetch it and must not gain an LBMA adapter without one.
+  gold-api.com's history needs a key. A purchase before 2024-03-02 takes a
+  hand-typed figure; there is no way around that without a licensed source.
+- **The historic-spot cache never expires early, and never covers today.**
+  `stack.historic_spot` caches under `spot_history` for ten years, because a
+  past day's price never changes; it refuses today or a future date (422:
+  use the current spot price instead) so nothing is ever cached that could
+  still change.
+- **A typed `spot_at_purchase` is never overwritten.** `stack.needs_spot`
+  is the one eligibility check the backfill, the hourly loop, and
+  `GET /api/stack`'s `missing_spot` count all use; a piece with any value
+  already in `spot_at_purchase` is never eligible, auto or manual.
+- **The per-item premium stays in the item's own currency; the per-metal
+  premium aggregates in the report currency.** `Item.premium_paid_pct` never
+  converts (cost and purchase-day spot are always in the same currency
+  already). The metal bucket's `premium_paid_pct` sums `cost_basis` and
+  `fine_oz * spot_at_purchase` in the report currency first, over only the
+  pieces where both convert, then takes one ratio; an unconvertible item's
+  premium is left out of the metal figure (though its ounces still count
+  elsewhere).
+- **Spot alerts are events, not conditions.** `stack.check_spot_alerts` calls
+  `alerts.event`, the same one-shot delivery `wishlist_target` uses, not
+  `alerts.fail`/`recover`: a threshold has no "recovery" message, isn't
+  listed among the checks in Settings, and doesn't touch
+  `cabinet_alert_failing`. State lives in the `spot_alert_state` setting
+  (per threshold key, met or not), written only by the service; saving a new
+  `spot_alerts` list prunes state for any threshold no longer in it, so
+  re-adding one alerts again instead of staying quiet.
+- **Both new hourly hooks sit inside the existing `maintenance.scheduled_task()`
+  wrapper**, like every other loop, and each is wrapped in its own
+  `try`/`except` that rolls back and logs: a missing purchase-day price or a
+  failed spot fetch is not worth an alert of its own.
+- **The widget is registered on both sides.** `stack` in the frontend
+  `REGISTRY` (`frontend/src/dashboard/registry.tsx`) and in the backend
+  `WIDGET_OPTIONS`/`DEFAULT_SIZES` (`services/dashboard.py`) have to agree on
+  the same options (`metal`, `tag`), or the options form and the server's
+  validation disagree too; it is deliberately left out of the default
+  layout.
+- `pricing._money` was renamed `pricing.money` (no longer private: the stack
+  service uses it too for alert messages).
+- `GET /api/stack` commits at the end of the request, so a spot price or
+  exchange rate it had to fetch is cached for the next call, the same as
+  other read endpoints that go through `pricing.cached_fetch`.
+- `items.weight_g` widened from `Numeric(8, 3)` to `Numeric(9, 4)` in the
+  same migration as the two new columns: a troy ounce is 31.1035 g, and
+  three decimal places could not hold a one-ounce round weight (found by the
+  new Playwright test). The item form's Weight field takes four decimals now.
+
 ## Releases
 
 

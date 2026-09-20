@@ -290,12 +290,14 @@ Rules that go with the table:
 - **Custom fields** are bounded (20 keys, 50-char names, 500-char string
   values) so arbitrary payloads can't be stashed in the JSON column.
 - **Outbound requests** go to the two keyless market-data APIs
-  (`api.gold-api.com`, `api.frankfurter.dev`), to Numista and PCGS once you
-  give them a key, to the alert webhook and heartbeat URLs you save, and to a
-  photo URL you ask for, all with timeouts, and the price and rate lookups
-  with cached fallbacks. The collection is never sent outward: a price source
-  receives only the catalogue number, PCGS number or cert number, and grade
-  being looked up.
+  (`api.gold-api.com`, `api.frankfurter.dev`), the keyless purchase-day spot
+  lookup for the bullion stack (`cdn.jsdelivr.net`, falling back to
+  `*.currency-api.pages.dev`), to Numista and PCGS once you give them a key,
+  to the alert webhook and heartbeat URLs you save, and to a photo URL you
+  ask for, all with timeouts, and the price and rate lookups with cached
+  fallbacks. The collection is never sent outward: a price source receives
+  only the catalogue number, PCGS number or cert number, and grade being
+  looked up; the purchase-day lookup sends only a date and a metal code.
 
 ## Containers and the browser
 
