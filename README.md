@@ -1,3 +1,5 @@
+<img src="frontend/public/logo.svg" alt="" width="96" align="right">
+
 # Cabinet
 
 **Numismatics: Coin & Paper Money Collection Manager**
