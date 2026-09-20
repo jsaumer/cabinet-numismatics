@@ -949,8 +949,8 @@ button.chip {
   font-size: 0.82rem;
 }
 .hbar-label {
-  flex: 0 0 8rem;
-  text-align: right;
+  flex: 0 0 var(--hbar-label, 8rem);
+  text-align: left;
   color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;

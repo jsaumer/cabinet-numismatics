@@ -20,13 +20,16 @@ export function LookupLinks({ item }: { item: Item }) {
     LH_Sold: "1",
     LH_Complete: "1",
   })}`;
-  const refFor = (catalog: string) =>
-    item.catalog_refs.find((r) => r.catalog.trim().toLowerCase() === catalog);
+  // A catalogue goes by several names: the Numista fill writes Pick as "P".
+  const refFor = (...catalogs: string[]) =>
+    item.catalog_refs.find((r) => catalogs.includes(r.catalog.trim().toLowerCase()));
+  // "P#109" and "Fr. 1500" both mean the bare number.
+  const bare = (code: string) => code.trim().replace(/^[a-z.]+\s*#?\s*/i, "") || code.trim();
   const search = (...words: (string | null)[]) =>
     `https://www.google.com/search?${new URLSearchParams({ q: words.filter(Boolean).join(" ") })}`;
   const pcgsNumber = refFor("pcgs");
-  const friedberg = item.type === "note" ? refFor("friedberg") : undefined;
-  const pick = item.type === "note" ? refFor("pick") : undefined;
+  const friedberg = item.type === "note" ? refFor("friedberg", "fr", "fr.", "f") : undefined;
+  const pick = item.type === "note" ? refFor("pick", "p") : undefined;
   const links: [string, string, string][] = [[ebay, "eBay sold listings", "What the same piece actually sold for"]];
   if (item.type === "coin") {
     links.push(["https://www.pcgs.com/photograde", "PCGS Photograde", "Reference photos for each grade"]);
@@ -40,15 +43,15 @@ export function LookupLinks({ item }: { item: Item }) {
   }
   if (friedberg) {
     links.push([
-      search("Friedberg", friedberg.ref_code.trim(), item.denomination),
-      `Friedberg ${friedberg.ref_code.trim()}`,
+      search("Friedberg", bare(friedberg.ref_code), item.denomination),
+      `Friedberg ${bare(friedberg.ref_code)}`,
       "Search the web for this Friedberg number",
     ]);
   }
   if (pick) {
     links.push([
-      search("Pick", pick.ref_code.trim(), item.country),
-      `Pick ${pick.ref_code.trim()}`,
+      search("Pick", bare(pick.ref_code), item.country, "banknote"),
+      `Pick ${bare(pick.ref_code)}`,
       "Search the web for this Pick number",
     ]);
   }
