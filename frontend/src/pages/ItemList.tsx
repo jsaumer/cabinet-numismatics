@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, CollectionStats, ItemPage, money, photoUrl } from "../api";
+import { api, CollectionStats, ItemPage, money, photoUrl, PRIORITY_LABELS } from "../api";
 import { Menu } from "../components/controls";
+import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 
 const PAGE_SIZE = 50;
 
@@ -16,9 +17,23 @@ const SORTS = [
   { value: "-acquisition_price", label: "Paid ↓" },
 ];
 
+// Offered when the list shows the wishlist.
+const WISHLIST_SORTS = [
+  { value: "priority", label: "Priority" },
+  { value: "target_price", label: "Target price ↑" },
+  { value: "-target_price", label: "Target price ↓" },
+];
+
+// Filters behind "More…"; any of them in the URL opens it.
+const ADVANCED_KEYS = [
+  "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
+  "fancy", "serial_trait", "target_reached",
+];
+
 const FILTER_KEYS = [
   "type", "status", "strike", "country", "year", "q", "tag", "set_id",
   "year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max",
+  "fancy", "serial_trait", "target_reached",
 ] as const;
 
 export default function ItemList() {
@@ -26,11 +41,8 @@ export default function ItemList() {
   const [params, setParams] = useSearchParams();
   const [page, setPage] = useState<ItemPage | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(
-    ["year_min", "year_max", "grade_min", "grade_max", "value_min", "value_max"].some((k) =>
-      params.has(k),
-    ),
-  );
+  const [showAdvanced, setShowAdvanced] = useState(ADVANCED_KEYS.some((k) => params.has(k)));
+  const traitReference = useSerialTraits();
   const [stats, setStats] = useState<CollectionStats | null>(null);
   const [tagNames, setTagNames] = useState<string[]>([]);
 
@@ -44,6 +56,7 @@ export default function ItemList() {
   }, []);
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkStorage, setBulkStorage] = useState("");
+  const [bulkPriority, setBulkPriority] = useState("");
   const [bulkAddTag, setBulkAddTag] = useState("");
   const [bulkRemoveTag, setBulkRemoveTag] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -61,8 +74,9 @@ export default function ItemList() {
     setBulkBusy(true);
     setError(null);
     try {
-      const set: Record<string, string> = {};
+      const set: Record<string, string | number> = {};
       if (bulkStatus) set.status = bulkStatus;
+      if (bulkPriority) set.priority = Number(bulkPriority);
       if (bulkStorage.trim()) set.storage_location = bulkStorage.trim();
       await api.bulkUpdate({
         ids: [...selected],
@@ -73,6 +87,7 @@ export default function ItemList() {
       setSelected(new Set());
       setBulkStatus("");
       setBulkStorage("");
+      setBulkPriority("");
       setBulkAddTag("");
       setBulkRemoveTag("");
       set0(); // refetch
@@ -141,6 +156,26 @@ export default function ItemList() {
 
 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
+  const wishlistView = get("status") === "wishlist";
+  const sorts =
+    wishlistView || WISHLIST_SORTS.some((s) => s.value === sort)
+      ? [...SORTS, ...WISHLIST_SORTS]
+      : SORTS;
+  // One select, two parameters: "any" is fancy=true, a trait is serial_trait=<key>.
+  const fancyChoice = get("serial_trait") || (get("fancy") === "true" ? "any" : "");
+  const setFancy = (choice: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("fancy");
+        next.delete("serial_trait");
+        next.delete("offset");
+        if (choice === "any") next.set("fancy", "true");
+        else if (choice) next.set("serial_trait", choice);
+        return next;
+      },
+      { replace: true },
+    );
 
   const exportQuery = (() => {
     const p = new URLSearchParams();
@@ -267,7 +302,7 @@ export default function ItemList() {
         <label className="field">
           Sort
           <select value={sort} onChange={(e) => set("sort", e.target.value)}>
-            {SORTS.map((s) => (
+            {sorts.map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
@@ -309,6 +344,28 @@ export default function ItemList() {
             <input type="number" min={0} value={get("value_max")}
               onChange={(e) => set("value_max", e.target.value)} />
           </label>
+          <label className="field">
+            Fancy serial
+            <select value={fancyChoice} onChange={(e) => setFancy(e.target.value)}>
+              <option value="">All</option>
+              <option value="any">Any fancy serial</option>
+              {traitReference.map((t) => (
+                <option key={t.key} value={t.key} title={t.description}>{t.label}</option>
+              ))}
+              {/* a trait from the URL, before the labels have loaded */}
+              {get("serial_trait") && !traitReference.some((t) => t.key === get("serial_trait")) && (
+                <option value={get("serial_trait")}>{get("serial_trait")}</option>
+              )}
+            </select>
+          </label>
+          <label className="field">
+            Wishlist target
+            <select value={get("target_reached")}
+              onChange={(e) => set("target_reached", e.target.value)}>
+              <option value="">All</option>
+              <option value="true">Target reached</option>
+            </select>
+          </label>
         </div>
       )}
 
@@ -338,6 +395,15 @@ export default function ItemList() {
             Set storage
             <input value={bulkStorage} placeholder="unchanged"
               onChange={(e) => setBulkStorage(e.target.value)} />
+          </label>
+          <label className="field">
+            Set priority
+            <select value={bulkPriority} onChange={(e) => setBulkPriority(e.target.value)}>
+              <option value="">unchanged</option>
+              <option value="1">High</option>
+              <option value="2">Medium</option>
+              <option value="3">Low</option>
+            </select>
           </label>
           <label className="field">
             Add tag
@@ -390,8 +456,17 @@ export default function ItemList() {
               <th>Grade</th>
               <th className="hide-sm">Series</th>
               <th className="num hide-sm">Qty</th>
-              <th className="num hide-sm">Paid</th>
-              <th className="hide-sm">Source</th>
+              {wishlistView ? (
+                <>
+                  <th className="hide-sm">Priority</th>
+                  <th className="num hide-sm">Target</th>
+                </>
+              ) : (
+                <>
+                  <th className="num hide-sm">Paid</th>
+                  <th className="hide-sm">Source</th>
+                </>
+              )}
               <th className="num">Value</th>
             </tr>
           </thead>
@@ -418,14 +493,35 @@ export default function ItemList() {
                 <td>{item.country}</td>
                 <td>
                   {item.denomination}
-                  {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}
+                  {item.mint_mark && <span className="muted"> · {item.mint_mark}</span>}{" "}
+                  <TraitBadges traits={item.serial_traits} reference={traitReference} max={2} />
                 </td>
                 <td>{item.year}</td>
                 <td>{item.grade_label ?? <span className="muted">–</span>}</td>
                 <td className="muted hide-sm">{item.series ?? ""}</td>
                 <td className="num hide-sm">{item.quantity}</td>
-                <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>
-                <td className="muted hide-sm">{item.latest_value_source ?? "–"}</td>
+                {wishlistView ? (
+                  <>
+                    <td className="hide-sm">
+                      {item.priority != null ? PRIORITY_LABELS[item.priority] : (
+                        <span className="muted">–</span>
+                      )}
+                    </td>
+                    <td className="num hide-sm">
+                      {item.target_reached && (
+                        <span className="badge reached" title="The estimate is at or under the target">
+                          reached
+                        </span>
+                      )}{" "}
+                      {money(item.target_price, item.currency)}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="num hide-sm">{money(item.acquisition_price, item.currency)}</td>
+                    <td className="muted hide-sm">{item.latest_value_source ?? "–"}</td>
+                  </>
+                )}
                 <td className="num">{money(item.latest_value, item.latest_value_currency)}</td>
               </tr>
             ))}

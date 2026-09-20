@@ -5,6 +5,28 @@ export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
 export type Strike = "business" | "proof" | "specimen";
 export type CacSticker = "green" | "gold";
+export type Priority = 1 | 2 | 3; // high, medium, low
+
+export const PRIORITY_LABELS: Record<Priority, string> = { 1: "High", 2: "Medium", 3: "Low" };
+
+/** A fancy-serial trait, from /api/reference/serial-traits. */
+export interface SerialTrait {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface CalendarReference {
+  calendars: { key: string; label: string }[];
+  eras: { key: string; label: string; offset: number }[];
+}
+
+export interface ConvertedDate {
+  calendar: string;
+  year: number;
+  era: string | null;
+  gregorian_year: number;
+}
 
 export interface Grade {
   id: number;
@@ -62,6 +84,22 @@ export interface Item {
   signatures: string | null;
   issuer: string | null;
   replacement_note: boolean;
+  charter_number: string | null;
+  bank_city: string | null;
+  bank_state: string | null;
+  plate_position: string | null;
+  serial_traits: string[]; // set by the server from the serial number
+  pcgs_population: number | null;
+  pcgs_pop_higher: number | null;
+  population_as_of: string | null; // set by the server
+  target_price: number | null; // in the item's own currency
+  priority: Priority | null;
+  target_gap: number | null; // latest value less the target; null across currencies
+  target_reached: boolean;
+  die_axis: number | null; // degrees; 0 = medal alignment, 180 = coin alignment
+  struck_calendar: string | null;
+  struck_year: number | null;
+  struck_era: string | null;
   acquisition_fees: number | null;
   cost_basis: number | null;
   sold_fees: number | null;
@@ -225,13 +263,25 @@ export interface ItemPayload {
   signatures: string | null;
   issuer: string | null;
   replacement_note: boolean;
+  charter_number: string | null;
+  bank_city: string | null;
+  bank_state: string | null;
+  plate_position: string | null;
+  pcgs_population: number | null;
+  pcgs_pop_higher: number | null;
+  target_price: number | null;
+  priority: Priority | null;
+  die_axis: number | null;
+  struck_calendar: string | null;
+  struck_year: number | null;
+  struck_era: string | null;
   acquisition_fees: number | null;
   sold_fees: number | null;
   sold_to: string | null;
   status: ItemStatus;
   country: string;
   denomination: string;
-  year: number;
+  year: number | null; // null only with a date as struck: the server converts it
   mint_mark: string | null;
   series: string | null;
   variety: string | null;

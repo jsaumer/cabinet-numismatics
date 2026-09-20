@@ -62,7 +62,11 @@ src/
                         sourceKey, latestBySource); the sales log
     documents.tsx, duplicates.tsx, lookup.tsx
                         attached documents; the duplicate warning; outbound
-                        lookup links (eBay sold, Photograde, CoinFacts)
+                        lookup links (eBay sold, Photograde, CoinFacts, and
+                        a web search for a note's Friedberg or Pick number)
+    serial-traits.tsx   fancy-serial badges (TraitBadges) and
+                        useSerialTraits, which fetches the trait labels
+                        once per session
     alerts.tsx, setup.tsx
                         Settings → Alerts & metrics; the dashboard's setup
                         checklist
@@ -111,9 +115,11 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 
 `e2e/smoke.spec.ts` drives the real pages in Chromium: the dashboard, adding
 an item, recording a value, the duplicate warning, a generated checklist
-filling itself, search, trash and restore, the security headers, and every
-Settings section. The tests run against a running stack (`docker compose up`),
-not the dev server, and they create and delete their own item.
+filling itself, search, trash and restore, a note with a radar serial
+number getting its badge, a wishlist coin showing its target price, the
+security headers, and every Settings section. The tests run against a running
+stack (`docker compose up`), not the dev server, and they create and delete
+their own items.
 
 ```bash
 npm run e2e                            # http://localhost, through the proxy

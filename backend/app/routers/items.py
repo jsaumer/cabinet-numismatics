@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
@@ -29,7 +30,16 @@ from app.schemas import (
     RunResult,
     SimilarItem,
 )
-from app.services import app_settings, checklists, duplicates, numista, pricing, trash
+from app.services import (
+    app_settings,
+    calendars,
+    checklists,
+    duplicates,
+    numista,
+    pricing,
+    serials,
+    trash,
+)
 from app.services.currency import Converter
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -41,7 +51,11 @@ SORTABLE = {
     "denomination": Item.denomination,
     "acquisition_date": Item.acquisition_date,
     "acquisition_price": Item.acquisition_price,
+    "priority": Item.priority,
+    "target_price": Item.target_price,
 }
+# Mostly empty columns: rows without a value sort last in either direction.
+NULLS_LAST = {"priority", "target_price"}
 
 ITEM_LOAD = (
     selectinload(Item.photos),
@@ -71,6 +85,10 @@ CSV_COLUMNS = [
     "edge",
     "shape",
     "mintage",
+    "die_axis",
+    "struck_calendar",
+    "struck_year",
+    "struck_era",
     "grade_scale",
     "grade",
     "grade_plus",
@@ -80,11 +98,17 @@ CSV_COLUMNS = [
     "cac_sticker",
     "cert_service",
     "cert_number",
+    "pcgs_population",
+    "pcgs_pop_higher",
     "serial_number",
     "prefix_block",
     "signatures",
     "issuer",
     "replacement_note",
+    "charter_number",
+    "bank_city",
+    "bank_state",
+    "plate_position",
     "quantity",
     "acquisition_date",
     "acquisition_price",
@@ -96,6 +120,8 @@ CSV_COLUMNS = [
     "sold_price",
     "sold_fees",
     "sold_to",
+    "target_price",
+    "priority",
     "notes",
     "tags",
     "catalog_refs",
@@ -185,9 +211,9 @@ def record_event(db: Session, item_id: uuid.UUID, action: str, changes: dict | N
     db.add(ItemEvent(item_id=item_id, action=action, changes=changes))
 
 
-def _latest_value_subquery():
+def _latest_value_subquery(column=PriceEstimate.estimated_value):
     return (
-        select(PriceEstimate.estimated_value)
+        select(column)
         .where(PriceEstimate.item_id == Item.id)
         .order_by(PriceEstimate.fetched_at.desc(), PriceEstimate.id)
         .limit(1)
@@ -213,6 +239,9 @@ def _filtered(
     value_min: float | None,
     value_max: float | None,
     q: str | None,
+    fancy: bool | None = None,
+    serial_trait: str | None = None,
+    target_reached: bool | None = None,
 ):
     if type:
         stmt = stmt.where(Item.type == type)
@@ -253,9 +282,22 @@ def _filtered(
                 Item.serial_number.ilike(like),
                 Item.prefix_block.ilike(like),
                 Item.issuer.ilike(like),
+                Item.charter_number.ilike(like),
+                Item.bank_city.ilike(like),
                 Item.catalog_refs.any(CatalogRef.ref_code.ilike(like)),
                 Item.tags.any(Tag.name.ilike(like)),
             )
+        )
+    if fancy:
+        stmt = stmt.where(Item.serial_traits.is_not(None))
+    if serial_trait:
+        stmt = stmt.where(Item.serial_traits.like(f"%,{serial_trait},%"))
+    if target_reached:
+        # As Item.target_gap: the newest estimate, in the item's own currency.
+        stmt = stmt.where(
+            Item.target_price.is_not(None),
+            _latest_value_subquery(PriceEstimate.currency) == Item.currency,
+            _latest_value_subquery() <= Item.target_price,
         )
     return stmt
 
@@ -305,8 +347,17 @@ def filter_query(
     value_min: float | None = Query(default=None, ge=0),
     value_max: float | None = Query(default=None, ge=0),
     q: str | None = None,
+    fancy: bool | None = None,
+    serial_trait: str | None = Query(default=None, max_length=20),
+    target_reached: bool | None = None,
 ) -> dict:
     """The list filters, shared by list and both exports via Depends."""
+    if serial_trait is not None and serial_trait not in serials.TRAITS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown serial trait {serial_trait!r}; expected one of "
+            + ", ".join(serials.TRAITS),
+        )
     return {
         "type": type,
         "status": status,
@@ -322,6 +373,9 @@ def filter_query(
         "value_min": value_min,
         "value_max": value_max,
         "q": q,
+        "fancy": fancy,
+        "serial_trait": serial_trait,
+        "target_reached": target_reached,
     }
 
 
@@ -341,13 +395,18 @@ def list_items(
         order = SORTABLE[field].desc() if descending else SORTABLE[field].asc()
     else:
         raise HTTPException(status_code=422, detail=f"Unknown sort field: {field}")
+    # `IS NULL` sorts false first on SQLite and Postgres alike, so empty rows
+    # come last whichever way the column runs.
+    ordering = (SORTABLE[field].is_(None), order) if field in NULLS_LAST else (order,)
 
     stmt = _filtered(select(Item), **filters)
     if field == "grade":
         stmt = stmt.outerjoin(Grade, Item.grade_id == Grade.id)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     rows = (
-        db.execute(stmt.options(*ITEM_LOAD).order_by(order, Item.id).limit(limit).offset(offset))
+        db.execute(
+            stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id).limit(limit).offset(offset)
+        )
         .scalars()
         .all()
     )
@@ -448,6 +507,10 @@ def _export_row(
         item.edge or "",
         item.shape or "",
         "" if item.mintage is None else item.mintage,
+        "" if item.die_axis is None else item.die_axis,
+        item.struck_calendar or "",
+        item.struck_year or "",
+        item.struck_era or "",
         item.grade.scale if item.grade else "",
         item.grade.code if item.grade else "",
         flag(item.grade_plus),
@@ -457,11 +520,17 @@ def _export_row(
         item.cac_sticker or "",
         item.cert_service or "",
         item.cert_number or "",
+        "" if item.pcgs_population is None else item.pcgs_population,
+        "" if item.pcgs_pop_higher is None else item.pcgs_pop_higher,
         item.serial_number or "",
         item.prefix_block or "",
         item.signatures or "",
         item.issuer or "",
         flag(item.replacement_note),
+        item.charter_number or "",
+        item.bank_city or "",
+        item.bank_state or "",
+        item.plate_position or "",
         item.quantity,
         item.acquisition_date or "",
         item.acquisition_price or "",
@@ -473,6 +542,8 @@ def _export_row(
         item.sold_price or "",
         item.sold_fees or "",
         item.sold_to or "",
+        item.target_price or "",
+        item.priority or "",
         item.notes or "",
         "|".join(t.name for t in item.tags),
         "|".join(f"{r.catalog}:{r.ref_code}" for r in item.catalog_refs),
@@ -598,6 +669,9 @@ async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:
     data = payload.model_dump(exclude={"tags", "catalog_refs", "grade_id"})
     item = Item(**data)
+    item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
+    if item.pcgs_population is not None or item.pcgs_pop_higher is not None:
+        item.population_as_of = datetime.now(timezone.utc)
     item.grade_id = grade_id if grade_id is not None else payload.grade_id
     _check_grade(db, item.grade_id)
     _check_set(db, item.set_id)
@@ -730,15 +804,47 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
         _check_grade(db, fields["grade_id"])
     if "set_id" in fields:
         _check_set(db, fields["set_id"])
+    _apply_struck_date(item, fields)
     for field, value in fields.items():
         old = getattr(item, field)
         if old != value:
             changes[field] = [_jsonable(old), _jsonable(value)]
         setattr(item, field, value)
+    _sync_derived(item, changes)
     if changes:
         record_event(db, item.id, "updated", changes)
     db.commit()
     return get_item_or_404(db, item_id, load_related=True)
+
+
+def _apply_struck_date(item: Item, fields: dict) -> None:
+    """The era rule, checked against the item as it will be; and `year: null`
+    beside a date as struck is answered with the converted year. A year
+    already there is left alone."""
+    merged = {
+        key: fields.get(key, getattr(item, key))
+        for key in ("struck_calendar", "struck_year", "struck_era")
+    }
+    try:
+        calendars.check_era(merged["struck_calendar"], merged["struck_era"])
+        if "year" in fields and fields["year"] is None:
+            if not merged["struck_calendar"] or merged["struck_year"] is None:
+                raise ValueError("year can only be empty beside a date as struck")
+            fields["year"] = calendars.to_gregorian(
+                merged["struck_calendar"], merged["struck_year"], merged["struck_era"]
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+
+def _sync_derived(item: Item, changed) -> None:
+    """The server-set fields, after an edit: the serial's traits, and when the
+    population figures last changed."""
+    if "serial_number" in changed or "replacement_note" in changed:
+        item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
+    if "pcgs_population" in changed or "pcgs_pop_higher" in changed:
+        has_any = item.pcgs_population is not None or item.pcgs_pop_higher is not None
+        item.population_as_of = datetime.now(timezone.utc) if has_any else None
 
 
 @router.get("/{item_id}/history", response_model=list[EventOut])
@@ -783,8 +889,10 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
     if remove_names:
         summary["remove_tags"] = [None, sorted(remove_names)]
     for item in items:
+        touched = {f for f, value in fields.items() if getattr(item, f) != value}
         for field, value in fields.items():
             setattr(item, field, value)
+        _sync_derived(item, touched)
         if add:
             existing = {t.name for t in item.tags}
             item.tags.extend(t for t in add if t.name not in existing)
@@ -809,6 +917,9 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
             not in ("id", "created_at", "updated_at", "import_source", "import_key", "deleted_at")
         }
     )
+    # The copy's population figures are set now, so they are dated now.
+    if copy.population_as_of is not None:
+        copy.population_as_of = datetime.now(timezone.utc)
     copy.tags = list(source.tags)
     copy.catalog_refs = list(source.catalog_refs)
     db.add(copy)

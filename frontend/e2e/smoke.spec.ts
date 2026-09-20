@@ -100,6 +100,62 @@ test("trash it, restore it, then delete it for good", async ({ page }) => {
   await expect(page.locator("p.error")).toBeVisible();
 });
 
+// These two make and remove their own items, under names the tests above don't match.
+// A select inside its label, found by how the label's text starts.
+const selectIn = (page: Page, label: RegExp) =>
+  page.locator("label.field", { hasText: label }).locator("select");
+
+async function deleteForGood(page: Page, url: string, country: string) {
+  await page.goto(url);
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+  await page.goto("/trash");
+  await page.getByRole("row", { name: new RegExp(country) })
+    .getByRole("button", { name: "delete for good" })
+    .click();
+  await expect(page.getByText("Deleted 1 item for good.")).toBeVisible();
+}
+
+test("a note with a radar serial number gets its badge", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `E2E note ${Date.now()}`;
+  await page.goto("/items/new");
+  await selectIn(page, /^Type/).selectOption("note");
+  await page.getByLabel("Country *").fill(country);
+  await page.getByLabel("Denomination *").fill("1 dollar");
+  await page.getByLabel("Year *").fill("1957");
+  await page.getByLabel("Serial number", { exact: true }).fill("12344321");
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+  await expect(page.locator("dl.facts .badge.trait")).toHaveText(/^radar$/i);
+
+  await deleteForGood(page, url, country);
+});
+
+test("a wishlist coin shows its target price", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `E2E wish ${Date.now()}`;
+  await page.goto("/items/new");
+  await page.getByLabel("Country *").fill(country);
+  await page.getByLabel("Denomination *").fill("1 cent");
+  await page.getByLabel("Year *").fill("1909");
+  await selectIn(page, /^Status/).selectOption("wishlist");
+  await page.getByLabel("Target price").fill("1000");
+  await selectIn(page, /^Priority/).selectOption("1");
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+  const target = page
+    .locator("dl.facts > div")
+    .filter({ has: page.locator("dt", { hasText: /^Target$/ }) });
+  await expect(target).toContainText("$1,000.00");
+
+  await deleteForGood(page, url, country);
+});
+
 test("the security headers are set and nothing trips the policy", async ({ page }) => {
   const violations: string[] = [];
   page.on("console", (message) => {

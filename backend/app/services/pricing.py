@@ -81,6 +81,55 @@ def estimate_row(item_id: uuid.UUID, result: EstimateResult) -> PriceEstimate:
     )
 
 
+MONEY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£", "CAD": "CA$", "AUD": "A$", "JPY": "¥"}
+
+
+def _money(amount, currency: str) -> str:
+    symbol = MONEY_SYMBOLS.get(currency)
+    text = f"{Decimal(amount):,.2f}"
+    return f"{symbol}{text}" if symbol else f"{text} {currency}"
+
+
+def add_estimate(db: Session, item: Item, row: PriceEstimate) -> PriceEstimate:
+    """Add a new estimate to the session: the one way in for every path that
+    records a value, manual or automatic, because it is also where a wish-list
+    target is noticed. The alert is sent once, when an estimate in the item's
+    own currency comes in at or under the target and the one before it was
+    over it (or in another currency, or missing). The caller commits."""
+    from sqlalchemy import select
+
+    target = item.target_price
+    value = Decimal(str(row.estimated_value))
+    reached = (
+        item.status == "wishlist"
+        and target is not None
+        and row.currency == item.currency
+        and value <= Decimal(target)
+    )
+    if reached:
+        previous = db.execute(
+            select(PriceEstimate)
+            .where(PriceEstimate.item_id == item.id)
+            .order_by(PriceEstimate.fetched_at.desc(), PriceEstimate.id)
+            .limit(1)
+        ).scalar_one_or_none()
+        reached = not (
+            previous is not None
+            and previous.currency == item.currency
+            and Decimal(previous.estimated_value) <= Decimal(target)
+        )
+    db.add(row)
+    if reached:
+        alerts.event(
+            db,
+            "wishlist_target",
+            "Wish-list target reached",
+            f"{item.label}: estimate {_money(value, row.currency)} is at or under your "
+            f"{_money(target, item.currency)} target",
+        )
+    return row
+
+
 def freshness(fetched_at: datetime, ttl: timedelta) -> dict:
     """When upstream data was fetched, and whether it was already past its
     cache window, which is what gets served when a refresh fails."""
@@ -411,7 +460,7 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
             failed += 1
             error = str(exc)
             continue
-        db.add(estimate_row(item.id, result))
+        add_estimate(db, item, estimate_row(item.id, result))
         updated += 1
     db.commit()
     return _refresh_outcome(updated, skipped, failed, error)
@@ -474,7 +523,7 @@ def refresh_source_estimates(db: Session, source: str, max_age_days: int = 7) ->
             failed += 1
             error = str(exc)
             continue
-        db.add(estimate_row(item.id, result))
+        add_estimate(db, item, estimate_row(item.id, result))
         updated += 1
     db.commit()
     return _refresh_outcome(updated, skipped, failed, error, stopped)

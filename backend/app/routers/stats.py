@@ -13,6 +13,7 @@ from app.schemas import (
     CollectionStats,
     GainEntry,
     Gains,
+    NotesBySignature,
     ValueHistory,
     ValuePoint,
 )
@@ -249,3 +250,42 @@ def value_history(
     # drop leading months before any estimate existed
     first = next((i for i, p in enumerate(points) if p.estimated_items > 0), len(points))
     return ValueHistory(currency=currency, points=points[first:])
+
+
+@router.get("/notes-by-signature", response_model=NotesBySignature)
+def notes_by_signature(db: Session = Depends(get_db)):
+    """Owned notes grouped by series and signature pair: groups by series then
+    signatures (those without come last), notes by serial number."""
+    notes = (
+        db.execute(select(Item).where(Item.type == "note", Item.status == "owned")).scalars().all()
+    )
+    groups: dict[tuple, list[Item]] = defaultdict(list)
+    for note in notes:
+        groups[(note.series or None, note.signatures or None)].append(note)
+
+    def nulls_last(text: str | None) -> tuple:
+        return (text is None, (text or "").lower())
+
+    return {
+        "groups": [
+            {
+                "series": series,
+                "signatures": signatures,
+                "count": len(members),
+                "quantity": sum(n.quantity for n in members),
+                "items": [
+                    {
+                        "id": n.id,
+                        "label": n.label,
+                        "serial_number": n.serial_number,
+                        "grade_label": n.grade_label,
+                    }
+                    for n in sorted(members, key=lambda n: nulls_last(n.serial_number))
+                ],
+            }
+            for (series, signatures), members in sorted(
+                groups.items(), key=lambda kv: (nulls_last(kv[0][0]), nulls_last(kv[0][1]))
+            )
+        ],
+        "total": len(notes),
+    }

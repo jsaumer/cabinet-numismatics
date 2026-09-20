@@ -33,6 +33,7 @@ from app.services.pricing import (
     NotApplicable,
     QuotaExhausted,
     SourceUnavailable,
+    _as_utc,
     cached_fetch,
     freshness,
 )
@@ -172,6 +173,13 @@ def recent_sales(payload: dict) -> list[Decimal]:
     return [lot["price"] for lot in recent_lots(payload)]
 
 
+def _count(value) -> int | None:
+    """A population figure: a whole number, zero included."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
 def prerequisite(db: Session, item: Item) -> str | None:
     """What stops PCGS pricing this item before any request, or None."""
     if not str(app_settings.get_setting(db, "pcgs_api_token")):
@@ -246,6 +254,13 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
     else:
         raise NotApplicable(f"PCGS has no auction sales or price-guide value for {matched}")
 
+    # The same response carries the population report, so the item's figures
+    # are kept current at no extra request, dated when PCGS was asked.
+    population, pop_higher = _count(payload.get("Population")), _count(payload.get("PopHigher"))
+    if population is not None or pop_higher is not None:
+        item.pcgs_population, item.pcgs_pop_higher = population, pop_higher
+        item.population_as_of = _as_utc(fetched_at)
+
     return EstimateResult(
         source=source,
         estimated_value=(per_piece * item.quantity).quantize(Decimal("0.01")),
@@ -260,6 +275,8 @@ def pcgs_estimate(db: Session, item: Item) -> EstimateResult:
             "median": float(per_piece) if lots else None,
             "price_guide_value": float(guide) if guide is not None else None,
             "coinfacts_url": _text(payload.get("CoinFactsLink")),
+            "population": population,
+            "pop_higher": pop_higher,
             "quantity": item.quantity,
             **freshness(fetched_at, CACHE_TTL),
         },
@@ -415,6 +432,11 @@ def cert_fields(cert: str, payload: dict) -> dict:
         "cert_number": cert,
     }
     fields = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in fields.items() if v}
+    population, pop_higher = _count(payload.get("Population")), _count(payload.get("PopHigher"))
+    if population is not None:
+        fields["pcgs_population"] = population
+    if pop_higher is not None:  # zero matters here: none graded higher
+        fields["pcgs_pop_higher"] = pop_higher
     number = _text(payload.get("PCGSNo"))
     return {
         "cert": cert,
@@ -423,12 +445,8 @@ def cert_fields(cert: str, payload: dict) -> dict:
         "fields": fields,
         "grade": parse_grade(_text(payload.get("Grade")), _text(payload.get("Designation"))),
         "catalog_refs": [{"catalog": "pcgs", "ref_code": number}] if number else [],
-        "population": payload.get("Population")
-        if isinstance(payload.get("Population"), int)
-        else None,
-        "pop_higher": payload.get("PopHigher")
-        if isinstance(payload.get("PopHigher"), int)
-        else None,
+        "population": population,
+        "pop_higher": pop_higher,
         "price_guide_value": float(_amount(payload.get("PriceGuideValue")) or 0) or None,
         "coinfacts_url": _text(payload.get("CoinFactsLink")),
     }
