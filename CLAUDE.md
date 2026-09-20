@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.24.9, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.25.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -100,8 +100,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.24.9: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0017`. What each release added, and the rules it left behind, is in
+Released as v0.25.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0018`. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
 
@@ -122,6 +122,9 @@ rules that bite most often:
   error text, or URLs.
 - Document uploads are refused unless `DOCUMENT_DIR` is a mount; a Swarm
   needs the bind. Backups are refused inside `PHOTO_DIR`.
+- Every new `price_estimates` row goes through `pricing.add_estimate` (it
+  notices a wish-list target). `serial_traits` and `population_as_of` are
+  server-set, on every path that changes their inputs (`items._sync_derived`).
 - Tests run on SQLite: one-second timestamps (backdate when order matters),
   `backup.dump_database` monkeypatched, alert delivery run inline. Import
   fixtures are synthetic (`tests/import_samples.py`); OpenNumismat's demo
@@ -141,24 +144,28 @@ and Calibri-first `--font` in `styles.css`, dark by default, the logo in
 fixes found with a real token (100 calls/day, `_country` / `_mint_mark`,
 month-only lot dates, `APR_MAX_AGE`). The API call counter was planned and
 **tabled** by the owner; don't build it unprompted.
-**Next: roadmap Phase 7**, the parity plan the owner chose on 20 September
-2026 from a survey of other tools, in order: P1 population on the item page, P2 in-app restore (no longer blocked on
-auth; safety backup first, typed confirmation, `RESTORE_ENABLED` switch),
-P3 wish-list depth, P4 paper money depth, P5 fancy serial numbers, P6 die
-axis and foreign dates, P7 bullion stack figures, P8 authentication (decided: one admin first, onboarded with a setup code
-from the backend log, always on, scoped API tokens in the first cut, deny by
-default; then SSO for that admin; more accounts and roles are optional; the
-design and permission table are in docs/security.md), P9 a share view (blocked on P8; the whole feature is an admin setting, off
-by default); labels, a phone
-app, and more accounts are optional. Research and propose each before building, as always.
-v1.0.0 follows P8 and the checklist under "The road to v1.0.0". Before
-that, the
-roadmap's Phase 5.9 was demoted on 19 September 2026 from a release train to
-one next item plus unordered **candidates** and **parked** items: the owner
-is entering 100–500 pieces by hand (runs and singles, mostly held), so don't
-build ahead of that beyond Phase 7: friction they report still comes
-first, and the pipeline statuses, tax lots, submissions, and slab scanning
-stay parked.
+Roadmap Phase 7 is the parity plan the owner chose on 20 September 2026 from
+a survey of other tools. Its P1 and P3 to P6 shipped in v0.25.0 (migration
+`0018`): the PCGS population on the item, wish-list target and priority with
+a one-time webhook event, National Bank Note fields and the notes-by-signature
+report, fancy serial traits (`services/serials.py`), and the die axis and
+date as struck (`services/calendars.py`); see "Parity fields" in the
+implementation notes.
+**Next, in order:** P2 in-app restore (no longer blocked on auth; safety
+backup first, typed confirmation, `RESTORE_ENABLED` switch), P7 bullion
+stack figures, P8 authentication (decided: one admin first, onboarded with a
+setup code from the backend log, always on, scoped API tokens in the first
+cut, deny by default; then SSO for that admin; more accounts and roles are
+optional; the design and permission table are in docs/security.md), P9 a
+share view (blocked on P8; the whole feature is an admin setting, off by
+default); labels, a phone app, and more accounts are optional. Research and
+propose each before building, as always. v1.0.0 follows P8 and the checklist
+under "The road to v1.0.0". Before that, the roadmap's Phase 5.9 was demoted
+on 19 September 2026 from a release train to one next item plus unordered
+**candidates** and **parked** items: the owner is entering 100–500 pieces by
+hand (runs and singles, mostly held), so don't build ahead of that beyond
+Phase 7: friction they report still comes first, and the pipeline statuses,
+tax lots, submissions, and slab scanning stay parked.
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

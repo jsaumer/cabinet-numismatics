@@ -2,7 +2,9 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.services import calendars
 
 ItemTypeName = Literal["coin", "note"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
@@ -84,6 +86,36 @@ def _validate_designations(value: list[str] | None) -> list[str] | None:
     return cleaned or None
 
 
+def _trimmed(value):
+    """Strip a text field; blank becomes null."""
+    if isinstance(value, str):
+        return value.strip() or None
+    return value
+
+
+def _validate_calendar(value: str | None) -> str | None:
+    if value is not None and value not in calendars.CALENDARS:
+        raise ValueError(
+            f"Unknown calendar {value!r}; expected one of {', '.join(calendars.CALENDARS)}"
+        )
+    return value
+
+
+def _validate_era(value: str | None) -> str | None:
+    if value is not None and value not in calendars.ERAS:
+        raise ValueError(f"Unknown era {value!r}; expected one of {', '.join(calendars.ERAS)}")
+    return value
+
+
+TRIMMED_FIELDS = ("charter_number", "bank_city", "bank_state", "plate_position")
+LOWERED_FIELDS = ("struck_calendar", "struck_era")
+
+
+def _lowered(value):
+    value = _trimmed(value)
+    return value.lower() if isinstance(value, str) else value
+
+
 class ItemBase(BaseModel):
     type: ItemTypeName
     status: ItemStatusName = "owned"
@@ -127,9 +159,26 @@ class ItemBase(BaseModel):
     sold_to: str | None = Field(default=None, max_length=200)
     custom_fields: dict[str, str] | None = None
     notes: str | None = None
+    # v0.25.0: population, wish-list target, paper money depth, die axis, date as struck
+    pcgs_population: int | None = Field(default=None, ge=0, le=2_000_000_000)
+    pcgs_pop_higher: int | None = Field(default=None, ge=0, le=2_000_000_000)
+    target_price: float | None = Field(default=None, gt=0, lt=10**10)  # in `currency`
+    priority: int | None = Field(default=None, ge=1, le=3)  # 1 high, 2 medium, 3 low
+    charter_number: str | None = Field(default=None, max_length=10)
+    bank_city: str | None = Field(default=None, max_length=100)
+    bank_state: str | None = Field(default=None, max_length=50)
+    plate_position: str | None = Field(default=None, max_length=20)
+    die_axis: int | None = Field(default=None, ge=0, le=359)  # 0 medal, 180 coin alignment
+    struck_calendar: str | None = Field(default=None, max_length=20)
+    struck_year: int | None = Field(default=None, ge=1, le=9999)
+    struck_era: str | None = Field(default=None, max_length=20)
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
+    _trim = field_validator(*TRIMMED_FIELDS, mode="before")(_trimmed)
+    _lower = field_validator(*LOWERED_FIELDS, mode="before")(_lowered)
+    _cal = field_validator("struck_calendar")(_validate_calendar)
+    _era = field_validator("struck_era")(_validate_era)
 
 
 class ItemCreate(ItemBase):
@@ -137,6 +186,28 @@ class ItemCreate(ItemBase):
     set_id: int | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefIn] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def _year_from_struck_date(cls, data):
+        """Without a year, a date as struck supplies it; a year that is given
+        stands (the owner may know better). The era rule holds either way."""
+        if not isinstance(data, dict):
+            return data
+        calendar, era = _lowered(data.get("struck_calendar")), _lowered(data.get("struck_era"))
+        if calendar not in calendars.CALENDARS:
+            if calendar is None and era is not None:
+                raise ValueError("struck_era is only for the Japanese calendar")
+            return data  # the field validator names an unknown calendar
+        calendars.check_era(calendar, era)
+        struck_year = data.get("struck_year")
+        if data.get("year") in (None, "") and struck_year not in (None, ""):
+            try:
+                struck = int(struck_year)
+            except (TypeError, ValueError):
+                return data
+            data = {**data, "year": calendars.to_gregorian(calendar, struck, era)}
+        return data
 
 
 class ItemUpdate(BaseModel):
@@ -186,9 +257,26 @@ class ItemUpdate(BaseModel):
     notes: str | None = None
     tags: list[str] | None = None
     catalog_refs: list[CatalogRefIn] | None = None
+    # v0.25.0: population, wish-list target, paper money depth, die axis, date as struck
+    pcgs_population: int | None = Field(default=None, ge=0, le=2_000_000_000)
+    pcgs_pop_higher: int | None = Field(default=None, ge=0, le=2_000_000_000)
+    target_price: float | None = Field(default=None, gt=0, lt=10**10)  # in `currency`
+    priority: int | None = Field(default=None, ge=1, le=3)  # 1 high, 2 medium, 3 low
+    charter_number: str | None = Field(default=None, max_length=10)
+    bank_city: str | None = Field(default=None, max_length=100)
+    bank_state: str | None = Field(default=None, max_length=50)
+    plate_position: str | None = Field(default=None, max_length=20)
+    die_axis: int | None = Field(default=None, ge=0, le=359)  # 0 medal, 180 coin alignment
+    struck_calendar: str | None = Field(default=None, max_length=20)
+    struck_year: int | None = Field(default=None, ge=1, le=9999)
+    struck_era: str | None = Field(default=None, max_length=20)
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
+    _trim = field_validator(*TRIMMED_FIELDS, mode="before")(_trimmed)
+    _lower = field_validator(*LOWERED_FIELDS, mode="before")(_lowered)
+    _cal = field_validator("struck_calendar")(_validate_calendar)
+    _era = field_validator("struck_era")(_validate_era)
 
 
 class PhotoOut(BaseModel):
@@ -461,6 +549,10 @@ class ItemOut(ItemBase):
     grade_label: str | None = None  # e.g. "PR-69 DCAM ★"
     cost_basis: float | None = None  # price paid plus fees
     sale_proceeds: float | None = None  # sold price less fees
+    population_as_of: datetime | None = None  # server-set with the population
+    serial_traits: list[str] = []  # fancy-serial traits, server-set from the serial
+    target_gap: float | None = None  # newest estimate less target_price; same currency only
+    target_reached: bool = False  # target_gap is zero or less
     set: SetOut | None = None
     tags: list[str] = []
     catalog_refs: list[CatalogRefOut] = []
@@ -472,6 +564,14 @@ class ItemOut(ItemBase):
     @classmethod
     def _tag_names(cls, value):
         return [t.name if hasattr(t, "name") else t for t in value]
+
+    @field_validator("serial_traits", mode="before")
+    @classmethod
+    def _trait_list(cls, value):
+        """Stored as `,radar,binary,`."""
+        if value is None or isinstance(value, str):
+            return [key for key in (value or "").split(",") if key]
+        return value
 
 
 class BulkUpdate(BaseModel):
@@ -641,6 +741,55 @@ class PcgsCert(BaseModel):
     pop_higher: int | None = None
     price_guide_value: float | None = None
     coinfacts_url: str | None = None
+
+
+class SerialTraitOut(BaseModel):
+    key: str
+    label: str
+    description: str
+
+
+class CalendarOut(BaseModel):
+    key: str
+    label: str
+
+
+class EraOut(CalendarOut):
+    offset: int  # year 1 of the era is offset + 1
+
+
+class CalendarReference(BaseModel):
+    calendars: list[CalendarOut]
+    eras: list[EraOut]
+
+
+class ConvertedDate(BaseModel):
+    calendar: str
+    year: int
+    era: str | None = None
+    gregorian_year: int
+
+
+class SignatureNote(BaseModel):
+    id: uuid.UUID
+    label: str
+    serial_number: str | None = None
+    grade_label: str | None = None
+
+
+class SignatureGroup(BaseModel):
+    series: str | None
+    signatures: str | None
+    count: int  # items
+    quantity: int  # pieces
+    items: list[SignatureNote]
+
+
+class NotesBySignature(BaseModel):
+    """Owned notes grouped by series and signature pair."""
+
+    groups: list[SignatureGroup]
+    total: int
 
 
 class SimilarItem(BaseModel):

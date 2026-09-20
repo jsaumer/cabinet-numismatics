@@ -42,10 +42,15 @@ table of who will be able to call what.
 `tag`, `set_id`, `grade_min`/`grade_max` (grade rank 1–70),
 `value_min`/`value_max` (the newest estimate, whatever the value strategy),
 `q` (substring match over notes/series/variety/country/denomination/cert and
-serial numbers/prefix/issuer/catalog refs/tags), `limit` (default 50, 1–500),
-`offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
-`acquisition_date`, `acquisition_price`, or `grade`; `-` prefix for
-descending; default `-created_at`; anything else is 422). The response is
+serial numbers/prefix/issuer/charter number/bank city/catalog refs/tags),
+`fancy=true` (notes with any fancy-serial trait), `serial_trait` (one trait
+key from `/api/reference/serial-traits`; an unknown one is 422),
+`target_reached=true` (see the wish-list fields below), `limit` (default 50,
+1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
+`acquisition_date`, `acquisition_price`, `priority`, `target_price`, or
+`grade`; `-` prefix for descending; default `-created_at`; anything else is
+422; with `priority` and `target_price`, items without a value come last in
+either direction). The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
 estimated value: `latest_value` + `latest_value_currency`, plus
@@ -53,7 +58,9 @@ estimated value: `latest_value` + `latest_value_currency`, plus
 manual entry's own source text, or `average`). It is resolved by the app-wide
 `value_strategy` setting (see Settings, below), not simply "whichever estimate
 is newest." Both exports take the same filters (not `sort`, `limit`, or
-`offset`) and use the same resolved value.
+`offset`) and use the same resolved value. List rows carry the same fields
+as a single item, so `target_price`, `priority`, `target_gap`,
+`target_reached`, and `serial_traits` are there too.
 
 Item payloads accept `tags` (list of names, get-or-create), `catalog_refs`
 (list of `{catalog, ref_code}`), `grade_id`, `set_id` (an unknown one is 422),
@@ -65,7 +72,9 @@ are reported without aborting the rest; it answers `created`, `skipped`, and
 `errors` (`row`, `error`). `POST /api/items/bulk` takes `ids` (1–500), `set`
 (item fields applied to every item; tags and catalog refs inside it are
 ignored), `add_tags`, and `remove_tags`, and answers `updated`; 404 when any
-id is missing or in the trash.
+id is missing or in the trash. `set` validates like an update, so `priority`
+(1–3, or `null` to clear) can be set in bulk, and a bulk change to
+`replacement_note` or `serial_number` recomputes `serial_traits`.
 
 Grading fields: `strike` (`business` default, `proof`, `specimen`),
 `grade_plus`, `grade_star`, `designations` (list; `PL`, `DMPL`, `CAM`, `DCAM`,
@@ -80,6 +89,54 @@ DCAM ★`), `cost_basis` (price plus fees), and `sale_proceeds` (sold price less
 fees); these are the figures every gain calculation uses. CSV import also
 reads label-style grades: `PR-65`, `PF-65`, or `SP-65` on the Sheldon scale
 set the strike, and a trailing `+` sets `grade_plus`.
+
+Added in v0.25.0, all optional and accepted on create, update, and bulk
+`set`:
+
+- **Population**: `pcgs_population` and `pcgs_pop_higher` (whole numbers, 0
+  or more). The response adds `population_as_of`, set by the server and never
+  accepted from a client: now when either figure changes through create,
+  update, or clone (cleared when both are), and the time the PCGS response
+  was fetched when a PCGS estimate updates them.
+- **Wish list**: `target_price` (above 0, in the item's `currency`) and
+  `priority` (`1` high, `2` medium, `3` low). They are accepted on any
+  status and are kept when a wishlist item becomes owned. The response adds
+  `target_gap`, the item's **newest** estimate less the target (not the
+  `value_strategy` value), and `target_reached` (the gap is zero or less).
+  Nothing is converted: the gap is `null`, and `target_reached` false, unless
+  that estimate's currency equals the item's. `target_reached=true` on the
+  list applies the same rule.
+- **National Bank Notes**: `charter_number` (up to 10 characters),
+  `bank_city` (100), `bank_state` (50), `plate_position` (20); trimmed, and
+  blank becomes `null`.
+- **Fancy serials**: the response's `serial_traits` is a list of trait keys
+  (empty when none), worked out by the server from `serial_number` and
+  `replacement_note` on every path that changes either; it is never accepted
+  from a client. Only the digits are read (leading zeros kept), and digit
+  patterns need at least four. Keys, in the order they are listed: `solid`,
+  `ladder`, `radar`, `super_radar`, `repeater`, `super_repeater`, `binary`,
+  `trinary`, `low`, `high`, `double_quad`, `date`, `star`. A solid is only
+  `solid`; `super_radar` and `super_repeater` replace `radar` and
+  `repeater`; `star` is a `*` or `★` in the serial, or `replacement_note`.
+- **Die axis**: `die_axis`, 0–359 degrees (`0` medal alignment, `180` coin
+  alignment).
+- **Date as struck**: `struck_calendar` (a key from
+  `/api/reference/calendars`), `struck_year` (1–9999), and `struck_era`
+  (`meiji`, `taisho`, `showa`, `heisei`, `reiwa`); calendar and era are
+  lowercased. The Japanese calendar requires an era, and an era with any
+  other calendar, or none, is 422. On create, a missing or `null` `year` is
+  filled from the conversion, and a `year` that is given stands. On update, a
+  `PATCH` without `year` leaves it alone; only an explicit `"year": null`
+  beside a struck calendar and year (in the request or already on the item)
+  is answered with the converted year, and `"year": null` without them is
+  422.
+
+The CSV and Excel exports, and both ways of importing them back, carry
+`die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
+`pcgs_population`, `pcgs_pop_higher`, `charter_number`, `bank_city`,
+`bank_state`, `plate_position`, `target_price`, and `priority`. An export
+from an older version imports as before. `serial_traits` and
+`population_as_of` are not exported: the import recomputes them.
 
 ## Photos
 
@@ -142,9 +199,19 @@ guide, 0.60, when no lot is that recent), or `apr_old` (the median of older
 lots, 0.35, when there is no guide value either). `lots` are the sales
 counted and `older_lots` the ones kept but not counted (each `date`, `price`,
 `auctioneer`, `sale`, `url`; ten at most between them), alongside `median`,
-`price_guide_value`, `coinfacts_url`, `quantity`, the lookup (`cert`, or
-`pcgs_number` + `grade`), and `data_as_of`/`stale`. `sample_size` is the
-number of lots counted, `null` on `guide`.
+`price_guide_value`, `coinfacts_url`, `population`, `pop_higher`, `quantity`,
+the lookup (`cert`, or `pcgs_number` + `grade`), and `data_as_of`/`stale`.
+`sample_size` is the number of lots counted, `null` on `guide`. When the
+response reports a population, the estimate also writes it to the item
+(`pcgs_population`, `pcgs_pop_higher`, and `population_as_of`, the time the
+PCGS response was fetched), at no extra request; without one the item is
+left alone.
+
+Every new estimate, manual or automatic, scheduled refreshes included, is
+checked against a wish-list target: for an item with status `wishlist` and a
+`target_price`, an estimate in the item's own currency at or under the
+target sends one event through the alert webhook, unless the estimate before
+it was already there. See [monitoring.md](monitoring.md).
 
 `POST /api/estimates/refresh-melt` answers `updated`, `skipped`, and `failed`,
 or 422 when melt is switched off. An in-process scheduler re-runs stale melt
@@ -164,6 +231,7 @@ right now.
 | `GET`  | `/api/stats/breakdowns`  | Owned items grouped by country/type/decade/grade/tag + acquisitions by year |
 | `GET`  | `/api/stats/gains`       | Per-item unrealized (owned) and realized (sold) gain/loss |
 | `GET`  | `/api/stats/value-history` | Month-end collection value over time (`?months=`, default 24, 1–120) |
+| `GET`  | `/api/stats/notes-by-signature` | Owned notes grouped by series and signature pair |
 
 `/collection` answers `currency`, `counts` (`total`, `owned`, `sold`,
 `wishlist`, and `coins` / `notes`, which count owned items only),
@@ -184,6 +252,12 @@ ECB rates (frankfurter.dev, 24h cache, stale fallback); amounts with no
 obtainable rate are **excluded** and counted, never guessed
 (`converted_other_currency` / `excluded_other_currency` on `/collection`).
 
+`/notes-by-signature` takes no parameters and answers `total` (owned notes)
+and `groups`, one per (`series`, `signatures`) pair, either of which may be
+`null`: `count` (items), `quantity` (pieces), and `items` (`id`, `label`,
+`serial_number`, `grade_label`) ordered by serial number. Groups are ordered
+by series, then signatures, ignoring case, with `null` last.
+
 The dashboard and the printable insurance report (`/report` in the UI;
 export to PDF via the browser's print dialog) are built on these endpoints.
 
@@ -197,9 +271,25 @@ export to PDF via the browser's print dialog) are built on these endpoints.
 | `POST`   | `/api/sets`         | Create a set (409 on duplicate name)           |
 | `PATCH`  | `/api/sets/{id}`    | Rename / edit a set                            |
 | `DELETE` | `/api/sets/{id}`    | Delete a set (items are detached, not deleted) |
+| `GET`    | `/api/reference/serial-traits` | The fancy-serial traits, in order   |
+| `GET`    | `/api/reference/calendars`     | Calendars for a date as struck, and the Japanese eras |
+| `GET`    | `/api/reference/convert-date`  | A struck year as a Gregorian year   |
 
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
-references are managed inline on items rather than via a standalone endpoint.
+references are managed inline on items rather than via a standalone endpoint;
+the catalogue name is free text (the form suggests `krause`, `numista`, and
+`pcgs`, and for notes `pick` and `friedberg`).
+
+`/reference/serial-traits` answers a list of `key`, `label`, and
+`description`. `/reference/calendars` answers `calendars` (`key`, `label`:
+`hijri`, `solar_hijri`, `thai_buddhist`, `hebrew`, `japanese`,
+`vikram_samvat`, `saka`, `minguo`, `chula_sakarat`, `rattanakosin`,
+`ethiopian`) and `eras` (`key`, `label`, `offset`; year 1 of an era is
+`offset` + 1). `/reference/convert-date` takes `calendar`, `year` (1–9999),
+and `era` (required for `japanese`, refused otherwise) and answers
+`calendar`, `year`, `era`, and `gregorian_year`: the Gregorian year the
+struck year mostly falls in (a fixed offset per calendar; the lunar Hijri
+year uses `floor(year × 0.970224 + 621.5774)`). Bad input is 422.
 
 ## Duplicate check
 
@@ -261,10 +351,13 @@ reached). `cert` is up to 20 characters, and anything but its digits is
 dropped. Answers `cert`, `pcgs_number`, `name`,
 `fields` (keyed like the item payload: `type`, `country`, `denomination`,
 `year`, `mint_mark`, `series`, `variety`, `composition`, `weight_g`,
-`diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number`; only what
-PCGS has), `grade` (`rank`, `strike`, `plus`, `designations`, or `null` for a
-Genuine/details holder), `catalog_refs` (the PCGS number), `population`,
-`pop_higher`, `price_guide_value`, and `coinfacts_url`. Fields are made to
+`diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number`,
+`pcgs_population`, `pcgs_pop_higher`; only what PCGS has, and a population of
+zero counts), `grade` (`rank`, `strike`, `plus`, `designations`, or `null`
+for a Genuine/details holder), `catalog_refs` (the PCGS number),
+`population`, `pop_higher`, `price_guide_value`, and `coinfacts_url` (the
+two population figures are inside `fields` so the form's fill carries them,
+and at the top level as before). Fields are made to
 match hand-entered ones: `country` is `United States` however PCGS spells it
 (and when it gives none), `denomination` is spelled out (`25C` becomes
 `25 cents`), and a `P` mint mark is kept only where the coin carries the
@@ -533,7 +626,9 @@ The test answers `200` either way, with `at`, `ok`, and `detail`: `HTTP 404`,
 a connection error, or `No webhook URL is saved` (`No heartbeat URL is saved`
 for the heartbeat); a detail never repeats the URL. Metrics are cached for a
 minute. What alerts fire, the payload of each format, and every metric are in
-[monitoring.md](monitoring.md).
+[monitoring.md](monitoring.md). Besides the failing/recovered checks there is
+one event, sent once and never listed under `alerts`: a wish-list target
+reached (generic JSON `alert` `wishlist_target`, `status` `event`).
 
 ## Checklists (completeness tracking)
 

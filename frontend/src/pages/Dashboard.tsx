@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, Breakdowns, CollectionStats, GainEntry, Gains, money, ValueHistory } from "../api";
+import {
+  api,
+  Breakdowns,
+  CollectionStats,
+  GainEntry,
+  Gains,
+  money,
+  NotesBySignature,
+  ValueHistory,
+} from "../api";
 import { ChartDatum, Columns, HBars, LineChart } from "../components/charts";
 import { SetupChecklist } from "../components/setup";
 
@@ -20,6 +29,7 @@ export default function Dashboard() {
   const [breakdowns, setBreakdowns] = useState<Breakdowns | null>(null);
   const [gains, setGains] = useState<Gains | null>(null);
   const [history, setHistory] = useState<ValueHistory | null>(null);
+  const [notes, setNotes] = useState<NotesBySignature | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
@@ -36,6 +46,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     load();
+    // Its own request: the dashboard shouldn't fail with it.
+    api.notesBySignature().then(setNotes).catch(() => setNotes(null));
   }, []);
 
   async function refreshMelt() {
@@ -213,6 +225,40 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      {notes && notes.groups.length > 0 && (
+        <div className="card">
+          <h2>Notes by series and signature</h2>
+          <table className="estimates">
+            <thead>
+              <tr><th>Series</th><th>Signatures</th><th className="num">Notes</th><th>Items</th></tr>
+            </thead>
+            <tbody>
+              {notes.groups.map((g) => (
+                <tr key={`${g.series ?? ""}|${g.signatures ?? ""}`}>
+                  <td>{g.series ?? <span className="muted">–</span>}</td>
+                  <td>{g.signatures ?? <span className="muted">–</span>}</td>
+                  <td className="num"
+                    title={g.quantity !== g.count ? `${g.quantity} pieces in all` : undefined}>
+                    {g.count}
+                  </td>
+                  <td>
+                    {g.items.map((n, i) => (
+                      <span key={n.id}>
+                        {i > 0 && " · "}
+                        <Link to={`/items/${n.id}`}
+                          title={[n.label, n.grade_label].filter(Boolean).join(", ")}>
+                          {n.serial_number ?? n.label}
+                        </Link>
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {gains.unrealized.length > 0 && (
         <div className="card">

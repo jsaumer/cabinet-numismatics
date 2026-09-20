@@ -31,7 +31,7 @@ Edit `.env`:
 - `PUID` / `PGID` (optional, not in `.env.example`): the user the backend
   runs as and that owns its files, default `1000`:`1000`. Set them when the
   data sits on bind mounts or NFS owned by another account.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.24.9`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.25.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -246,7 +246,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.24.9 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.25.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 What that file does differently from `docker-compose.yaml`, and why:

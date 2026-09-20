@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { api, CatalogRef, Grade, gradeScaleFor, ItemType, SetInfo } from "../api";
+import { api, CalendarReference, CatalogRef, Grade, gradeScaleFor, ItemType, SetInfo } from "../api";
 import {
   CustomField,
   DESIGNATIONS,
@@ -19,6 +19,12 @@ import { NumistaFill } from "./item-form/NumistaFill";
 import { PcgsFill } from "./item-form/PcgsFill";
 import { DuplicateWarning } from "../components/duplicates";
 
+// Catalogues the reference rows suggest; any other name is accepted too.
+const CATALOGS: Record<ItemType, string[]> = {
+  coin: ["krause", "numista", "pcgs"],
+  note: ["pick", "friedberg", "numista", "krause"],
+};
+
 export default function ItemForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -31,6 +37,46 @@ export default function ItemForm() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [calendars, setCalendars] = useState<CalendarReference | null>(null);
+  const [axisOther, setAxisOther] = useState(false);
+  // The date as struck in Gregorian years, or why it couldn't be converted.
+  const [converted, setConverted] = useState<number | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
+  const autoYear = useRef(""); // the Year this form filled in itself, which it may replace
+
+  useEffect(() => {
+    api.calendars().then(setCalendars).catch(() => setCalendars(null));
+  }, []);
+
+  // Convert the date as struck (debounced). Year is filled only when empty,
+  // or when it still holds an earlier conversion from this form.
+  useEffect(() => {
+    setConverted(null);
+    setConvertError(null);
+    const year = Number(form.struck_year);
+    if (form.type !== "coin" || !form.struck_calendar || !(year > 0)) return;
+    if (form.struck_calendar === "japanese" && !form.struck_era) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      api
+        .convertDate(form.struck_calendar, year, form.struck_era || undefined)
+        .then((r) => {
+          if (!live) return;
+          const gregorian = String(r.gregorian_year);
+          setConverted(r.gregorian_year);
+          setForm((f) => {
+            if (f.year !== "" && f.year !== autoYear.current) return f;
+            autoYear.current = gregorian;
+            return { ...f, year: gregorian };
+          });
+        })
+        .catch((e: Error) => live && setConvertError(e.message));
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [form.type, form.struck_calendar, form.struck_year, form.struck_era]);
 
   useEffect(() => {
     api.listGrades(gradeScaleFor(form.type)).then(setGrades).catch(() => setGrades([]));
@@ -111,6 +157,7 @@ export default function ItemForm() {
       }));
       setRefs([]);
       setCustomFields([]);
+      setAxisOther(false);
       setSavedNote(`Added ${saved.country} ${saved.denomination}, ${saved.year}.`);
       window.scrollTo(0, 0);
       setSaving(false);
@@ -158,6 +205,9 @@ export default function ItemForm() {
       : g.code;
 
   const isCoin = form.type === "coin";
+  const hasStruckDate = isCoin && form.struck_calendar !== "" && form.struck_year !== "";
+  const axisChoice =
+    axisOther || !["", "0", "180"].includes(form.die_axis) ? "other" : form.die_axis;
 
   return (
     <>
@@ -210,7 +260,54 @@ export default function ItemForm() {
               ))}
             </datalist>
             {text("denomination", "Denomination *", { required: true, placeholder: 'e.g. "25 cents"' })}
-            {text("year", "Year *", { required: true, type: "number" })}
+            {text("year", hasStruckDate ? "Year" : "Year *", {
+              required: !hasStruckDate, type: "number",
+            })}
+            {isCoin && (
+              <>
+                <label className="field" title="For a date written in another calendar">
+                  Date as struck: calendar
+                  <select
+                    value={form.struck_calendar}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        struck_calendar: e.target.value,
+                        struck_era: e.target.value === "japanese" ? f.struck_era : "",
+                      }))
+                    }
+                  >
+                    <option value="">Gregorian</option>
+                    {calendars?.calendars.map((c) => (
+                      <option key={c.key} value={c.key}>{c.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {form.struck_calendar !== "" && (
+                  <>
+                    {form.struck_calendar === "japanese" && (
+                      <label className="field">
+                        Era
+                        <select value={form.struck_era} required
+                          onChange={(e) => set("struck_era")(e.target.value)}>
+                          <option value="">choose…</option>
+                          {calendars?.eras.map((era) => (
+                            <option key={era.key} value={era.key}>{era.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <label className="field">
+                      Year as struck
+                      <input type="number" min={1} max={9999} step={1} value={form.struck_year}
+                        onChange={(e) => set("struck_year")(e.target.value)} />
+                      {converted != null && <span className="muted">= {converted} CE</span>}
+                      {convertError && <span className="muted">{convertError}</span>}
+                    </label>
+                  </>
+                )}
+              </>
+            )}
             {text("mint_mark", "Mint mark")}
             {text("series", "Series")}
             {text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
@@ -264,6 +361,16 @@ export default function ItemForm() {
             </datalist>
             {text("cert_service", "Cert service", { placeholder: "PCGS, NGC, PMG…" })}
             {text("cert_number", "Cert number")}
+            {isCoin && (
+              <>
+                {text("pcgs_population", "PCGS population", {
+                  type: "number", min: 0, step: 1, title: "Coins PCGS has graded at this grade",
+                })}
+                {text("pcgs_pop_higher", "Graded higher", {
+                  type: "number", min: 0, step: 1, title: "Coins PCGS has graded higher",
+                })}
+              </>
+            )}
             {isCoin && (
               <label className="field">
                 CAC sticker
@@ -322,6 +429,26 @@ export default function ItemForm() {
                 <datalist id="shape-options">
                   {SHAPES.map((v) => <option key={v} value={v} />)}
                 </datalist>
+                <label className="field">
+                  Die axis
+                  <select
+                    value={axisChoice}
+                    onChange={(e) => {
+                      const choice = e.target.value;
+                      setAxisOther(choice === "other");
+                      set("die_axis")(choice === "other" ? "" : choice);
+                    }}
+                  >
+                    <option value=""></option>
+                    <option value="0">Medal alignment ↑↑ (0°)</option>
+                    <option value="180">Coin alignment ↑↓ (180°)</option>
+                    <option value="other">Other…</option>
+                  </select>
+                </label>
+                {axisChoice === "other" &&
+                  text("die_axis", "Die axis (degrees)", {
+                    type: "number", min: 0, max: 359, step: 1,
+                  })}
               </>
             )}
             {!isCoin && (
@@ -330,6 +457,14 @@ export default function ItemForm() {
                 {text("prefix_block", "Prefix / block")}
                 {text("signatures", "Signatures", { placeholder: "e.g. Coyne–Towers" })}
                 {text("issuer", "Issuer", { placeholder: "issuing bank or authority" })}
+                {text("charter_number", "Charter number", {
+                  maxLength: 10, title: "National Bank Note charter",
+                })}
+                {text("bank_city", "Bank city", { maxLength: 100 })}
+                {text("bank_state", "Bank state", { maxLength: 50 })}
+                {text("plate_position", "Plate / position", {
+                  maxLength: 20, title: "Plate and position letters",
+                })}
               </>
             )}
             {text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
@@ -361,6 +496,23 @@ export default function ItemForm() {
                 <option value="wishlist">Wishlist</option>
               </select>
             </label>
+            {form.status === "wishlist" && (
+              <>
+                {text("target_price", "Target price", {
+                  type: "number", step: "0.01", min: 0.01,
+                  title: "In the item's currency; an estimate at or under it is flagged",
+                })}
+                <label className="field">
+                  Priority
+                  <select value={form.priority} onChange={(e) => set("priority")(e.target.value)}>
+                    <option value=""></option>
+                    <option value="1">High</option>
+                    <option value="2">Medium</option>
+                    <option value="3">Low</option>
+                  </select>
+                </label>
+              </>
+            )}
             {form.status === "sold" && (
               <>
                 {text("sold_date", "Sold on", { type: "date" })}
@@ -382,7 +534,8 @@ export default function ItemForm() {
               Catalog references
               {refs.map((ref, i) => (
                 <div className="ref-row" key={i}>
-                  <input value={ref.catalog} placeholder="catalog (krause, numista…)"
+                  <input value={ref.catalog} list="catalog-options"
+                    placeholder={isCoin ? "catalog (krause, numista…)" : "catalog (pick, friedberg…)"}
                     onChange={(e) => setRef(i, "catalog", e.target.value)} />
                   <input value={ref.ref_code} placeholder="reference code"
                     onChange={(e) => setRef(i, "ref_code", e.target.value)} />
@@ -392,6 +545,9 @@ export default function ItemForm() {
                   </button>
                 </div>
               ))}
+              <datalist id="catalog-options">
+                {CATALOGS[form.type].map((c) => <option key={c} value={c} />)}
+              </datalist>
               <div>
                 <button type="button"
                   onClick={() => setRefs((rs) => [...rs, { catalog: "", ref_code: "" }])}>

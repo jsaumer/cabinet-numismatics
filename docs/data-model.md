@@ -5,7 +5,7 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0017`. `0001` is an empty baseline;
+**Migration status:** revisions `0001`–`0018`. `0001` is an empty baseline;
 `0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
 Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
 photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
@@ -39,7 +39,14 @@ grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log. `001
 for the trash. `0017` (v0.23.0) added `checklists.match_catalog`,
 `match_ref`, `match_country`, and `match_denomination` (what fills a
 generated checklist) and `checklist_slots.year` and `mint_mark`; which item
-fills a slot is computed on read, never stored.
+fills a slot is computed on read, never stored. `0018` (v0.25.0, parity
+fields) added fourteen nullable columns on `items`: `pcgs_population`,
+`pcgs_pop_higher`, `population_as_of`, `target_price`, `priority`,
+`charter_number`, `bank_city`, `bank_state`, `plate_position`,
+`serial_traits`, `die_axis`, `struck_calendar`, `struck_year`, and
+`struck_era`. It also backfills `serial_traits` for every item with a serial
+number or the replacement flag, trash included, using a copy of the traits
+logic frozen inside the revision.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -103,6 +110,10 @@ not as native postgres enum types.
 | `edge`             | text null     | reeded, plain, lettered…                |
 | `shape`            | text null     | round, polygonal…                       |
 | `mintage`          | bigint null   | mintage, or print run for a note        |
+| `die_axis`         | smallint null | coins: degrees 0–359; `0` medal, `180` coin alignment |
+| `struck_calendar`  | text null     | the calendar of a non-Gregorian date as struck: a key of `services/calendars.CALENDARS` (`hijri`, `japanese`…) |
+| `struck_year`      | int null      | the year as written on the piece, in that calendar; `year` stays Gregorian |
+| `struck_era`       | text null     | `meiji` … `reiwa`; required with `japanese`, null otherwise |
 | `grade_id`         | fk → grades   | null if ungraded                        |
 | `cert_service`     | text null     | PCGS, NGC, PMG…                         |
 | `cert_number`      | text null     | slab certification number               |
@@ -111,11 +122,19 @@ not as native postgres enum types.
 | `designations`     | json null     | list, e.g. `["DCAM"]`, `["RD"]`, `["EPQ"]` |
 | `grade_details`    | text null     | the problem on a details grade          |
 | `cac_sticker`      | text null     | `green` \| `gold`                        |
+| `pcgs_population`  | int null      | PCGS population at this grade           |
+| `pcgs_pop_higher`  | int null      | graded higher                           |
+| `population_as_of` | timestamptz null | server-set: when the two figures last changed, or when the PCGS response that supplied them was fetched |
 | `serial_number`    | text null     | notes                                   |
 | `prefix_block`     | text null     | notes                                   |
 | `signatures`       | text null     | notes                                   |
 | `issuer`           | text null     | notes: issuing bank or authority        |
 | `replacement_note` | bool          | notes: replacement / star note          |
+| `charter_number`   | text null     | notes: National Bank Note charter       |
+| `bank_city`        | text null     | notes                                   |
+| `bank_state`       | text null     | notes                                   |
+| `plate_position`   | text null     | notes: plate and position letters       |
+| `serial_traits`    | text null     | server-set fancy-serial traits, stored comma-wrapped (`,radar,binary,`) so one trait is a `LIKE '%,radar,%'`; null when none. The API returns a list |
 | `quantity`         | int           | default 1                               |
 | `acquisition_date` | date null     |                                         |
 | `acquisition_price`| numeric null  | what you paid                           |
@@ -127,6 +146,8 @@ not as native postgres enum types.
 | `sold_price`       | numeric null  | realized price (gross), in `currency`   |
 | `sold_fees`        | numeric null  | commission, listing fees                |
 | `sold_to`          | text null     | buyer or venue                          |
+| `target_price`     | numeric null  | wish list: the most to pay, in `currency`; kept when the status changes |
+| `priority`         | smallint null | wish list: `1` high, `2` medium, `3` low |
 | `set_id`           | fk → sets null | the set or lot it belongs to; SET NULL when the set is deleted |
 | `custom_fields`    | json null     | user-defined key→value, max 20          |
 | `notes`            | text null     | free-form                               |

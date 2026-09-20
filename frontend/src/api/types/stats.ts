@@ -153,3 +153,15 @@ export interface RunResult {
   skipped: number;
   item_ids: string[];
 }
+
+/** Owned notes grouped by series and signature pair. */
+export interface NotesBySignature {
+  groups: {
+    series: string | null;
+    signatures: string | null;
+    count: number;
+    quantity: number;
+    items: { id: string; label: string; serial_number: string | null; grade_label: string | null }[];
+  }[];
+  total: number;
+}

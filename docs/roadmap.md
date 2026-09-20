@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.24.9**, with versioned images
+**Status (September 2026): released as v0.25.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -17,7 +17,10 @@ in v0.12.0, and the open-source readiness track (Phase 6) is complete.
 **What's next is Phase 7**, a parity plan chosen by the owner on 20
 September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
-without one.
+without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
+depth, fancy serial numbers, die axis and foreign dates) shipped together in
+v0.25.0; in-app restore (P2), the stack figures (P7), authentication (P8),
+and the share view (P9) remain.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -98,19 +101,19 @@ The heart of the app: describing what you own, accurately and flexibly.
   **Shipped in v0.22.0.**
 - ✔ **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
   item per date and mint. Phase 5.9. **Shipped in v0.23.0.**
-- **[Core]** Wish-list target price and priority, alerted when an estimate
-  falls to the target. **Planned: Phase 7, P3.**
+- ✔ **[Core]** Wish-list target price and priority, alerted when an estimate
+  falls to the target. Phase 7, P3. **Shipped in v0.25.0.**
 - **[Nice]** Statuses beyond owned/sold/wishlist (watching, bidding,
   ordered, for sale, for swap) with auction fields (house, lot, date, max
   bid, result). Phase 5.9. **Parked**: the owner mostly holds.
-- **[Core]** Paper money depth: Friedberg and Pick references, National Bank
-  Note fields, series and signature combination with a report by signature.
-  **Planned: Phase 7, P4.**
-- **[Nice]** Fancy serial numbers detected from a note's serial (solids,
-  radars, repeaters, ladders, binaries, low numbers, date notes). **Planned:
-  Phase 7, P5.**
-- **[Nice]** Die axis, and the date as struck in its own calendar beside the
-  Gregorian year. **Planned: Phase 7, P6.**
+- ✔ **[Core]** Paper money depth: Friedberg and Pick references, National
+  Bank Note fields, series and signature combination with a report by
+  signature. Phase 7, P4. **Shipped in v0.25.0.**
+- ✔ **[Nice]** Fancy serial numbers detected from a note's serial (solids,
+  radars, repeaters, ladders, binaries, low numbers, date notes). Phase 7,
+  P5. **Shipped in v0.25.0.**
+- ✔ **[Nice]** Die axis, and the date as struck in its own calendar beside
+  the Gregorian year. Phase 7, P6. **Shipped in v0.25.0.**
 - **[Nice]** Grading submissions: service, submission number, tier, fees
   (into cost basis), dates, result, and old → new cert. Phase 5.9.
   **Parked**: nothing is being submitted.
@@ -202,9 +205,9 @@ guidance, not appraisals.
   dated by month, only sales from the last five years count (older ones are
   shown, not counted), the price guide stands in otherwise, and the default
   quota is 100 calls a day. **Shipped in v0.24.4 and v0.24.6.**
-- **[Nice]** PCGS population and eBay sold-listings / Photograde links on
-  the item page. Phase 5.9. Links ✔ **shipped in v0.22.0**; population on
-  the item page is **planned: Phase 7, P1**.
+- ✔ **[Nice]** PCGS population and eBay sold-listings / Photograde links on
+  the item page. Phase 5.9. Links **shipped in v0.22.0**; population on the
+  item page (Phase 7, P1) **shipped in v0.25.0**.
 - **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
   the alert webhook. **Planned: Phase 7, P7** (was parked).
@@ -347,7 +350,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0017`, applied by the
+  upgrades: Alembic since Phase 0, revisions `0001`–`0018`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -710,7 +713,8 @@ for it, and new ones found while entering the collection outrank these.
 - **API call counter**: tabled by the owner; see section 5.
 
 The wish-list targets, population, and the stack view moved from here and
-from Parked into **Phase 7** on 20 September 2026.
+from Parked into **Phase 7** on 20 September 2026; the targets and the
+population shipped in v0.25.0.
 
 **Parked**: real features for a collector this owner isn't; revisit only
 if that changes.
@@ -787,14 +791,15 @@ third look's "build only what real use asks for": parity is now wanted, so
 items that were parked (the wish-list targets, the stack view) and the
 decision against application login are reopened here.
 
-In the proposed order; each ships alone as a minor release, and versions
-are illustrative.
+In the proposed order; each was to ship alone as a minor release, and
+versions are illustrative. In the event P1 and P3 to P6 shipped together as
+v0.25.0 (one migration, `0018`), ahead of P2.
 
-- **P1: Population on the item page** (S). PCGS population and population
+- ✔ **P1: Population on the item page** (S). PCGS population and population
   higher, which the cert fill already fetches and then drops, kept with the
   item (a migration), shown beside the grade with the date fetched, and
   refreshed with the PCGS estimate at no extra request. PCGS, NGC, and PMG
-  all show it.
+  all show it. **Shipped in v0.25.0.**
 - **P2: In-app restore** (M–L). Phase 5.6's B3, no longer blocked on
   authentication (the owner's decision, 20 September 2026). The block was a
   matter of principle more than of risk: anyone who can reach an open
@@ -814,24 +819,36 @@ are illustrative.
   authentication ships. `restore.sh` stays the disaster-recovery path for
   when the app itself won't start, and CI's restore drill gains the in-app
   route.
-- **P3: Wish-list depth** (M). A target price and a priority on wish-list
+- ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
   items, a wish-list view sorted by either, the gap between target and the
   current estimate, and an alert through the existing webhook when an
   estimate falls to the target. Eight of the products have a wish list.
-- **P4: Paper money depth** (M). Friedberg and Pick numbers as first-class
+  **Shipped in v0.25.0.** As built: the gap and the alert use the item's
+  newest estimate, in the item's own currency only (nothing is converted);
+  the alert is sent once, when an estimate first reaches the target; and
+  the target and priority stay with a piece after it is bought.
+- ✔ **P4: Paper money depth** (M). Friedberg and Pick numbers as first-class
   catalogue references with their own lookup links; National Bank Note
   fields (charter number, bank, city, state); series and signature
   combination as structured fields with a report grouped by signature;
-  plate and position letters. CurrencyManage is the benchmark.
-- **P5: Fancy serial numbers** (S–M). Detected from the serial number
+  plate and position letters. CurrencyManage is the benchmark. **Shipped in
+  v0.25.0.** As built: the lookup links are web searches, the bank is the
+  existing issuer field, and the report is a dashboard card over the
+  existing series and signatures fields.
+- ✔ **P5: Fancy serial numbers** (S–M). Detected from the serial number
   already stored: solids, radars, repeaters and super repeaters, ladders,
   binaries, low and high numbers, birthday and date notes, and star or
   replacement notes, shown as badges, searchable, and listed on a report.
-  No product surveyed has this; it needs no outside data.
-- **P6: Die axis and foreign dates** (S). Die axis in degrees or as coin or
+  No product surveyed has this; it needs no outside data. **Shipped in
+  v0.25.0**, with super radars, trinaries, and double quads as well. As
+  built, a list filter (any fancy serial, or one trait) stands in for the
+  report.
+- ✔ **P6: Die axis and foreign dates** (S). Die axis in degrees or as coin or
   medal alignment; the date as struck (Hijri, Japanese era, Thai Buddhist,
   Hebrew, and so on) beside the Gregorian year, converted on entry, with the
   calendar recorded. OpenNumismat has the first, Exact Change the second.
+  **Shipped in v0.25.0**, with eleven calendars; a year the owner types is
+  never replaced by the conversion.
 - **P7: Bullion stack figures** (M). Fine ounces by metal, premium over spot
   at purchase (from the spot price on the acquisition date where known),
   cost per ounce, break-even spot, and a spot-price threshold alert through
@@ -934,7 +951,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0017`), never create-on-startup.
+  revision (`0001`–`0018`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty, the same reasoning that front-loaded Phase 2's fields.

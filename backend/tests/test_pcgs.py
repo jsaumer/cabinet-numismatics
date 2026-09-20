@@ -353,6 +353,8 @@ def test_cert_fill_maps_the_coin(client, upstream):
         "mintage": 436800,
         "cert_service": "PCGS",
         "cert_number": "12345678",
+        "pcgs_population": 812,
+        "pcgs_pop_higher": 240,
     }
     assert body["grade"] == {"rank": 64, "strike": "business", "plus": True, "designations": []}
     assert body["catalog_refs"] == [{"catalog": "pcgs", "ref_code": "5960"}]
