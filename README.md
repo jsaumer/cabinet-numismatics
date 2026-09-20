@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.27.1-informational)
+![Version](https://img.shields.io/badge/version-0.28.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.27.1, feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.28.0, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
 1.0 will mean a stable HTTP API. There is no application login yet, so
 Cabinet belongs on a trusted network or behind an authenticating reverse
@@ -148,16 +148,22 @@ Dark is the default; the header toggle switches to light and remembers it.
   why (source off, missing catalog ref or grade, what the source said, a
   failed fetch), which estimates are stale, how the sources compare and
   disagree, and how estimates held up against actual sale prices.
+- **Bullion stack**: a Stack page with fine troy ounces, melt value, cost per
+  ounce (also the break-even spot price), gain or loss, and the premium paid
+  over spot at purchase, by metal and per item, scopeable by tag. Purchase-day
+  spot is looked up automatically for purchases from 2 March 2024 and can be
+  typed in for older ones; spot-price threshold alerts fire through the
+  existing webhook.
 
 ### Insights & reporting
-- Customisable dashboard (the home page): twenty widgets (value, breakdowns
-  by country/decade/grade/tag or one tag/set, acquisitions by year,
-  top-movers tables, owned notes by series and signature pair, wish list,
-  fancy serials, checklists, pricing coverage, and operations status) added,
-  removed, resized, retitled, and arranged by drag or keyboard, saved on the
-  server so it follows the collection; the default layout is today's fixed
-  page, and a setup checklist widget says what is still off (scheduled
-  backups, the alert webhook, a price-source key).
+- Customisable dashboard (the home page): twenty-one widgets (value,
+  breakdowns by country/decade/grade/tag or one tag/set, acquisitions by
+  year, top-movers tables, owned notes by series and signature pair, wish
+  list, fancy serials, checklists, the bullion stack, pricing coverage, and
+  operations status) added, removed, resized, retitled, and arranged by drag
+  or keyboard, saved on the server so it follows the collection; the default
+  layout is today's fixed page, and a setup checklist widget says what is
+  still off (scheduled backups, the alert webhook, a price-source key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
 - Deleting is recoverable: items go to a trash with their photos, documents,

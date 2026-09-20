@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -8,13 +10,14 @@ from app.schemas import (
     CalendarReference,
     ConvertedDate,
     GradeOut,
+    HistoricSpot,
     SerialTraitOut,
     SetCreate,
     SetOut,
     SetWithCount,
     TagOut,
 )
-from app.services import calendars, serials
+from app.services import calendars, pricing, serials, stack
 
 router = APIRouter(prefix="/api", tags=["reference"])
 
@@ -123,3 +126,29 @@ def convert_date(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     return {"calendar": calendar, "year": year, "era": era, "gregorian_year": gregorian}
+
+
+@router.get("/reference/historic-spot", response_model=HistoricSpot)
+def historic_spot(
+    metal: str = Query(max_length=20),
+    on: date = Query(alias="date"),
+    currency: str = Query(default="USD", min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+):
+    """A metal's spot price per troy ounce on a past day, for a purchase made
+    then. Only the date and the metal go upstream."""
+    metal = metal.strip().lower()
+    currency = currency.upper()
+    try:
+        per_oz = stack.historic_spot(db, metal, on, currency)
+    except pricing.NotApplicable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except pricing.SourceUnavailable as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+    return {
+        "metal": metal,
+        "date": on,
+        "currency": currency,
+        "per_oz": float(per_oz),
+        "source": stack.HISTORY_LABEL,
+    }

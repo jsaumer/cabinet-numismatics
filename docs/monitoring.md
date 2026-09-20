@@ -39,16 +39,28 @@ page says sales records need the paid plan, and no key alert is raised.
 
 ### Events
 
-One message is an event, not a check: **Wish-list target reached**. It is
-sent when a new estimate (typed in, run from the item page, or from a
-scheduled refresh) for a wishlist item with a target price comes in at or
-under the target, in the item's own currency (nothing is converted). It is
-sent once, on the crossing: a first estimate already under the target
-counts, and later estimates that stay under it say nothing until one has
-gone back over. The message reads `United States 1 cent 1909 "S": estimate
-$950.00 is at or under your $1,000.00 target`. An event has no recovery, is
-not listed among the checks in Settings, and doesn't affect the heartbeat or
-the `cabinet_alert_failing` metric. Without a saved webhook nothing is sent.
+Two kinds of message are events, not checks: they have no recovery, are not
+listed among the checks in Settings, and don't affect the heartbeat or the
+`cabinet_alert_failing` metric. Without a saved webhook nothing is sent.
+
+**Wish-list target reached.** Sent when a new estimate (typed in, run from
+the item page, or from a scheduled refresh) for a wishlist item with a
+target price comes in at or under the target, in the item's own currency
+(nothing is converted). It is sent once, on the crossing: a first estimate
+already under the target counts, and later estimates that stay under it say
+nothing until one has gone back over. The message reads `United States 1
+cent 1909 "S": estimate $950.00 is at or under your $1,000.00 target`.
+
+**Spot price alert** (v0.28.0, roadmap Phase 7, P7). Each saved threshold in
+Settings → Alerts (metal, above/below, a price per troy ounce, a currency)
+is checked in the hourly loop against the current spot price. Crossing into
+"met" sends one message, e.g. title `Silver is above $35.00`, message `Spot
+is $35.12 per ounce (threshold $35.00).`; the threshold then **re-arms
+silently** when spot moves back the other way, so the next crossing alerts
+again. Removing a threshold from Settings drops its state, so re-adding it
+alerts again rather than staying quiet, and a new threshold that is already
+met when saved fires on the very next check. The alert key is `spot_<metal>`
+(`spot_gold`, `spot_silver`, `spot_platinum`, `spot_palladium`).
 
 ### Formats
 
@@ -66,10 +78,12 @@ keys, since it usually carries a token; Settings shows only its host.
 
 `status` is `failing`, `recovered`, `test`, or `event`; `alert` is one of
 `backup`, `numista_key`, `numista_quota`, `pcgs_key`, `pcgs_quota`,
-`refresh_melt`, `refresh_numista`, `refresh_pcgs` (or `test`), and
-`wishlist_target` for the event, whose `label` is `Wish-list target reached`
-and `title` `Cabinet: Wish-list target reached`. An event goes out at normal
-priority (ntfy `default` with the `dart` tag, Gotify 4). An example:
+`refresh_melt`, `refresh_numista`, `refresh_pcgs` (or `test`),
+`wishlist_target` for the wish-list event (`title` `Cabinet: Wish-list
+target reached`), and `spot_<metal>` for a spot-price alert, whose `title`
+names the threshold that crossed (e.g. `Cabinet: Silver is above $35.00`).
+Both events go out at normal priority (ntfy `default` with the `dart` tag,
+Gotify 4). An example:
 
 ```json
 {
@@ -170,6 +184,7 @@ so scraping more often than that gains nothing.
 | `cabinet_refresh_last_run_timestamp_seconds` | `source` | Last scheduled refresh |
 | `cabinet_refresh_last_run_items` | `source`, `outcome` | Its updated / skipped / failed items |
 | `cabinet_estimate_attempts` | `source`, `outcome` | Each item's latest automatic attempt (`ok`, `not_applicable`, `unavailable`) |
+| `cabinet_stack_fine_ounces` | `metal` | Fine troy ounces of owned bullion (the same set the Stack page reports); no network call |
 | `cabinet_alert_failing` | `alert` | 1 while that check is failing |
 | `cabinet_alert_delivery_success`, `cabinet_heartbeat_success` | | The last delivery / push (after the first one since startup) |
 

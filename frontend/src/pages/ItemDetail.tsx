@@ -10,6 +10,7 @@ import {
   money,
   PRIORITY_LABELS,
   SourceStatus,
+  TROY_OUNCE_G,
 } from "../api";
 import { DocumentsCard } from "../components/documents";
 import { LookupLinks } from "../components/lookup";
@@ -226,6 +227,19 @@ export default function ItemDetail() {
           {item.type === "coin" &&
             fact("Weight", item.weight_g != null ? `${item.weight_g} g` : null)}
           {item.type === "coin" && fact("Fineness", item.fineness)}
+          {item.fine_oz != null && (
+            <div>
+              <dt>Fine weight</dt>
+              <dd>
+                {item.fine_oz.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 3,
+                })}{" "}
+                oz
+                <div className="muted fact-note">{(item.fine_oz * TROY_OUNCE_G).toFixed(2)} g</div>
+              </dd>
+            </div>
+          )}
           {item.diameter_mm != null && fact("Diameter", `${item.diameter_mm} mm`)}
           {item.thickness_mm != null && fact("Thickness", `${item.thickness_mm} mm`)}
           {item.edge && fact("Edge", item.edge)}
@@ -257,6 +271,11 @@ export default function ItemDetail() {
             fact("Fees, shipping & tax", money(item.acquisition_fees, item.currency))}
           {item.acquisition_fees != null &&
             fact("Cost basis", money(item.cost_basis, item.currency))}
+          {item.premium_paid_pct != null &&
+            fact(
+              "Premium over spot at purchase",
+              `${item.premium_paid_pct > 0 ? "+" : ""}${item.premium_paid_pct.toFixed(1)}%`,
+            )}
           {fact("From", item.acquired_from)}
           {fact("Storage", item.storage_location)}
           {item.priority != null && fact("Priority", PRIORITY_LABELS[item.priority])}
