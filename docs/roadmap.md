@@ -18,8 +18,10 @@ proxy-level auth.
 A ✔ marks shipped items below. A second review on 19 September 2026 — with
 v0.21.0 live and the real collection still to be entered — surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
-**Phase 5.9**: entering the collection quickly first, then the money and the
-paperwork, then v1.0.0 with authentication, in-app restore, and sharing.
+**Phase 5.9**. A third look the same day, after v0.22.0, asked whether the
+owner needs any of it — 100–500 pieces to enter by hand, runs and singles,
+mostly held — and demoted the release train to **one next item and a list
+of candidates**, built only when real use asks for them.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions — new capability = minor,
@@ -90,22 +92,22 @@ The heart of the app: describing what you own, accurately and flexibly.
   the same reference, year, and mint already exists. Phase 5.9.
   **Shipped in v0.22.0.**
 - **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
-  item per date and mint. Phase 5.9. **Target: v0.23.0.**
+  item per date and mint. Phase 5.9. **Next — v0.23.0.**
 - **[Nice]** Wish-list target price and priority, alerted when an estimate
   falls to the target; statuses beyond owned/sold/wishlist — watching,
   bidding, ordered, for sale, for swap — with auction fields (house, lot,
-  date, max bid, result). Phase 5.9. **Target: v0.24.0.**
+  date, max bid, result). Phase 5.9. **Parked** — the owner mostly holds.
 - **[Nice]** Grading submissions: service, submission number, tier, fees
   (into cost basis), dates, result, and old → new cert. Phase 5.9.
-  **Target: v0.26.0.**
+  **Parked** — nothing is being submitted.
 - **[Nice]** Nested storage locations (safe → box → row), printable 2×2
   inserts and slab/box labels with QR codes, and a "verified on" physical
-  audit. Phase 5.9. **Target: v0.27.0.**
+  audit. Phase 5.9. **Candidate** — once there are a few hundred pieces.
 - **[Nice]** Variety references by scheme and number (FS, VAM, CONECA,
   Overton…) with links to NGC VarietyPlus and VAMworld. Phase 5.9.
-  **Target: v0.28.0.**
+  **Candidate.**
 - **[Nice]** Saved list views and a choice of list columns; print or export
-  any view. Phase 5.9. **Target: v0.29.0.**
+  any view. Phase 5.9. **Candidate** — once the list is long enough to need it.
 
 ## 2. Photo management
 
@@ -181,10 +183,10 @@ guidance, not appraisals.
   own latest value as a chip.
 - **[Nice]** PCGS population and eBay sold-listings / Photograde links on
   the item page. Phase 5.9. Links ✔ **shipped in v0.22.0**; population on
-  the item page **target v0.28.0** (the cert fill already reports it).
+  the item page is a **candidate** (the cert fill already reports it).
 - **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
-  the alert webhook. Phase 5.9, optional and last. **Target: v0.30.0.**
+  the alert webhook. Phase 5.9. **Parked** — the collection isn't a stack.
 
 ## 4. Stats, reports & insights
 
@@ -207,15 +209,15 @@ guidance, not appraisals.
 - **[Nice]** Registry-style sets: checklist slots generated from a catalogue
   type's issues or a year and mint range, matched automatically to owned
   items, with a completion percentage and a "needed to complete" list.
-  Phase 5.9. **Target: v0.23.0.**
+  Phase 5.9. **Next — v0.23.0**, with "Add a run".
 - **[Nice]** Tax lots and realized gains by year: several purchase and sale
   records per item, partial sales, holding period, basis including fees,
   FIFO or specific identification, and a Form 8949-style CSV. Phase 5.9.
-  **Target: v0.26.0.**
+  **Parked** — nothing has been sold; cost basis with fees already exists.
 - **[Nice]** Insurance schedule (the insurer's per-item fields, a flag above
   the scheduling threshold, appraisal records) and an estate packet (letter
   of instruction, dealer contacts, where everything is). Phase 5.9.
-  **Target: v0.28.0.**
+  **Candidate** — the insurance report and attached documents cover it today.
 
 ## 5. Platform, data & operations
 
@@ -278,10 +280,12 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - **[Nice]** Coin-show mode: an installable mobile web app (PWA) with
   quick-add from the phone camera and slab barcode/QR scanning (PCGS → cert
   and grade, NGC → cert) feeding cert-first entry, tolerant of a bad
-  connection. Phase 5.9. **Target: v0.25.0.**
+  connection. Phase 5.9. **Candidate** for the quick-add; scanning is
+  **parked** — the collection isn't mostly slabs, and the site already works
+  on a phone with the camera.
 - **[Nice]** Portability: Excel export with thumbnails, and an
   OpenNumismat-compatible round-trip export with a photo archive. Phase
-  5.9. **Target: v0.29.0.**
+  5.9. **Candidate** — CSV/XLSX export and rehearsed backups exist.
 
 ## 6. Open-source readiness [OSS]
 
@@ -593,49 +597,60 @@ relative to the pace so far: S about a day, M a few days, L a week.
   denomination, grade, designation, variety); a duplicate warning on add
   and import; eBay sold-listings and PCGS Photograde links on the item
   page. NGC has no public API, so an NGC cert gets a lookup link only.
+**The third look (19 September 2026, after v0.22.0).** The list above this
+point was built from what other tools have, which makes a parity list, not
+a needs list. Asked directly, the owner's collection is 100–500 pieces to be
+entered by hand from scratch, part date/mint runs and part scattered
+singles, mostly held rather than traded, with no evidence yet of many slabs
+or bullion. Nothing unshipped is blocking that; what is needed first is not
+code — scheduled backups switched on, the Authentik middleware on the route
+if it's reachable beyond the LAN, and the first 25–50 real pieces entered,
+because the friction found doing that is the real roadmap. So the numbered
+train ends here:
+
+**Next**
+
 - **Runs and registry sets** (v0.23.0, M–L) — "Add a run": pick a Numista
   type, tick its issues (already fetched for "Fill from Numista"), get one
   item per date and mint; checklists generated from a type's issues or a
   year and mint range, matched automatically to owned items, with a
-  completion percentage and a "needed to complete" list.
-- **Pipeline** (v0.24.0, M) — wish-list target price and priority, alerted
-  through the existing webhook when an estimate falls to the target;
-  statuses watching, bidding, ordered, for sale, and for swap; auction
-  fields (house, lot, date, max bid, result); a duplicates-for-trade export.
-  Swap *matching* needs a community and stays out.
-- **Coin-show mode** (v0.25.0, L) — an installable PWA with quick-add from
-  the camera and slab barcode/QR scanning: PCGS labels carry a 22-digit
-  Interleaved 2 of 5 barcode (spec number, grade, cert) and a QR code, NGC
-  labels a cert barcode; the scan feeds cert-first entry. Tolerant of a bad
-  connection at a show.
-- **Money** (v0.26.0, L) — tax lots: several purchase and sale records per
-  item, partial sales, holding period, basis including grading fees, FIFO
-  or specific identification; realized gains by year with a Form 8949-style
-  CSV (US collectibles gains are taxed at up to 28%); grading submissions
-  (service, submission number, tier, fees into basis, dates, result,
-  old → new cert).
-- **Physical** (v0.27.0, M) — nested locations (safe → box → row), printable
-  2×2 flip inserts and slab/box labels with QR codes that open the item, a
-  "verified on" physical audit, and a safe-deposit inventory print.
-- **Paperwork** (v0.28.0, M) — an insurance schedule with the insurer's
-  per-item fields, a flag above the scheduling threshold (collector
-  policies schedule items from about $5,000), and appraisal records; an
-  estate packet (letter of instruction, dealer contacts, where everything
-  is); variety reference fields by scheme and number (FS, VAM, CONECA,
-  Overton) with links to NGC VarietyPlus and VAMworld — no free dataset
-  exists to embed; PCGS population on the item page.
-- **Views and portability** (v0.29.0, M) — saved views with a choice of
-  columns, print or export any view, Excel export with thumbnails, and an
-  OpenNumismat-compatible round-trip export with a photo archive — the
-  answer to collectors who went back to Excel after their software was
-  abandoned.
-- **Stack view** (v0.30.0, M, optional and last) — for bullion: fine ounces
-  by metal, premium over spot at purchase, cost per ounce, break-even, and
-  spot-price thresholds through the alert webhook.
+  completion percentage and a "needed to complete" list. The one candidate
+  the collection's makeup supports today: a run of fifty coins becomes one
+  form instead of fifty.
 
-Then **v1.0.0 — auth and sharing** (L): application login, or proxy
-authentication with a documented metrics exemption; in-app restore (Phase
-5.6 B3); read-only showcase links; the API declared stable.
+**Candidates** — unordered, no targets; one is pulled when real use asks
+for it, and new ones found while entering the collection outrank these.
+
+- **Quick entry** — a phone-friendly quick-add, and possibly a grid for
+  typing several similar pieces at once. (The installable-PWA shell is the
+  small part.)
+- **Physical** — nested locations (safe → box → row), printable 2×2 inserts
+  and slab/box labels with QR codes, a "verified on" audit. Worth it past a
+  few hundred pieces; free-text storage is fine until then.
+- **Saved views** and a choice of list columns; print or export any view.
+- **Paperwork** — an insurance schedule with a flag above the insurer's
+  scheduling threshold and appraisal records; an estate packet; variety
+  reference fields with VarietyPlus/VAMworld links; PCGS population on the
+  item page.
+- **Portability** — Excel with thumbnails; an OpenNumismat-compatible
+  round-trip export with a photo archive.
+
+**Parked** — real features for a collector this owner isn't; revisit only
+if that changes.
+
+- **Pipeline** — wish-list targets, watching/bidding/ordered/for-sale
+  statuses, auction fields. (Mostly holds.)
+- **Money** — tax lots, realized gains by year with a Form 8949-style CSV,
+  grading submissions. (Nothing sold or submitted; cost basis with fees
+  already exists.)
+- **Slab barcode/QR scanning.** (Not mostly slabs; the cert fill takes a
+  typed number.)
+- **Stack view** for bullion. (Not a stack.)
+
+**v1.0.0** stays the marker for authentication and a stable API, but needs
+no code for this deployment: the homelab runs Authentik, so protecting
+Cabinet is a forward-auth middleware on its Traefik route. In-app restore
+and showcase links remain wants, not needs.
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -687,6 +702,12 @@ gets asked.*
   was still empty — the same reasoning that front-loaded Phase 2's fields.
   That moved photo niceties to v0.16.0, sold-listing comps to v0.17.0, and
   import mappings to v0.18.0; Phase 5.8's additions follow from v0.19.0.
+- **The third look (19 September 2026) ended the release train.** A survey
+  of other tools makes a parity list; the owner's actual collection —
+  100–500 pieces by hand, runs and singles, mostly held — supported one
+  next item ("Add a run" with generated checklists). Everything else is a
+  candidate or parked, and friction found while entering real pieces
+  outranks all of it.
 - **The second review (19 September 2026) put entry speed first.** With
   v0.21.0 live and one item in it, the six unshipped items and the new ones
   from the survey were ordered by how much each speeds up entering and
