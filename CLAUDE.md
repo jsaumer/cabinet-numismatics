@@ -148,7 +148,8 @@ P3 wish-list depth, P4 paper money depth, P5 fancy serial numbers, P6 die
 axis and foreign dates, P7 bullion stack figures, P8 authentication (decided: one admin first, onboarded with a setup code
 from the backend log, always on, scoped API tokens in the first cut, deny by
 default; then SSO for that admin; more accounts and roles are optional; the
-design and permission table are in docs/security.md), P9 a share view (blocked on P8); labels, a phone
+design and permission table are in docs/security.md), P9 a share view (blocked on P8; the whole feature is an admin setting, off
+by default); labels, a phone
 app, and more accounts are optional. Research and propose each before building, as always.
 v1.0.0 follows P8 and the checklist under "The road to v1.0.0". Before
 that, the

@@ -16,7 +16,8 @@ applies them itself on startup; for earlier releases, run
   groups: population on the item page, wish-list depth, paper money depth,
   fancy serial numbers, die axis and foreign dates, bullion stack figures,
   authentication (local accounts with a first-run superuser, then single
-  sign-on), and a share view that waits on authentication; in-app restore
+  sign-on), and a share view that waits on authentication and is switched on or off
+  as a whole in the admin's Settings (off by default); in-app restore
   is no longer blocked on authentication and comes second, with an
   automatic safety backup before it runs; labels and a
   phone app are optional. This reverses the earlier decision to ship v1.0.0

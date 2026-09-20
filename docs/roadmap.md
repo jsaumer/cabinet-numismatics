@@ -271,7 +271,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   the same day, when the owner chose feature parity and a share view, which
   needs the rest of the app closed first.
 - **[Nice]** Share and showcase view: a read-only public link to a set, a
-  checklist, or the collection. **Planned: Phase 7, P9**, blocked on
+  checklist, or the collection; the whole feature switched on or off in the
+  admin's Settings, off by default. **Planned: Phase 7, P9**, blocked on
   authentication.
 - ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
   frontend typecheck, and a compose build/migrate/smoke test on every push and
@@ -879,8 +880,14 @@ are illustrative.
 - **P9: Share and showcase view** (M). A read-only public page for a set, a
   checklist, or the whole collection, behind an unguessable link that can be
   revoked, with a choice of what it shows (never costs, never storage
-  locations). **Blocked on P8**: it is the first deliberately public page,
-  and everything else has to be closed before one door is opened.
+  locations). **The whole feature is a switch in the admin's Settings, off
+  by default** (the owner's requirement, 20 September 2026): while it is
+  off, no link can be made, the public routes answer "not found" as if they
+  didn't exist, and links made earlier stop working without being deleted,
+  so switching it back on restores them. Settings lists every live link
+  with when it was last opened. **Blocked on P8**: it is the first
+  deliberately public page, and everything else has to be closed before
+  one door is opened.
 
 Optional, after the above and only if still wanted:
 

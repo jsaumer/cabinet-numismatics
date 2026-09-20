@@ -155,7 +155,10 @@ Two more kinds of caller are not accounts:
   than the user who made it, and can never manage users, settings, secrets,
   backups, or tokens.
 - **Share link** (Phase 7, P9): an anonymous, read-only, revocable link to
-  one set, one checklist, or the collection.
+  one set, one checklist, or the collection. Sharing as a whole is a switch
+  in the admin's Settings, **off by default**: while it is off the public
+  routes answer "not found", no link can be made, and existing links stop
+  working (kept, not deleted, so switching it back on restores them).
 
 | Action | Admin | Editor | Viewer | API token | Share link |
 |---|---|---|---|---|---|
@@ -169,7 +172,8 @@ Two more kinds of caller are not accounts:
 | Ask a price source for an estimate (spends quota) | yes | yes | no | `write` | no |
 | Move to the trash, restore from the trash | yes | yes | no | `write` | no |
 | Delete for good, empty the trash | yes | no | no | no | no |
-| Create and revoke share links | yes | own links | no | no | no |
+| Switch sharing on or off for the whole app | yes | no | no | no | no |
+| Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes | view only | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
 | Backups: download, run now, schedule | yes | no | no | no | no |
