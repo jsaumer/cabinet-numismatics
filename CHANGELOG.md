@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.24.4] - 2026-09-20
+
 ### Fixed
 - **PCGS's daily limit is 100 calls, not 1,000.** PCGS cut its documented
   default; Settings, the cert fill, and the docs now say 100 (more on
