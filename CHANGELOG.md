@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-09-20
+
 ### Fixed
 - **A restore could replace the database and then fail to replace the
   files.** Found on the first restore on an NFS deployment: photos uploaded
