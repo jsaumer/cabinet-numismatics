@@ -102,7 +102,7 @@ a:hover {
   color: var(--header-ink);
   padding: 0.7rem 1.25rem;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.75rem;
   border-bottom: 2px solid var(--header-rule);
 }
@@ -116,7 +116,6 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  align-self: center;
 }
 .site-header a.brand:hover {
   text-decoration: none;
