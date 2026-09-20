@@ -4,6 +4,7 @@ export * from "./types/items";
 export * from "./types/imports";
 export * from "./types/stats";
 export * from "./types/settings";
+export * from "./types/dashboard";
 export { api } from "./calls";
 
 import type { ItemType } from "./types/items";
@@ -49,3 +50,16 @@ export const money = (value: number | null | undefined, currency: string | null 
 };
 
 export const gradeScaleFor = (type: ItemType) => (type === "coin" ? "sheldon" : "pmg");
+
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"];
+
+/** A file size in the largest unit that keeps it above 1 (1.4 GB, 812 KB). */
+export function formatBytes(bytes: number): string {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${BYTE_UNITS[unit]}`;
+}

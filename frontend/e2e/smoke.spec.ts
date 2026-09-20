@@ -39,6 +39,47 @@ test("record a value by hand", async ({ page }) => {
   await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
 });
 
+// Needs an item, so it sits after the one above: an empty collection shows the
+// "nothing to report yet" page instead of the grid.
+test("the dashboard can be rearranged, and put back", async ({ page }) => {
+  acceptDialogs(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Edit dashboard" }).click();
+  await page.getByRole("button", { name: "Add widget" }).click();
+  await page.locator(".import-source", { hasText: "Recent additions" }).click();
+
+  const earlier = page.getByRole("button", { name: "Move Recent additions earlier" });
+  await expect(earlier).toBeVisible();
+  await earlier.click();
+  await expect(page.locator(".dash-live")).toContainText("moved to position 11 of 12");
+
+  // And by dragging, one chart over its neighbour in the same row. The cards
+  // reorder under the pointer mid-drag, and the release still has to land.
+  const handle = page.getByRole("button", { name: "Move Estimated value by tag", exact: true });
+  await handle.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const from = (await handle.boundingBox())!;
+  const to = (await page
+    .getByRole("button", { name: "Move Estimated value by country", exact: true })
+    .boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect(page.locator(".dash-live")).toContainText("Estimated value by tag moved to position 4 of 12");
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Edit dashboard" })).toBeVisible();
+
+  // Saved on the server, so it survives a reload.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 2, name: "Recent additions" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit dashboard" }).click();
+  await page.getByRole("button", { name: "Reset to default" }).click();
+  await expect(page.getByRole("button", { name: "Edit dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Recent additions" })).toHaveCount(0);
+});
+
 test("entering it again warns about the duplicate", async ({ page }) => {
   await page.goto("/items/new");
   await page.getByLabel("Country *").fill(COUNTRY);

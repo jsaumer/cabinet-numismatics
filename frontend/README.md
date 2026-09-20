@@ -44,6 +44,12 @@ src/
     client.ts           the fetch wrapper and error handling
     calls.ts            one function per endpoint, exported as `api`
     index.ts            re-exports it all, plus helpers such as money()
+  dashboard/          the customisable dashboard: registry.tsx (every widget
+                      type, its catalogue entry, default size and options),
+                      widgets/ (one file per group), WidgetFrame.tsx (the
+                      card, lazy mount, per-widget error), data.ts (the
+                      per-page request cache), options.ts, edit.tsx (edit
+                      mode, the drag, the catalogue and options dialogs)
   pages/              one file per route: Dashboard, ItemList (/collection),
                       ItemDetail, ItemForm, AddRun, Checklists, Pricing,
                       Report, Import, Trash, Settings
@@ -111,6 +117,11 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
   with `Intl.NumberFormat` in currency style (the browser's locale,
   formatters cached per code) and falls back to `12.50 XYZ` for a code the
   browser rejects. Don't format amounts by hand.
+- **The dashboard is a six-column grid.** A widget spans 6, 3, or 2 columns
+  (full, half, a third); a third becomes a half under 900px and everything is
+  full width under 720px. `grid-auto-flow` stays `row`, never `dense`, so the
+  drawn order is the saved order. The layout itself lives on the server
+  (`/api/dashboard/layout`), not in the browser.
 - **The CSP is strict.** New inline scripts, external scripts or fonts, or
   iframes will trip it. The e2e header test visits the main pages and fails
   on any policy violation.
@@ -120,7 +131,8 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 ## End-to-end tests
 
 `e2e/smoke.spec.ts` drives the real pages in Chromium: the dashboard, adding
-an item, recording a value, the duplicate warning, a generated checklist
+an item, recording a value, rearranging the dashboard and resetting it, the
+duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
 number getting its badge, a wishlist coin showing its target price, the
 security headers, every Settings section, and, last, an in-app restore of a
