@@ -163,11 +163,10 @@ rotation.
   `BACKUP_DIR`), or with `./scripts/backup.sh` from the host (database dump,
   photo archive, and document archive together either way); see
   [backup-restore.md](backup-restore.md).
-- There is no application-level auth, by decision: Cabinet is for a trusted
+- There is no application-level auth yet: Cabinet is for a trusted
   network, or behind an authenticating reverse proxy with TLS (for example
-  Traefik + Authentik forward-auth). v1.0.0 will ship the same way;
-  application login is not planned for 1.0 and is at most a possible later
-  item. See [security.md](security.md).
+  Traefik + Authentik forward-auth). Application login is planned before
+  v1.0.0 (roadmap Phase 7). See [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

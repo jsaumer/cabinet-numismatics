@@ -71,7 +71,8 @@ full client packages pull ~50 MB of perl) into
 major: pg_dump 18 against a 16 server writes `SET transaction_timeout`,
 which 16 rejects on restore. Tests monkeypatch `backup.dump_database`
 (SQLite has no pg_dump); CI's stack job rehearses download → restore.sh on
-real Postgres. B3 (in-app restore) stays blocked on auth.
+real Postgres. B3 (in-app restore) was blocked on auth until the owner unblocked it; it is
+roadmap Phase 7, P2.
 
 ## Pricing reports, M5 (v0.13.0)
 

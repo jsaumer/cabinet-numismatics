@@ -13,9 +13,11 @@ built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance), in-app backup (Phase 5.6 B1 + B2) shipped
-in v0.12.0, and the open-source readiness track (Phase 6) is complete. Application
-login is not planned: v1.0.0 will ship without one (see "The road to
-v1.0.0" under Phase 5.9).
+in v0.12.0, and the open-source readiness track (Phase 6) is complete.
+**What's next is Phase 7**, a parity plan chosen by the owner on 20
+September 2026 from a survey of other collection tools; it includes
+application login, which reverses the earlier decision to ship v1.0.0
+without one.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -96,16 +98,27 @@ The heart of the app: describing what you own, accurately and flexibly.
   **Shipped in v0.22.0.**
 - ✔ **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
   item per date and mint. Phase 5.9. **Shipped in v0.23.0.**
-- **[Nice]** Wish-list target price and priority, alerted when an estimate
-  falls to the target; statuses beyond owned/sold/wishlist (watching,
-  bidding, ordered, for sale, for swap) with auction fields (house, lot,
-  date, max bid, result). Phase 5.9. **Parked**: the owner mostly holds.
+- **[Core]** Wish-list target price and priority, alerted when an estimate
+  falls to the target. **Planned: Phase 7, P3.**
+- **[Nice]** Statuses beyond owned/sold/wishlist (watching, bidding,
+  ordered, for sale, for swap) with auction fields (house, lot, date, max
+  bid, result). Phase 5.9. **Parked**: the owner mostly holds.
+- **[Core]** Paper money depth: Friedberg and Pick references, National Bank
+  Note fields, series and signature combination with a report by signature.
+  **Planned: Phase 7, P4.**
+- **[Nice]** Fancy serial numbers detected from a note's serial (solids,
+  radars, repeaters, ladders, binaries, low numbers, date notes). **Planned:
+  Phase 7, P5.**
+- **[Nice]** Die axis, and the date as struck in its own calendar beside the
+  Gregorian year. **Planned: Phase 7, P6.**
 - **[Nice]** Grading submissions: service, submission number, tier, fees
   (into cost basis), dates, result, and old → new cert. Phase 5.9.
   **Parked**: nothing is being submitted.
-- **[Nice]** Nested storage locations (safe → box → row), printable 2×2
-  inserts and slab/box labels with QR codes, and a "verified on" physical
-  audit. Phase 5.9. **Candidate**: once there are a few hundred pieces.
+- **[Nice]** Nested storage locations (safe → box → row) and a "verified on"
+  physical audit. Phase 5.9. **Candidate**: once there are a few hundred
+  pieces.
+- **[Nice]** Printable 2×2 inserts and slab/box labels with QR codes.
+  **Optional, Phase 7.**
 - **[Nice]** Variety references by scheme and number (FS, VAM, CONECA,
   Overton…) with links to NGC VarietyPlus and VAMworld. Phase 5.9.
   **Candidate.**
@@ -191,10 +204,10 @@ guidance, not appraisals.
   quota is 100 calls a day. **Shipped in v0.24.4 and v0.24.6.**
 - **[Nice]** PCGS population and eBay sold-listings / Photograde links on
   the item page. Phase 5.9. Links ✔ **shipped in v0.22.0**; population on
-  the item page is a **candidate** (the cert fill already reports it).
+  the item page is **planned: Phase 7, P1**.
 - **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
-  the alert webhook. Phase 5.9. **Parked**: the collection isn't a stack.
+  the alert webhook. **Planned: Phase 7, P7** (was parked).
 
 ## 4. Stats, reports & insights
 
@@ -241,21 +254,25 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Nice]** Backup from inside the app: download the collection as one
   `.zip` from Settings, and scheduled backups with retention. The scripts
   stay as the disaster-recovery path. See Phase 5.6. **Shipped in v0.12.0**
-  (B1 download + B2 scheduled/retention; B3 restore is blocked on the auth
-  decision below, no target yet).
+  (B1 download + B2 scheduled/retention; B3 restore is **planned: Phase 7,
+  P2**, no longer blocked on authentication).
 - ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
 - ✔ **[Core]** Data validation and sensible error messages (real image
   validation, enum/range checks, actionable estimate errors).
 - ✔ **[Core]** Secrets handled to standard: price-source credentials are
   Fernet-encrypted at rest with env-supplied keys and rotation support, and
   are write-only through the API. See `security.md`.
-- **[Nice]** Authentication. **Not planned for v1.0.0** (decided 20
-  September 2026). Cabinet is for a trusted network, or behind an
-  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth),
-  which needs no application code. v1.0.0 means a stable HTTP API, not
-  login. Application-level login would change the security model of every
-  endpoint; it is a possible 2.0 item if direct public exposure ever
-  becomes a goal.
+- **[Core]** Authentication: local accounts with a first-run superuser,
+  user maintenance, and API tokens, then single sign-on (OpenID Connect and
+  a trusted-header mode). **Planned: Phase 7, P8**, before v1.0.0. Until it
+  ships, Cabinet has no login and belongs on a trusted network or behind an
+  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth). A
+  decision on 20 September 2026 to ship v1.0.0 without login was reversed
+  the same day, when the owner chose feature parity and a share view, which
+  needs the rest of the app closed first.
+- **[Nice]** Share and showcase view: a read-only public link to a set, a
+  checklist, or the collection. **Planned: Phase 7, P9**, blocked on
+  authentication.
 - ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
   frontend typecheck, and a compose build/migrate/smoke test on every push and
   PR; a `v*` tag push additionally publishes the backend and proxy images to
@@ -303,9 +320,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - **[Nice]** Coin-show mode: an installable mobile web app (PWA) with
   quick-add from the phone camera and slab barcode/QR scanning (PCGS → cert
   and grade, NGC → cert) feeding cert-first entry, tolerant of a bad
-  connection. Phase 5.9. **Candidate** for the quick-add; scanning is
-  **parked**: the collection isn't mostly slabs, and the site already works
-  on a phone with the camera.
+  connection. **Optional, Phase 7** (the installable app with quick-add;
+  scanning would ride on it).
 - **[Nice]** Portability: Excel export with thumbnails, and an
   OpenNumismat-compatible round-trip export with a photo archive. Phase
   5.9. **Candidate**: CSV/XLSX export and rehearsed backups exist.
@@ -469,8 +485,8 @@ estimate, and you can see where pricing is thin.*
 ### Phase 5.6: Backup from inside the app
 
 B1 + B2 ✔ **shipped in v0.12.0**, pulled ahead of pricing M5 once real data
-started going into the live instance. B3 restore is blocked on the auth
-decision in Phase 6/section 5, no target yet.
+started going into the live instance. B3 restore was blocked on the auth
+decision until 20 September 2026; it is now Phase 7, P2.
 
 `scripts/backup.sh` needs a shell, the host, and Docker. That is the right
 tool for disaster recovery and the wrong one for "I just entered forty items
@@ -493,9 +509,10 @@ stay the documented recovery path.
   no new service; see the "no cut services" rule in CLAUDE.md.
 - **B3: Restore from an upload.** Upload an archive, validate the manifest
   (schema revision compatible, checksums intact), show what would change,
-  then restore behind an explicit typed confirmation. **Blocked on a
-  decision:** restore is destructive and the app has no auth, so this either
-  waits for authentication or stays CLI-only. B1 and B2 do not depend on it.
+  then restore behind an explicit typed confirmation. It was blocked on a
+  decision (restore is destructive and the app has no auth) until the owner
+  unblocked it on 20 September 2026: see **Phase 7, P2**, which adds an
+  automatic safety backup and a deployment switch.
 
 Implementation notes:
 
@@ -691,6 +708,9 @@ for it, and new ones found while entering the collection outrank these.
   in the September 2026 layout review and not picked yet.
 - **API call counter**: tabled by the owner; see section 5.
 
+The wish-list targets, population, and the stack view moved from here and
+from Parked into **Phase 7** on 20 September 2026.
+
 **Parked**: real features for a collector this owner isn't; revisit only
 if that changes.
 
@@ -703,11 +723,15 @@ if that changes.
   typed number.)
 - **Stack view** for bullion. (Not a stack.)
 
-**The road to v1.0.0** (decided 20 September 2026). v1.0.0 ships with **no
-application login**: Cabinet is documented as for a trusted network or
-behind an authenticating reverse proxy, and 1.0 means the HTTP API is
-stable. It is declared after the data-entry review, if that finds nothing
-structural. The checklist:
+**The road to v1.0.0.** 1.0 means the HTTP API is stable. On 20 September
+2026 it was first decided to ship 1.0 with no application login; later the
+same day the owner chose the Phase 7 parity plan, which includes
+authentication, and authentication changes every endpoint, so it has to
+land before the API is declared stable. v1.0.0 therefore follows Phase 7's
+P8 (and the data-entry review, if that finds nothing structural). The
+checklist:
+
+- Authentication (Phase 7, P8: local accounts, then single sign-on).
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -720,8 +744,8 @@ structural. The checklist:
 - A README and quick-start pass (the screenshots are current as of
   v0.24.2).
 
-In-app restore stays blocked on authentication, so it stays a script;
-showcase links remain a want, not a need.
+In-app restore (Phase 5.6, B3) is no longer blocked on authentication: it
+is Phase 7, P2. The share view is Phase 7, P9.
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -740,13 +764,125 @@ gets asked.*
 - ✔ Hardened setup docs (`deployment.md`), CI on PRs, changelog + versioned
   release, demo seed data, screenshots.
 - ✔ Migration story for upgrades (Alembic end to end).
-- Application-level authentication remains **deliberately unbuilt**, and is
-  not part of v1.0.0: proxy-level forward-auth (Traefik + Authentik) is the
-  documented path, and app login would only matter for direct public
-  exposure. See section 5's Authentication entry.
+- Application-level authentication was deliberately left unbuilt through
+  this phase: proxy-level forward-auth (Traefik + Authentik) is the
+  documented path until it ships. It is now planned (Phase 7, P8).
 - ✔ The repository is public on GitHub (since v0.10.1); versioned images are
   published to GHCR from v0.10.2.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
+
+### Phase 7: Parity with other collection tools
+
+Added 20 September 2026, with v0.24.9 live. A survey of fourteen product
+groups (OpenNumismat, Numista, the PCGS, NGC, and PMG registries and apps,
+CoinManage and CurrencyManage, EzCoin, Exact Change, Coin Elite, Colnect,
+uCoin, the camera-identification apps, Greysheet and the bullion trackers,
+Koillection, MyCollect and iCollect) was checked against Cabinet feature by
+feature. Cabinet already covers most of what three or more of them share,
+and is ahead on documents, the trash, estimate provenance, pricing reports,
+rehearsed backups, alerts, and being self-hosted with an API. The owner
+chose the gaps below to close. This is a deliberate change of goal from the
+third look's "build only what real use asks for": parity is now wanted, so
+items that were parked (the wish-list targets, the stack view) and the
+decision against application login are reopened here.
+
+In the proposed order; each ships alone as a minor release, and versions
+are illustrative.
+
+- **P1: Population on the item page** (S). PCGS population and population
+  higher, which the cert fill already fetches and then drops, kept with the
+  item (a migration), shown beside the grade with the date fetched, and
+  refreshed with the PCGS estimate at no extra request. PCGS, NGC, and PMG
+  all show it.
+- **P2: In-app restore** (M–L). Phase 5.6's B3, no longer blocked on
+  authentication (the owner's decision, 20 September 2026). The block was a
+  matter of principle more than of risk: anyone who can reach an open
+  Cabinet can already download the whole collection and delete every item
+  for good, so a restore page adds little to what a trusted network is
+  already trusted with. Placed second because it protects the data going
+  in now, and because every later item in this phase adds a migration, which
+  is when a quick way back matters most. Upload a Cabinet archive (or pick
+  one of the scheduled ones); the manifest and checksums are verified and
+  the schema revision checked (older archives are migrated forward after
+  the restore, newer ones refused); a summary shows what is there now
+  against what the archive holds; a **safety backup is taken automatically
+  first**, so a restore can itself be undone; then a typed confirmation. The
+  app goes into a short maintenance state while `pg_restore` runs and the
+  photo and document archives are unpacked. A deployment can switch the
+  page off (`RESTORE_ENABLED=false`), and it becomes admin-only when
+  authentication ships. `restore.sh` stays the disaster-recovery path for
+  when the app itself won't start, and CI's restore drill gains the in-app
+  route.
+- **P3: Wish-list depth** (M). A target price and a priority on wish-list
+  items, a wish-list view sorted by either, the gap between target and the
+  current estimate, and an alert through the existing webhook when an
+  estimate falls to the target. Eight of the products have a wish list.
+- **P4: Paper money depth** (M). Friedberg and Pick numbers as first-class
+  catalogue references with their own lookup links; National Bank Note
+  fields (charter number, bank, city, state); series and signature
+  combination as structured fields with a report grouped by signature;
+  plate and position letters. CurrencyManage is the benchmark.
+- **P5: Fancy serial numbers** (S–M). Detected from the serial number
+  already stored: solids, radars, repeaters and super repeaters, ladders,
+  binaries, low and high numbers, birthday and date notes, and star or
+  replacement notes, shown as badges, searchable, and listed on a report.
+  No product surveyed has this; it needs no outside data.
+- **P6: Die axis and foreign dates** (S). Die axis in degrees or as coin or
+  medal alignment; the date as struck (Hijri, Japanese era, Thai Buddhist,
+  Hebrew, and so on) beside the Gregorian year, converted on entry, with the
+  calendar recorded. OpenNumismat has the first, Exact Change the second.
+- **P7: Bullion stack figures** (M). Fine ounces by metal, premium over spot
+  at purchase (from the spot price on the acquisition date where known),
+  cost per ounce, break-even spot, and a spot-price threshold alert through
+  the webhook. Every stack tracker has these; this is the parked stack view.
+- **P8: Authentication** (L, in two parts).
+  - **A1: Local accounts.** A first-run setup page that creates the
+    superuser; sign-in with a session cookie (HttpOnly, SameSite, behind a
+    CSRF check); passwords hashed with Argon2; sign-in rate limiting; user
+    maintenance by the superuser (add, disable, reset a password, roles:
+    admin, editor, read-only); personal API tokens so the Homepage tile,
+    Prometheus, and scripts keep working; and photos protected too, which
+    today nginx serves without asking the API (an `auth_request`, or signed
+    photo URLs). Still one shared collection: accounts are logins, not
+    separate collections.
+  - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
+    Keycloak, Authelia, Google), with accounts created on first sign-in or
+    matched by email, and a trusted-header mode for a forward-auth proxy
+    that already authenticates. Planned from the start so A1's user table
+    and sessions carry an external identity; built second.
+  - Authentication changes every endpoint, so it must land **before
+    v1.0.0** declares the API stable (adding it afterwards would be the
+    breaking change 1.0 promises not to make). In-app restore (P2)
+    becomes admin-only when it ships. To settle during its research: whether
+    login can be switched off for a deployment that sits behind its own
+    proxy, and how an upgrade from an open install behaves on first start.
+  - **The proposed permission table** (admin, editor, viewer, API tokens,
+    and share links, action by action, with the rules around it) is in
+    [security.md](security.md#planned-accounts-and-permissions), so it is
+    reviewed before it is coded.
+- **P9: Share and showcase view** (M). A read-only public page for a set, a
+  checklist, or the whole collection, behind an unguessable link that can be
+  revoked, with a choice of what it shows (never costs, never storage
+  locations). **Blocked on P8**: it is the first deliberately public page,
+  and everything else has to be closed before one door is opened.
+
+Optional, after the above and only if still wanted:
+
+- **Labels**: printable 2×2 inserts and slab or box labels with a QR code
+  back to the item.
+- **Phone app**: an installable web app (PWA) with quick-add from the
+  camera; slab barcode scanning into the cert fill would ride on it.
+
+Surveyed and not planned, with the reason: identifying a coin from a photo
+(a hosted model or a paid API, and the ANA's review disputes CoinSnap's
+grading and pricing); swap matching, rankings, feeds, and marketplaces
+(they need a community); competitive registries with awards (checklists
+give the completion view); price databases sold as updates (the API-key
+sources are free and current).
+
+*Exit: nothing a collector expects from another tool is missing, notes are
+as well served as coins, and the collection can be shown to someone without
+handing them the keys.*
 
 ---
 
@@ -754,9 +890,10 @@ gets asked.*
 
 - **Auth is deliberately late, and mostly external.** For homelab deployment,
   an authenticating reverse proxy (Traefik + Authentik forward-auth) covers
-  private networked use with zero application code. App-level login would
-  only be a prerequisite for direct public exposure, which isn't a goal, so
-  v1.0.0 ships without it and marks a stable API instead.
+  private networked use with zero application code, and that stays the
+  path until login ships. Login is now planned (Phase 7, P8) because a share
+  view needs the rest of the app closed first, and it lands before v1.0.0
+  because it changes every endpoint.
 - **Schema-complete before data-complete.** Phase 2 front-loaded every field
   the collection would need (status, composition, certification, provenance)
   because adding columns is cheap before the full collection is entered and

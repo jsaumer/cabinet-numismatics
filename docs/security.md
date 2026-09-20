@@ -102,25 +102,96 @@ that is an accepted gap.
 
 ## Authentication & network exposure
 
-There is **no application-level authentication**, by decision (see the
-roadmap's "The road to v1.0.0"), and v1.0.0 will ship that way: 1.0 means a
-stable HTTP API, not login. Cabinet is for a trusted network, or behind an
-authenticating reverse proxy. Before exposing it beyond a trusted LAN:
+There is **no application-level authentication yet**. It is planned before
+v1.0.0 (roadmap Phase 7, P8: local accounts with a first-run superuser and
+API tokens, then OpenID Connect single sign-on). Until it ships, Cabinet is
+for a trusted network, or behind an authenticating reverse proxy. Before exposing it beyond a trusted LAN:
 
 - Put it behind an authenticating reverse proxy (Traefik + Authentik
   forward-auth is the intended path), which requires no application changes.
   [deployment.md](deployment.md) has the configuration.
 - Terminate TLS at the proxy so credentials entered in Settings and photos are
   not transmitted in the clear.
-- Application-level login would only matter for direct public exposure, which
-  isn't a goal. It is not planned for 1.0; it is at most a possible later
-  item.
+- When application login ships it will also have to cover what bypasses the
+  API today (photos, below) and give the Homepage tile and the metrics
+  endpoint a token to use.
 
 Photos under `/photos/` are served by nginx without going through the API;
 their UUID file names are not guessable, but only the reverse proxy's
 authentication actually protects them, like everything else.
 
 Do not port-forward the stack to the internet as-is.
+
+## Planned: accounts and permissions
+
+**Not built yet.** This is the design proposed for roadmap Phase 7, P8, kept
+here so it is reviewed before it is coded; it will be revised by that item's
+research and replaced by a description of what ships.
+
+Accounts are logins to **one shared collection**, not separate collections.
+The first-run setup page creates the first admin, and works only while no
+account exists. Three roles:
+
+- **Admin**: everything, including users, settings, secrets, backups, and
+  restore. The superuser created at setup is an admin.
+- **Editor**: the collection itself (add, edit, photograph, value, import,
+  trash and restore) but nothing about the deployment.
+- **Viewer**: read-only.
+
+Two more kinds of caller are not accounts:
+
+- **API token**: created by a user for the Homepage tile, Prometheus, or a
+  script. It carries scopes (`read`, `write`, `metrics`), can never do more
+  than the user who made it, and can never manage users, settings, secrets,
+  backups, or tokens.
+- **Share link** (Phase 7, P9): an anonymous, read-only, revocable link to
+  one set, one checklist, or the collection.
+
+| Action | Admin | Editor | Viewer | API token | Share link |
+|---|---|---|---|---|---|
+| View items, photos, checklists, dashboard, reports, edit history | yes | yes | yes | `read` | only what the link shares |
+| View costs, values, and gains | yes | yes | yes (an admin can hide them per viewer) | `read`, if its owner can | never |
+| View storage locations | yes | yes | yes | `read` | never |
+| View and download documents | yes | yes | yes | `read` | never |
+| Export CSV and Excel | yes | yes | yes | `read` | no |
+| Add and edit items, photos, documents, tags, sets, checklists, sales log | yes | yes | no | `write` | no |
+| Bulk edit, "Add a run", imports | yes | yes | no | `write` | no |
+| Ask a price source for an estimate (spends quota) | yes | yes | no | `write` | no |
+| Move to the trash, restore from the trash | yes | yes | no | `write` | no |
+| Delete for good, empty the trash | yes | no | no | no | no |
+| Create and revoke share links | yes | own links | no | no | no |
+| Settings: display currency, value strategy, refresh cadence, trash retention | yes | view only | no | no | no |
+| Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
+| Backups: download, run now, schedule | yes | no | no | no | no |
+| Restore from an archive | yes | no | no | no | no |
+| Alerts test, monitoring status | yes | no | no | no | no |
+| `/api/metrics` | yes | no | no | `metrics` | no |
+| Users: add, disable, change role, reset a password | yes | no | no | no | no |
+| Own password, own API tokens, own sessions | yes | yes | yes | no | no |
+| `/api/docs` (the API reference) | yes | yes | yes | no | no |
+| `/api/health` | full | full | full | full | status only, as for anyone not signed in |
+
+Rules that go with the table:
+
+- The last enabled admin can't be disabled, demoted, or deleted.
+- Disabling a user ends their sessions and revokes their tokens.
+- Passwords are hashed with Argon2id; sign-in is rate limited per account and
+  per address; sessions are HttpOnly, SameSite cookies with a CSRF check on
+  anything that changes data; a token is shown once and stored hashed.
+- Photos need the same check as the API. nginx serves them directly today,
+  so that becomes an `auth_request` to the backend, or signed, expiring
+  photo URLs.
+- Single sign-on (OpenID Connect) maps a provider's groups to roles: an
+  admin group, an editor group, and viewer for anyone else allowed in; a
+  trusted-header mode does the same for a forward-auth proxy. Local accounts
+  stay available so a provider outage can't lock the admin out.
+- Every sign-in, failed sign-in, role change, token, share link, backup
+  download, and restore is written to an audit log the admin can read.
+- Open questions for the research: whether a deployment that sits behind its
+  own proxy can switch login off, and what the first start after upgrading
+  an open install does (the proposal: everything stays reachable only until
+  the setup page has created the admin, and the log says so loudly).
+
 
 ## Input handling
 

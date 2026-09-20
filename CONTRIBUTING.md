@@ -11,8 +11,9 @@ Contributions that keep it simple are very welcome.
 - **Features**: check [docs/roadmap.md](docs/roadmap.md) first: the intended
   scope, what's built, and what's deliberately deferred are all recorded
   there. Opening an issue before a large PR saves everyone time. An
-  application login is out of scope: Cabinet runs on a trusted network or
-  behind an authenticating reverse proxy, and v1.0.0 will ship that way.
+  application login is planned (roadmap Phase 7) and not built yet: until
+  then Cabinet runs on a trusted network or behind an authenticating
+  reverse proxy. Talk to us before starting on it.
 - **Questions**: open a discussion or issue; there's no separate forum.
 
 ## Development setup

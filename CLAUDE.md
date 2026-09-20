@@ -21,9 +21,10 @@ changelog entry when releasing.
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- Single-user, so no auth in the app, by decision: it runs on a trusted
-  network or behind an authenticating reverse proxy, and v1.0.0 will ship
-  that way (1.0 means a stable API, not login).
+- No auth in the app yet: it runs on a trusted network or behind an
+  authenticating reverse proxy. Login is planned (roadmap Phase 7, P8: local
+  accounts with a first-run superuser, then OIDC single sign-on) and lands
+  before v1.0.0; it stays one shared collection.
 
 ## Repo layout
 
@@ -140,13 +141,22 @@ and Calibri-first `--font` in `styles.css`, dark by default, the logo in
 fixes found with a real token (100 calls/day, `_country` / `_mint_mark`,
 month-only lot dates, `APR_MAX_AGE`). The API call counter was planned and
 **tabled** by the owner; don't build it unprompted.
-**Next: nothing is queued**, and v1.0.0 follows the checklist under "The
-road to v1.0.0" in the roadmap (no application login). The
+**Next: roadmap Phase 7**, the parity plan the owner chose on 20 September
+2026 from a survey of other tools, in order: P1 population on the item page, P2 in-app restore (no longer blocked on
+auth; safety backup first, typed confirmation, `RESTORE_ENABLED` switch),
+P3 wish-list depth, P4 paper money depth, P5 fancy serial numbers, P6 die
+axis and foreign dates, P7 bullion stack figures, P8 authentication (local
+accounts, then SSO; the proposed role and permission table is in
+docs/security.md), P9 a share view (blocked on P8); labels and a phone
+app are optional. Research and propose each before building, as always.
+v1.0.0 follows P8 and the checklist under "The road to v1.0.0". Before
+that, the
 roadmap's Phase 5.9 was demoted on 19 September 2026 from a release train to
 one next item plus unordered **candidates** and **parked** items: the owner
 is entering 100–500 pieces by hand (runs and singles, mostly held), so don't
-build ahead of that: propose work from friction they report, and treat the
-pipeline, tax lots, submissions, slab scanning, and the stack view as parked.
+build ahead of that beyond Phase 7: friction they report still comes
+first, and the pipeline statuses, tax lots, submissions, and slab scanning
+stay parked.
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;

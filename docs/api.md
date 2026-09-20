@@ -11,9 +11,12 @@ auto-generated OpenAPI documentation served at:
 
 All request and response bodies are JSON unless noted (photo, document, and
 import uploads are multipart; exports, backups, document files, and metrics
-answer files or text). Since the app is single-user and self-hosted,
-endpoints are described without an auth layer; add one before exposing the
-app publicly.
+answer files or text). The app has no login yet, so
+endpoints are described without an auth layer; put an authenticating proxy
+in front before exposing it beyond a trusted network. Login is planned
+(roadmap Phase 7, P8), and
+[security.md](security.md#planned-accounts-and-permissions) has the proposed
+table of who will be able to call what.
 
 ## Items
 
