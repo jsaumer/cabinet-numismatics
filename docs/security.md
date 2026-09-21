@@ -188,7 +188,7 @@ Decided on 21 September 2026, the details that shape the code:
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
 | CSRF | That cookie plus an Origin or Referer check on every unsafe method, no token plumbing |
 | Passwords | Argon2id through `argon2-cffi`, sign-in throttled per account and per address |
-| Photos | nginx `auth_request` against the session, the answer cached briefly so a page of thumbnails costs one check |
+| Photos | nginx `auth_request` against the session, one subrequest per photo. Caching only if measurement asks for it, and only with a reviewed cache key |
 | Proxies | A `TRUSTED_PROXIES` setting, default empty, decides whose forwarded scheme and address are believed |
 | Restore | The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
 | API tokens | Scopes `read`, `write`, `metrics`; shown once, stored hashed, revocable, with a last-used time |
@@ -276,9 +276,16 @@ Rules that go with the table:
   address); `TRUSTED_PROXIES` names which proxies it believes, and defaults
   to trusting none.
 - A restore replaces the users, sessions, and tokens tables with whatever the
-  archive holds: everyone is signed out, and an archive made before login
+  archive holds, so **every session and API token in the restored database is
+  revoked** as the last step. A credential withdrawn since that backup can
+  never come back to life; everyone signs in again, and a token the Homepage
+  tile or Prometheus uses has to be re-minted. An archive made before login
   existed brings the setup page back. The restore summary says so before it
-  runs.
+  runs, and the outcome records how many were revoked.
+- Once accounts exist, the `db.dump` inside every backup archive carries
+  password and token hashes. Archives live in `BACKUP_DIR`, often a network
+  mount, and can be downloaded from Settings: treat an archive as credential
+  material, not only collection data.
 
 
 ## Input handling
