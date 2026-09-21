@@ -54,6 +54,23 @@ def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = D
     return estimate
 
 
+@router.delete("/estimates/{estimate_id}", status_code=204)
+def delete_estimate(item_id: uuid.UUID, estimate_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Remove a value that was typed in. What a price source said stays: that
+    history is the record the reports and the provenance are built on."""
+    get_item_or_404(db, item_id)
+    estimate = db.get(PriceEstimate, estimate_id)
+    if estimate is None or estimate.item_id != item_id:
+        raise HTTPException(status_code=404, detail="Estimate not found")
+    if pricing.source_key(estimate.source) in pricing.ADAPTER_NAMES:
+        raise HTTPException(
+            status_code=409,
+            detail="Only a value you typed in can be deleted; a price source's values are kept",
+        )
+    db.delete(estimate)
+    db.commit()
+
+
 @router.post("/estimate", response_model=EstimateOut, status_code=201)
 def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depends(get_db)):
     """Produce an automatic estimate from one price source: `melt` (default),

@@ -89,6 +89,8 @@ export const api = {
   reorderPhotos: (itemId: string, order: string[]) =>
     req<Photo[]>(`/api/items/${itemId}/photos/order`, json("POST", { order })),
 
+  deleteEstimate: (itemId: string, estimateId: string) =>
+    req<void>(`/api/items/${itemId}/estimates/${estimateId}`, { method: "DELETE" }),
   addEstimate: (
     itemId: string,
     payload: {

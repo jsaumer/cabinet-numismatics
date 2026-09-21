@@ -127,7 +127,8 @@ Dark is the default; the header toggle switches to light and remembers it.
 ### Valuation
 - **Manual estimates**: record researched values (dealer quote, auction
   result, price guide) with source and optional confidence, kept as
-  append-only history, never overwritten.
+  append-only history, never overwritten (a value typed in by mistake can be
+  deleted; what a source said is kept).
 - **Pluggable price sources**: melt value (spot price × weight × fineness ×
   quantity, keyless), Numista (coins and notes, priced by catalog ref +
   grade), and PCGS (US coins, by cert number or catalog ref + grade,

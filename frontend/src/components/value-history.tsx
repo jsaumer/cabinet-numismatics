@@ -54,6 +54,21 @@ export function ValueHistory({
     }
   }
 
+  // Only a typed-in value can go; what a source said is the record.
+  const typed = (source: string) => !(sourceKey(source) in SOURCE_LABELS);
+
+  async function removeEstimate(id: string) {
+    if (!window.confirm("Delete this value? It can't be brought back.")) return;
+    setEstimateError(null);
+    setEstimateSuccess(null);
+    try {
+      await api.deleteEstimate(item.id, id);
+      onChanged();
+    } catch (err) {
+      setEstimateError((err as Error).message);
+    }
+  }
+
   async function autoEstimate(source: string) {
     setEstimating(source);
     setLastTried(source);
@@ -156,6 +171,16 @@ export function ValueHistory({
                           onClick={() => toggleExpanded(est.id)}
                         >
                           {open ? "▾ details" : "▸ details"}
+                        </button>
+                      )}
+                      {typed(est.source) && (
+                        <button
+                          type="button"
+                          className="link-button danger-link"
+                          title="Delete this typed-in value"
+                          onClick={() => removeEstimate(est.id)}
+                        >
+                          delete
                         </button>
                       )}
                     </td>
