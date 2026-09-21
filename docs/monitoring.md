@@ -218,7 +218,9 @@ Scraping through the public hostname works too, but an authenticating proxy
 
 **Like the rest of the API, `/api/metrics` has no login**, and it includes the
 collection's value. That's the reason it's off by default. See
-[security.md](security.md).
+[security.md](security.md). When login ships in v0.30.0 the endpoint moves
+behind an API token with the `metrics` scope, and the scrape config here
+gains an `Authorization` header.
 
 ## During a restore
 

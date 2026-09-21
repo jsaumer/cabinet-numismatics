@@ -278,14 +278,16 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Core]** Secrets handled to standard: price-source credentials are
   Fernet-encrypted at rest with env-supplied keys and rotation support, and
   are write-only through the API. See `security.md`.
-- **[Core]** Authentication: local accounts with a first-run superuser,
-  user maintenance, and API tokens, then single sign-on (OpenID Connect and
-  a trusted-header mode). **Planned: Phase 7, P8**, before v1.0.0. Until it
-  ships, Cabinet has no login and belongs on a trusted network or behind an
-  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth). A
-  decision on 20 September 2026 to ship v1.0.0 without login was reversed
-  the same day, when the owner chose feature parity and a share view, which
-  needs the rest of the app closed first.
+- **[Core]** Authentication: one admin with a first-run setup code,
+  database-backed sessions, and scoped API tokens, then single sign-on
+  (OpenID Connect and a trusted-header mode). **Next: Phase 7, P8**, as
+  v0.30.0 and v0.31.0, both before v1.0.0. Until it ships, Cabinet has no
+  login and belongs on a trusted network or behind an authenticating reverse
+  proxy (e.g. Traefik + Authentik forward-auth). A decision on 20 September
+  2026 to ship v1.0.0 without login was reversed the same day, when the
+  owner chose feature parity and a share view, which needs the rest of the
+  app closed first; the design was settled on 20 and 21 September 2026 and
+  is in [security.md](security.md#next-accounts-and-permissions).
 - **[Nice]** Share and showcase view: a read-only public link to a set, a
   checklist, or the collection; the whole feature switched on or off in the
   admin's Settings, off by default. **Planned: Phase 7, P9**, blocked on
@@ -792,9 +794,17 @@ checklist:
   `watermark`, `demonetization`, added in v0.29.0) confirmed against the
   live API: it was built without a key on the dev machine, so it reads
   every shape defensively and could not be tried against a real response.
-- An API consistency pass while breaking changes are still free (for
-  example the old `POST /api/items/import` beside `/api/imports`), then a
-  written stability policy in `api.md`.
+- An API consistency pass while breaking changes are still free. **Folded
+  into P8's A1 (v0.30.0)**, decided 21 September 2026, with three changes
+  approved: the old `POST /api/items/import` goes, leaving `/api/imports` as
+  the one import path; `POST /api/estimates/refresh-melt` becomes
+  `POST /api/estimates/refresh?source=melt`; and
+  `POST /api/items/{id}/estimate` becomes
+  `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
+  letter from the manual `POST .../estimates`. Then a written stability
+  policy in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
+  sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
+  where a PATCH would read better.
 - A CI check that fails on a breaking change to the OpenAPI schema.
 - A CI upgrade test: a database from an old release migrated to head.
 - A README and quick-start pass (the screenshots are current as of
@@ -933,7 +943,19 @@ v0.26.0.
   metrics gauge. `items.weight_g` gained a fourth decimal place (a troy
   ounce is 31.1035 g) in the same migration.
 - **P8: Authentication** (L, in two parts, with more accounts optional;
-  decisions of 20 September 2026 marked ◆).
+  decisions of 20 September 2026 marked ◆). **This is what is being built
+  now**, as **v0.30.0** (A1) and **v0.31.0** (A2). The remaining design
+  questions were settled on 21 September 2026: a session lasts one day from
+  last use with a 7 day cap; CSRF is the `SameSite` cookie plus an Origin
+  check, not a token; photos go through nginx `auth_request` rather than
+  signed URLs; passwords use Argon2id (`argon2-cffi`, a new dependency); a
+  `TRUSTED_PROXIES` setting decides whose forwarded headers are believed,
+  because it must work both behind an authenticating proxy and directly
+  exposed; and the session that starts a restore keeps an in-memory grant so
+  its progress page still answers. The full design and the permission table
+  are in [security.md](security.md#next-accounts-and-permissions). **The API
+  consistency pass from the 1.0 checklist below ships with A1**, since auth
+  already touches every endpoint.
   - **A1: One admin.** ◆ Single user to start: just the admin, onboarded
     when the app is initialised. A setup page appears while no account
     exists and asks for ◆ a one-time **setup code the backend prints in its
@@ -971,7 +993,7 @@ v0.26.0.
     page until the admin exists.
   - **The proposed permission table** (admin, editor, viewer, API tokens,
     and share links, action by action, with the rules around it) is in
-    [security.md](security.md#planned-accounts-and-permissions), so it is
+    [security.md](security.md#next-accounts-and-permissions), so it is
     reviewed before it is coded.
 - **P9: Share and showcase view** (M). A read-only public page for a set, a
   checklist, or the whole collection, behind an unguessable link that can be
@@ -1043,7 +1065,7 @@ Optional, after the above and only if still wanted:
   camera; slab barcode scanning into the cert fill would ride on it.
 - **More accounts**: user maintenance by the admin (add, disable, reset a
   password) and the editor and viewer roles, per the permission table in
-  [security.md](security.md#planned-accounts-and-permissions), with single
+  [security.md](security.md#next-accounts-and-permissions), with single
   sign-on then creating accounts and mapping a provider's groups to roles.
   Moved here from P8 by the owner on 20 September 2026. Still one shared
   collection: accounts would be logins, not separate collections.
@@ -1064,12 +1086,13 @@ handing them the keys.*
 
 ## Notes on sequencing
 
-- **Auth is deliberately late, and mostly external.** For homelab deployment,
-  an authenticating reverse proxy (Traefik + Authentik forward-auth) covers
-  private networked use with zero application code, and that stays the
-  path until login ships. Login is now planned (Phase 7, P8) because a share
-  view needs the rest of the app closed first, and it lands before v1.0.0
-  because it changes every endpoint.
+- **Auth was deliberately late, and is now next.** For homelab deployment an
+  authenticating reverse proxy (Traefik + Authentik forward-auth) covers
+  private networked use with zero application code, and that stays the path
+  until login ships. Login became Phase 7, P8 because a share view needs the
+  rest of the app closed first, and it lands before v1.0.0 because it
+  changes every endpoint. It is built to work both behind such a proxy and
+  directly exposed, since which one a deployment uses is its own choice.
 - **Schema-complete before data-complete.** Phase 2 front-loaded every field
   the collection would need (status, composition, certification, provenance)
   because adding columns is cheap before the full collection is entered and

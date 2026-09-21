@@ -182,8 +182,10 @@ rotation.
   start; see [backup-restore.md](backup-restore.md).
 - There is no application-level auth yet: Cabinet is for a trusted
   network, or behind an authenticating reverse proxy with TLS (for example
-  Traefik + Authentik forward-auth). Application login is planned before
-  v1.0.0 (roadmap Phase 7). See [security.md](security.md).
+  Traefik + Authentik forward-auth). Application login is the next thing
+  built (roadmap Phase 7, P8: v0.30.0 one admin and API tokens, v0.31.0
+  single sign-on), and it has to work both behind such a proxy and directly
+  exposed. See [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

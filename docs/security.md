@@ -131,33 +131,44 @@ that is an accepted gap.
 
 ## Authentication & network exposure
 
-There is **no application-level authentication yet**. It is planned before
-v1.0.0 (roadmap Phase 7, P8: local accounts with a first-run superuser and
-API tokens, then OpenID Connect single sign-on). Until it ships, Cabinet is
-for a trusted network, or behind an authenticating reverse proxy. Before exposing it beyond a trusted LAN:
+Cabinet has **no application-level authentication yet, and it is the next
+thing being built**: roadmap Phase 7, P8, shipping as **v0.30.0** (one admin,
+database-backed sessions, scoped API tokens, and a deny-by-default gate) and
+**v0.31.0** (OpenID Connect single sign-on and a trusted-header mode). The
+design is settled rather than sketched, and is written out under "Next:
+accounts and permissions" below. Until those releases land, everything in
+this section is what stands between the collection and anyone who can reach
+the port:
 
 - Put it behind an authenticating reverse proxy (Traefik + Authentik
   forward-auth is the intended path), which requires no application changes.
   [deployment.md](deployment.md) has the configuration.
 - Terminate TLS at the proxy so credentials entered in Settings and photos are
   not transmitted in the clear.
-- When application login ships it will also have to cover what bypasses the
-  API today (photos, below) and give the Homepage tile and the metrics
-  endpoint a token to use.
+- Do not port-forward the stack to the internet as-is.
 
 Photos under `/photos/` are served by nginx without going through the API;
 their UUID file names are not guessable, but only the reverse proxy's
 authentication actually protects them, like everything else. Any path under
 `/photos/` with a segment starting with a dot answers 404, so a restore's
-working folders inside the photo volume are never served.
+working folders inside the photo volume are never served. When login ships,
+nginx authorises each photo request against the session (`auth_request`), so
+one rule covers the files and the API alike.
 
-Do not port-forward the stack to the internet as-is.
+Four things concentrate the most in a single unauthenticated request, which
+is why the proxy matters today: `GET /api/backup.zip` (the whole collection
+in one download), the restore endpoints (destructive, and they replace
+everything), `GET /api/settings` (what is configured, though the secrets
+themselves are masked), and `/api/metrics` (counts and the collection's
+value, which is why it is off by default).
 
-## Planned: accounts and permissions
+## Next: accounts and permissions
 
-**Not built yet.** This is the design proposed for roadmap Phase 7, P8, kept
-here so it is reviewed before it is coded; it will be revised by that item's
-research and replaced by a description of what ships.
+**Not built yet, and next in line.** A1 ships as **v0.30.0**: one admin,
+database-backed sessions, scoped API tokens, and a deny-by-default gate. A2
+follows as **v0.31.0**: OpenID Connect and a trusted-header mode for that
+same admin. This is a settled design, not a proposal awaiting research, and
+this section is replaced by a description of what shipped once A1 lands.
 
 Decided on 20 September 2026: the first cut is **one admin and nothing
 else**, onboarded when the app is initialised; the setup page asks for a
@@ -168,6 +179,22 @@ there first; login is **always on**, with no switch to turn it off; and
 admin is the second part. **More accounts (the editor and viewer roles and
 user maintenance) are optional**, off the planned path: the table below
 keeps their columns so the design is ready if they are ever wanted.
+
+Decided on 21 September 2026, the details that shape the code:
+
+| Decision | What ships |
+|---|---|
+| Session lifetime | One day from last use, a 7 day hard cap, and the session id rotated on sign-in |
+| Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
+| CSRF | That cookie plus an Origin or Referer check on every unsafe method, no token plumbing |
+| Passwords | Argon2id through `argon2-cffi`, sign-in throttled per account and per address |
+| Photos | nginx `auth_request` against the session, the answer cached briefly so a page of thumbnails costs one check |
+| Proxies | A `TRUSTED_PROXIES` setting, default empty, decides whose forwarded scheme and address are believed |
+| Restore | The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
+| API tokens | Scopes `read`, `write`, `metrics`; shown once, stored hashed, revocable, with a last-used time |
+
+It has to work **both** behind an authenticating proxy and directly exposed,
+because which of those the deployment uses is not decided.
 
 Accounts are logins to **one shared collection**, not separate collections.
 The setup page works only while no account exists. Three roles, of which
@@ -225,8 +252,9 @@ Rules that go with the table:
   per address; sessions are HttpOnly, SameSite cookies with a CSRF check on
   anything that changes data; a token is shown once and stored hashed.
 - Photos need the same check as the API. nginx serves them directly today,
-  so that becomes an `auth_request` to the backend, or signed, expiring
-  photo URLs.
+  so that becomes an `auth_request` to the backend (chosen over signed,
+  expiring photo URLs, which would keep photo links plain but need a key
+  rotation story of their own).
 - Single sign-on (OpenID Connect) signs in as the admin through an identity
   linked to that account; a trusted-header mode does the same for a
   forward-auth proxy. The local password stays so a provider outage can't
@@ -245,7 +273,12 @@ Rules that go with the table:
   the setup page until the admin exists, and the log says so.
 - Behind a TLS-terminating proxy the backend has to trust the forwarded
   scheme and client address (for the Secure cookie and for throttling by
-  address); which proxies it trusts is a deployment setting.
+  address); `TRUSTED_PROXIES` names which proxies it believes, and defaults
+  to trusting none.
+- A restore replaces the users, sessions, and tokens tables with whatever the
+  archive holds: everyone is signed out, and an archive made before login
+  existed brings the setup page back. The restore summary says so before it
+  runs.
 
 
 ## Input handling

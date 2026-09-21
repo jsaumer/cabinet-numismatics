@@ -17,15 +17,16 @@ or API keys required.
 the HTTP API may still change; the data model and migration path are stable.
 1.0 will mean a stable HTTP API. There is no application login yet, so
 Cabinet belongs on a trusted network or behind an authenticating reverse
-proxy; login (local accounts, then single sign-on) is planned before 1.0.
+proxy. Login is what comes next: one admin with scoped API tokens in
+v0.30.0, then single sign-on in v0.31.0, both before 1.0.
 What's next is the roadmap's Phase 7, a parity plan drawn from a survey of
 other collection tools, alongside what entering a real collection turns up
 rather
 than by a schedule. See the [roadmap](docs/roadmap.md) and
 [changelog](CHANGELOG.md).
 
-> **Deploying it?** Cabinet has no built-in login yet (one is planned before
-> 1.0): keep it on a trusted network or put it behind an authenticating
+> **Deploying it?** Cabinet has no built-in login yet (it is the next
+> release): keep it on a trusted network or put it behind an authenticating
 > reverse proxy. See [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
