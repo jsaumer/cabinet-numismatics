@@ -753,10 +753,10 @@ for it, and new ones found while entering the collection outrank these.
 - **Multi-architecture images**: the publish job builds `amd64` only; an
   `arm64` build would cover a Raspberry Pi or Apple Silicon homelab host.
   Noted in the 20 September 2026 review.
-- **Off-site or encrypted backups**: passphrase-encrypted archives and push
-  targets (S3/WebDAV/SFTP) were deferred under Phase 5.6; a mounted path
-  (including a NAS bind) covers the homelab case without a new dependency.
-  Noted again in the 20 September 2026 review.
+- **Off-site backups**: push targets (S3/WebDAV/SFTP) were deferred under
+  Phase 5.6; a mounted path (including a NAS bind) covers the homelab case
+  without a new dependency. Noted again in the 20 September 2026 review.
+  Encrypted archives moved into P8 (v0.30.0) on 21 September 2026.
 - **A keyed source for purchase-day spot before March 2024**: the stack's
   free lookup (`history_start`) only reaches back to 2 March 2024; an
   optional paid or keyed source could cover older purchases. Noted in the
@@ -983,13 +983,15 @@ v0.26.0.
     get a Postgres schema and migration chain of their own (`cabinet_auth`):
     users (with a role and an external identity from the start), sessions,
     tokens, known devices, and an audit log, never in a backup and never
-    touched by a restore. After Codex's review (21 September 2026): the
-    password is asked for again before a backup download, an export, a
-    restore, a new token, or a change to a stored secret; a password change
-    or reset revokes every `read` and `write` token; `read` and `write`
-    tokens expire within 90 days and can't export or read documents; and
-    the alert webhook reports new-device sign-ins, repeated failures, new
-    tokens, downloads, and restores. The contract, with a walkthrough of
+    touched by a restore. After Codex's two reviews (21 September 2026):
+    the password is asked for again before a backup download, an export, a
+    restore, any settings change, and creating or revoking a token; a
+    password change or reset revokes every token; `read` and `write` tokens
+    last at most 7 days and can't export or read documents; the alert
+    webhook reports new-device sign-ins, repeated failures, new tokens,
+    downloads, and restores; and **every backup archive is encrypted** with
+    a backup key the owner keeps, because an archive on a NAS share was a
+    readable copy of the whole collection outside the login. The contract, with a walkthrough of
     setup, password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
     - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
