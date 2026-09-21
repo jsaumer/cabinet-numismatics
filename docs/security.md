@@ -140,8 +140,10 @@ accounts and permissions" below. Until those releases land, everything in
 this section is what stands between the collection and anyone who can reach
 the port:
 
-- Put it behind an authenticating reverse proxy (Traefik + Authentik
-  forward-auth is the intended path), which requires no application changes.
+- Put it behind an authenticating reverse proxy (for example Traefik with a
+  forward-auth or SSO gateway such as Authentik, Authelia, or oauth2-proxy),
+  which requires no application changes. Keep one there after v0.30.0 too,
+  until v0.31.0 brings single sign-on and two-factor sign-in.
   [deployment.md](deployment.md) has the configuration.
 - Terminate TLS at the proxy so credentials entered in Settings and photos are
   not transmitted in the clear.
@@ -341,10 +343,13 @@ Rules that go with the table:
   key and authenticated with a MAC derived from it: someone who can read the
   backup share learns nothing, and someone who can write to it cannot make an
   archive that restores. The key must be kept outside Cabinet (a password
-  manager); `restore.sh` and the in-app restore both need it. What Cabinet
-  cannot encrypt is the database's own files and the photo and document
-  volumes: on a NAS, export them only to the Cabinet host, keep
-  `root_squash`, and never share them over SMB.
+  manager); `restore.sh` and the in-app restore both need it. Cabinet does
+  not encrypt the database's own files or the photo and document volumes:
+  protecting that storage is the operator's responsibility, as for any
+  service. A generated backup key is only as private as the state volume it
+  sits on, so a deployment whose backups leave the host should supply the
+  key as a secret (`BACKUP_KEY_FILE`); Cabinet warns when the key and the
+  backups share a mount.
 
 
 ## Input handling

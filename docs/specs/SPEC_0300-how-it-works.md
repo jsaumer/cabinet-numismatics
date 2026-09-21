@@ -261,11 +261,30 @@ nobody without the key can forge or alter one that restores.
 - **Restoring** decrypts the archive and checks it was made with your key
   before reading anything in it; an altered or foreign archive is refused.
 - **What Cabinet cannot encrypt:** the database's own files and the photo
-  and document folders, wherever you keep them. If those are on a NAS,
-  export them only to the Cabinet host, keep `root_squash`, and never share
-  them over SMB. The deployment guide has the details.
+  and document folders. Protecting that storage is the operator's job, as
+  for any service; Cabinet encrypts the backups it writes.
 
-## 7. What each piece protects
+## 7. Until single sign-on: a door in front
+
+**Until v0.31.0 brings single sign-on and two-factor sign-in, keep an
+authenticating proxy in front of Cabinet as well.** Any forward-auth or SSO
+gateway works (Authentik, Authelia, oauth2-proxy, Pomerium, Cloudflare
+Access), and it brings its own second factor today. Cabinet's login is then
+a second door, not a replacement:
+
+- Cabinet ignores whatever identity the proxy asserts; it always asks for
+  its own sign-in.
+- A `Basic` or provider `Bearer` header the proxy adds is ignored; only
+  Cabinet's own tokens count.
+- `PUBLIC_ORIGINS` is the address the browser sees, the proxy's public name.
+- Homepage and Prometheus skip the proxy on the internal name with a
+  `metrics` token.
+
+In v0.31.0 the two doors can become one: signing in through the provider
+signs you in to Cabinet, with the local password kept for when the provider
+is down.
+
+## 8. What each piece protects
 
 | Piece | Stops |
 |---|---|
