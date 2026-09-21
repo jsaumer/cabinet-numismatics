@@ -4,7 +4,7 @@ spot-price threshold alerts."""
 
 import csv
 import io
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -266,7 +266,7 @@ def test_historic_spot_refuses_outside_coverage(client, history):
     before = client.get("/api/reference/historic-spot?metal=silver&date=2020-01-01")
     assert before.status_code == 422 and "2024-03-02" in before.json()["detail"]
 
-    today = client.get(f"/api/reference/historic-spot?metal=silver&date={date.today()}")
+    today = client.get(f"/api/reference/historic-spot?metal=silver&date={stack._today()}")
     assert today.status_code == 422 and "today" in today.json()["detail"]
 
     unknown = client.get(f"/api/reference/historic-spot?metal=copper&date={IN_COVERAGE}")
