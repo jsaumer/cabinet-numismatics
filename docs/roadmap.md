@@ -503,6 +503,11 @@ estimate, and you can see where pricing is thin.*
 
 ### Phase 5.6: Backup from inside the app
 
+*Superseded in part by v0.30.0 (Phase 7, P8): every archive is encrypted
+with a backup key and carries a keyed MAC, restores decrypt only in a
+private staging volume, and plain archives can no longer be restored. The
+text below describes the feature as built in v0.12.0 and v0.26.0.*
+
 B1 + B2 ✔ **shipped in v0.12.0**, pulled ahead of pricing M5 once real data
 started going into the live instance. B3 restore was blocked on the auth
 decision until 20 September 2026, became Phase 7, P2, and ✔ **shipped in

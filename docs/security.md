@@ -343,13 +343,23 @@ Rules that go with the table:
   key and authenticated with a MAC derived from it: someone who can read the
   backup share learns nothing, and someone who can write to it cannot make an
   archive that restores. The key must be kept outside Cabinet (a password
-  manager); `restore.sh` and the in-app restore both need it. Cabinet does
+  manager); `restore.sh` and the in-app restore both need it. Decryption
+  happens only in a private staging volume (`/data/staging`) and, for
+  `restore.sh`, a private temporary folder, so no plain copy of an archive
+  is ever written to `BACKUP_DIR`. Each archive names the key that made it
+  (`mac_recipient`, covered by the MAC); Cabinet keeps a record of the
+  archives it wrote, in the sign-in schema a restore never touches, so
+  restoring an older one than the newest needs a separate typed
+  confirmation. Plain archives from before v0.30.0 cannot be restored.
+  (Until v0.30.0 ships, the restore staging described under "Input
+  handling" still sits in `BACKUP_DIR`.) Cabinet does
   not encrypt the database's own files or the photo and document volumes:
   protecting that storage is the operator's responsibility, as for any
   service. A generated backup key is only as private as the state volume it
   sits on, so a deployment whose backups leave the host should supply the
-  key as a secret (`BACKUP_KEY_FILE`); Cabinet warns when the key and the
-  backups share a mount.
+  key as a secret (`BACKUP_KEY_FILE`); Cabinet says whether the key and the
+  backups are separate, shared, or impossible to tell apart, and never
+  treats silence as safe.
 
 
 ## Input handling

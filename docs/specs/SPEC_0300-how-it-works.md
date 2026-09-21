@@ -242,7 +242,8 @@ nobody without the key can forge or alter one that restores.
 - **The key.** On the first start of v0.30.0 Cabinet makes one (or uses
   yours, from a Docker secret, `BACKUP_KEY_FILE`). Settings, Backups shows
   its fingerprint and a reminder, **"Save your backup key"**, until you tick
-  that you have.
+  that you have. If the key is stored beside the backups, or Cabinet can't
+  tell, Settings says so and suggests supplying it as a secret.
 - **Saving it.** From the host:
   `docker compose exec backend python -m app.cli backup-key show` (or
   `docker exec` on the Swarm node). Put it in your password manager. It is
@@ -255,11 +256,15 @@ nobody without the key can forge or alter one that restores.
   [age](https://age-encryption.org) files:
   `age -d -i key.txt cabinet-backup-....zip.age > backup.zip`.
 - **Old archives.** Unencrypted `.zip` archives from before v0.30.0 are
-  still readable copies of the collection. Settings lists them as
-  **unencrypted**, with "Delete unencrypted archives" (password again).
-  Restoring one needs a typed `RESTORE UNENCRYPTED`.
-- **Restoring** decrypts the archive and checks it was made with your key
-  before reading anything in it; an altered or foreign archive is refused.
+  still readable copies of the collection, and can no longer be restored.
+  Settings lists them as **unencrypted**, with "Delete unencrypted archives"
+  (password again); delete them once you have a new encrypted backup.
+- **Restoring** decrypts the archive in a private working folder, never on
+  the backup share, and checks it was made with your key before reading
+  anything in it; an altered or foreign archive is refused. The summary says
+  whether this Cabinet made the archive and how many newer backups exist;
+  restoring an older one needs you to type `RESTORE OLDER`, so nobody can
+  quietly swap in an old backup.
 - **What Cabinet cannot encrypt:** the database's own files and the photo
   and document folders. Protecting that storage is the operator's job, as
   for any service; Cabinet encrypts the backups it writes.
