@@ -10,6 +10,31 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-20
+
+### Added
+- **Note details.** Five new item fields: `width_mm` and `height_mm` (for
+  notes and anything else not round; coins keep `diameter_mm`), `printer`,
+  `watermark`, and `demonetized_on` (coins and notes alike). `q` search also
+  matches `printer`. "Fill from Numista" fills all five for a banknote type
+  when the catalogue gives them. Migration `0021`.
+- **Ten more dashboard widgets** (the roadmap's "group C"): Most valuable,
+  Piece of the day, Oldest piece, Newest acquisition, On this day, Photo
+  mosaic, Certified share, Value spread, Population highlights, and Data
+  health, plus a `metal` dimension on the breakdown widget. None are in the
+  default layout; add them from "Edit dashboard".
+- Two new list sorts, `sort=value` (the newest estimate) and
+  `sort=pcgs_pop_higher`, and four stats endpoints behind the new widgets:
+  `GET /api/stats/quality`, `/value-spread`, `/data-health`, `/showcase`.
+
+### Changed
+- **The item page.** A hero at the top shows the primary photo large beside
+  the title, grade, certification, value, and wish-list details; the facts
+  below are grouped (Identity, Grade & certification, Physical, Acquisition,
+  Custom fields) and only show what has a value, with a "Show empty fields"
+  toggle for the full sheet. Split into `components/item-hero.tsx` and
+  `components/item-facts.tsx`.
+
 ## [0.28.0] - 2026-09-20
 
 ### Added

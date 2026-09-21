@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.28.0**, with versioned images
+**Status (September 2026): released as v0.29.0**, with versioned images
 published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -20,8 +20,10 @@ application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
 depth, fancy serial numbers, die axis and foreign dates) shipped together in
 v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
-(P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0;
-authentication (P8) and the share view (P9) remain.
+(P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
+"group C" widgets followed in v0.29.0, alongside note details and a
+regrouped item page from the data-entry pass; authentication (P8) and the
+share view (P9) remain.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -30,8 +32,8 @@ owner needs any of it (100–500 pieces to enter by hand, runs and singles,
 mostly held) and demoted the release train to **one next item and a list
 of candidates**, built only when real use asks for them. Since 20 September
 2026 the owner has been entering real pieces, and everything from v0.23.2 to
-v0.24.9, and v0.27.1, came from that: see "From the data-entry pass" under
-Phase 5.9.
+v0.24.9, v0.27.1, and v0.29.0 came from that: see "From the data-entry pass"
+under Phase 5.9.
 
 **Target versions** on the unshipped items below assume each ships alone,
 following how this project actually bumps versions: new capability = minor,
@@ -116,6 +118,10 @@ The heart of the app: describing what you own, accurately and flexibly.
   P5. **Shipped in v0.25.0.**
 - ✔ **[Nice]** Die axis, and the date as struck in its own calendar beside
   the Gregorian year. Phase 7, P6. **Shipped in v0.25.0.**
+- ✔ **[Nice]** Note details: width and height for anything not round (coins
+  keep diameter), printer, and watermark; a demonetisation date for coins
+  and notes alike. Filled from Numista too. From the data-entry pass, not
+  in the original roadmap. **Shipped in v0.29.0.**
 - **[Nice]** Grading submissions: service, submission number, tier, fees
   (into cost basis), dates, result, and old → new cert. Phase 5.9.
   **Parked**: nothing is being submitted.
@@ -357,7 +363,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0020`, applied by the
+  upgrades: Alembic since Phase 0, revisions `0001`–`0021`, applied by the
   backend on startup since v0.11.1.
 
 ---
@@ -701,6 +707,13 @@ pieces turned up, each shipped as a small release:
   unpriced replacement note and the common priced one, and pricing always
   took the first, so it failed; same-year issues are now ranked and tried
   in turn until one prices.
+- ✔ v0.29.0: a note had nowhere to record its size, printer, or watermark
+  (the owner had been typing the printer into the free-text notes), and the
+  item page had grown into one grid of mostly dashes. Note details (size,
+  printer, watermark, demonetisation date) filled from Numista too, and the
+  item page now leads with a hero (photo, title, grade, value) and groups
+  the rest into titled facts that hide when empty, with a toggle for the
+  full sheet. Ten more dashboard widgets from the "group C" survey.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -718,15 +731,30 @@ for it, and new ones found while entering the collection outrank these.
 - **Saved views** and a choice of list columns; print or export any view.
 - **Paperwork**: an insurance schedule with a flag above the insurer's
   scheduling threshold and appraisal records; an estate packet; variety
-  reference fields with VarietyPlus/VAMworld links; PCGS population on the
-  item page.
+  reference fields with VarietyPlus/VAMworld links. (PCGS population on the
+  item page, once listed here, shipped in v0.25.0.)
 - **Portability**: Excel with thumbnails; an OpenNumismat-compatible
   round-trip export with a photo archive.
-- **Layout**: an item page that leads with the photos and groups its facts
+- ✔ **Layout**: an item page that leads with the photos and groups its facts
   (identity, grade and cert, acquisition, physical) instead of one grid with
-  a dash for every empty field; Settings split into sections. Recommended
-  in the September 2026 layout review and not picked yet.
+  a dash for every empty field. Recommended in the September 2026 layout
+  review. **Shipped in v0.29.0** (the hero and grouped facts); Settings
+  split into sections remains a candidate.
 - **API call counter**: tabled by the owner; see section 5.
+- **A user guide**: today's docs are operator and developer facing
+  (deployment, API, architecture), not a walkthrough for someone using the
+  app day to day. Noted in the 20 September 2026 review.
+- **Multi-architecture images**: the publish job builds `amd64` only; an
+  `arm64` build would cover a Raspberry Pi or Apple Silicon homelab host.
+  Noted in the 20 September 2026 review.
+- **Off-site or encrypted backups**: passphrase-encrypted archives and push
+  targets (S3/WebDAV/SFTP) were deferred under Phase 5.6; a mounted path
+  (including a NAS bind) covers the homelab case without a new dependency.
+  Noted again in the 20 September 2026 review.
+- **A keyed source for purchase-day spot before March 2024**: the stack's
+  free lookup (`history_start`) only reaches back to 2 March 2024; an
+  optional paid or keyed source could cover older purchases. Noted in the
+  20 September 2026 review.
 
 The wish-list targets, population, and the stack view moved from here and
 from Parked into **Phase 7** on 20 September 2026; the targets and the
@@ -756,6 +784,10 @@ checklist:
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
 - "Add a run" confirmed against live Numista.
+- The Numista banknote field mapping (`size`, `size2`, `printers`,
+  `watermark`, `demonetization`, added in v0.29.0) confirmed against the
+  live API: it was built without a key on the dev machine, so it reads
+  every shape defensively and could not be tried against a real response.
 - An API consistency pass while breaking changes are still free (for
   example the old `POST /api/items/import` beside `/api/imports`), then a
   written stability policy in `api.md`.
@@ -987,11 +1019,17 @@ v0.26.0.
   the surveyed "group C" widgets (most valuable pieces, value by metal,
   certified share, population highlights, data health, value spread,
   showcase widgets, once P9 exists), which are candidates rather than a
-  commitment; bullion widgets arrive with P7.
+  commitment; bullion widgets arrive with P7. **The group C widgets shipped
+  in v0.29.0**: `most_valuable`, `piece_of_the_day`, `oldest_piece`,
+  `newest_acquisition`, `on_this_day`, `photo_mosaic`, `certified_share`,
+  `value_spread`, `population_highlights`, `data_health`, and a `metal`
+  dimension on `breakdown`, none in the default layout. Showcase widgets did
+  not wait for P9: they show only what the owner's own dashboard already
+  shows.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
-P7 the bullion stack figures in v0.28.0): P8 authentication, then P9 the
-share view.
+P7 the bullion stack figures in v0.28.0, and P10's group C widgets in
+v0.29.0): P8 authentication, then P9 the share view.
 
 Optional, after the above and only if still wanted:
 
@@ -1038,7 +1076,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0020`), never create-on-startup.
+  revision (`0001`–`0021`), never create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty, the same reasoning that front-loaded Phase 2's fields.

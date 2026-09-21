@@ -166,11 +166,17 @@ test("a note with a radar serial number gets its badge", async ({ page }) => {
   await page.getByLabel("Denomination *").fill("1 dollar");
   await page.getByLabel("Year *").fill("1957");
   await page.getByLabel("Serial number", { exact: true }).fill("12344321");
+  await page.getByLabel("Width (mm)").fill("156");
+  await page.getByLabel("Height (mm)").fill("66.5");
+  await page.getByLabel("Printer", { exact: true }).fill("BEP");
   await page.getByRole("button", { name: "Add item", exact: true }).click();
 
   await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
   const url = new URL(page.url()).pathname;
   await expect(page.locator("dl.facts .badge.trait")).toHaveText(/^radar$/i);
+  // The note details, in the item page's Physical group.
+  await expect(page.getByText("156 × 66.5 mm")).toBeVisible();
+  await expect(page.getByText("BEP", { exact: true })).toBeVisible();
 
   await deleteForGood(page, url, country);
 });

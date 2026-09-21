@@ -1,7 +1,7 @@
 import { api, BreakdownEntry, Breakdowns, money, WidgetOptions } from "../../api";
 import { ChartDatum, Columns, HBars } from "../../components/charts";
 import { optionIdOrNull, optionNumber, optionOrNull, optionText } from "../options";
-import { useWidgetData, WidgetProps } from "../WidgetFrame";
+import { useWidgetData, useWidgetEmpty, WidgetProps } from "../WidgetFrame";
 
 type Measure = "value" | "count" | "cost";
 
@@ -21,6 +21,7 @@ export const DIMENSIONS: Record<string, Dimension> = {
   decade: { label: "decade", field: "by_decade", chart: "columns", trim: false },
   grade: { label: "grade", field: "by_grade", chart: "bars", trim: true },
   tag: { label: "tag", field: "by_tag", chart: "bars", trim: true },
+  metal: { label: "metal", field: "by_metal", chart: "bars", trim: true },
   acquisition_year: {
     label: "year acquired",
     field: "acquisitions_by_year",
@@ -104,6 +105,92 @@ export function BreakdownWidget({ options }: WidgetProps) {
         <Columns data={points} format={format} />
       ) : (
         <HBars data={points} format={format} />
+      )}
+    </>
+  );
+}
+
+/** How much of the collection is in a slab, and from which service. */
+export function CertifiedShareWidget() {
+  const { data, pending } = useWidgetData("quality", () => api.quality());
+  useWidgetEmpty(data !== null && data.owned === 0);
+  if (!data) return pending;
+  if (data.owned === 0) return null;
+  const share = (data.certified.items / data.owned) * 100;
+
+  return (
+    <>
+      <div className="tiles">
+        <div className="tile">
+          <span className="tile-label">Certified</span>
+          <span className="tile-value">{share.toFixed(0)}%</span>
+          <span className="muted">
+            {data.certified.items} of {data.owned} owned
+          </span>
+        </div>
+        <div className="tile">
+          <span className="tile-label">Value in slabs</span>
+          <span className="tile-value">{money(data.certified.value, data.currency)}</span>
+          <span className="muted">raw {money(data.raw.value, data.currency)}</span>
+        </div>
+        <div className="tile">
+          <span className="tile-label">Graded</span>
+          <span className="tile-value">{data.graded}</span>
+          <span className="muted">{data.ungraded} ungraded</span>
+        </div>
+      </div>
+      {data.by_service.length > 0 && (
+        <table className="estimates" style={{ marginTop: "0.8rem" }}>
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th className="num">Items</th>
+              <th className="num">Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.by_service.map((s) => (
+              <tr key={s.key}>
+                <td>{s.key}</td>
+                <td className="num">{s.count}</td>
+                <td className="num">{money(s.estimated_value, data.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
+
+/** How the value is spread: a few big pieces, or many even ones. */
+export function ValueSpreadWidget() {
+  const { data, pending } = useWidgetData("value-spread", () => api.valueSpread());
+  useWidgetEmpty(data !== null && data.median == null);
+  if (!data) return pending;
+  if (data.median == null) return null;
+
+  const rows: [string, string][] = [
+    ["Median", money(data.median, data.currency)],
+    ["Mean", money(data.mean, data.currency)],
+    ["Lowest", money(data.min, data.currency)],
+    ["Highest", money(data.max, data.currency)],
+  ];
+  return (
+    <>
+      <dl className="facts">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {data.top_share_pct != null && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          The top tenth of {data.items} valued pieces holds{" "}
+          <b>{data.top_share_pct.toFixed(0)}%</b> of the value.
+        </p>
       )}
     </>
   );

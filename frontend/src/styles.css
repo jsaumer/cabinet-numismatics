@@ -413,6 +413,96 @@ h1 {
   flex: 1;
 }
 
+/* The item page leads with the piece: the primary photo at the left, the
+   essentials beside it. Under 720px the photo goes on top (it is first in the
+   markup, so one column is all it takes). */
+.item-hero {
+  display: grid;
+  grid-template-columns: 17rem 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+.hero-photo-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.hero-photo-open img,
+.hero-photo-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+}
+.hero-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--ink-3);
+  font-size: 4rem;
+}
+.hero-main {
+  min-width: 0;
+}
+.hero-main .detail-header {
+  margin-bottom: 0.6rem;
+}
+.hero-grade {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+.hero-money {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+.hero-amount {
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.hero-facts {
+  margin-top: 0.8rem;
+}
+.hero-chips {
+  margin: 0.8rem 0 0;
+}
+.item-notes {
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+}
+
+/* The facts card: quiet headings over one grid each. */
+.fact-group h3 {
+  margin: 0 0 0.6rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+.fact-group + .fact-group {
+  margin-top: 1.1rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--border-soft);
+}
+.fact-toggle {
+  margin-top: 1.1rem;
+  color: var(--ink-2);
+}
+.fact-toggle:hover {
+  text-decoration: underline;
+}
+
 dl.facts {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
@@ -584,6 +674,16 @@ dl.facts dd {
 }
 .item-form .full {
   grid-column: 1 / -1;
+}
+/* Two measurements in one field: a note's width and height. */
+.size-pair {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.size-pair input {
+  flex: 1;
+  min-width: 0;
 }
 .ref-row {
   display: flex;
@@ -993,6 +1093,51 @@ button.chip {
   font-size: 0.88rem;
 }
 
+/* The showcase widgets: one piece, shown for its own sake. */
+.showcase {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.showcase-photo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+  flex: none;
+}
+.showcase-photo.placeholder {
+  border-style: dashed;
+}
+.showcase-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+.showcase-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.photo-mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  gap: 0.4rem;
+}
+.photo-mosaic img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+}
+
 /* Edit mode */
 .dash-editbar {
   align-items: center;
@@ -1281,6 +1426,15 @@ details.history summary {
   }
   dl.facts {
     grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  }
+  .item-hero {
+    grid-template-columns: 1fr;
+  }
+  .hero-photo {
+    max-width: 16rem;
+  }
+  .hero-amount {
+    font-size: 1.5rem;
   }
   .photo-card {
     width: calc(50% - 0.45rem);

@@ -188,6 +188,14 @@ class ItemBase(BaseModel):
     # v0.28.0: the metal's spot price per troy ounce on the purchase day, in
     # `currency`. Not bulk-editable; the router drops it there.
     spot_at_purchase: float | None = Field(default=None, gt=0, lt=10**8)
+    # v0.29.0: note details (width/height for anything not round; coins keep
+    # diameter_mm), and demonetization for coins and notes alike. None of the
+    # five are bulk-editable; the router drops them there.
+    width_mm: float | None = Field(default=None, gt=0, le=2000)
+    height_mm: float | None = Field(default=None, gt=0, le=2000)
+    printer: str | None = Field(default=None, max_length=200)
+    watermark: str | None = Field(default=None, max_length=200)
+    demonetized_on: date | None = None
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -297,6 +305,12 @@ class ItemUpdate(BaseModel):
     struck_era: str | None = Field(default=None, max_length=20)
     # v0.28.0: not bulk-editable; the router drops it there.
     spot_at_purchase: float | None = Field(default=None, gt=0, lt=10**8)
+    # v0.29.0: note details; not bulk-editable, the router drops them there.
+    width_mm: float | None = Field(default=None, gt=0, le=2000)
+    height_mm: float | None = Field(default=None, gt=0, le=2000)
+    printer: str | None = Field(default=None, max_length=200)
+    watermark: str | None = Field(default=None, max_length=200)
+    demonetized_on: date | None = None
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -898,6 +912,7 @@ class Breakdowns(BaseModel):
     by_decade: list[BreakdownEntry]
     by_grade: list[BreakdownEntry]
     by_tag: list[BreakdownEntry]
+    by_metal: list[BreakdownEntry]
     acquisitions_by_year: list[BreakdownEntry]
 
 
@@ -1128,3 +1143,75 @@ class HistoricSpot(BaseModel):
     currency: str
     per_oz: float
     source: str
+
+
+# --- dashboard "group C" widgets (roadmap Phase 7, P10) ---------------------
+
+
+class QualityGroup(BaseModel):
+    items: int
+    value: float
+
+
+class QualityServiceEntry(BaseModel):
+    key: str  # cert_service, e.g. "PCGS"
+    count: int
+    estimated_value: float
+
+
+class QualityStats(BaseModel):
+    currency: str
+    owned: int
+    certified: QualityGroup  # has a cert service or number
+    raw: QualityGroup
+    by_service: list[QualityServiceEntry]
+    graded: int  # has a grade assigned
+    ungraded: int
+
+
+class ValueSpread(BaseModel):
+    """Distribution of owned items' shown values. Null throughout when no
+    owned item has a value."""
+
+    currency: str
+    items: int
+    min: float | None
+    median: float | None
+    max: float | None
+    mean: float | None
+    top_share_pct: float | None  # share of total held by the top 10% (at least one)
+
+
+class DataHealthItem(BaseModel):
+    id: uuid.UUID
+    label: str
+
+
+class DataHealthCheck(BaseModel):
+    key: str
+    label: str
+    count: int
+    items: list[DataHealthItem]  # the first 5
+
+
+class DataHealth(BaseModel):
+    owned: int
+    checks: list[DataHealthCheck]
+
+
+class ShowcasePiece(BaseModel):
+    id: uuid.UUID
+    label: str
+    year_label: str
+    thumb_key: str | None
+    photo_key: str | None
+    value: float | None
+    currency: str | None
+    acquisition_date: date | None
+
+
+class Showcase(BaseModel):
+    piece_of_the_day: ShowcasePiece | None
+    oldest: ShowcasePiece | None
+    newest: ShowcasePiece | None
+    on_this_day: list[ShowcasePiece]

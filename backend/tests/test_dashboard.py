@@ -100,6 +100,57 @@ def test_validation_errors(client):
     assert _put(client, too_many).status_code == 422
 
 
+GROUP_C_WIDGETS = [
+    ("most_valuable", {"count": 5}),
+    ("certified_share", {}),
+    ("population_highlights", {"count": 5}),
+    ("data_health", {}),
+    ("value_spread", {}),
+    ("piece_of_the_day", {}),
+    ("oldest_piece", {}),
+    ("newest_acquisition", {}),
+    ("on_this_day", {}),
+    ("photo_mosaic", {"count": 12}),
+]
+
+
+def test_group_c_widgets_accepted_with_defaults(client):
+    widgets = [
+        {"id": f"w-{i}", "type": wtype, "size": "half", "title": None, "options": {}}
+        for i, (wtype, _) in enumerate(GROUP_C_WIDGETS)
+    ]
+    body = _put(client, widgets).json()
+    for stored, (wtype, defaults) in zip(body["widgets"], GROUP_C_WIDGETS, strict=True):
+        assert stored["type"] == wtype
+        assert stored["options"] == defaults
+
+
+def test_group_c_widgets_refuse_bad_options(client):
+    base = {"id": "w-1", "size": "half", "title": None}
+    assert (
+        _put(client, [{**base, "type": "most_valuable", "options": {"count": 1}}]).status_code
+        == 422
+    )
+    assert (
+        _put(client, [{**base, "type": "photo_mosaic", "options": {"count": 5}}]).status_code == 422
+    )
+    assert _put(client, [{**base, "type": "no_such_widget", "options": {}}]).status_code == 422
+
+
+def test_metal_accepted_as_breakdown_dimension(client):
+    widgets = [
+        {
+            "id": "w-1",
+            "type": "breakdown",
+            "size": "third",
+            "title": None,
+            "options": {"dimension": "metal", "measure": "count"},
+        }
+    ]
+    body = _put(client, widgets).json()
+    assert body["widgets"][0]["options"]["dimension"] == "metal"
+
+
 def test_unknown_stored_type_dropped_on_read(client):
     _store(
         [
