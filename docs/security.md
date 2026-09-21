@@ -186,15 +186,17 @@ Decided on 21 September 2026, the details that shape the code:
 |---|---|
 | Session lifetime | One day from last use, a 7 day hard cap, and the session id rotated on sign-in |
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
-| CSRF | That cookie plus an Origin or Referer check on every unsafe method, no token plumbing |
-| Passwords | Argon2id through `argon2-cffi`, sign-in throttled per account and per address |
-| Photos | nginx `auth_request` against the session, one subrequest per photo. Caching only if measurement asks for it, and only with a reviewed cache key |
-| Proxies | A `TRUSTED_PROXIES` setting, default empty, decides whose forwarded scheme and address are believed |
-| Restore | The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
-| API tokens | Scopes `read`, `write`, `metrics`; shown once, stored hashed, revocable, with a last-used time |
+| CSRF | Origin, or Referer's origin, must exactly match an entry in a required `PUBLIC_ORIGINS` setting; any cookie-authenticated request marked `Sec-Fetch-Site: cross-site` or `same-site` is refused, whatever its method. No token plumbing |
+| Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock, and a signed known-device cookie from a successful sign-in bypasses them |
+| Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos are sent `Cache-Control: private, no-cache`. Caching the check only if measurement asks for it, and only with a reviewed cache key |
+| Proxies | nginx decides, by the immediate peer, whose forwarded headers to believe (`TRUSTED_PROXIES`, CIDR ranges, default none) and overwrites them towards the backend. The backend sits only on the internal network and a private egress network, and believes only that pinned internal subnet |
+| Restore | Credentials are deployment state, not collection data: backups leave them out and a restore keeps the current ones. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
+| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). Shown once, stored hashed, revocable, with a last-used time |
 
 It has to work **both** behind an authenticating proxy and directly exposed,
-because which of those the deployment uses is not decided.
+because which of those the deployment uses is not decided. The table includes
+the changes from an independent review on 21 September 2026; its findings,
+with a verdict on each, are recorded in the project's planning notes.
 
 Accounts are logins to **one shared collection**, not separate collections.
 The setup page works only while no account exists. Three roles, of which
@@ -239,6 +241,7 @@ Two more kinds of caller are not accounts:
 | Restore from an archive | yes | no | no | no | no |
 | Alerts test, monitoring status | yes | no | no | no | no |
 | `/api/metrics` | yes | no | no | `metrics` | no |
+| The collection totals (`/api/stats/collection`) | yes | yes | yes | `read` or `metrics` | no |
 | Users: add, disable, change role, reset a password | yes | no | no | no | no |
 | Own password, own API tokens, own sessions | yes | yes | yes | no | no |
 | `/api/docs` (the API reference) | yes | yes | yes | no | no |
@@ -252,9 +255,10 @@ Rules that go with the table:
   per address; sessions are HttpOnly, SameSite cookies with a CSRF check on
   anything that changes data; a token is shown once and stored hashed.
 - Photos need the same check as the API. nginx serves them directly today,
-  so that becomes an `auth_request` to the backend (chosen over signed,
-  expiring photo URLs, which would keep photo links plain but need a key
-  rotation story of their own).
+  so that becomes an `auth_request` to the backend, declared for the whole
+  server and switched off only for the static app and for `/api/` (where the
+  backend is the gate). It was chosen over signed, expiring photo URLs, which
+  would keep photo links plain but need a key rotation story of their own.
 - Single sign-on (OpenID Connect) signs in as the admin through an identity
   linked to that account; a trusted-header mode does the same for a
   forward-auth proxy. The local password stays so a provider outage can't
@@ -271,21 +275,27 @@ Rules that go with the table:
   container: shell access to the deployment is the proof of ownership.
 - On the first start after upgrading an open install, nothing is served but
   the setup page until the admin exists, and the log says so.
-- Behind a TLS-terminating proxy the backend has to trust the forwarded
-  scheme and client address (for the Secure cookie and for throttling by
-  address); `TRUSTED_PROXIES` names which proxies it believes, and defaults
-  to trusting none.
-- A restore replaces the users, sessions, and tokens tables with whatever the
-  archive holds, so **every session and API token in the restored database is
-  revoked** as the last step. A credential withdrawn since that backup can
-  never come back to life; everyone signs in again, and a token the Homepage
-  tile or Prometheus uses has to be re-minted. An archive made before login
-  existed brings the setup page back. The restore summary says so before it
-  runs, and the outcome records how many were revoked.
-- Once accounts exist, the `db.dump` inside every backup archive carries
-  password and token hashes. Archives live in `BACKUP_DIR`, often a network
-  mount, and can be downloaded from Settings: treat an archive as credential
-  material, not only collection data.
+- Forwarded headers are believed at exactly one place: nginx, by the
+  immediate peer, against `TRUSTED_PROXIES`. It overwrites them towards the
+  backend, and blanks identity headers (`Remote-User`, `X-Forwarded-User`,
+  and the like) from every peer. Listing a shared network's range trusts every
+  service on that network. On a Swarm, ports published in the default ingress
+  mode arrive from the ingress network's address, not the client's, which is
+  why sign-in limits lean on the known-device cookie rather than on addresses.
+- **Credentials are deployment state, not collection data.** Backups leave
+  out the rows of the users, sessions, tokens, and audit tables, and a restore
+  keeps the current ones. A credential withdrawn since a backup can therefore
+  never come back to life, nobody can plant one in an archive, API tokens keep
+  working through a restore, the audit log survives it, and an archive made
+  before login existed never reopens setup. A restore onto a brand new machine
+  starts unclaimed and is claimed with a fresh setup code. A timestamp on the
+  state volume, written as soon as a restore's database step returns, makes
+  the gate refuse anything issued before it, covering a crash mid-restore.
+- An archive carries no credentials, but it carries everything else,
+  settings included, and its checksums live inside it. Anyone who can write to
+  `BACKUP_DIR`, often a network mount, could alter an archive (for instance to
+  plant a webhook address) for a later restore to bring in: treat the backup
+  mount as sensitive.
 
 
 ## Input handling
