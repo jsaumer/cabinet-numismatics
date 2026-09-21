@@ -4,8 +4,8 @@ Cabinet is a single-user, self-hosted application. The design assumes the
 stack runs on a network you control, and that the operator is the only user.
 This document records what that means concretely, what is protected and how,
 and what you must do before exposing the app more widely. There is no
-application login, and v1.0.0 will ship without one; see Authentication &
-network exposure below.
+application login yet: it is the next thing built, as v0.30.0 and v0.31.0,
+both before v1.0.0. See Authentication & network exposure below.
 
 ## Secrets at rest
 
