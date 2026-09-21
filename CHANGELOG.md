@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-09-20
+
 ### Added
 - **A typed-in value can be deleted.** `DELETE
   /api/items/{id}/estimates/{estimate_id}` and a "delete" link on the row in
