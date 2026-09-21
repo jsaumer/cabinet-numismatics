@@ -990,8 +990,10 @@ v0.26.0.
     last at most 7 days and can't export or read documents; the alert
     webhook reports new-device sign-ins, repeated failures, new tokens,
     downloads, and restores; and **every backup archive is encrypted** with
-    a backup key the owner keeps, because an archive on a NAS share was a
-    readable copy of the whole collection outside the login. The contract, with a walkthrough of
+    a backup key the owner keeps, because an archive on a backup share was
+    a readable copy of the whole collection outside the login. Until
+    v0.31.0, the recommended deployment also keeps an authenticating proxy
+    (any forward-auth or SSO gateway) in front. The contract, with a walkthrough of
     setup, password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
     - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
