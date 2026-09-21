@@ -37,6 +37,16 @@ test("record a value by hand", async ({ page }) => {
   await page.getByLabel("Value", { exact: true }).fill("20");
   await page.getByRole("button", { name: "Record value" }).click();
   await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
+
+  // A typed-in value can be taken back.
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.getByLabel("Value", { exact: true }).fill("21");
+  await page.getByRole("button", { name: "Record value" }).click();
+  const mistake = page.getByRole("row", { name: /\$21\.00/ });
+  await expect(mistake).toBeVisible();
+  await mistake.getByRole("button", { name: "delete" }).click();
+  await expect(mistake).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
 });
 
 // Needs an item, so it sits after the one above: an empty collection shows the

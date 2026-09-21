@@ -10,6 +10,21 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+- **A typed-in value can be deleted.** `DELETE
+  /api/items/{id}/estimates/{estimate_id}` and a "delete" link on the row in
+  the item page's value history, for a value recorded by hand (one entered
+  by mistake, or one a source has since replaced). What a price source said
+  is still kept: deleting one of those answers `409`, because the reports
+  and the provenance are built on that history.
+
+### Fixed
+- **Photos could not be deleted, except the last one.** The controls under a
+  photo were wider than its tile, so each delete button sat underneath the
+  next tile's first arrow. The tile is wider, its controls are compact and
+  wrap inside it, and a photo whose file is missing now keeps a full-size
+  tile, so it can be found and deleted.
+
 ## [0.29.0] - 2026-09-20
 
 ### Added

@@ -139,8 +139,10 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
           <div key={photo.id} className={`photo-card${photo.is_primary ? " primary" : ""}`}>
             <button type="button" className="photo-open" title="View larger"
               onClick={() => setLightbox(index)}>
+              {/* A photo whose file has gone still gets a tile, so it can be deleted. */}
               <img src={photoUrl(photo.thumb_key ?? photo.file_key)}
-                alt={photo.angle ?? "photo"} />
+                alt={photo.angle ?? "photo"}
+                onError={(e) => e.currentTarget.classList.add("missing")} />
             </button>
             <div className="row">
               <button title="Move left" disabled={index === 0}

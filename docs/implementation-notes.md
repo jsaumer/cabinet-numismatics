@@ -757,6 +757,20 @@ to respect:
   open item, like "Add a run" against live Numista; see the roadmap's road
   to v1.0.0.
 
+## v0.29.1
+
+Two things the owner hit on a real note. The photo tile's controls were
+wider than the tile (150px), so every delete button but the last sat under
+the next tile's first arrow: the tile is 190px and `.photo-card .row` wraps
+compact controls inside it. Anything added to that row has to fit the tile;
+the check is that each button is the top element at its own centre. A photo
+whose file is gone (`img.missing`, set by `onError`) keeps a full-size tile
+so it can be deleted. And `DELETE /api/items/{id}/estimates/{estimate_id}`
+removes a typed-in value only: `pricing.source_key(source) in
+pricing.ADAPTER_NAMES` is a source's estimate and answers 409, because
+coverage, accuracy, and provenance read that history. Don't widen it to
+sources without deciding what those reports should then say.
+
 ## Releases
 
 

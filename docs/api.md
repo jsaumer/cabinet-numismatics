@@ -226,12 +226,17 @@ aren't shown, and deletes the old files.
 |--------|-------------------------------|------------------------------------------|
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
 | `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
+| `DELETE` | `/api/items/{id}/estimates/{estimate_id}` | Delete a value that was typed in |
 | `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate            |
 | `POST` | `/api/estimates/refresh-melt` | Re-run stale melt estimates now          |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1, optional
-`note` up to 500 characters), never overwriting history. Every estimate in a
+`note` up to 500 characters), never overwriting history. The one exception is
+a value typed in by hand, which `DELETE .../estimates/{estimate_id}` removes
+(`204`): a mistake shouldn't have to stay in the chart. An estimate from a
+price source (`melt`, `numista`, `pcgs`, `comps`) is `409`, and one that
+belongs to another item is `404`. Every estimate in a
 response carries `id`, `item_id`, `source`, `estimated_value`, `currency`,
 `confidence`, `sample_size`, `fetched_at`, and `details`: the provenance an
 automatic source recorded (see [price-sources.md](price-sources.md)),

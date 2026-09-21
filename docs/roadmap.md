@@ -714,6 +714,10 @@ pieces turned up, each shipped as a small release:
   item page now leads with a hero (photo, title, grade, value) and groups
   the rest into titled facts that hide when empty, with a toggle for the
   full sheet. Ten more dashboard widgets from the "group C" survey.
+- ✔ v0.29.1: photos could only be deleted if they were the last one (each
+  delete button sat under the next tile's arrow), and a value typed in by
+  mistake could not be removed. Both fixed; a price source's values are
+  still kept.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

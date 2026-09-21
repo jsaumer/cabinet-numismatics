@@ -330,7 +330,8 @@ point at the same `catalog_refs` row.
 - **UUID primary keys** on user-facing tables keep photo file keys and API
   URLs non-enumerable.
 - **Price estimates are append-only**, giving a value history over time rather
-  than a single mutable field.
+  than a single mutable field. Only a value typed in by hand can be deleted
+  (v0.29.1); a source's estimates never are.
 - **`quantity`** on `items` supports holding multiples of an identical piece
   without duplicate rows; split into separate rows if grades differ.
 - **Grades and catalogs are reference tables** so the app can present valid

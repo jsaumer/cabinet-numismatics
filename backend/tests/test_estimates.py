@@ -209,3 +209,35 @@ def test_csv_export_respects_value_strategy(client, coin):
     resp = client.get("/api/items/export.csv")
     rows = list(csv.DictReader(io.StringIO(resp.text)))
     assert rows[0]["latest_value"] == "100.00"
+
+
+def test_a_typed_value_can_be_deleted_and_a_source_value_cannot(client, coin):
+    base = f"/api/items/{coin['id']}/estimates"
+    typed = client.post(base, json={"estimated_value": 1.7, "source": "ebay lot"}).json()
+    kept = client.post(base, json={"estimated_value": 2.0}).json()
+
+    session = _session()
+    sourced = PriceEstimate(
+        item_id=uuid.UUID(coin["id"]),
+        source="numista:N#1 VG",
+        estimated_value=Decimal("1.74"),
+        currency="USD",
+    )
+    session.add(sourced)
+    session.commit()
+    sourced_id = sourced.id
+
+    assert client.delete(f"{base}/{typed['id']}").status_code == 204
+    refused = client.delete(f"{base}/{sourced_id}")
+    assert refused.status_code == 409 and "typed" in refused.json()["detail"]
+    assert client.delete(f"{base}/{uuid.uuid4()}").status_code == 404
+
+    left = {e["id"] for e in client.get(base).json()}
+    assert left == {kept["id"], str(sourced_id)}
+
+
+def test_an_estimate_is_only_deleted_through_its_own_item(client, coin):
+    other = client.post("/api/items", json={**COIN, "year": 1901}).json()
+    typed = client.post(f"/api/items/{coin['id']}/estimates", json={"estimated_value": 5.0}).json()
+    assert client.delete(f"/api/items/{other['id']}/estimates/{typed['id']}").status_code == 404
+    assert len(client.get(f"/api/items/{coin['id']}/estimates").json()) == 1
