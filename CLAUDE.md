@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.28.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.29.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -100,11 +100,13 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.28.0: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0020`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.29.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0021`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
-them. What each release added, and the rules it left behind, is in
+them. v0.29.0 added note details (width/height, printer, watermark,
+demonetisation) and reworked the item page into a hero plus grouped facts,
+with ten more dashboard widgets from the "group C" survey. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
 
@@ -195,6 +197,12 @@ purchase-day spot comes only from the CC0 fawazahmed0 currency-api (never
 LBMA, whose terms need a licence for valuation), cached ten years and
 refusing today; a typed value is never overwritten by the hourly backfill;
 see "Bullion stack figures" in the implementation notes.
+Note details, the item page, and P10's "group C" widgets shipped in v0.29.0
+(migration `0021`): `items.width_mm`/`height_mm`/`printer`/`watermark`/
+`demonetized_on`, `services/insights.py` behind four `/api/stats/*`
+endpoints, `components/item-hero.tsx` and `item-facts.tsx`, and ten
+dashboard widget types; see "Note details, the item page, more widgets" in
+the implementation notes.
 **Next, in order:** P8 authentication (decided: one admin first,
 onboarded with a setup code from the backend log, always on, scoped API
 tokens in the first cut, deny by default; then SSO for that admin; more

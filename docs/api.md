@@ -45,15 +45,19 @@ undated, `false` only dated), `tag`, `set_id`, `grade_min`/`grade_max`
 (grade rank 1–70),
 `value_min`/`value_max` (the newest estimate, whatever the value strategy),
 `q` (substring match over notes/series/variety/country/denomination/cert and
-serial numbers/prefix/issuer/charter number/bank city/catalog refs/tags),
+serial numbers/prefix/issuer/charter number/bank city/printer/catalog
+refs/tags),
 `fancy=true` (notes with any fancy-serial trait), `serial_trait` (one trait
 key from `/api/reference/serial-traits`; an unknown one is 422),
 `target_reached=true` (see the wish-list fields below), `limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
-`acquisition_date`, `acquisition_price`, `priority`, `target_price`, or
-`grade`; `-` prefix for descending; default `-created_at`; anything else is
-422; with `priority`, `target_price`, and `year`, items without a value come
-last in either direction). The response is
+`acquisition_date`, `acquisition_price`, `priority`, `target_price`,
+`value`, `pcgs_pop_higher`, or `grade`; `-` prefix for descending; default
+`-created_at`; anything else is 422; with `priority`, `target_price`,
+`year`, `value`, and `pcgs_pop_higher`, items without a value come last in
+either direction). `value` sorts by the newest estimate, the same
+subquery the value filters use, not the blended `value_strategy` figure.
+The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
 estimated value: `latest_value` + `latest_value_currency`, plus
@@ -159,11 +163,20 @@ basis ran over `fine_oz * spot_at_purchase`, as a percentage in the item's
 own currency; null without a purchase-day spot price or a cost). See
 [Bullion stack](#bullion-stack) below.
 
+**Note details (v0.29.0)**: `width_mm` and `height_mm` (above 0, up to 2000;
+for notes and anything else not round, coins keep `diameter_mm`), `printer`
+(up to 200 characters), `watermark` (up to 200), and `demonetized_on` (a
+date; coins and notes alike). None of the five are accepted in a bulk
+`set` (they're per piece). "Fill from Numista" fills them for a banknote
+type from the catalogue's `size`/`size2`, `printers`, `watermark`, and
+`demonetization` fields, when present.
+
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
 `pcgs_population`, `pcgs_pop_higher`, `charter_number`, `bank_city`,
-`bank_state`, `plate_position`, `target_price`, `priority`, and (v0.28.0)
-`spot_at_purchase`. An export from an older version imports as before.
+`bank_state`, `plate_position`, `target_price`, `priority`, `spot_at_purchase`
+(v0.28.0), and (v0.29.0) `width_mm`, `height_mm`, `printer`, `watermark`, and
+`demonetized_on`. An export from an older version imports as before.
 `serial_traits`, `population_as_of`, and `spot_at_purchase_source` are not
 exported: the import recomputes them (a `spot_at_purchase` cell always
 imports as `manual`).
@@ -284,6 +297,10 @@ right now.
 | `GET`  | `/api/stats/gains`       | Per-item unrealized (owned) and realized (sold) gain/loss |
 | `GET`  | `/api/stats/value-history` | Month-end collection value over time (`?months=`, default 24, 1–120) |
 | `GET`  | `/api/stats/notes-by-signature` | Owned notes grouped by series and signature pair |
+| `GET`  | `/api/stats/quality`     | Certified vs. raw owned items, by count and value, plus a breakdown by grading service (`?currency=`) |
+| `GET`  | `/api/stats/value-spread` | Min/median/max/mean of owned items' shown values, and the share held by the top 10% (`?currency=`) |
+| `GET`  | `/api/stats/data-health` | Owned items missing a photo, grade, cost, value, weight, storage, or reference |
+| `GET`  | `/api/stats/showcase`    | Piece of the day, oldest, newest, and pieces acquired on this day in an earlier year (`?currency=`) |
 
 `/collection` answers `currency`, `counts` (`total`, `owned`, `sold`,
 `wishlist`, and `coins` / `notes`, which count owned items only),
@@ -293,7 +310,9 @@ contribute), `unrealized_gain` (owned items with both a cost and a value),
 and `realized_gain` (sold items, net of fees). A count is a row, not its
 `quantity`. [monitoring.md](monitoring.md) builds a Homepage tile from this
 endpoint. `/breakdowns` answers `by_country`, `by_type`, `by_decade`,
-`by_grade`, `by_tag`, and `acquisitions_by_year`, each a list of `key`,
+`by_grade`, `by_tag`, `by_metal` (v0.29.0: `detect_metal` on the
+composition, title-cased, or `Other` for none), and `acquisitions_by_year`,
+each a list of `key`,
 `count`, `cost_basis`, and `estimated_value`; `?tag=` and `?set_id=` scope
 every breakdown to items carrying that tag or belonging to that set (an
 unknown tag or set gives empty breakdowns, not an error); `/gains` answers `unrealized`
@@ -311,6 +330,38 @@ and `groups`, one per (`series`, `signatures`) pair, either of which may be
 `null`: `count` (items), `quantity` (pieces), and `items` (`id`, `label`,
 `serial_number`, `grade_label`) ordered by serial number. Groups are ordered
 by series, then signatures, ignoring case, with `null` last.
+
+Four more endpoints (v0.29.0, `services/insights.py`, behind the new
+dashboard widgets): owned items only, trashed already hidden by the ORM.
+
+- **`/quality?currency=`**: `{"currency", "owned", "certified": {"items",
+  "value"}, "raw": {"items", "value"}, "by_service": [{"key", "count",
+  "estimated_value"}], "graded", "ungraded"}`. "Certified" means a cert
+  service or number is set; `by_service` groups certified items by
+  `cert_service`, highest value first. Money follows the stats currency
+  rule.
+- **`/value-spread?currency=`**: `{"currency", "items", "min", "median",
+  "max", "mean", "top_share_pct"}` over owned items' shown value (the same
+  `resolve_display_value` the dashboard totals use). `top_share_pct` is the
+  share of total value held by the most valuable 10% of priced pieces (at
+  least one); every field is `null` when no owned item has a value.
+- **`/data-health`**: `{"owned", "checks": [{"key", "label", "count",
+  "items": [{"id", "label"}]}]}`. Checks, always in this order: `no_photo`,
+  `no_grade`, `no_cost`, `no_value` (no estimate at all), `no_weight` (a
+  detected precious metal with no weight or fineness to melt-price it),
+  `no_storage`, `no_reference` (no catalogue reference). `items` lists the
+  first 5 matching items; `count` is the true total. Takes no `?currency=`:
+  it counts items, not money.
+- **`/showcase?currency=`**: `{"piece_of_the_day", "oldest", "newest",
+  "on_this_day": [...]}`, each piece `{"id", "label", "year_label",
+  "thumb_key", "photo_key", "value", "currency", "acquisition_date"}` or
+  `null`. Piece of the day is chosen by hashing today's calendar date over
+  owned items that have a photo (falling back to every owned item when none
+  do), so it is the same piece all day and needs no storage of its own.
+  Oldest is the smallest non-null `year` among owned items; newest is the
+  latest `acquisition_date`, falling back to `created_at` when that's
+  unset. "On this day" lists owned items whose acquisition month and day
+  match today's, from an earlier year.
 
 The dashboard and the printable insurance report (`/report` in the UI;
 export to PDF via the browser's print dialog) are built on these endpoints.
@@ -359,7 +410,7 @@ parentheses):
 | `setup` | none | full |
 | `value_summary` | none | full |
 | `value_history` | `months`: 12, 24, 60, or 120 (24) | full |
-| `breakdown` | `dimension`: `country`, `type`, `decade`, `grade`, `tag`, `acquisition_year` (`country`); `measure`: `value`, `count`, `cost` (`value`); `top_n`: 3-20 (8); `tag`: a tag name or `null` (`null`); `set_id`: a set id or `null` (`null`) | third |
+| `breakdown` | `dimension`: `country`, `type`, `decade`, `grade`, `tag`, `metal`, `acquisition_year` (`country`); `measure`: `value`, `count`, `cost` (`value`); `top_n`: 3-20 (8); `tag`: a tag name or `null` (`null`); `set_id`: a set id or `null` (`null`) | third |
 | `notes_by_signature` | none | full |
 | `unrealized_movers` | `top_n`: 3-25, best and worst each (5) | full |
 | `realized_gains` | `top_n`: 3-50 (20) | full |
@@ -377,6 +428,16 @@ parentheses):
 | `alerts_status` | none | third |
 | `market_data` | none | third |
 | `trash` | `count`: 3-20 (5) | third |
+| `most_valuable` | `count`: 3-20 (5) | half |
+| `piece_of_the_day` | none | third |
+| `oldest_piece` | none | third |
+| `newest_acquisition` | none | third |
+| `on_this_day` | none | third |
+| `photo_mosaic` | `count`: 6-30 (12) | half |
+| `certified_share` | none | third |
+| `value_spread` | none | third |
+| `population_highlights` | `count`: 3-20 (5) | half |
+| `data_health` | none | half |
 
 `breakdown`'s `top_n` trims only the dimensions sorted by size (`country`,
 `type`, `grade`, `tag`) into an "Other" bucket; `decade` and
@@ -386,7 +447,9 @@ The default layout reproduces the dashboard as it was before this feature:
 `setup`, `value_summary`, `value_history` (24 months), five `breakdown`
 widgets (country/value, tag/value, decade/count, acquisition_year/count,
 grade/count), `notes_by_signature`, `unrealized_movers`, `realized_gains`,
-in that order, 11 widgets in all.
+in that order, 11 widgets in all. The ten "group C" types added in v0.29.0
+(`most_valuable` through `data_health`, above) are not in the default
+layout; add them from "Edit dashboard".
 
 ## Reference data
 

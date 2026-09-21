@@ -489,6 +489,23 @@ export default function ItemForm() {
             )}
             {!isCoin && (
               <>
+                {/* Width and height together: a note is measured both ways. */}
+                <div className="field">
+                  Size (mm)
+                  <span className="size-pair">
+                    <input
+                      type="number" step="0.01" min={0} aria-label="Width (mm)" placeholder="width"
+                      value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
+                    />
+                    <span className="muted">×</span>
+                    <input
+                      type="number" step="0.01" min={0} aria-label="Height (mm)" placeholder="height"
+                      value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
+                    />
+                  </span>
+                </div>
+                {text("printer", "Printer", { maxLength: 200, placeholder: "e.g. BEP, De La Rue" })}
+                {text("watermark", "Watermark", { maxLength: 200 })}
                 {text("serial_number", "Serial number")}
                 {text("prefix_block", "Prefix / block")}
                 {text("signatures", "Signatures", { placeholder: "e.g. Coyne–Towers" })}
@@ -504,6 +521,9 @@ export default function ItemForm() {
               </>
             )}
             {text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
+            {text("demonetized_on", "Demonetised on", {
+              type: "date", title: "The date it stopped being legal tender",
+            })}
             {!isCoin && (
               <div className="field">
                 &nbsp;

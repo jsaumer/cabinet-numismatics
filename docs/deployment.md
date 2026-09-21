@@ -38,7 +38,7 @@ Edit `.env`:
   reachable by people who shouldn't be able to do that.
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.28.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.29.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -269,7 +269,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.28.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.29.0 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 What that file does differently from `docker-compose.yaml`, and why:

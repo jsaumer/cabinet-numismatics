@@ -46,7 +46,9 @@ src/
     index.ts            re-exports it all, plus helpers such as money()
   dashboard/          the customisable dashboard: registry.tsx (every widget
                       type, its catalogue entry, default size and options),
-                      widgets/ (one file per group), WidgetFrame.tsx (the
+                      widgets/ (one file per group, including showcase.tsx:
+                      piece of the day, oldest/newest, on this day, the
+                      photo mosaic, and most valuable), WidgetFrame.tsx (the
                       card, lazy mount, per-widget error), data.ts (the
                       per-page request cache), options.ts, edit.tsx (edit
                       mode, the drag, the catalogue and options dialogs)
@@ -57,6 +59,9 @@ src/
                         toPayload, fromItem, the designation and problem
                         lists), NumistaFill.tsx, PcgsFill.tsx
   components/         shared pieces
+    item-hero.tsx       the item page's top: photo, title, grade, value
+    item-facts.tsx      the rest of an item's fields, grouped, empty ones
+                        hidden behind a "Show empty fields" toggle
     icons.tsx           inline SVG icons
     controls.tsx        FileButton (a file picker that looks like a button)
                         and Menu
@@ -134,7 +139,8 @@ page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
-number getting its badge, a wishlist coin showing its target price, an
+number getting its badge and its size and printer showing on the item page,
+a wishlist coin showing its target price, an
 undated piece taking ND with no year, a silver piece showing its fine ounces
 on the Stack page, the
 security headers, every Settings section, and, last, an in-app restore of a

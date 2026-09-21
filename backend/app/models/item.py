@@ -178,6 +178,13 @@ class Item(Base):
     # figure typed in, "auto" for one services/stack.py looked up.
     spot_at_purchase: Mapped[Decimal | None] = mapped_column(Numeric(14, 4))
     spot_at_purchase_source: Mapped[str | None] = mapped_column(String(10))
+    # Note details: size for anything not round (coins keep diameter_mm), and
+    # demonetization, which applies to coins and notes alike.
+    width_mm: Mapped[Decimal | None] = mapped_column(Numeric(7, 2))
+    height_mm: Mapped[Decimal | None] = mapped_column(Numeric(7, 2))
+    printer: Mapped[str | None] = mapped_column(String(200))
+    watermark: Mapped[str | None] = mapped_column(String(200))
+    demonetized_on: Mapped[date | None] = mapped_column(Date)
     # Wish list: what to pay at most (in `currency`), and 1 high / 2 medium / 3 low.
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     priority: Mapped[int | None] = mapped_column(SmallInteger)

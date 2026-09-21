@@ -703,6 +703,60 @@ Roadmap Phase 7, P7. `services/stack.py`, `routers/stack.py`, migration
   three decimal places could not hold a one-ounce round weight (found by the
   new Playwright test). The item form's Weight field takes four decimals now.
 
+## Note details, the item page, more widgets (v0.29.0)
+
+Migration `0021`: `items.width_mm`, `height_mm` (Numeric(7, 2), for notes and
+anything else not round; coins keep `diameter_mm`), `printer`, `watermark`
+(String(200)), and `demonetized_on` (Date, coins and notes alike). None are
+bulk-editable; the router drops them there like `spot_at_purchase`. Clone
+needed no code change: it copies every column. What a later change here has
+to respect:
+
+- **A new item field needs a home or it is invisible.** The item page no
+  longer shows a dash for every field: `components/item-facts.tsx`'s
+  `groups` array is the only place a fact reaches the page, and a field left
+  out of every group's `facts` list is never shown, filled or empty. A field
+  essential enough to read before anything else (the grade, the value, a
+  wishlist target) belongs in `components/item-hero.tsx` instead, or in
+  both if the hero shows a short form and the facts card the full one.
+- **Never print a dash for an empty field outside "Show empty fields".**
+  `ItemFacts`'s `filled()` and the per-fact `forType` are what decide a
+  field shows at all; a group holding nothing (or, per `inHero`, only a
+  fact the hero already shows) is left out entirely rather than rendered
+  empty. The "Show empty fields" choice lives in `localStorage`
+  `cabinet.item.showEmpty` only, never on the server: it is a per-viewer
+  reading preference, not collection data.
+- **Keep the Playwright selectors the page promises.** The h1 text, the
+  `$12.50`-style money text, cert/badge classes, and the Edit/Clone/Delete
+  buttons moved into `ItemHero` and stayed outside the disabled `fieldset`
+  so a trashed item can still be restored; a further split must keep them
+  exactly as `smoke.spec.ts` and `docs/screenshots/capture.cjs` find them.
+- **`services/insights.py` follows `routers/stats.py`'s currency rule**:
+  amounts convert into the requested currency at cached daily rates,
+  unconvertible ones are excluded and counted, nothing is guessed. `quality`
+  and `value-spread` take `?currency=`; `data-health` counts items, not
+  money, so it takes none.
+- **The showcase choice must stay storage-free and stable within a day.**
+  `insights.showcase`'s piece of the day is a hash of today's calendar date
+  over owned items (preferring ones with a photo), so it is the same answer
+  on every request that day and needs no column, cache row, or scheduled
+  job to keep it that way. Don't replace the hash with anything that reads
+  "now" more precisely than the date.
+- **Widget types are registered on both sides.** The ten new types
+  (`most_valuable` through `data_health`) and `metal` as a `breakdown`
+  dimension are in both `backend/app/services/dashboard.py`
+  (`WIDGET_OPTIONS`/`DEFAULT_SIZES`) and `frontend/src/dashboard/registry.tsx`
+  (`REGISTRY`), same as any other widget; see the existing rule on adding or
+  retiring one.
+- **The Numista banknote mapping is unconfirmed and must never fail a
+  fill.** `numista.catalogue_fields`'s reading of `size`/`size2`, `printers`,
+  `watermark`, and `demonetization` was written without a live key on the
+  dev machine, so every shape is read defensively (wrong type, missing key,
+  or absent field all fall through to leaving that item field empty) and a
+  fill never raises over it. Confirming it against a real response is an
+  open item, like "Add a run" against live Numista; see the roadmap's road
+  to v1.0.0.
+
 ## Releases
 
 
