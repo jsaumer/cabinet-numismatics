@@ -21,10 +21,13 @@ changelog entry when releasing.
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- No auth in the app yet: it runs on a trusted network or behind an
-  authenticating reverse proxy. Login is planned (roadmap Phase 7, P8: local
-  accounts with a first-run superuser, then OIDC single sign-on) and lands
-  before v1.0.0; it stays one shared collection.
+- No auth in the app yet, and it is **the next thing built**: roadmap Phase
+  7, P8, as v0.30.0 (one admin, database-backed sessions, scoped API tokens,
+  deny by default) then v0.31.0 (OIDC single sign-on and a trusted-header
+  mode). Until then it runs on a trusted network or behind an authenticating
+  reverse proxy. Every design decision was settled on 20 and 21 September
+  2026: see "Next: accounts and permissions" in docs/security.md, and don't
+  re-open them. It stays one shared collection.
 
 ## Repo layout
 

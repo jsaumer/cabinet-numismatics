@@ -32,7 +32,8 @@ Edit `.env`:
   runs as and that owns its files, default `1000`:`1000`. Set them when the
   data sits on bind mounts or NFS owned by another account.
 - `RESTORE_ENABLED` (optional, default `true`): restore from Settings →
-  Backups replaces the whole collection, and Cabinet has no login yet. Set
+    Backups replaces the whole collection, and Cabinet has no login yet (it
+  arrives in v0.30.0, which makes restore admin-only). Set
   `false` to switch it off (the endpoints answer 404 and
   `scripts/restore.sh` is the only way), for instance where the app is
   reachable by people who shouldn't be able to do that.
@@ -115,10 +116,12 @@ turns the check off, for local development only.
 ## 3. Reverse proxy, TLS, and authentication
 
 **Cabinet has no application-level login yet**: it is for a trusted network,
-or behind an authenticating reverse proxy. Application login is planned
-before v1.0.0 (roadmap Phase 7); until it ships, this section is the only
-protection. Do not expose it directly to the internet. Put it behind a reverse
-proxy that terminates TLS and handles authentication.
+or behind an authenticating reverse proxy. Login is the next thing built
+(roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
+tokens; v0.31.0 adds single sign-on and a trusted-header mode, so a proxy
+like Authentik can sign you straight in). Until then, this section is the
+only protection. Do not expose it directly to the internet. Put it behind a
+reverse proxy that terminates TLS and handles authentication.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:
 

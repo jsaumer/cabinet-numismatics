@@ -11,13 +11,15 @@ auto-generated OpenAPI documentation served at:
 
 All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
-document files, and metrics answer files or text). The app has no login
-yet, so
-endpoints are described without an auth layer; put an authenticating proxy
-in front before exposing it beyond a trusted network. Login is planned
-(roadmap Phase 7, P8), and
-[security.md](security.md#planned-accounts-and-permissions) has the proposed
-table of who will be able to call what.
+document files, and metrics answer files or text). The app has no login yet,
+so endpoints are described without an auth layer; put an authenticating proxy
+in front before exposing it beyond a trusted network. Login is the next thing
+built (roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
+tokens, with every endpoint denied by default; v0.31.0 adds single sign-on).
+When it lands, every endpoint below needs a session or a token, three of them
+change shape, and this document gains a stability policy.
+[security.md](security.md#next-accounts-and-permissions) has the settled
+design and the table of who will be able to call what.
 
 ## Items
 
