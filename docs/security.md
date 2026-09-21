@@ -188,8 +188,10 @@ Decided on 21 September 2026, the details that shape the code:
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
 | CSRF | Fails closed, whatever the method: a cookie-authenticated `/api/` request passes only with `Sec-Fetch-Site: same-origin`, or with no such header and an Origin (or Referer's origin) exactly matching an entry in a required `PUBLIC_ORIGINS` setting. `none` (a typed address) is accepted only on the two addresses meant to be opened directly (the OpenAPI schema and a document's file). Bearer tokens are not CSRF-checked. No token plumbing |
 | Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username, per-address, and global limits and has a password-check slot reserved for it, so a flood can't keep the owner out; it never lifts the setup throttle or skips the password |
-| Recent password | Downloading a backup, exporting, restoring, creating a token, changing a stored secret or the webhook, deleting for good, and changing the password or username ask for the password again; a correct answer opens a 5-minute window for that session only, never for a token |
-| Password change | Revokes every other session, every known device, and every `read` and `write` token; `metrics` tokens are kept and named. The reset command in the container does the same |
+| Recent password | Downloading a backup, exporting, restoring, deleting old unencrypted archives, any settings change, creating or revoking a token, ending another session or signing out everywhere, deleting for good, and changing the password or username ask for the password again; a correct answer opens a 5-minute window for that session only, never for a token. Signing out of the current session never asks |
+| Password change | Revokes every other session, every known device, and every API token of every scope, naming each. The reset command in the container does the same |
+| Backups | Every archive is encrypted ([age](https://age-encryption.org), X25519) with a backup key from a Docker secret or generated on the state volume, and carries a MAC keyed by that key, so an archive on the backup share can be neither read nor forged without it. The key is shown only by a command in the container, never in the browser; losing it makes the archives unreadable, by design. Old unencrypted archives are flagged and can be deleted |
+| Anonymous requests | The only two routes that read a body without a login (sign-in and setup) accept at most 8 KiB, in nginx and in the gate |
 | Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos, documents, and exports are sent `Cache-Control: private, no-store`, and signing out clears the browser's cache of Cabinet. Caching the check only if measurement asks for it, and only with a reviewed cache key |
 | Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
 | Proxies | nginx believes no forwarded header and overwrites them towards the backend with its own immediate peer and scheme. Cabinet pins no network ranges (the operator's infrastructure decides); the backend should be reachable by nothing but nginx, and uvicorn runs with `--no-proxy-headers`. The address nginx saw is recorded in the audit log for information only |
@@ -197,7 +199,7 @@ Decided on 21 September 2026, the details that shape the code:
 | Alerts | Through the existing webhook, carrying no collection data: a sign-in from a new device, repeated failures, a password change or reset, a new token, a backup download or export, a restore, secrets cleared |
 | API docs | The interactive `/api/docs` page is off; `/api/openapi.json` stays, for a signed-in session only |
 | Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
-| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 90 days; creating one needs the password and sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
+| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 7 days (a day by default); creating or revoking one needs the password, and creating one sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
 
 It has to work **both** behind an authenticating proxy and directly exposed,
 because which of those the deployment uses is not decided. The table includes
@@ -243,7 +245,7 @@ Two more kinds of caller are not accounts:
 | Delete for good, empty the trash | yes, with the password again | no | no | no | no |
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
 | Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
-| Settings: display currency, value strategy, refresh cadence, trash retention | yes | view only | no | no | no |
+| Settings: display currency, value strategy, refresh cadence, trash retention | yes, with the password again | view only | no | no | no |
 | Save, reset, or delete the dashboard layout | yes | no | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
 | Backups: download (with the password again), run now, schedule | yes | no | no | no | no |
@@ -334,6 +336,15 @@ Rules that go with the table:
   the deployment's own key, so an archive edited without that key cannot
   plant a working webhook; a restore clears any that don't, and says which.
   The restore summary lists which secrets the archive would set.
+- **Archives are encrypted.** An archive holds the whole collection, storage
+  locations included, so from v0.30.0 every one is encrypted with the backup
+  key and authenticated with a MAC derived from it: someone who can read the
+  backup share learns nothing, and someone who can write to it cannot make an
+  archive that restores. The key must be kept outside Cabinet (a password
+  manager); `restore.sh` and the in-app restore both need it. What Cabinet
+  cannot encrypt is the database's own files and the photo and document
+  volumes: on a NAS, export them only to the Cabinet host, keep
+  `root_squash`, and never share them over SMB.
 
 
 ## Input handling

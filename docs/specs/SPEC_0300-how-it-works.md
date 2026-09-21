@@ -118,16 +118,21 @@ Fields: **Username**, **Password** (`autocomplete` `username` and
 - The session renews itself as it is used; a day away signs you out, and a
   week is the limit regardless.
 - **Sensitive actions ask for the password again.** Downloading a backup,
-  exporting CSV or Excel, restoring, creating an API token, changing a
-  stored secret or the webhook, emptying the trash or deleting for good, and
-  changing the password or username all show "Confirm your password to
-  continue." A correct password opens a 5-minute window for that session
-  only; tokens can never have it. Each confirmation and each download is
-  audited.
+  exporting CSV or Excel, restoring, deleting old unencrypted archives, any
+  change in Settings, creating or revoking an API token, ending another
+  session or signing out everywhere, emptying the trash or deleting for
+  good, and changing the password or username all show "Confirm your
+  password to continue." A correct password opens a 5-minute window for
+  that session only; tokens can never have it. Each confirmation and each
+  download is audited. Signing out of the session you are in never asks.
 - **Signing out** ends the session on the server, tells the browser to clear
   its cache of Cabinet's pages and files, and clears the app's in-memory
   data. Photos, documents, and exports are sent `no-store`, so nothing from
   the collection stays behind in the browser.
+- **API tokens** for scripts and CI (`read` or `write`) last a day or a week
+  at most, and the form says plainly that a `read` token can see every item
+  and where it is kept. A `metrics` token for the Homepage tile or
+  Prometheus sees only totals and can be long-lived.
 
 ## 4. Changing the password
 
@@ -142,16 +147,19 @@ password**, **Confirm new password**.
       session ends;
     - every known device is forgotten, including this one's (it is
       re-issued);
-    - **every `read` and `write` API token is revoked.** `metrics` tokens are
-      kept, because they can only see totals; the answer names them;
+    - **every API token is revoked, whatever its scope**, including the
+      Homepage and Prometheus `metrics` tokens; the answer names each one so
+      you can replace it;
     - the audit log records it, and the webhook sends "Cabinet password
       changed".
 4. The page says exactly what happened: "Password changed. 2 other sessions
-   were signed out. Revoked: CI (write), laptop script (read). Kept:
-   Homepage tile (metrics)."
+   were signed out. Revoked: CI (write), Homepage tile (metrics), Prometheus
+   (metrics). Create new tokens for anything that still needs one."
 
-Why the tokens go: someone who learned the old password could have made a
-token, and a token would otherwise outlive the change.
+Why every token goes: someone who learned the old password could have made
+a token, even a harmless-looking `metrics` one that never expires, and it
+would otherwise outlive the change. Pasting a new token into Homepage is the
+right price for a suspected compromise.
 
 **Changing the username** is on the same page: current password plus the
 new name.
@@ -160,13 +168,14 @@ new name.
 
 | Situation | What to do | What happens |
 |---|---|---|
-| Lost or stolen laptop, you can still sign in elsewhere | Settings, Account, Sessions: end that session, or **Sign out everywhere** | Every session ends and every device is forgotten |
-| You think the password is known | Change it (section 4) | Sessions, devices, and read and write tokens all end |
+| Lost or stolen laptop, you can still sign in elsewhere | Settings, Account, Sessions: end that session, or **Sign out everywhere** (password again) | Every session ends and every device is forgotten |
+| You think the password is known | Change it (section 4) | Sessions, devices, and every token end |
 | A token leaked | Settings, Account, Tokens: revoke it | Immediate 401 for that token |
 | **Forgotten password** | Break the glass (below) | New password; everything that could have been stolen is revoked |
 | Forgotten username | `python -m app.cli status` | Prints it |
-| Lost state volume | Nothing | The admin still exists in the database; supply `SECRET_KEY` as today |
-| Lost database, restoring to a new machine | Start v0.30.0 on the empty database, claim it with a fresh code, then restore the collection (in the app, or `restore.sh` before or after) | Backups never carry sign-in data, so the new admin is whoever claimed the new machine |
+| Lost state volume | Nothing for sign-in: the admin is in the database; supply `SECRET_KEY` as today. **The generated backup key was on that volume**: use your saved copy (section 6) | |
+| Lost database, restoring to a new machine | Start v0.30.0 on the empty database, claim it with a fresh code, give it your saved backup key (`BACKUP_KEY_FILE`), then restore the collection (in the app, or `restore.sh`) | Backups never carry sign-in data, so the new admin is whoever claimed the new machine |
+| Lost backup key and lost machine | Nothing can open the encrypted archives | This is why the key must be saved outside Cabinet |
 
 ### Breaking the glass: the reset command
 
@@ -191,7 +200,7 @@ flowchart TD
   B -->|yes| C[Prompt twice, hidden input]
   C --> D[New Argon2id hash]
   D --> E[End all sessions<br/>forget all devices]
-  E --> F[Revoke read and write tokens]
+  E --> F[Revoke every token]
   F --> G[Clear sign-in throttles]
   G --> H[Audit, webhook alert, print summary]
 ```
@@ -204,32 +213,70 @@ flowchart TD
 - The running backend clears its in-memory sign-in throttles when it sees
   the command's flag file on the state volume.
 - It prints what it did, without secrets: "Password reset for admin. Signed
-  out 3 sessions and forgot 2 devices. Revoked 2 tokens; kept Homepage tile
-  (metrics)."
+  out 3 sessions and forgot 2 devices. Revoked 3 tokens: CI, Homepage tile,
+  Prometheus."
 
 The other container commands, same form:
 
 | Command | Use it when |
 |---|---|
-| `status` | You want to see: claimed or not, the admin's name, last sign-in, failed sign-ins in the past 24 hours, live sessions and tokens with their last use. Prints no secrets |
+| `status` | You want to see: claimed or not, the admin's name, last sign-in, failed sign-ins in the past 24 hours, live sessions and tokens with their last use, and the backup key's fingerprint and whether you have saved it. Prints no secrets |
 | `sign-out-everywhere` | A device is lost and you can't sign in anywhere else |
 | `revoke-tokens [--name NAME]` | A token leaked and you can't sign in |
+| `backup-key show` | You need a copy of the backup key to keep safe (section 6) |
+| `backup-key rotate` | You want a new backup key; older archives stay readable |
 
 **There is deliberately no command that un-claims Cabinet or deletes the
 admin.** Either would reopen the setup page to whoever reaches it first. If
 it is ever truly needed, it is a documented database operation, not a
 button.
 
-## 6. What each piece protects
+## 6. Backups and the backup key
+
+**Every backup Cabinet makes is encrypted, because a backup is the whole
+collection: every item, value, storage location, photo, and receipt.**
+Before v0.30.0, archives on the backup share were readable by anyone who
+could read that share. Now they are unreadable without the backup key, and
+nobody without the key can forge or alter one that restores.
+
+- **The key.** On the first start of v0.30.0 Cabinet makes one (or uses
+  yours, from a Docker secret, `BACKUP_KEY_FILE`). Settings, Backups shows
+  its fingerprint and a reminder, **"Save your backup key"**, until you tick
+  that you have.
+- **Saving it.** From the host:
+  `docker compose exec backend python -m app.cli backup-key show` (or
+  `docker exec` on the Swarm node). Put it in your password manager. It is
+  never shown in the browser: like the password reset, the container is the
+  proof of ownership.
+- **Losing it.** If the key and the machine are both lost, the archives
+  cannot be opened by anyone, including you. There is no recovery by
+  design.
+- **Opening an archive without Cabinet.** Archives are standard
+  [age](https://age-encryption.org) files:
+  `age -d -i key.txt cabinet-backup-....zip.age > backup.zip`.
+- **Old archives.** Unencrypted `.zip` archives from before v0.30.0 are
+  still readable copies of the collection. Settings lists them as
+  **unencrypted**, with "Delete unencrypted archives" (password again).
+  Restoring one needs a typed `RESTORE UNENCRYPTED`.
+- **Restoring** decrypts the archive and checks it was made with your key
+  before reading anything in it; an altered or foreign archive is refused.
+- **What Cabinet cannot encrypt:** the database's own files and the photo
+  and document folders, wherever you keep them. If those are on a NAS,
+  export them only to the Cabinet host, keep `root_squash`, and never share
+  them over SMB. The deployment guide has the details.
+
+## 7. What each piece protects
 
 | Piece | Stops |
 |---|---|
 | Deny by default, tested against every route | A forgotten route leaking the inventory |
 | Setup code, one winner, then closed | Someone claiming an open instance first |
-| Argon2id, delays, known devices | Guessing the password, and locking the owner out |
-| Password again before sensitive actions | Someone at an unlocked laptop taking the whole collection or planting a token |
-| Tokens revoked on a password change | A stolen password turning into lasting access |
+| Argon2id, delays, known devices, a reserved slot | Guessing the password, and locking the owner out |
+| Tiny limits on anonymous requests | Flooding the sign-in page to exhaust memory |
+| Password again before sensitive actions and every settings change | Someone at an unlocked laptop taking the collection, planting a token, or quietly deleting for good |
+| Every token revoked on a password change; script tokens last a week at most | A stolen password or token turning into lasting access |
 | Webhook alerts | An attempt going unnoticed |
 | `no-store`, clear on sign-out | The collection lingering in a shared browser |
-| Backups without sign-in data; secrets cleared if not encrypted with your key | A tampered archive planting an account or a webhook |
+| Encrypted, keyed backups | Someone reading or altering the collection on the backup share |
+| Backups without sign-in data; secrets used only if encrypted with your key | A tampered archive planting an account or a webhook |
 | Reset only from the container | Anyone on the network resetting the password |
