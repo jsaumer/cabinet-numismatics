@@ -23,6 +23,22 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
+/** Stands in for a coin with no photo. */
+export const CoinIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="4.5" />
+  </Icon>
+);
+
+/** Stands in for a note with no photo. */
+export const NoteIcon = () => (
+  <Icon>
+    <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+    <circle cx="12" cy="12" r="2.6" />
+  </Icon>
+);
+
 /** Settings, as sliders: a drawn gear at this size reads as a sun. */
 export const SettingsIcon = () => (
   <Icon>

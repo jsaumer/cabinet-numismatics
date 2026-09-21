@@ -32,7 +32,7 @@ WIDGET_OPTIONS: dict[str, dict[str, dict]] = {
     },
     "breakdown": {
         "dimension": {
-            "choices": ["country", "type", "decade", "grade", "tag", "acquisition_year"],
+            "choices": ["country", "type", "decade", "grade", "tag", "metal", "acquisition_year"],
             "default": "country",
         },
         "measure": {"choices": ["value", "count", "cost"], "default": "value"},
@@ -80,6 +80,23 @@ WIDGET_OPTIONS: dict[str, dict[str, dict]] = {
     "trash": {
         "count": {"kind": "int", "min": 3, "max": 20, "default": 5},
     },
+    # Group C (roadmap Phase 7, P10 follow-up): none are in the default layout.
+    "most_valuable": {
+        "count": {"kind": "int", "min": 3, "max": 20, "default": 5},
+    },
+    "certified_share": {},
+    "population_highlights": {
+        "count": {"kind": "int", "min": 3, "max": 20, "default": 5},
+    },
+    "data_health": {},
+    "value_spread": {},
+    "piece_of_the_day": {},
+    "oldest_piece": {},
+    "newest_acquisition": {},
+    "on_this_day": {},
+    "photo_mosaic": {
+        "count": {"kind": "int", "min": 6, "max": 30, "default": 12},
+    },
 }
 
 DEFAULT_SIZES: dict[str, str] = {
@@ -104,6 +121,16 @@ DEFAULT_SIZES: dict[str, str] = {
     "alerts_status": "third",
     "market_data": "third",
     "trash": "third",
+    "most_valuable": "half",
+    "certified_share": "third",
+    "population_highlights": "half",
+    "data_health": "half",
+    "value_spread": "third",
+    "piece_of_the_day": "third",
+    "oldest_piece": "third",
+    "newest_acquisition": "third",
+    "on_this_day": "third",
+    "photo_mosaic": "half",
 }
 
 

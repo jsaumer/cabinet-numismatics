@@ -21,7 +21,7 @@ item's quantity.
 
 import hashlib
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import httpx
@@ -492,6 +492,31 @@ def catalogue_fields(payload: dict, issues: list[dict] | None = None) -> dict:
         fields["issuer"] = (
             _clean(entity.get("name"), _LIMITS["issuer"]) if isinstance(entity, dict) else None
         )
+        # Note details (v0.29.0): every shape below is unconfirmed against a
+        # live response, so each is read defensively and never fails the fill.
+        fields["width_mm"] = _number(payload.get("size"), 2000)
+        fields["height_mm"] = _number(payload.get("size2"), 2000)
+        printers = payload.get("printers")
+        if isinstance(printers, list):
+            names = [
+                _clean(p.get("name"))
+                for p in printers
+                if isinstance(p, dict) and _clean(p.get("name"))
+            ]
+            fields["printer"] = _clean(", ".join(names), 200) if names else None
+        watermark = payload.get("watermark")
+        if isinstance(watermark, dict):
+            fields["watermark"] = _clean(watermark.get("description"), 200)
+        elif isinstance(watermark, str):
+            fields["watermark"] = _clean(watermark, 200)
+        demonetization = payload.get("demonetization")
+        if isinstance(demonetization, dict) and demonetization.get("is_demonetized") is True:
+            raw_date = demonetization.get("demonetization_date")
+            if isinstance(raw_date, str):
+                try:
+                    fields["demonetized_on"] = date.fromisoformat(raw_date)
+                except ValueError:
+                    pass
     else:
         edge = payload.get("edge")
         fields.update(

@@ -80,8 +80,13 @@ export interface Item {
   cac_sticker: CacSticker | null;
   diameter_mm: number | null;
   thickness_mm: number | null;
+  width_mm: number | null; // notes, and anything not round
+  height_mm: number | null;
   edge: string | null;
   shape: string | null;
+  printer: string | null;
+  watermark: string | null;
+  demonetized_on: string | null; // no longer legal tender from this date
   mintage: number | null;
   serial_number: string | null;
   prefix_block: string | null;
@@ -258,8 +263,13 @@ export interface ItemPayload {
   strike: Strike;
   diameter_mm: number | null;
   thickness_mm: number | null;
+  width_mm: number | null;
+  height_mm: number | null;
   edge: string | null;
   shape: string | null;
+  printer: string | null;
+  watermark: string | null;
+  demonetized_on: string | null;
   mintage: number | null;
   grade_plus: boolean;
   grade_star: boolean;

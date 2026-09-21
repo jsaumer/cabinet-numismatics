@@ -33,7 +33,62 @@ export interface Breakdowns {
   by_decade: BreakdownEntry[];
   by_grade: BreakdownEntry[];
   by_tag: BreakdownEntry[];
+  by_metal: BreakdownEntry[];
   acquisitions_by_year: BreakdownEntry[];
+}
+
+/** How much of the collection is certified, and by whom. */
+export interface QualityStats {
+  currency: string;
+  owned: number;
+  certified: { items: number; value: number };
+  raw: { items: number; value: number };
+  by_service: { key: string; count: number; estimated_value: number }[];
+  graded: number;
+  ungraded: number;
+}
+
+/** How the shown values are spread across owned pieces; nulls when none has one. */
+export interface ValueSpread {
+  currency: string;
+  items: number;
+  min: number | null;
+  median: number | null;
+  max: number | null;
+  mean: number | null;
+  /** The share of the total value held by the most valuable tenth of pieces. */
+  top_share_pct: number | null;
+}
+
+export interface DataHealthCheck {
+  key: string;
+  label: string;
+  count: number;
+  items: { id: string; label: string }[]; // the first few
+}
+
+export interface DataHealth {
+  owned: number;
+  checks: DataHealthCheck[];
+}
+
+/** One piece as a showcase widget shows it. */
+export interface ShowcasePiece {
+  id: string;
+  label: string;
+  year_label: string;
+  thumb_key: string | null;
+  photo_key: string | null;
+  value: number | null;
+  currency: string | null;
+  acquisition_date: string | null;
+}
+
+export interface Showcase {
+  piece_of_the_day: ShowcasePiece | null;
+  oldest: ShowcasePiece | null;
+  newest: ShowcasePiece | null;
+  on_this_day: ShowcasePiece[];
 }
 
 export interface GainEntry {
