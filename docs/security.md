@@ -186,11 +186,12 @@ Decided on 21 September 2026, the details that shape the code:
 |---|---|
 | Session lifetime | One day from last use, a 7 day hard cap, and the session id rotated on sign-in |
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
-| CSRF | Origin, or Referer's origin, must exactly match an entry in a required `PUBLIC_ORIGINS` setting; any cookie-authenticated request marked `Sec-Fetch-Site: cross-site` or `same-site` is refused, whatever its method. No token plumbing |
-| Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock, and a signed known-device cookie from a successful sign-in bypasses them |
+| CSRF | Fails closed, whatever the method: a cookie-authenticated `/api/` request passes only with `Sec-Fetch-Site: same-origin`, or with no such header and an Origin (or Referer's origin) exactly matching an entry in a required `PUBLIC_ORIGINS` setting. `none` (a typed address) is accepted only on the few pages meant to be opened directly (the API reference and a document's file). Bearer tokens are not CSRF-checked. No token plumbing |
+| Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username and per-address delays only, never the setup throttle or the global limit |
 | Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos are sent `Cache-Control: private, no-cache`. Caching the check only if measurement asks for it, and only with a reviewed cache key |
+| Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
 | Proxies | nginx decides, by the immediate peer, whose forwarded headers to believe (`TRUSTED_PROXIES`, CIDR ranges, default none) and overwrites them towards the backend. The backend sits only on the internal network and a private egress network, and believes only that pinned internal subnet |
-| Restore | Credentials are deployment state, not collection data: backups leave them out and a restore keeps the current ones. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
+| Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
 | API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). Shown once, stored hashed, revocable, with a last-used time |
 
 It has to work **both** behind an authenticating proxy and directly exposed,
@@ -269,8 +270,13 @@ Rules that go with the table:
   download, and restore is written to an audit log the admin can read.
 - The whole API is denied by default behind one gate, with a short
   allow-list (sign-in, setup, and a health check that tells an anonymous
-  caller only "ok" or not); a test fails if any other route answers without
-  a login. `/api/docs` sits behind the login.
+  caller only "ok" or not). Anonymous callers are refused on the raw method
+  and path, before routing, so unknown paths, HEAD, OPTIONS, and redirects
+  are refused too; each route's permission is checked after routing, and a
+  route that declares none is refused. Tests enumerate the OpenAPI document
+  (not the route list, which hides included routers) and fail if any route
+  answers without a login or lacks a permission. `/api/docs` sits behind the
+  login, for a session only.
 - A forgotten admin password is reset with a command inside the backend
   container: shell access to the deployment is the proof of ownership.
 - On the first start after upgrading an open install, nothing is served but
@@ -282,16 +288,21 @@ Rules that go with the table:
   service on that network. On a Swarm, ports published in the default ingress
   mode arrive from the ingress network's address, not the client's, which is
   why sign-in limits lean on the known-device cookie rather than on addresses.
-- **Credentials are deployment state, not collection data.** Backups leave
-  out the rows of the users, sessions, tokens, and audit tables, and a restore
-  keeps the current ones. A credential withdrawn since a backup can therefore
-  never come back to life, nobody can plant one in an archive, API tokens keep
-  working through a restore, the audit log survives it, and an archive made
-  before login existed never reopens setup. A restore onto a brand new machine
-  starts unclaimed and is claimed with a fresh setup code. A timestamp on the
-  state volume, written as soon as a restore's database step returns, makes
-  the gate refuse anything issued before it, covering a crash mid-restore.
-- An archive carries no credentials, but it carries everything else,
+- **Credentials are deployment state, not collection data.** Users,
+  sessions, tokens, known devices, and the audit log live in the Postgres
+  schema `cabinet_auth`, with an Alembic chain and version table of their
+  own, and no foreign key crosses between it and the collection. Every dump
+  (downloaded, scheduled, the pre-restore safety copy, and `backup.sh`)
+  excludes that schema; every restore (in the app and `restore.sh`) restores
+  only `public`; and a restore refuses an archive whose table of contents
+  lists anything in `cabinet_auth`. So a credential withdrawn since a backup
+  can never come back to life, nobody can plant one in an archive, sessions
+  and API tokens keep working through a restore, the audit log survives it,
+  and an archive made before login existed never reopens setup. A restore
+  never revokes anything. A restore onto a brand new machine starts
+  unclaimed and is claimed with a fresh setup code.
+- An archive carries no credentials, by the mechanism above, but it
+  carries everything else,
   settings included, and its checksums live inside it. Anyone who can write to
   `BACKUP_DIR`, often a network mount, could alter an archive (for instance to
   plant a webhook address) for a later restore to bring in: treat the backup
