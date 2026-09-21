@@ -28,7 +28,7 @@ changelog entry when releasing.
   reverse proxy. Every design decision was settled on 20 and 21 September
   2026: see "Next: accounts and permissions" in docs/security.md, and don't
   re-open them. It stays one shared collection. The build contract,
-  SPEC_0300, was drafted on 21 September 2026 and awaits the owner's
+  `docs/specs/SPEC_0300.md`, was drafted on 21 September 2026 and awaits the owner's
   approval; that day the owner also cut forwarded-header trust
   (`TRUSTED_PROXIES`), pinned networks, and the `/api/docs` page from the
   design.
@@ -41,7 +41,8 @@ deploy/docker-stack.yaml Swarm stack (pulled images)
 .env.example / .env (gitignored)
 README.md, CLAUDE.md (this file), CHANGELOG.md
 docs/                    architecture, data-model, api, price-sources,
-                         monitoring, roadmap, implementation-notes, claude-code
+                         monitoring, roadmap, implementation-notes, claude-code;
+                         specs/ holds build contracts and their reviews
 proxy/nginx.conf
 backend/                 FastAPI app, Alembic migrations, pytest suite
 frontend/                React + Vite app; e2e/ holds the Playwright tests,
