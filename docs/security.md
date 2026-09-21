@@ -187,18 +187,25 @@ Decided on 21 September 2026, the details that shape the code:
 | Session lifetime | One day from last use, a 7 day hard cap, and the session id rotated on sign-in |
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
 | CSRF | Fails closed, whatever the method: a cookie-authenticated `/api/` request passes only with `Sec-Fetch-Site: same-origin`, or with no such header and an Origin (or Referer's origin) exactly matching an entry in a required `PUBLIC_ORIGINS` setting. `none` (a typed address) is accepted only on the two addresses meant to be opened directly (the OpenAPI schema and a document's file). Bearer tokens are not CSRF-checked. No token plumbing |
-| Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username and per-address delays only, never the setup throttle or the global limit |
-| Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos are sent `Cache-Control: private, no-cache`. Caching the check only if measurement asks for it, and only with a reviewed cache key |
+| Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username, per-address, and global limits and has a password-check slot reserved for it, so a flood can't keep the owner out; it never lifts the setup throttle or skips the password |
+| Recent password | Downloading a backup, exporting, restoring, creating a token, changing a stored secret or the webhook, deleting for good, and changing the password or username ask for the password again; a correct answer opens a 5-minute window for that session only, never for a token |
+| Password change | Revokes every other session, every known device, and every `read` and `write` token; `metrics` tokens are kept and named. The reset command in the container does the same |
+| Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos, documents, and exports are sent `Cache-Control: private, no-store`, and signing out clears the browser's cache of Cabinet. Caching the check only if measurement asks for it, and only with a reviewed cache key |
 | Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
-| Proxies | nginx believes no forwarded header and overwrites them towards the backend with its own immediate peer and scheme. Cabinet pins no network ranges (the operator's infrastructure decides); the backend should be reachable by nothing but nginx, and believes forwarded headers only from addresses the operator lists in `FORWARDED_ALLOW_IPS`, none by default |
+| Proxies | nginx believes no forwarded header and overwrites them towards the backend with its own immediate peer and scheme. Cabinet pins no network ranges (the operator's infrastructure decides); the backend should be reachable by nothing but nginx, and uvicorn runs with `--no-proxy-headers`. The address nginx saw is recorded in the audit log for information only |
+| Setup | A setup code from a Docker secret (`SETUP_CODE_FILE`, preferred), the environment, or generated and logged; compared first, so wrong guesses can't block the right code; one winner; the setup page closes for good |
+| Alerts | Through the existing webhook, carrying no collection data: a sign-in from a new device, repeated failures, a password change or reset, a new token, a backup download or export, a restore, secrets cleared |
 | API docs | The interactive `/api/docs` page is off; `/api/openapi.json` stays, for a signed-in session only |
 | Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
-| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). Shown once, stored hashed, revocable, with a last-used time |
+| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 90 days; creating one needs the password and sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
 
 It has to work **both** behind an authenticating proxy and directly exposed,
 because which of those the deployment uses is not decided. The table includes
-the changes from an independent review on 21 September 2026; its findings,
-with a verdict on each, are recorded in the project's planning notes.
+the changes from four outside reviews on 21 September 2026, the last of them
+Codex's adversarial review; the contract, with a verdict on each finding, is
+[docs/specs/SPEC_0300.md](specs/SPEC_0300.md), and
+[SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) walks through
+setup, sign-in, password changes, and the break-glass reset.
 
 Accounts are logins to **one shared collection**, not separate collections.
 The setup page works only while no account exists. Three roles, of which
@@ -227,20 +234,20 @@ Two more kinds of caller are not accounts:
 | View items, photos, checklists, dashboard, reports, edit history | yes | yes | yes | `read` | only what the link shares |
 | View costs, values, and gains | yes | yes | yes (an admin can hide them per viewer) | `read`, if its owner can | never |
 | View storage locations | yes | yes | yes | `read` | never |
-| View and download documents | yes | yes | yes | `read` | never |
-| Export CSV and Excel | yes | yes | yes | `read` | no |
+| View and download documents | yes | yes | yes | no (a session only) | never |
+| Export CSV and Excel | yes, with the password again | yes | yes | no (a session only) | no |
 | Add and edit items, photos, documents, tags, sets, checklists, sales log | yes | yes | no | `write` | no |
 | Bulk edit, "Add a run", imports | yes | yes | no | `write` | no |
 | Ask a price source for an estimate (spends quota) | yes | yes | no | `write` | no |
 | Move to the trash, restore from the trash | yes | yes | no | `write` | no |
-| Delete for good, empty the trash | yes | no | no | no | no |
+| Delete for good, empty the trash | yes, with the password again | no | no | no | no |
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
 | Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes | view only | no | no | no |
 | Save, reset, or delete the dashboard layout | yes | no | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
-| Backups: download, run now, schedule | yes | no | no | no | no |
-| Restore from an archive | yes | no | no | no | no |
+| Backups: download (with the password again), run now, schedule | yes | no | no | no | no |
+| Restore from an archive (with the password again) | yes | no | no | no | no |
 | Alerts test, monitoring status | yes | no | no | no | no |
 | `/api/metrics` | yes | no | no | `metrics` | no |
 | The collection totals (`/api/stats/collection`) | yes | yes | yes | `read` or `metrics` | no |
@@ -255,7 +262,9 @@ Rules that go with the table:
 - Disabling a user ends their sessions and revokes their tokens.
 - Passwords are hashed with Argon2id; sign-in is rate limited per account and
   per address; sessions are HttpOnly, SameSite cookies with a CSRF check on
-  anything that changes data; a token is shown once and stored hashed.
+  every request; a token is shown once and stored hashed. Any `/api/`
+  request whose path is percent-encoded is refused (400), so no encoding can
+  route around the gate.
 - Photos need the same check as the API. nginx serves them directly today,
   so that becomes an `auth_request` to the backend, declared for the whole
   server and switched off only for the static app and for `/api/` (where the
@@ -268,7 +277,10 @@ Rules that go with the table:
   accounts and map a provider's groups to roles (an admin group, an editor
   group, and viewer for anyone else allowed in).
 - Every sign-in, failed sign-in, role change, token, share link, backup
-  download, and restore is written to an audit log the admin can read.
+  download, export, and restore is written to an audit log the admin can
+  read. Failed sign-ins have their own cap, so a flood of them can never
+  push out the record of anything else, and nothing from the collection is
+  ever written to the audit log, a log line, or a webhook.
 - The whole API is denied by default behind one gate, with a short
   allow-list (sign-in, setup, and a health check that tells an anonymous
   caller only "ok" or not). Anonymous callers are refused on the raw method
@@ -295,10 +307,11 @@ Rules that go with the table:
   a forwarded address or scheme: cookies are `Secure` by configuration, and
   the CSRF check compares against `PUBLIC_ORIGINS`. Cabinet pins no network
   ranges; the rule it documents is that nothing but nginx should be able to
-  reach the backend. On a Swarm, ports published in the default ingress mode
-  arrive from the ingress network's address anyway, which is why sign-in
-  limits lean on the known-device cookie rather than on addresses. Sign-in
-  limits are counted in memory, so a restart clears them.
+  reach the backend, and uvicorn ignores forwarded headers entirely. On a
+  Swarm, ports published in the default ingress mode arrive from the ingress
+  network's address anyway, which is why sign-in limits lean on the
+  known-device cookie rather than on addresses. Sign-in limits are counted
+  in memory, so a restart clears them.
 - **Credentials are deployment state, not collection data.** Users,
   sessions, tokens, known devices, and the audit log live in the Postgres
   schema `cabinet_auth`, with an Alembic chain and version table of their
@@ -317,7 +330,10 @@ Rules that go with the table:
   settings included, and its checksums live inside it. Anyone who can write to
   `BACKUP_DIR`, often a network mount, could alter an archive (for instance to
   plant a webhook address) for a later restore to bring in: treat the backup
-  mount as sensitive.
+  mount as sensitive. Stored secrets are only ever used if they decrypt with
+  the deployment's own key, so an archive edited without that key cannot
+  plant a working webhook; a restore clears any that don't, and says which.
+  The restore summary lists which secrets the archive would set.
 
 
 ## Input handling

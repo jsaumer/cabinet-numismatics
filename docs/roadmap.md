@@ -983,13 +983,24 @@ v0.26.0.
     get a Postgres schema and migration chain of their own (`cabinet_auth`):
     users (with a role and an external identity from the start), sessions,
     tokens, known devices, and an audit log, never in a backup and never
-    touched by a restore.
+    touched by a restore. After Codex's review (21 September 2026): the
+    password is asked for again before a backup download, an export, a
+    restore, a new token, or a change to a stored secret; a password change
+    or reset revokes every `read` and `write` token; `read` and `write`
+    tokens expire within 90 days and can't export or read documents; and
+    the alert webhook reports new-device sign-ins, repeated failures, new
+    tokens, downloads, and restores. The contract, with a walkthrough of
+    setup, password changes, and the break-glass reset, is in
+    [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
     - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
     Keycloak, Authelia, Google), signing in as the admin through an identity
     linked to that account, and a trusted-header mode for a forward-auth
-    proxy that already authenticates. Planned from the start so A1's user
-    table and sessions carry an external identity; built second. The local
-    admin password stays, so a provider outage can't lock anyone out.
+    proxy that already authenticates, with a shared secret or signed
+    assertion rather than trust in an address. Planned from the start so
+    A1's user table and sessions carry an external identity; built second.
+    The local admin password stays, so a provider outage can't lock anyone
+    out. **Two-factor sign-in** comes with it: passkeys (WebAuthn) for the
+    local password, or the identity provider's own second factor.
   - ◆ **More accounts are optional** (see the optional list below), not
     part of this item: Cabinet stays single-user unless that is wanted.
   - Authentication changes every endpoint, so it must land **before
