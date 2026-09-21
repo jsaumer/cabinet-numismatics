@@ -138,6 +138,45 @@ export function MarketDataWidget() {
   );
 }
 
+/** Owned pieces missing something worth filling in. */
+export function DataHealthWidget() {
+  const { data, pending } = useWidgetData("data-health", () => api.dataHealth());
+  useWidgetEmpty(data !== null && data.checks.every((c) => c.count === 0));
+  if (!data) return pending;
+  const gaps = data.checks.filter((c) => c.count > 0);
+  if (gaps.length === 0) return null;
+
+  return (
+    <>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Of {data.owned} owned items:
+      </p>
+      <ul className="dash-list">
+        {gaps.map((check) => (
+          <li key={check.key}>
+            <span className="dash-list-main">
+              {check.label}
+              {check.items.length > 0 && (
+                <span className="muted">
+                  {" · "}
+                  {check.items.map((i, index) => (
+                    <span key={i.id}>
+                      {index > 0 && ", "}
+                      <Link to={`/items/${i.id}`}>{i.label}</Link>
+                    </span>
+                  ))}
+                  {check.count > check.items.length && ` +${check.count - check.items.length}`}
+                </span>
+              )}
+            </span>
+            <span className="num">{check.count}</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /** What is waiting in the trash. */
 export function TrashWidget({ options }: WidgetProps) {
   const count = optionNumber(options, "count", 5);

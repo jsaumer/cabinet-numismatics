@@ -181,9 +181,58 @@ def test_banknote_type(client, catalogue):
         "year": 1954,
         "composition": "Paper",
         "issuer": "Bank of Canada",
-    }  # no diameter from a note's size, no fineness from paper
+        "width_mm": 152.4,
+        "height_mm": 69.9,
+    }  # no diameter from a note's size (that's width_mm), no fineness from paper
     assert body["catalog_refs"][1] == {"catalog": "pick", "ref_code": "Pick#79a"}
     assert body["issues"] == []  # no issues listed upstream
+
+
+def test_banknote_printer_watermark_demonetization_present(client):
+    fields = numista.catalogue_fields(
+        {
+            **NOTE_TYPE,
+            "printers": [{"name": "Canadian Bank Note Company"}, {"name": "British American"}],
+            "watermark": {"description": "Queen's portrait"},
+            "demonetization": {"is_demonetized": True, "demonetization_date": "1971-01-01"},
+        }
+    )
+    assert fields["printer"] == "Canadian Bank Note Company, British American"
+    assert fields["watermark"] == "Queen's portrait"
+    assert fields["demonetized_on"].isoformat() == "1971-01-01"
+
+
+def test_banknote_printer_watermark_demonetization_absent(client):
+    fields = numista.catalogue_fields(NOTE_TYPE)
+    assert "printer" not in fields
+    assert "watermark" not in fields
+    assert "demonetized_on" not in fields
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"printers": "not a list"},
+        {"printers": [{"name": ""}, "not a dict"]},
+        {"watermark": 12345},
+        {"watermark": {"description": ""}},
+        {"demonetization": "not a dict"},
+        {"demonetization": {"is_demonetized": "yes"}},  # not a bool True
+        {"demonetization": {"is_demonetized": True, "demonetization_date": "not a date"}},
+        {"demonetization": {"is_demonetized": True, "demonetization_date": 12345}},
+        {"demonetization": {"is_demonetized": False, "demonetization_date": "1971-01-01"}},
+    ],
+)
+def test_banknote_malformed_fields_never_fail(client, extra):
+    fields = numista.catalogue_fields({**NOTE_TYPE, **extra})
+    assert "watermark" not in fields or isinstance(fields["watermark"], str)
+    assert "printer" not in fields or isinstance(fields["printer"], str)
+    assert "demonetized_on" not in fields
+
+
+def test_banknote_watermark_as_string(client):
+    fields = numista.catalogue_fields({**NOTE_TYPE, "watermark": "Plain watermark text"})
+    assert fields["watermark"] == "Plain watermark text"
 
 
 def test_unknown_type_and_upstream_failure(client, catalogue, monkeypatch):

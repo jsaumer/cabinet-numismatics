@@ -3,7 +3,7 @@
 import { json, req } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
-import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, RefreshResult, TrashList, ValueHistory } from "./types/stats";
+import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
@@ -137,6 +137,10 @@ export const api = {
   gains: () => req<Gains>("/api/stats/gains"),
   valueHistory: (months = 24) => req<ValueHistory>(`/api/stats/value-history?months=${months}`),
   notesBySignature: () => req<NotesBySignature>("/api/stats/notes-by-signature"),
+  quality: () => req<QualityStats>("/api/stats/quality"),
+  valueSpread: () => req<ValueSpread>("/api/stats/value-spread"),
+  dataHealth: () => req<DataHealth>("/api/stats/data-health"),
+  showcase: () => req<Showcase>("/api/stats/showcase"),
   refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
 
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),

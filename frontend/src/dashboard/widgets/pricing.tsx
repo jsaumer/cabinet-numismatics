@@ -124,6 +124,48 @@ export function SourceDisagreementsWidget({ options }: WidgetProps) {
   );
 }
 
+/** The pieces PCGS has graded fewest of above them: the scarce end of the slabs. */
+export function PopulationHighlightsWidget({ options }: WidgetProps) {
+  const count = optionNumber(options, "count", 5);
+  const query = `sort=pcgs_pop_higher&limit=${count}`;
+  const { data, pending } = useWidgetData(`items:${query}`, () =>
+    api.listItems(new URLSearchParams(query)),
+  );
+  const rows = (data?.items ?? []).filter((i) => i.pcgs_pop_higher != null);
+  useWidgetEmpty(data !== null && rows.length === 0);
+  if (!data) return pending;
+  if (rows.length === 0) return null;
+
+  return (
+    <table className="estimates">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Grade</th>
+          <th className="num">At grade</th>
+          <th className="num">Higher</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((item) => (
+          <tr key={item.id}>
+            <td>
+              <Link to={`/items/${item.id}`}>
+                {`${item.country} ${item.denomination}, ${item.year_label}`}
+              </Link>
+            </td>
+            <td>{item.grade_label ?? <span className="muted">–</span>}</td>
+            <td className="num">
+              {item.pcgs_population != null ? item.pcgs_population.toLocaleString() : "–"}
+            </td>
+            <td className="num">{item.pcgs_pop_higher!.toLocaleString()}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** How the estimates held up against what items sold for. */
 export function EstimateAccuracyWidget() {
   const { data, pending } = useWidgetData("pricing-accuracy", () => api.pricingAccuracy());

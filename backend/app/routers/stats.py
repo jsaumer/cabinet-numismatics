@@ -11,15 +11,20 @@ from app.schemas import (
     BreakdownEntry,
     Breakdowns,
     CollectionStats,
+    DataHealth,
     GainEntry,
     Gains,
     NotesBySignature,
+    QualityStats,
+    Showcase,
     ValueHistory,
     ValuePoint,
+    ValueSpread,
 )
+from app.services import insights
 from app.services.app_settings import display_currency, get_setting
 from app.services.currency import Converter
-from app.services.pricing import resolve_display_value
+from app.services.pricing import detect_metal, resolve_display_value
 
 
 def _resolve_currency(db: Session, currency: str | None) -> str:
@@ -131,7 +136,8 @@ def breakdowns(
     conv = Converter(db, currency)
     strategy, preferred_source = _resolve_strategy(db)
     dims: dict[str, dict[str, _Bucket]] = {
-        d: defaultdict(_Bucket) for d in ("country", "type", "decade", "grade", "tag", "acq_year")
+        d: defaultdict(_Bucket)
+        for d in ("country", "type", "decade", "grade", "tag", "metal", "acq_year")
     }
 
     for item in _load_items(db):
@@ -151,6 +157,7 @@ def breakdowns(
             "decade": [UNDATED if item.year is None else f"{(item.year // 10) * 10}s"],
             "grade": [item.grade.code if item.grade else "ungraded"],
             "tag": [t.name for t in item.tags],
+            "metal": [(detect_metal(item.composition) or "other").title()],
             "acq_year": ([str(item.acquisition_date.year)] if item.acquisition_date else []),
         }
         for dim, dim_keys in keys.items():
@@ -172,6 +179,7 @@ def breakdowns(
         ],
         by_grade=[_entry(k, b) for k, b in sorted(dims["grade"].items(), key=by_value)],
         by_tag=[_entry(k, b) for k, b in sorted(dims["tag"].items(), key=by_value)],
+        by_metal=[_entry(k, b) for k, b in sorted(dims["metal"].items(), key=by_value)],
         acquisitions_by_year=[_entry(k, b) for k, b in sorted(dims["acq_year"].items())],
     )
 
@@ -304,3 +312,46 @@ def notes_by_signature(db: Session = Depends(get_db)):
         ],
         "total": len(notes),
     }
+
+
+@router.get("/quality", response_model=QualityStats)
+def quality(
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+):
+    """Certified vs. raw owned items, by count and value, plus a breakdown
+    by grading service."""
+    currency = _resolve_currency(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
+    return insights.quality_stats(db, currency, strategy, preferred_source)
+
+
+@router.get("/value-spread", response_model=ValueSpread)
+def value_spread(
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+):
+    """min/median/max/mean of owned items' shown values, and the share of
+    total value held by the top 10% of pieces."""
+    currency = _resolve_currency(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
+    return insights.value_spread(db, currency, strategy, preferred_source)
+
+
+@router.get("/data-health", response_model=DataHealth)
+def data_health(db: Session = Depends(get_db)):
+    """Owned items missing a photo, grade, cost, value estimate,
+    weight/fineness, storage location, or catalogue reference."""
+    return insights.data_health(db)
+
+
+@router.get("/showcase", response_model=Showcase)
+def showcase(
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    db: Session = Depends(get_db),
+):
+    """Piece of the day, oldest and newest pieces, and pieces acquired on
+    this day in an earlier year."""
+    currency = _resolve_currency(db, currency)
+    strategy, preferred_source = _resolve_strategy(db)
+    return insights.showcase(db, currency, strategy, preferred_source)

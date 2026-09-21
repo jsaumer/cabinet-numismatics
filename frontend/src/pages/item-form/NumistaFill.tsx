@@ -15,8 +15,13 @@ const NUMISTA_FIELDS: Partial<Record<TextField, string>> = {
   fineness: "fineness",
   diameter_mm: "diameter",
   thickness_mm: "thickness",
+  width_mm: "width",
+  height_mm: "height",
   edge: "edge",
   shape: "shape",
+  printer: "printer",
+  watermark: "watermark",
+  demonetized_on: "demonetised on",
   issuer: "issuer",
   mintage: "mintage",
 };

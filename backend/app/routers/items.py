@@ -55,10 +55,11 @@ SORTABLE = {
     "acquisition_price": Item.acquisition_price,
     "priority": Item.priority,
     "target_price": Item.target_price,
+    "pcgs_pop_higher": Item.pcgs_pop_higher,
 }
 # Mostly empty columns: rows without a value sort last in either direction
 # (an undated piece has no year).
-NULLS_LAST = {"priority", "target_price", "year"}
+NULLS_LAST = {"priority", "target_price", "year", "pcgs_pop_higher", "value"}
 
 ITEM_LOAD = (
     selectinload(Item.photos),
@@ -86,6 +87,8 @@ CSV_COLUMNS = [
     "fineness",
     "diameter_mm",
     "thickness_mm",
+    "width_mm",
+    "height_mm",
     "edge",
     "shape",
     "mintage",
@@ -113,6 +116,9 @@ CSV_COLUMNS = [
     "bank_city",
     "bank_state",
     "plate_position",
+    "printer",
+    "watermark",
+    "demonetized_on",
     "quantity",
     "acquisition_date",
     "acquisition_price",
@@ -294,6 +300,7 @@ def _filtered(
                 Item.issuer.ilike(like),
                 Item.charter_number.ilike(like),
                 Item.bank_city.ilike(like),
+                Item.printer.ilike(like),
                 Item.catalog_refs.any(CatalogRef.ref_code.ilike(like)),
                 Item.tags.any(Tag.name.ilike(like)),
             )
@@ -403,13 +410,22 @@ def list_items(
     descending = sort.startswith("-")
     if field == "grade":
         order = Grade.rank.desc() if descending else Grade.rank.asc()
+    elif field == "value":
+        # The newest estimate, the same subquery the value filters use.
+        value_column = _latest_value_subquery()
+        order = value_column.desc() if descending else value_column.asc()
     elif field in SORTABLE:
         order = SORTABLE[field].desc() if descending else SORTABLE[field].asc()
     else:
         raise HTTPException(status_code=422, detail=f"Unknown sort field: {field}")
     # `IS NULL` sorts false first on SQLite and Postgres alike, so empty rows
     # come last whichever way the column runs.
-    ordering = (SORTABLE[field].is_(None), order) if field in NULLS_LAST else (order,)
+    if field == "value":
+        ordering = (_latest_value_subquery().is_(None), order)
+    elif field in NULLS_LAST:
+        ordering = (SORTABLE[field].is_(None), order)
+    else:
+        ordering = (order,)
 
     stmt = _filtered(select(Item), **filters)
     if field == "grade":
@@ -517,6 +533,8 @@ def _export_row(
         item.fineness or "",
         item.diameter_mm or "",
         item.thickness_mm or "",
+        item.width_mm or "",
+        item.height_mm or "",
         item.edge or "",
         item.shape or "",
         "" if item.mintage is None else item.mintage,
@@ -544,6 +562,9 @@ def _export_row(
         item.bank_city or "",
         item.bank_state or "",
         item.plate_position or "",
+        item.printer or "",
+        item.watermark or "",
+        item.demonetized_on or "",
         item.quantity,
         item.acquisition_date or "",
         item.acquisition_price or "",
@@ -917,6 +938,9 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         fields.pop("year_nd", None)
         # A purchase-day spot price is per piece, and looked up per piece.
         fields.pop("spot_at_purchase", None)
+        # Note details and demonetization are per piece, not bulk-editable.
+        for key in ("width_mm", "height_mm", "printer", "watermark", "demonetized_on"):
+            fields.pop(key, None)
         if "year" in fields and fields["year"] is None:
             raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
         if "grade_id" in fields:

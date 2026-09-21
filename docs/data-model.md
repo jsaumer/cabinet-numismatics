@@ -5,7 +5,7 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0020`. `0001` is an empty baseline;
+**Migration status:** revisions `0001`–`0021`. `0001` is an empty baseline;
 `0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
 Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
 photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
@@ -60,6 +60,11 @@ has no service logic to freeze: the data step is a plain `year = 0` update.
 `items.spot_at_purchase_source`, and widens `items.weight_g` from
 `Numeric(8, 3)` to `Numeric(9, 4)`: a troy ounce is 31.1035 g, which three
 decimal places could not hold as a round one-ounce weight.
+`0021` (v0.29.0, note details) adds `items.width_mm` and `items.height_mm`
+(Numeric(7, 2), for notes and anything else not round; coins keep
+`diameter_mm`), `items.printer` and `items.watermark` (String(200)), and
+`items.demonetized_on` (Date, coins and notes alike). No data step: all
+five are nullable and start empty.
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -121,6 +126,8 @@ not as native postgres enum types.
 | `fineness`         | numeric null  | 0–1, e.g. 0.9000                        |
 | `diameter_mm`      | numeric null  | coins                                   |
 | `thickness_mm`     | numeric null  | coins                                   |
+| `width_mm`         | numeric(7,2) null | notes (and anything not round); coins keep `diameter_mm` |
+| `height_mm`        | numeric(7,2) null | notes (and anything not round)          |
 | `edge`             | text null     | reeded, plain, lettered…                |
 | `shape`            | text null     | round, polygonal…                       |
 | `mintage`          | bigint null   | mintage, or print run for a note        |
@@ -148,6 +155,9 @@ not as native postgres enum types.
 | `bank_city`        | text null     | notes                                   |
 | `bank_state`       | text null     | notes                                   |
 | `plate_position`   | text null     | notes: plate and position letters       |
+| `printer`          | text null     | notes: printing firm (e.g. BEP, De La Rue) |
+| `watermark`        | text null     | notes: watermark description             |
+| `demonetized_on`   | date null     | coins and notes alike: when it stopped being legal tender |
 | `serial_traits`    | text null     | server-set fancy-serial traits, stored comma-wrapped (`,radar,binary,`) so one trait is a `LIKE '%,radar,%'`; null when none. The API returns a list |
 | `quantity`         | int           | default 1                               |
 | `acquisition_date` | date null     |                                         |

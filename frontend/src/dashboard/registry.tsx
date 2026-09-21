@@ -7,7 +7,13 @@ import { ReactNode } from "react";
 import type { DashboardWidget, WidgetOptions, WidgetSize } from "../api";
 import { OptionField } from "./options";
 import { WidgetProps } from "./WidgetFrame";
-import { breakdownTitle, BreakdownWidget, CountsWidget } from "./widgets/breakdowns";
+import {
+  breakdownTitle,
+  BreakdownWidget,
+  CertifiedShareWidget,
+  CountsWidget,
+  ValueSpreadWidget,
+} from "./widgets/breakdowns";
 import {
   ChecklistsWidget,
   FancySerialsWidget,
@@ -18,15 +24,25 @@ import {
 import {
   AlertsStatusWidget,
   BackupStatusWidget,
+  DataHealthWidget,
   MarketDataWidget,
   TrashWidget,
 } from "./widgets/operations";
 import {
   EstimateAccuracyWidget,
+  PopulationHighlightsWidget,
   PricingCoverageWidget,
   SourceDisagreementsWidget,
   StaleEstimatesWidget,
 } from "./widgets/pricing";
+import {
+  MostValuableWidget,
+  NewestAcquisitionWidget,
+  OldestPieceWidget,
+  OnThisDayWidget,
+  PhotoMosaicWidget,
+  PieceOfTheDayWidget,
+} from "./widgets/showcase";
 import {
   RealizedGainsWidget,
   SetupWidget,
@@ -132,6 +148,7 @@ export const REGISTRY: Record<string, WidgetSpec> = {
           { value: "decade", label: "Decade" },
           { value: "grade", label: "Grade" },
           { value: "tag", label: "Tag" },
+          { value: "metal", label: "Metal" },
           { value: "acquisition_year", label: "Year acquired" },
         ],
       },
@@ -254,6 +271,99 @@ export const REGISTRY: Record<string, WidgetSpec> = {
     fields: [countField("count", "Notes", 3, 20)],
     title: "Fancy serial numbers",
     Component: FancySerialsWidget,
+  },
+  most_valuable: {
+    name: "Most valuable",
+    description: "The owned pieces worth the most, by their shown value.",
+    group: "Collection",
+    defaultSize: "half",
+    defaultOptions: { count: 5 },
+    fields: [countField("count", "Items", 3, 20)],
+    title: "Most valuable",
+    Component: MostValuableWidget,
+  },
+  piece_of_the_day: {
+    name: "Piece of the day",
+    description: "One piece from the collection, the same one all day.",
+    group: "Collection",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Piece of the day",
+    Component: PieceOfTheDayWidget,
+  },
+  oldest_piece: {
+    name: "Oldest piece",
+    description: "The earliest piece by the year on it.",
+    group: "Collection",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Oldest piece",
+    Component: OldestPieceWidget,
+  },
+  newest_acquisition: {
+    name: "Newest acquisition",
+    description: "The piece that arrived most recently.",
+    group: "Collection",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Newest acquisition",
+    Component: NewestAcquisitionWidget,
+  },
+  on_this_day: {
+    name: "On this day",
+    description: "Pieces acquired on today's date in an earlier year.",
+    group: "Collection",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "On this day",
+    Component: OnThisDayWidget,
+  },
+  photo_mosaic: {
+    name: "Photo mosaic",
+    description: "A grid of the newest photographed pieces.",
+    group: "Collection",
+    defaultSize: "half",
+    defaultOptions: { count: 12 },
+    fields: [countField("count", "Photos", 6, 30)],
+    title: "Photo mosaic",
+    Component: PhotoMosaicWidget,
+  },
+  certified_share: {
+    name: "Certified share",
+    description: "How much is slabbed, by service, and what it is worth.",
+    group: "Breakdowns",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Certified share",
+    Component: CertifiedShareWidget,
+  },
+  value_spread: {
+    name: "Value spread",
+    description: "Lowest, median, and highest value, and how concentrated it is.",
+    group: "Breakdowns",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Value spread",
+    Component: ValueSpreadWidget,
+  },
+  population_highlights: {
+    name: "Population highlights",
+    description: "The pieces PCGS has graded fewest of above them.",
+    group: "Pricing",
+    defaultSize: "half",
+    defaultOptions: { count: 5 },
+    fields: [countField("count", "Items", 3, 20)],
+    title: "Population highlights",
+    Component: PopulationHighlightsWidget,
+  },
+  data_health: {
+    name: "Data health",
+    description: "Owned pieces missing a photo, a grade, a cost, a value, or a reference.",
+    group: "Operations",
+    defaultSize: "half",
+    defaultOptions: {},
+    title: "Data health",
+    Component: DataHealthWidget,
   },
   checklists: {
     name: "Checklists",

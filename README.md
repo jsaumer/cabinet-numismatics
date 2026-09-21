@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.28.0-informational)
+![Version](https://img.shields.io/badge/version-0.29.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.28.0, feature-complete and in daily use.** Pre-1.0 signals that
+**Status: v0.29.0, feature-complete and in daily use.** Pre-1.0 signals that
 the HTTP API may still change; the data model and migration path are stable.
 1.0 will mean a stable HTTP API. There is no application login yet, so
 Cabinet belongs on a trusted network or behind an authenticating reverse
@@ -60,6 +60,9 @@ Dark is the default; the header toggle switches to light and remembers it.
   web-search link; and fancy serial numbers (solid, ladder, radar, repeater,
   binary, low and high numbers, dates, star notes, and more) badged on the
   item and in the list, with a filter for any of them.
+- **Note details**: width and height for anything not round (coins keep
+  diameter), printer, watermark, and a demonetisation date for coins and
+  notes alike, filled in from Numista along with everything else.
 - **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with proof
   and specimen strikes, plus grades, stars, designations (CAM/DCAM, PL/DMPL,
   RD/RB/BN, EPQ…), CAC stickers, and details grades, shown the way the holder
@@ -83,6 +86,11 @@ Dark is the default; the header toggle switches to light and remembers it.
   generated, with progress tracking.
 - List filters and paging persist in the URL, so back-navigation keeps your
   place.
+- **The item page leads with the piece**: a large primary photo beside the
+  title, grade, certification, and value, then the rest of what's known
+  grouped into titled facts (identity, grade and certification, physical,
+  acquisition) that only show fields with something in them, with a
+  "Show empty fields" toggle for the full sheet.
 - **Fill from Numista**: enter a Numista number or search by name, and the
   item form fills in country, denomination, composition, fineness, weight,
   dimensions, catalogue references, and the issue's year, mint, and mintage.
@@ -156,14 +164,18 @@ Dark is the default; the header toggle switches to light and remembers it.
   existing webhook.
 
 ### Insights & reporting
-- Customisable dashboard (the home page): twenty-one widgets (value,
-  breakdowns by country/decade/grade/tag or one tag/set, acquisitions by
-  year, top-movers tables, owned notes by series and signature pair, wish
-  list, fancy serials, checklists, the bullion stack, pricing coverage, and
-  operations status) added, removed, resized, retitled, and arranged by drag
-  or keyboard, saved on the server so it follows the collection; the default
-  layout is today's fixed page, and a setup checklist widget says what is
-  still off (scheduled backups, the alert webhook, a price-source key).
+- Customisable dashboard (the home page): 31 widgets (value, breakdowns by
+  country/decade/grade/tag/metal or one tag/set, acquisitions by year,
+  top-movers tables, owned notes by series and signature pair, wish list,
+  fancy serials, checklists, the bullion stack, pricing coverage, operations
+  status, and a "group C" of showcase widgets: most valuable, piece of the
+  day, oldest and newest pieces, on this day, a photo mosaic, certified
+  share, value spread, population highlights, and data health) added,
+  removed, resized, retitled, and arranged by drag or keyboard, saved on the
+  server so it follows the collection; the default layout is today's fixed
+  page (the group C widgets are opt-in), and a setup checklist widget says
+  what is still off (scheduled backups, the alert webhook, a price-source
+  key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
 - Deleting is recoverable: items go to a trash with their photos, documents,
