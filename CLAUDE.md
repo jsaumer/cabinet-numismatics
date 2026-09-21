@@ -27,7 +27,11 @@ changelog entry when releasing.
   mode). Until then it runs on a trusted network or behind an authenticating
   reverse proxy. Every design decision was settled on 20 and 21 September
   2026: see "Next: accounts and permissions" in docs/security.md, and don't
-  re-open them. It stays one shared collection.
+  re-open them. It stays one shared collection. The build contract,
+  SPEC_0300, was drafted on 21 September 2026 and awaits the owner's
+  approval; that day the owner also cut forwarded-header trust
+  (`TRUSTED_PROXIES`), pinned networks, and the `/api/docs` page from the
+  design.
 
 ## Repo layout
 

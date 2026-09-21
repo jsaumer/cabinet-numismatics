@@ -948,14 +948,16 @@ v0.26.0.
   questions were settled on 21 September 2026: a session lasts one day from
   last use with a 7 day cap; CSRF is the `SameSite` cookie plus an Origin
   check, not a token; photos go through nginx `auth_request` rather than
-  signed URLs; passwords use Argon2id (`argon2-cffi`, a new dependency); a
-  `TRUSTED_PROXIES` setting decides whose forwarded headers are believed,
-  because it must work both behind an authenticating proxy and directly
-  exposed; and the session that starts a restore keeps an in-memory grant so
-  its progress page still answers. The full design and the permission table
-  are in [security.md](security.md#next-accounts-and-permissions). **The API
-  consistency pass from the 1.0 checklist below ships with A1**, since auth
-  already touches every endpoint.
+  signed URLs; passwords use Argon2id (`argon2-cffi`, a new dependency);
+  nginx believes no forwarded header and Cabinet pins no network ranges
+  (addressing is the operator's), because it must work both behind an
+  authenticating proxy and directly exposed; and the session that starts a
+  restore keeps an in-memory grant so its progress page still answers. The
+  full design and the permission table are in
+  [security.md](security.md#next-accounts-and-permissions), and the build
+  contract is SPEC_0300, drafted the same day and awaiting approval. **The
+  API consistency pass from the 1.0 checklist below ships with A1**, since
+  auth already touches every endpoint.
   - **A1: One admin.** ◆ Single user to start: just the admin, onboarded
     when the app is initialised. A setup page appears while no account
     exists and asks for ◆ a one-time **setup code the backend prints in its
@@ -965,17 +967,23 @@ v0.26.0.
     cookie (HttpOnly, Secure over HTTPS, SameSite) and an origin check on
     anything that changes data; the password hashed with Argon2id; sign-in
     throttled per account and per address; an Account section in Settings
-    (change password, see and end sessions); a command in the container to
-    reset a forgotten password. The whole API is **denied by default**
-    behind one gate with a short allow-list (sign-in, setup, a health check
-    trimmed to "ok" for anonymous callers), and a test fails if any other
-    route answers without a login. Photos get the same check through
-    nginx's `auth_request`; `/api/docs` goes behind the login. ◆ **API
+    (change password and username, see and end sessions, tokens, the audit
+    log, and a notice of failed sign-ins since the last visit); commands in
+    the container to reset a forgotten password, sign out everywhere, revoke
+    tokens, and show the account's status. The whole API is **denied by
+    default** behind one gate with a short allow-list (sign-in, setup, a
+    health check trimmed to "ok" for anonymous callers), and a test fails if
+    any other route answers without a login. Photos get the same check
+    through nginx's `auth_request`. The interactive API docs page
+    (`/api/docs`) is turned off, so no third-party script runs in the
+    signed-in page; `/api/openapi.json` stays, behind the login. ◆ **API
     tokens with scopes** (`read`, `write`, `metrics`) ship in this first
     cut, created in Settings, shown once, stored hashed, so the Homepage
-    tile, Prometheus, the seed script, and CI keep working. One migration:
+    tile, Prometheus, the seed script, and CI keep working. The credentials
+    get a Postgres schema and migration chain of their own (`cabinet_auth`):
     users (with a role and an external identity from the start), sessions,
-    tokens, and an audit log.
+    tokens, known devices, and an audit log, never in a backup and never
+    touched by a restore.
     - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
     Keycloak, Authelia, Google), signing in as the admin through an identity
     linked to that account, and a trusted-header mode for a forward-auth

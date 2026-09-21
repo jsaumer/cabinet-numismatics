@@ -186,11 +186,12 @@ Decided on 21 September 2026, the details that shape the code:
 |---|---|
 | Session lifetime | One day from last use, a 7 day hard cap, and the session id rotated on sign-in |
 | Session cookie | Database-backed, HttpOnly, Secure over HTTPS, `SameSite=Lax` |
-| CSRF | Fails closed, whatever the method: a cookie-authenticated `/api/` request passes only with `Sec-Fetch-Site: same-origin`, or with no such header and an Origin (or Referer's origin) exactly matching an entry in a required `PUBLIC_ORIGINS` setting. `none` (a typed address) is accepted only on the few pages meant to be opened directly (the API reference and a document's file). Bearer tokens are not CSRF-checked. No token plumbing |
+| CSRF | Fails closed, whatever the method: a cookie-authenticated `/api/` request passes only with `Sec-Fetch-Site: same-origin`, or with no such header and an Origin (or Referer's origin) exactly matching an entry in a required `PUBLIC_ORIGINS` setting. `none` (a typed address) is accepted only on the two addresses meant to be opened directly (the OpenAPI schema and a document's file). Bearer tokens are not CSRF-checked. No token plumbing |
 | Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username and per-address delays only, never the setup throttle or the global limit |
 | Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos are sent `Cache-Control: private, no-cache`. Caching the check only if measurement asks for it, and only with a reviewed cache key |
 | Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
-| Proxies | nginx decides, by the immediate peer, whose forwarded headers to believe (`TRUSTED_PROXIES`, CIDR ranges, default none) and overwrites them towards the backend. The backend sits only on the internal network and a private egress network, and believes only that pinned internal subnet |
+| Proxies | nginx believes no forwarded header and overwrites them towards the backend with its own immediate peer and scheme. Cabinet pins no network ranges (the operator's infrastructure decides); the backend should be reachable by nothing but nginx, and believes forwarded headers only from addresses the operator lists in `FORWARDED_ALLOW_IPS`, none by default |
+| API docs | The interactive `/api/docs` page is off; `/api/openapi.json` stays, for a signed-in session only |
 | Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
 | API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). Shown once, stored hashed, revocable, with a last-used time |
 
@@ -245,7 +246,7 @@ Two more kinds of caller are not accounts:
 | The collection totals (`/api/stats/collection`) | yes | yes | yes | `read` or `metrics` | no |
 | Users: add, disable, change role, reset a password | yes | no | no | no | no |
 | Own password, own API tokens, own sessions | yes | yes | yes | no | no |
-| `/api/docs` (the API reference) | yes | yes | yes | no | no |
+| `/api/openapi.json` (the API schema; there is no docs page) | yes | yes | yes | no | no |
 | `/api/health` | full | full | full | full | status only, as for anyone not signed in |
 
 Rules that go with the table:
@@ -275,19 +276,29 @@ Rules that go with the table:
   are refused too; each route's permission is checked after routing, and a
   route that declares none is refused. Tests enumerate the OpenAPI document
   (not the route list, which hides included routers) and fail if any route
-  answers without a login or lacks a permission. `/api/docs` sits behind the
-  login, for a session only.
-- A forgotten admin password is reset with a command inside the backend
-  container: shell access to the deployment is the proof of ownership.
+  answers without a login or lacks a permission. The interactive API docs
+  page (`/api/docs`) is turned off, so no third-party script ever runs in
+  the signed-in page; `/api/openapi.json` stays, for a session only.
+- The admin looks after the account in Settings (password, username,
+  sessions, tokens, the audit log, and a notice of failed sign-ins since the
+  last visit) and, when the app can't be reached, with commands inside the
+  backend container: reset the password, sign out everywhere, revoke tokens,
+  and show the account's status. Shell access to the deployment is the proof
+  of ownership. No command un-claims the instance or deletes the admin, since
+  that would reopen setup to whoever reaches it first.
 - On the first start after upgrading an open install, nothing is served but
   the setup page until the admin exists, and the log says so.
-- Forwarded headers are believed at exactly one place: nginx, by the
-  immediate peer, against `TRUSTED_PROXIES`. It overwrites them towards the
-  backend, and blanks identity headers (`Remote-User`, `X-Forwarded-User`,
-  and the like) from every peer. Listing a shared network's range trusts every
-  service on that network. On a Swarm, ports published in the default ingress
-  mode arrive from the ingress network's address, not the client's, which is
-  why sign-in limits lean on the known-device cookie rather than on addresses.
+- nginx believes no forwarded header from anyone: towards the backend it
+  overwrites the client address with its own immediate peer and the scheme
+  with its own, and blanks identity headers (`Remote-User`,
+  `X-Forwarded-User`, and the like). Nothing in the first release depends on
+  a forwarded address or scheme: cookies are `Secure` by configuration, and
+  the CSRF check compares against `PUBLIC_ORIGINS`. Cabinet pins no network
+  ranges; the rule it documents is that nothing but nginx should be able to
+  reach the backend. On a Swarm, ports published in the default ingress mode
+  arrive from the ingress network's address anyway, which is why sign-in
+  limits lean on the known-device cookie rather than on addresses. Sign-in
+  limits are counted in memory, so a restart clears them.
 - **Credentials are deployment state, not collection data.** Users,
   sessions, tokens, known devices, and the audit log live in the Postgres
   schema `cabinet_auth`, with an Alembic chain and version table of their
