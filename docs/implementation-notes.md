@@ -1114,10 +1114,48 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `require_permission` and the photo route are `async`, since they wait on
   nothing and a plain function costs a hop to a worker thread (182 ms to
   162 ms for the 50). The rest is the session lookup itself.
-- Still to come in stage 9: the pages (setup, sign-in, the password dialog,
-  the Account section, and the Settings UI for the key and for deleting
-  unencrypted archives). Until then the app in a browser answers 401
-  everywhere, photos included.
+- **Stage 9, the frontend, shipped**: `/setup` and `/login` (no header, just
+  the brand), `App.tsx`'s `Gate` doing the boot check
+  (`GET /api/auth/state` then `GET /api/auth/me`) before anything else
+  renders, the confirm-password dialog, Settings → Account (password,
+  username, sessions, tokens, the audit log) and the backup key block in
+  Settings → Backups. Rules a later change here has to respect:
+  - **`api/client.ts`'s `req()` is the one place that reacts to a dying
+    session or a lapsed confirmation.** A `401` calls a handler
+    `auth/AuthContext.tsx`'s `AuthProvider` registers (a full page load to
+    `/login?next=...`); a `403` with `reauth_required` calls a handler the
+    confirm dialog registers, awaits it, and retries the original request
+    once. Both are `null`-able module-level refs set at runtime, not
+    imports, so `client.ts` never imports from `auth/` (which imports `api`)
+    and the two can't form a cycle. A call that must answer 401/403 itself
+    (setup, sign-in, the auth boot check) passes `{ raw: true }`.
+  - **One confirm dialog, two callers.** `auth/ConfirmDialog.tsx`'s
+    `requestConfirm()` is a promise-based service; `req()`'s automatic retry
+    and `auth/FreshLink.tsx` (plain download links to a fresh route: both
+    exports, `backup.zip`, a stored archive) both open it through that same
+    function, never their own. A plain `<a>` can't be retried the way a
+    JSON call is, which is why `FreshLink` checks `GET /api/auth/me`'s
+    `confirmed_until` itself before deciding whether to ask.
+  - **The theme effect lives above the signed-in app**, in `App.tsx`'s
+    `Gate`, not inside the authenticated shell, so a remembered light theme
+    still applies to `/setup` and `/login`, which render without the header
+    that used to own it.
+  - **Widening `WIDGET_OPTIONS`/`REGISTRY`-style pairing applies here too**:
+    `components/setup.tsx`'s `setupChecks` takes the same `BackupList` the
+    Backups card already fetches, so a new setup-checklist condition reads
+    fields already on that type rather than a new request.
+  - **Playwright's `workers: 1`** (`playwright.config.ts`): the suite shares
+    one backend and one database, and a password or username change
+    (`e2e/smoke.spec.ts`'s last two tests, deliberately last, after the
+    restore test) revokes every *other* session, including the one baked
+    into `storageState` that every other spec's fresh page starts from. A
+    second worker mid-request when that happens would see an inexplicable
+    401. Those two tests also sign themselves in through the form rather
+    than trusting `storageState`, since the first one's own change kills it
+    for the second. `e2e/auth.spec.ts` covers the rest of sign-in (the
+    sign-in page, sign-out, the confirm dialog, tokens, ending another
+    session) without touching the shared session, so it can run alongside
+    `smoke.spec.ts` safely, which is what actually needs the single worker.
 - **The CI stack job, the seed script, and Playwright's global setup move
   onto tokens and sign-in in stage 7** (spec section 9), alongside the gate
   and the auth routes. `scripts/ci/stack-smoke.sh` replaces the stack job's

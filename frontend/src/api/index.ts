@@ -6,7 +6,10 @@ export * from "./types/stats";
 export * from "./types/settings";
 export * from "./types/dashboard";
 export * from "./types/stack";
+export * from "./types/auth";
 export { api } from "./calls";
+export { ApiError, setReauthHandler, setUnauthorizedHandler } from "./client";
+export type { ReqOptions } from "./client";
 
 import type { ItemType } from "./types/items";
 
