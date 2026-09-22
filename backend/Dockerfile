@@ -25,11 +25,14 @@ COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
 COPY --from=pgclient /pgclient/ /usr/local/lib/pgclient/
 # `upgrade` first: the base image trails Debian's security updates between
 # its own rebuilds (the image scan in security.yml is what notices).
+# `age` encrypts every backup archive (v0.30.0): Debian's package, so its
+# version is the one this image was built with, and Trivy scans it.
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1 libxxhash0 \
+    && apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1 libxxhash0 age \
     && rm -rf /var/lib/apt/lists/* \
-    && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done
+    && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done \
+    && age --version && age-keygen --version
 
 # The unprivileged user the entrypoint drops to, and data directories it
 # owns. A new named volume inherits that ownership from the image.

@@ -772,6 +772,29 @@ pricing.ADAPTER_NAMES` is a source's estimate and answers 409, because
 coverage, accuracy, and provenance read that history. Don't widen it to
 sources without deciding what those reports should then say.
 
+## Sign-in and encrypted backups (v0.30.0, being built)
+
+Roadmap Phase 7, P8 A1, built stage by stage to
+[SPEC_0300](specs/SPEC_0300.md) on the `p8-auth-a1` branch. Rules so far:
+
+- **The renames are done**: `POST .../estimates/auto?source=`,
+  `POST /api/estimates/refresh?source=melt` (only melt; anything else 422),
+  and no `POST /api/items/import`. Tests import a Cabinet CSV with
+  `tests.conftest.import_cabinet_csv`, which goes through `/api/imports`
+  and forces `format: cabinet` (a hand-written CSV with a few export columns
+  detects as `spreadsheet`). Its errors number data rows from 1, not file
+  lines, and an exported id is a duplicate even when that item is in the
+  trash, so a round-trip test purges (`?permanent=true`) before re-importing.
+- **`age` is a program, not a library**: Debian's package in the backend
+  image, called as a subprocess, so archives stream through it however large
+  they are. The Dockerfile's `age --version` step fails the build if it is
+  missing. The dev machine has no `age`, so tests go through monkeypatch
+  points (`backup.encrypt_stream`/`decrypt_stream`, stage 5).
+- `argon2-cffi` is in the lockfile (with `argon2-cffi-bindings`; `cffi` and
+  `pycparser` were already there for `cryptography`). The real hashing
+  parameters arrive with the password service (stage 6);
+  `tests/test_dependencies.py` only proves it installs and round-trips.
+
 ## Releases
 
 

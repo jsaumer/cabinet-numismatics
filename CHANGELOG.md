@@ -25,6 +25,10 @@ backups). The upgrade notes will lead this entry when it is released.
   - `POST /api/items/import` is removed. `POST /api/imports`, then
     `POST /api/imports/{upload_id}/run`, reads a Cabinet export (the
     `cabinet` format) and is the one import path; the app already used it.
+- New dependencies for sign-in and encrypted backups: `argon2-cffi` (password
+  hashing, with `argon2-cffi-bindings`) in the backend lockfile, and Debian's
+  `age` package in the backend image (backup encryption, called as a
+  program). Nothing uses either yet.
 - `docs/api.md` gains a stability policy: breaking changes are allowed and
   announced here until 1.0; from 1.0, `/api/` paths and response fields are
   stable within a major version, and additions are never breaking.
