@@ -794,3 +794,56 @@ def test_prune_drops_what_can_never_work_again(db, owner, clock):
     assert db.scalar(select(func.count()).select_from(Session)) == 0
     assert db.scalar(select(func.count()).select_from(KnownDevice)) == 0
     assert db.scalar(select(func.count()).select_from(ApiToken)) == 0
+
+
+# --- attempts are counted before the password check (stage 11 review) ---------------
+
+
+def test_an_attempt_is_counted_before_its_password_is_checked(db, owner, monkeypatch):
+    """A burst waiting for the check slot must see the attempts ahead of it:
+    the count rises before Argon2 runs, not after."""
+    seen = []
+
+    def verify(stored, password, reserved=False):
+        seen.append(
+            throttle.wait("user", "owner") >= 0 and throttle._entries["user:owner"].failures
+        )
+        return False
+
+    monkeypatch.setattr(passwords, "verify", verify)
+    with pytest.raises(accounts.WrongPassword):
+        accounts.sign_in(db, "owner", "wrong password!", BROWSER)
+    assert seen == [1]  # already counted while the check ran
+
+
+def test_parallel_attempts_cannot_share_the_old_count(clock):
+    """Six attempts that all start before any finishes: the sixth waits."""
+    for _ in range(5):
+        throttle.attempt(("user", "owner"), ("addr", "192.0.2.1"))
+    with pytest.raises(throttle.Throttled):
+        throttle.attempt(("user", "owner"), ("addr", "192.0.2.1"))
+
+
+def test_a_success_gives_the_attempt_back(db, owner):
+    accounts.sign_in(db, "owner", PASSWORD, BROWSER)
+    assert throttle.wait("user", "owner") == 0 and "user:owner" not in throttle._entries
+
+
+def test_a_device_reserves_its_attempts_atomically(db, owner):
+    row = devices.find(db, owner.device_secret, owner.user.id)
+    for n in range(1, devices.MAX_FAILURES + 1):
+        assert devices.reserve(db, row)
+        assert row.failures == n
+    assert not devices.reserve(db, row)  # used up: throttled like anyone
+    devices.release(db, row)
+    db.commit()
+    db.refresh(row)
+    assert row.failures == devices.MAX_FAILURES - 1
+
+
+def test_a_right_password_with_a_device_leaves_no_failure(db, owner):
+    started = accounts.sign_in(db, "owner", PASSWORD, BROWSER)
+    row = devices.find(db, started.device_secret, owner.user.id)
+    accounts.confirm(db, started.session, owner.user, PASSWORD, with_device(started))
+    db.refresh(row)
+    assert row.failures == 0

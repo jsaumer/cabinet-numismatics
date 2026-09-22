@@ -158,15 +158,35 @@ Don't mount it inside the photo directory, and don't give it to the proxy:
 documents are served only by the backend. `REQUIRE_DOCUMENT_MOUNT=false`
 turns the check off, for local development only.
 
-## 3. Reverse proxy, TLS, and authentication
+## 3. TLS and an authenticating proxy in front
 
-**Cabinet has no application-level login yet**: it is for a trusted network,
-or behind an authenticating reverse proxy. Login is the next thing built
-(roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
-tokens; v0.31.0 adds single sign-on and a trusted-header mode, so a proxy
-like Authentik can sign you straight in). Until then, this section is the
-only protection. Do not expose it directly to the internet. Put it behind a
-reverse proxy that terminates TLS and handles authentication.
+Cabinet has its own sign-in (section 1: one admin, sessions, and scoped API
+tokens), so it no longer depends on a reverse proxy for authentication. Two
+things still call for one:
+
+- **TLS.** nginx serves plain HTTP; terminate TLS at a reverse proxy in
+  front (the nginx config is baked into the proxy image, so terminating TLS
+  there instead means building your own image with a certificate and a
+  `443` server block).
+- **A second door, until single sign-on.** Until v0.31.0 adds OpenID Connect
+  and a trusted-header mode, keep an authenticating reverse proxy (any
+  forward-auth or SSO gateway: Traefik + Authentik, Authelia, oauth2-proxy,
+  Pomerium, Cloudflare Access) in front as well. It brings its own second
+  factor today; Cabinet's own sign-in stays a second, independent check
+  behind it, never a replacement for it and never trusted in its place (the
+  gate ignores whatever identity a proxy asserts and always asks for its own
+  credential).
+
+Cabinet is built to work both ways, directly exposed behind TLS or behind
+such a proxy, because which one a deployment uses is its own choice. Either
+way, don't port-forward the stack to the internet without TLS in front of it.
+
+**`PUBLIC_ORIGINS` is what the browser must match to sign in**, not just a
+CSRF setting: a plain-http address on the LAN (`http://192.168.1.5`) can't
+sign in once `PUBLIC_ORIGINS` names an `https` domain, because the session
+cookie is `Secure`-only and the CSRF check compares the `Origin` against
+that exact entry. Reach Cabinet by the domain in `PUBLIC_ORIGINS`, not a
+bare LAN address, once it's set to `https`.
 
 **The Host header and forwarded headers.** Cabinet's nginx answers only the
 Host names from `PUBLIC_ORIGINS` and `ALLOWED_HOSTS`, so set
@@ -229,8 +249,9 @@ checking a large one takes a while. Give the edge proxy a body limit at
 least the size of your archives there, long read and write timeouts, and
 no request buffering if it can be turned off (a proxy that buffers needs
 room for the whole upload). Or skip the upload: copy the archive into the
-backup directory under its own `cabinet-backup-….zip` name and restore it
-from the list in Settings, which sends no body at all. While a restore runs
+backup directory under its own `cabinet-backup-….zip.age` name and restore
+it from the list in Settings, which sends no body at all. While a restore
+runs
 the app answers 503 to everything but `/api/health` and
 `/api/restore/status`; that is expected, not an outage.
 
@@ -241,6 +262,25 @@ tunnel that requires identity. The requirements are: TLS, authentication, and
 a body-size limit that permits photo uploads. HSTS belongs on that proxy too;
 Cabinet's nginx sets the other security headers itself
 ([security.md](security.md)).
+
+### Checking a gateway is wired up correctly
+
+Whichever gateway you put in front, confirm each of these before relying on
+it:
+
+- The public origin the browser actually uses matches `PUBLIC_ORIGINS`
+  exactly (scheme, host, and port).
+- The gateway passes Cabinet's cookies, `Origin`, `Referer`, and
+  `Sec-Fetch-Site` through unchanged; most do by default, but a proxy that
+  strips or rewrites headers will break sign-in or CSRF.
+- A photo loads on an item page (it goes through nginx's own `auth_request`
+  check, so a working photo confirms the gateway isn't interfering with
+  cookies).
+- The password-again dialog appears and succeeds on a fresh action (a
+  backup download or a settings change).
+- A `metrics`-token client (Homepage, Prometheus) still reaches Cabinet on
+  the internal name in `ALLOWED_HOSTS`, around the gateway, since those
+  aren't signed in through it.
 
 ## 4. Scheduled backups
 

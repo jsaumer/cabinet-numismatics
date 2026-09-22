@@ -171,17 +171,24 @@ def _check_password(
     known device lifts the user, address, and global limits and takes the
     reserved slot; everything else is throttled before hashing."""
     address = _address(client)
+    # Every attempt is counted before Argon2 runs, so a burst waiting for the
+    # check slot can't all read the count as it was (review, stage 11).
+    if device is not None and not devices.reserve(db, device):
+        device = None  # its attempts are used up: throttled like anyone
     if device is None:
-        throttle.check(("user", key), ("addr", address))
+        throttle.attempt(("user", key), ("addr", address))
         throttle.check_global()
     stored = account.password_hash if account is not None and account.is_active else None
     if passwords.verify(stored, password, reserved=device is not None):
         throttle.succeed("user", key)
         throttle.succeed("addr", address)
+        if device is not None:
+            devices.release(db, device)
         return True
-    throttle.fail("user", key)
-    throttle.fail("addr", address)
     if device is not None:
+        # The limits it lifts still hear of the failure, for when it's gone.
+        throttle.fail("user", key)
+        throttle.fail("addr", address)
         devices.failed(db, device)
     # The name typed is recorded only when it is the account's; anything else
     # is `unknown`, so the log never collects other people's guesses.

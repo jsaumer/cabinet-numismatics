@@ -845,7 +845,7 @@ attached to), and `created_at`; `GET /api/items/{id}` includes them as
 `documents` in Health.
 
 Files are served with `X-Content-Type-Options: nosniff`, `Cache-Control:
-private, max-age=3600`, a `Content-Disposition` carrying the filename (RFC
+private, no-store`, a `Content-Disposition` carrying the filename (RFC
 5987 for non-ASCII names), and a content security policy: `default-src 'none';
 sandbox` for images, `default-src 'none'; frame-ancestors 'self'` for PDFs,
 because `sandbox` stops Chrome's built-in PDF viewer rendering at all.
@@ -1029,7 +1029,8 @@ the current public key as saved (a rotated key asks again) and answers the
 alert event, and answers `{"deleted": [names]}`. A second `POST
 /api/backups` while one is running returns `409`. Stored archive names must
 match `cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age` (or `.zip`
-for an old one); anything else is `404`. Pre-restore archives sit outside `backup_keep`: the newest three are
+for an old one); anything else is `404`. `backup_keep` applies to full and data-only
+archives separately. Pre-restore archives sit outside `backup_keep`: the newest three are
 kept. Every backup route is admin-only; both downloads and deleting old
 archives also need a recent password, and each download, the saved-key
 tick, and the deletion is written to the audit log (downloads and the

@@ -9,7 +9,7 @@ presenting it delete it; a success replaces it.
 
 from datetime import timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from app.auth import common
@@ -45,8 +45,38 @@ def find(db: DbSession, secret: str | None, user_id: int) -> KnownDevice | None:
     return row
 
 
+def reserve(db: DbSession, row: KnownDevice) -> bool:
+    """Count this attempt against the device before the password is checked,
+    in one UPDATE, so parallel requests carrying the same cookie can't each
+    read the old count. False once the device has used its MAX_FAILURES
+    attempts: the request is then throttled like any other. Committed at
+    once, so a concurrent request sees it."""
+    result = db.execute(
+        update(KnownDevice)
+        .where(KnownDevice.id == row.id, KnownDevice.failures < MAX_FAILURES)
+        .values(failures=KnownDevice.failures + 1)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+    db.refresh(row)
+    return (result.rowcount or 0) == 1
+
+
+def release(db: DbSession, row: KnownDevice) -> None:
+    """The password was right: the reserved attempt is given back."""
+    db.execute(
+        update(KnownDevice)
+        .where(KnownDevice.id == row.id, KnownDevice.failures > 0)
+        .values(failures=KnownDevice.failures - 1)
+        .execution_options(synchronize_session=False)
+    )
+    db.flush()
+
+
 def failed(db: DbSession, row: KnownDevice) -> None:
-    row.failures = (row.failures or 0) + 1
+    """The password was wrong: the attempt stays counted, and a device that
+    has used all of its attempts is forgotten."""
+    db.refresh(row)
     if row.failures >= MAX_FAILURES:
         db.delete(row)
     db.flush()

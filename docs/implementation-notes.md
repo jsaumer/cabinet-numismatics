@@ -458,6 +458,11 @@ docs/backup-restore.md. What a change here has to respect:
   done) or clears `.restore-new`. A non-empty `.restore-old` only survives
   a failed put-back, may hold the only copy, and makes the next restore
   refuse; never delete it automatically.
+- **Retention counts full and data-only archives separately** (v0.30.0,
+  `backup.prune`): each kind keeps the newest `backup_keep`, so a run of
+  quick data-only backups (`POST /api/backups?photos=false` is admin but
+  not fresh) can never push out the last archives holding the photos and
+  documents.
 - **Pre-restore archives** (`backup.write_prerestore`): verified after
   writing, not recorded as `backup_last_run` (that database is about to go),
   outside `backup_keep` in `prune`, newest `PRERESTORE_KEEP` (3) kept, and
@@ -772,10 +777,12 @@ pricing.ADAPTER_NAMES` is a source's estimate and answers 409, because
 coverage, accuracy, and provenance read that history. Don't widen it to
 sources without deciding what those reports should then say.
 
-## Sign-in and encrypted backups (v0.30.0, being built)
+## Authentication and encrypted backups (v0.30.0)
 
-Roadmap Phase 7, P8 A1, built stage by stage to
-[SPEC_0300](specs/SPEC_0300.md) on the `p8-auth-a1` branch. Rules so far:
+Roadmap Phase 7, P8 A1, built to [SPEC_0300](specs/SPEC_0300.md) on the
+`p8-auth-a1` branch: one admin, sessions, scoped API tokens, a
+deny-by-default gate, and every backup archive encrypted. Rules a later
+change must respect:
 
 - **The renames are done**: `POST .../estimates/auto?source=`,
   `POST /api/estimates/refresh?source=melt` (only melt; anything else 422),
@@ -789,10 +796,10 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   image, called as a subprocess, so archives stream through it however large
   they are. The Dockerfile's `age --version` step fails the build if it is
   missing. The dev machine has no `age`, so tests go through monkeypatch
-  points (`backup.encrypt_stream`/`decrypt_stream`, stage 5).
+  points (`backup.encrypt_stream`/`decrypt_stream`).
 - `argon2-cffi` is in the lockfile (with `argon2-cffi-bindings`; `cffi` and
-  `pycparser` were already there for `cryptography`). The real hashing
-  parameters arrive with the password service (stage 6);
+  `pycparser` were already there for `cryptography`). The hashing parameters
+  live in the password service (`app/auth/passwords.py`);
   `tests/test_dependencies.py` only proves it installs and round-trips.
 - **Deployment settings are checked before anything starts.**
   `config.check_startup` runs first in the lifespan and raises `ConfigError`
@@ -800,10 +807,10 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `AUTH_INSECURE_HTTP` only beside http origins, a supplied setup code at
   least 32 characters with no character over a quarter of it, a readable
   `SETUP_CODE_FILE`); uvicorn then exits 3. `config.normalize_origin` is the
-  one origin parser (lowercase, default port dropped, no path); CSRF will use
+  one origin parser (lowercase, default port dropped, no path); CSRF uses
   it. Tests get `PUBLIC_ORIGINS=https://testserver` from conftest. Once the
-  claimed marker exists (stage 7) the setup code is ignored, so its check
-  moves behind that.
+  claimed marker exists, the setup code is ignored, so its check moves
+  behind that.
 - **Every proxied nginx location includes `cabinet-proxy.conf`**, and a
   location with its own `add_header` includes `cabinet-headers.conf`: nginx
   drops the server-level `proxy_set_header` and `add_header` lines in any
@@ -827,12 +834,12 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   names, never shows. It runs at startup after migrations (only when
   `AUTO_MIGRATE` is on, since tests have no database there) and first in
   every hourly tick, which also covers a database put back by `restore.sh`.
-  The in-app restore calls it with `undecryptable=True` (stage 4); the audit
-  event `secrets_cleared` joins it in stage 6.
+  The in-app restore calls it with `undecryptable=True`; the audit event
+  `secrets_cleared` joins it too.
 - **The PCGS cert route takes `^[0-9A-Za-z-]{1,20}$`** (`CERT_PATTERN`), so
   no real cert needs a percent-encoded path. An encoded digit (`%31`)
-  decodes before routing, so only the gate's refusal of any `%` (stage 7)
-  catches that form.
+  decodes before routing, so only the gate's refusal of any `%` catches that
+  form.
 - **No `/api/docs`**: `docs_url`, `redoc_url`, and
   `swagger_ui_oauth2_redirect_url` are all `None`; `/api/openapi.json` stays.
 - **Two schemas, two chains, no crossing.** `AuthBase` (`app/models/auth.py`,
@@ -900,9 +907,9 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `manifest.json` and `SHA256SUMS`, and `SHA256SUMS` to be exactly the one
   the manifest implies. `zipfile` reads the last of two same-named entries
   and `unzip` the first, so without this a doubled or extra member could
-  reach `restore.sh` unverified (found in the stage 5 review). Both small
-  members are size-capped (`MAX_SMALL_MEMBER`) before the MAC, since
-  anyone can encrypt to the public key.
+  reach `restore.sh` unverified. Both small members are size-capped
+  (`MAX_SMALL_MEMBER`) before the MAC, since anyone can encrypt to the
+  public key.
 - **The MAC is checked first.** `backup.verify_archive` reads
   `manifest.json` and `SHA256SUMS`, verifies `mac` with the one configured
   identity its `mac_recipient` names (`archive_keys.verify`,
@@ -960,15 +967,21 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   and deletes it.
 - **The credential services live in `app/auth/`**, one module per kind
   (`passwords`, `sessions`, `tokens`, `devices`, `throttle`, `audit`,
-  `notify`), put together by `accounts`, which the routes (stage 7) and the
-  container commands both call. Each `accounts` function is one unit of
+  `notify`), put together by `accounts`, which the routes and the container
+  commands both call. Each `accounts` function is one unit of
   work and commits itself, so a failed sign-in's audit row, device failure,
   and counters persist although the caller answers with an error. **A
   password is only ever checked through `accounts._check_password`**: the
-  throttles first (skipped for a known device), then the slot (the reserved
-  one for a known device), then Argon2, then on failure the counters, the
-  device's failure count, the audit row, and the burst alert. A new path
-  that takes a password goes through it, never `passwords.verify` directly.
+  attempt counted first (`throttle.attempt`, or `devices.reserve` for a
+  known device, which falls back to the throttles once its five attempts
+  are used), then the slot (the reserved one for a known device), then
+  Argon2, then on failure the audit row and the burst alert, and on success
+  the attempt given back. A new path that takes a password goes through it,
+  never `passwords.verify` directly. **Counting before Argon2 is the rule
+  the final review added**: counted afterwards, a burst queued for the check
+  slot all read the count as it was and passed, leaving only the global
+  limit (about 86,000 guesses a day). The device count is one atomic
+  `UPDATE ... WHERE failures < 5`, committed at once, for the same reason.
 - **Time comes from `common.now()` and `common.monotonic()`**, called
   through the module (never imported by name), so tests freeze it by
   patching `common`. SQLite hands times back naive: compare through
@@ -1007,11 +1020,11 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `app.db.SessionLocal` points at the test database).
 - **Tests never touch `/data`.** conftest's autouse `_private_paths` points
   every data folder at a temporary one, also for tests that start the app
-  without the `client` fixture (stage 5's key generation wrote a real
-  key under `C:/data/state` on the dev machine and failed on CI, where
-  `/data` isn't writable). Tests that hash use a cheap `PasswordHasher`;
+  without the `client` fixture (key generation once wrote a real key under
+  `C:/data/state` on the dev machine and failed on CI, where `/data` isn't
+  writable). Tests that hash use a cheap `PasswordHasher`;
   `test_hashing_parameters_are_pinned` checks the real one.
-- **The gate is two layers** (stage 7). Layer 1, `app/auth/gate.py`, is
+- **The gate is two layers.** Layer 1, `app/auth/gate.py`, is
   plain ASGI after the maintenance middleware (Starlette runs the
   last-added first, and `test_middleware_order` pins it): any `%` in the raw
   path is 400; during maintenance only health (no lookup) and the restore
@@ -1042,8 +1055,8 @@ Roadmap Phase 7, P8 A1, built stage by stage to
 - **nginx forwards the raw request URI** (`proxy_pass http://backend:8000;`,
   no path), so the gate sees what the client sent. A `proxy_pass` with a
   path forwards nginx's decoded, normalised URI instead, and `/api/%68ealth`
-  arrived as `/api/health` (found through real nginx in stage 7). A new
-  location must keep `proxy_pass` without a path.
+  arrived as `/api/health` (found through real nginx). A new location must
+  keep `proxy_pass` without a path.
 - **Setup** (`app/auth/setup.py`): `prepare` runs at startup after
   migrations (lazily from the first `/api/auth/state` or setup when
   migrations are off, re-checked inside its lock so two first requests log
@@ -1083,7 +1096,7 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   call every operation without running a handler. The HTTP client
   normalises `.` and `..` segments before sending, so those cases belong to
   the real-nginx checks.
-- **Photos go through nginx's `auth_request`** (stage 8). It is set at
+- **Photos go through nginx's `auth_request`.** It is set at
   server level in `proxy/nginx.conf`, and every other location turns it off
   (`location /`, each `/api` location, the named 503 location): **a new
   location is checked unless it says `auth_request off`**, which is the safe
@@ -1099,27 +1112,23 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `/photos/` sends `private, no-store` and repeats the security headers
   (its own `add_header` replaces the server's). The real-nginx cases are
   `stack-smoke.sh photos`, a CI step; pytest covers the route itself.
-- **The measurement** (the spec asked for one before any caching is
-  considered; local stack, 16 cores, one uvicorn process, 50 thumbnails):
-  the check alone 3.7 ms; one thumbnail 3.8 ms with it, 0.6 ms without; 50
-  thumbnails over 6 connections 162 ms with, 14 ms without, since the
-  backend is one process and the checks queue behind each other at about
-  3.3 ms each. In Chromium, the collection page with 50 photos loaded in a
-  median 1,125 ms with the check and 1,050 ms without, and the dashboard
-  with a 30-photo mosaic in 924 ms and 826 ms. No cache is proposed: about
-  75 to 100 ms on a full page, for one user, doesn't ask for one. Two things
-  came out of measuring. Anonymous health built the full body (database and
-  schema reads) and threw it away: it now answers `{"status": "ok"}` at
-  once (6.4 ms to 1.6 ms), which matters because anyone can call it. And
-  `require_permission` and the photo route are `async`, since they wait on
-  nothing and a plain function costs a hop to a worker thread (182 ms to
-  162 ms for the 50). The rest is the session lookup itself.
-- **Stage 9, the frontend, shipped**: `/setup` and `/login` (no header, just
-  the brand), `App.tsx`'s `Gate` doing the boot check
-  (`GET /api/auth/state` then `GET /api/auth/me`) before anything else
-  renders, the confirm-password dialog, Settings → Account (password,
-  username, sessions, tokens, the audit log) and the backup key block in
-  Settings → Backups. Rules a later change here has to respect:
+- **The photo check is not cached**, by measurement (the spec asked for one
+  before considering it): on the local stack, 50 thumbnails cost about 162
+  ms with the check against 14 ms without (the backend is one process, so
+  checks queue at ~3.3 ms each), and a 50-photo collection page loads in a
+  median 1,125 ms against 1,050 ms without. 75 to 100 ms on a full page, for
+  one user, doesn't justify a cache. Measuring it found two real fixes:
+  anonymous health used to build and discard the full body (database and
+  schema reads) before answering `{"status": "ok"}` (6.4 ms → 1.6 ms, and it
+  matters since anyone can call it), and `require_permission` and the photo
+  route are `async` now, since a plain function costs a hop to a worker
+  thread for no reason (182 ms → 162 ms for the 50).
+- **The frontend**: `/setup` and `/login` (no header, just the brand),
+  `App.tsx`'s `Gate` doing the boot check (`GET /api/auth/state` then
+  `GET /api/auth/me`) before anything else renders, the confirm-password
+  dialog, Settings → Account (password, username, sessions, tokens, the
+  audit log) and the backup key block in Settings → Backups. Rules a later
+  change here has to respect:
   - **`api/client.ts`'s `req()` is the one place that reacts to a dying
     session or a lapsed confirmation.** A `401` calls a handler
     `auth/AuthContext.tsx`'s `AuthProvider` registers (a full page load to
@@ -1156,9 +1165,9 @@ Roadmap Phase 7, P8 A1, built stage by stage to
     sign-in page, sign-out, the confirm dialog, tokens, ending another
     session) without touching the shared session, so it can run alongside
     `smoke.spec.ts` safely, which is what actually needs the single worker.
-- **The CI stack job, the seed script, and Playwright's global setup move
-  onto tokens and sign-in in stage 7** (spec section 9), alongside the gate
-  and the auth routes. `scripts/ci/stack-smoke.sh` replaces the stack job's
+- **The CI stack job, the seed script, and Playwright's global setup all
+  authenticate through tokens and sign-in**, alongside the gate and the auth
+  routes. `scripts/ci/stack-smoke.sh` replaces the stack job's
   inline curl: it waits for health, claims with `SETUP_CODE` if the stack is
   unclaimed (else signs in), mints write, read, and metrics tokens, and
   wraps every write and read call in `api()` (Bearer, write-scoped) and
@@ -1186,13 +1195,13 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   (with `CABINET_USER`/`CABINET_PASSWORD`) once before the suite through
   Playwright's request API, and saves `storageState`
   (`playwright.config.ts`'s `use.storageState`), so every spec starts signed
-  in. There is no sign-in page yet (stage 9) for a spec to drive, so
-  `smoke.spec.ts`'s `confirmPassword` helper opens the recent-password
-  window itself, through `page.request` (it shares cookies with the page)
-  with an explicit `Origin` header, right before an action that reaches a
-  fresh route: deleting an item for good, and the in-app restore's inspect
-  and run.
-- **The outside-in suite and the upgrade test, stage 10.**
+  in. A spec that reaches a "fresh" route now goes through the app's own
+  confirm-password dialog rather than confirming out of band:
+  `smoke.spec.ts`'s `withPasswordConfirm` helper performs the action and
+  answers the dialog only if it appears (it doesn't, inside the window an
+  earlier action already opened), used before deleting an item for good and
+  the in-app restore's inspect and run.
+- **The outside-in suite and the upgrade test.**
   `scripts/ci/stack-smoke.sh` gained two phases. `race` fires two concurrent
   `POST /api/auth/setup` calls at a fresh stack and requires exactly one
   `201` and one `409`; it only means anything before a stack is claimed, so

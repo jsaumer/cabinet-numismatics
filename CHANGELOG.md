@@ -10,8 +10,45 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-Work towards 0.30.0 (roadmap Phase 7, P8 A1: sign-in and encrypted
-backups). The upgrade notes will lead this entry when it is released.
+## [0.30.0] - unreleased
+
+Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
+
+**Upgrading: read this before you deploy.**
+- **Nothing but the setup page is served until the admin exists.** On the
+  first start, open Cabinet and enter the setup code: your `SETUP_CODE` (or
+  the file `SETUP_CODE_FILE` names, the better choice on a Swarm), or, if you
+  set neither, the one the backend prints once in its log (`docker compose
+  logs backend | grep "setup code"`, or `docker service logs
+  cabinet_backend`). Delete the secret or the variable afterwards; Cabinet
+  ignores it from then on.
+- **`PUBLIC_ORIGINS` is required**: the exact address browsers use, for
+  example `PUBLIC_ORIGINS=https://cabinet.example.com`. The backend and the
+  proxy refuse to start without it. Add any internal name other services
+  use (`cabinet_proxy` for Homepage or Prometheus) to `ALLOWED_HOSTS`: nginx
+  now gives no answer to any other Host. Don't set `AUTH_INSECURE_HTTP`
+  beside an https origin (it is refused).
+- **Anything that called the API without signing in stops** until it has an
+  API token (Settings, Account): the Homepage tile and Prometheus need a
+  `metrics` token (header snippets in `docs/monitoring.md`), scripts a `read`
+  or `write` token. Uptime Kuma or a container health check on `/api/health`
+  keeps working: it answers `{"status":"ok"}` without one.
+- **Every backup is encrypted from the first start.** Save the backup key
+  (`docker compose exec backend python -m app.cli backup-key show`) in your
+  password manager, or supply your own as a Docker secret
+  (`BACKUP_KEY_FILE`), before you rely on the archives: without it they
+  can't be opened by anyone. Then take a new backup and delete the old
+  unencrypted archives (Settings, Backups, **Delete unencrypted archives**):
+  they are readable copies of the collection and can no longer be restored.
+- **A Swarm deployment adds the `staging_data` volume** (`/data/staging`,
+  on the node's own disk) and the settings above; see
+  `deploy/docker-stack.yaml`.
+- An authenticating proxy in front (forward-auth or an SSO gateway) keeps
+  working and is recommended until single sign-on arrives in v0.31.0.
+- Any stored secret still in plain text is cleared and named, to be entered
+  again. Every secret saved since v0.10 is already encrypted.
+- Revision `a0001` creates the `cabinet_auth` schema; the backend applies it
+  on startup after the collection's migrations, which are unchanged.
 
 ### Added
 - **Sign-in, always on, and every endpoint denied by default.** One admin,
@@ -129,6 +166,9 @@ backups). The upgrade notes will lead this entry when it is released.
   alerts instead. Startup checks the key with a real encrypt and decrypt,
   and alerts when the newest recorded archive was made with a key this
   Cabinet no longer has.
+- **Retention keeps full and data-only archives separately**: each kind
+  keeps the newest `backup_keep`, so data-only backups never push out the
+  last archives that hold the photos and documents.
 - New: `POST /api/backups/key/saved`, `DELETE /api/backups/unencrypted`;
   `GET /api/backups` gains `encrypted` per archive and the key's status;
   the restore inspection gains `provenance` and `confirm_phrase`.
@@ -152,7 +192,7 @@ backups). The upgrade notes will lead this entry when it is released.
 - New dependencies for sign-in and encrypted backups: `argon2-cffi` (password
   hashing, with `argon2-cffi-bindings`) in the backend lockfile, and Debian's
   `age` package in the backend image (backup encryption, called as a
-  program). Nothing uses either yet.
+  program).
 - `docs/api.md` gains a stability policy: breaking changes are allowed and
   announced here until 1.0; from 1.0, `/api/` paths and response fields are
   stable within a major version, and additions are never breaking.

@@ -22,16 +22,17 @@ changelog entry when releasing.
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- Sign-in is being built on `p8-auth-a1` as v0.30.0 (roadmap Phase 7, P8
-  A1: one admin, database-backed sessions, scoped API tokens, deny by
-  default; the gate and routes are in, the pages arrive in stage 9), then
-  v0.31.0 (OIDC single sign-on and a trusted-header mode). The released
-  v0.29.1 has no login and runs on a trusted network or behind an
-  authenticating reverse proxy. Every design decision was settled on 20 and 21 September
-  2026: see "Next: accounts and permissions" in docs/security.md, and don't
-  re-open them. It stays one shared collection. The build contract,
-  `docs/specs/SPEC_0300.md`, was approved by the owner on 21 September 2026 and is being
-  built (section 10 has the stages); that day the owner also cut forwarded-header trust
+- Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
+  scoped API tokens, deny by default) is **built on `p8-auth-a1`, complete,
+  and awaiting the owner's final review before tagging as v0.30.0**; the
+  last published release is still v0.29.1. Every route needs a session or a
+  token; setup asks for a one-time code on first start. v0.31.0 (OIDC single
+  sign-on and a trusted-header mode) is next. Every design decision was
+  settled on 20 and 21 September 2026: see "Accounts and permissions" in
+  docs/security.md, and don't re-open them. It stays one shared collection.
+  The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
+  on 21 September 2026 and built stage by stage (section 10 has the
+  stages); that day the owner also cut forwarded-header trust
   (`TRUSTED_PROXIES`), pinned networks, and the `/api/docs` page from the
   design.
 
@@ -223,8 +224,9 @@ P2, in-app restore, shipped in v0.26.0 (no migration): `services/restore.py`
 and `maintenance.py`, `/api/restore/*`, `components/restore.tsx`; verify,
 safety backup (`-prerestore`, outside `backup_keep`), typed `RESTORE`,
 unpack, database in one transaction, then the file swap; outcome and journal
-on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Open until P8
-makes it admin-only; see "In-app restore" in the implementation notes.
+on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Admin-only and
+password-confirmed from P8 A1 (v0.30.0); see "In-app restore" in the
+implementation notes.
 P10, a customisable dashboard, shipped in v0.27.0 (no migration):
 `services/dashboard.py` and `routers/dashboard.py`, `dashboard_layout` in
 `app_settings`, `/api/dashboard/layout` (`GET`/`PUT`/`DELETE`), and
@@ -247,15 +249,18 @@ Note details, the item page, and P10's "group C" widgets shipped in v0.29.0
 endpoints, `components/item-hero.tsx` and `item-facts.tsx`, and ten
 dashboard widget types; see "Note details, the item page, more widgets" in
 the implementation notes.
-**Next, in order:** P8 authentication (decided: one admin first,
-onboarded with a setup code from the backend log, always on, scoped API
-tokens in the first cut, deny by default; then SSO for that admin; more
-accounts and roles are optional; the design and permission table are in
-docs/security.md), P9 a share view (blocked on P8; the whole feature is an
-admin setting, off by default); labels, a phone app, and more accounts are
-optional. Research and propose each before building, as always. v1.0.0
-follows P8 and the checklist under "The road to v1.0.0". Before that, the
-roadmap's Phase 5.9 was demoted
+P8 A1, sign-in and encrypted backups, is built on `p8-auth-a1` for v0.30.0
+(migration `a0001`, the `cabinet_auth` schema and chain): one admin claimed
+with a setup code, sessions, scoped API tokens, and a deny-by-default gate
+(details in the rules below); see "Authentication and encrypted backups" in
+the implementation notes and `docs/specs/SPEC_0300.md`.
+**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
+trusted-header mode for the same admin, plus two-factor sign-in) as
+v0.31.0; then P9 a share view (the whole feature is an admin setting, off
+by default); labels, a phone app, and more accounts are optional. Research
+and propose each before building, as always. v1.0.0 follows P8 and the
+checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
+was demoted
 on 19 September 2026 from a release train to one next item plus unordered
 **candidates** and **parked** items: the owner is entering 100–500 pieces by
 hand (runs and singles, mostly held), so don't build ahead of that beyond
