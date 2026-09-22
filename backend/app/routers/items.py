@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -20,7 +20,6 @@ from app.schemas import (
     BulkResult,
     BulkUpdate,
     EventOut,
-    ImportResult,
     ItemCreate,
     ItemDetail,
     ItemList,
@@ -661,50 +660,6 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
 
     payload = ItemCreate(**data, tags=tags, catalog_refs=refs, set_id=set_id)
     return payload, grade_id
-
-
-@router.post("/import", response_model=ImportResult)
-async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
-    """Import items from CSV in the export format. Creates items only (no
-    updates); rows that fail validation are reported and skipped."""
-    raw = await file.read()
-    try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=422, detail="File is not UTF-8 text") from None
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames or "type" not in reader.fieldnames:
-        raise HTTPException(status_code=422, detail="Missing CSV header (expected export format)")
-
-    created = 0
-    skipped = 0
-    errors = []
-    for line_no, row in enumerate(reader, start=2):  # 1-based; header is line 1
-        # Rows whose id already exists are skipped, so re-importing an export
-        # (or importing the same file twice) never duplicates the collection.
-        raw_id = (row.get("id") or "").strip()
-        if raw_id:
-            try:
-                if db.get(Item, uuid.UUID(raw_id)) is not None:
-                    skipped += 1
-                    continue
-            except ValueError:
-                pass  # malformed id: treat the row as new
-        try:
-            payload, grade_id = _row_to_payload(row, db)
-            item = _build_item(db, payload, grade_id)
-            db.add(item)
-            db.flush()
-            record_event(db, item.id, "created", {"via": ["import", file.filename]})
-            # Commit each row: a later row's rollback must not discard this one.
-            db.commit()
-            created += 1
-        except (ValueError, ValidationError) as exc:
-            db.rollback()
-            msg = exc.errors()[0]["msg"] if isinstance(exc, ValidationError) else str(exc)
-            errors.append({"row": line_no, "error": msg})
-    db.commit()
-    return ImportResult(created=created, skipped=skipped, errors=errors)
 
 
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:

@@ -15,10 +15,13 @@ router = APIRouter(prefix="/api/items/{item_id}", tags=["estimates"])
 refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
 
 
-@refresh_router.post("/refresh-melt", response_model=RefreshResult)
-def refresh_melt(db: Session = Depends(get_db)):
-    """Re-run stale melt estimates now (the scheduler does this automatically
-    every 12h using the cadence configured in Settings)."""
+@refresh_router.post("/refresh", response_model=RefreshResult)
+def refresh(source: str, db: Session = Depends(get_db)):
+    """Re-run one source's stale estimates now (the scheduler does this
+    automatically every 12h using the cadence configured in Settings). Only
+    `melt` can be refreshed by hand for now."""
+    if source != "melt":
+        raise HTTPException(status_code=422, detail="Only melt can be refreshed by hand for now.")
     if not get_setting(db, "melt_enabled"):
         raise HTTPException(status_code=422, detail="Melt estimation is disabled in Settings")
     return pricing.refresh_melt_estimates(db, effective_reestimate_days(db))
@@ -71,7 +74,7 @@ def delete_estimate(item_id: uuid.UUID, estimate_id: uuid.UUID, db: Session = De
     db.commit()
 
 
-@router.post("/estimate", response_model=EstimateOut, status_code=201)
+@router.post("/estimates/auto", response_model=EstimateOut, status_code=201)
 def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depends(get_db)):
     """Produce an automatic estimate from one price source: `melt` (default),
     `numista`, or `pcgs`. The outcome is recorded for the coverage report."""

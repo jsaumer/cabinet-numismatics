@@ -81,7 +81,7 @@ def by_cert(client, **overrides):
 
 
 def estimate(client, item):
-    return client.post(f"/api/items/{item['id']}/estimate", params={"source": "pcgs"})
+    return client.post(f"/api/items/{item['id']}/estimates/auto", params={"source": "pcgs"})
 
 
 def test_auction_prices_preferred_over_the_guide(client, upstream):

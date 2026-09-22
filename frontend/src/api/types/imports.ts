@@ -52,12 +52,6 @@ export interface PcgsCert {
   coinfacts_url: string | null;
 }
 
-export interface ImportResult {
-  created: number;
-  skipped: number;
-  errors: { row: number; error: string }[];
-}
-
 export type ImportFormat = "spreadsheet" | "cabinet" | "numista_file" | "opennumismat";
 
 export interface ImportUpload {

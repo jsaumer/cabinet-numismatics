@@ -39,7 +39,7 @@ def _create(client, payload):
 
 def test_melt_estimate(client, spot):
     item = _create(client, SILVER)
-    resp = client.post(f"/api/items/{item['id']}/estimate")
+    resp = client.post(f"/api/items/{item['id']}/estimates/auto")
     assert resp.status_code == 201
     body = resp.json()
     # 26.73 g × 0.9 × $1.00/g = 24.06
@@ -55,19 +55,19 @@ def test_melt_estimate(client, spot):
 
 def test_melt_multiplies_by_quantity(client, spot):
     item = _create(client, {**SILVER, "quantity": 3})
-    body = client.post(f"/api/items/{item['id']}/estimate").json()
+    body = client.post(f"/api/items/{item['id']}/estimates/auto").json()
     assert body["estimated_value"] == 72.17  # 24.057 × 3, rounded
 
 
 def test_melt_percent_fallback_from_composition(client, spot):
     item = _create(client, {**SILVER, "fineness": None})
-    body = client.post(f"/api/items/{item['id']}/estimate").json()
+    body = client.post(f"/api/items/{item['id']}/estimates/auto").json()
     assert body["estimated_value"] == 24.06  # "90% silver" → 0.90
 
 
 def test_melt_records_provenance(client, spot):
     item = _create(client, SILVER)
-    details = client.post(f"/api/items/{item['id']}/estimate").json()["details"]
+    details = client.post(f"/api/items/{item['id']}/estimates/auto").json()["details"]
     assert details["metal"] == "silver"
     assert details["weight_g"] == 26.73
     assert details["fineness"] == 0.9
@@ -78,21 +78,21 @@ def test_melt_records_provenance(client, spot):
     assert details["stale"] is False
 
     derived = _create(client, {**SILVER, "fineness": None})
-    details = client.post(f"/api/items/{derived['id']}/estimate").json()["details"]
+    details = client.post(f"/api/items/{derived['id']}/estimates/auto").json()["details"]
     assert details["fineness_from"] == "composition"
 
 
 def test_melt_not_applicable_reasons(client, spot):
     no_metal = _create(client, COIN)
-    resp = client.post(f"/api/items/{no_metal['id']}/estimate")
+    resp = client.post(f"/api/items/{no_metal['id']}/estimates/auto")
     assert resp.status_code == 422 and "composition" in resp.json()["detail"]
 
     no_weight = _create(client, {**SILVER, "weight_g": None})
-    resp = client.post(f"/api/items/{no_weight['id']}/estimate")
+    resp = client.post(f"/api/items/{no_weight['id']}/estimates/auto")
     assert resp.status_code == 422 and "weight" in resp.json()["detail"]
 
     no_fineness = _create(client, {**SILVER, "fineness": None, "composition": "silver"})
-    resp = client.post(f"/api/items/{no_fineness['id']}/estimate")
+    resp = client.post(f"/api/items/{no_fineness['id']}/estimates/auto")
     assert resp.status_code == 422 and "fineness" in resp.json()["detail"].lower()
 
     assert spot["count"] == 0  # no upstream call for inapplicable items
@@ -100,14 +100,14 @@ def test_melt_not_applicable_reasons(client, spot):
 
 def test_spot_price_cached_within_ttl(client, spot):
     item = _create(client, SILVER)
-    client.post(f"/api/items/{item['id']}/estimate")
-    client.post(f"/api/items/{item['id']}/estimate")
+    client.post(f"/api/items/{item['id']}/estimates/auto")
+    client.post(f"/api/items/{item['id']}/estimates/auto")
     assert spot["count"] == 1  # second estimate reused the cache
 
 
 def test_stale_cache_used_when_fetch_fails(client, spot, monkeypatch):
     item = _create(client, SILVER)
-    assert client.post(f"/api/items/{item['id']}/estimate").status_code == 201
+    assert client.post(f"/api/items/{item['id']}/estimates/auto").status_code == 201
 
     # expire the cache and break the upstream
     monkeypatch.setattr(pricing, "CACHE_TTL", timedelta(0))
@@ -116,7 +116,7 @@ def test_stale_cache_used_when_fetch_fails(client, spot, monkeypatch):
         raise pricing.SpotUnavailable("upstream down")
 
     monkeypatch.setattr(pricing, "fetch_spot_price", broken)
-    resp = client.post(f"/api/items/{item['id']}/estimate")
+    resp = client.post(f"/api/items/{item['id']}/estimates/auto")
     assert resp.status_code == 201  # stale beats nothing
     assert resp.json()["details"]["stale"] is True  # ...and says so
 
@@ -127,7 +127,7 @@ def test_spot_unavailable_without_cache_is_502(client, monkeypatch):
 
     monkeypatch.setattr(pricing, "fetch_spot_price", broken)
     item = _create(client, SILVER)
-    resp = client.post(f"/api/items/{item['id']}/estimate")
+    resp = client.post(f"/api/items/{item['id']}/estimates/auto")
     assert resp.status_code == 502
 
 
@@ -181,3 +181,8 @@ def test_collection_stats(client):
     assert stats["realized_gain"] == 40.0
     assert stats["estimated_items"] == 1
     assert stats["excluded_other_currency"] == 1
+
+
+def test_old_auto_estimate_path_is_gone(client):
+    item = client.post("/api/items", json=COIN).json()
+    assert client.post(f"/api/items/{item['id']}/estimate").status_code in (404, 405)

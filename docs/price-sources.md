@@ -8,7 +8,7 @@ document describes how the app produces estimates and the caveats involved.
 
 The backend has four automatic sources (`melt`, `numista`, `pcgs`, `comps`)
 and manual entry. Each automatic source is an adapter chosen with
-`POST /api/items/{id}/estimate?source=`; it reads the item (catalog
+`POST /api/items/{id}/estimates/auto?source=`; it reads the item (catalog
 reference, grade, cert number, composition, or sales log, depending on the
 source) and returns one estimate. Results are appended to the
 `price_estimates` table with a timestamp and a confidence score, so value
@@ -70,7 +70,7 @@ confidence 0.95.
 The bullion stack (see [api.md](api.md#bullion-stack)) also wants the metal's
 spot price on the day a piece was *bought*, not just its current value, to
 work out the premium paid over spot. This isn't a `price_estimates` source
-(there's no adapter, no confidence, no `POST .../estimate`): it fills one
+(there's no adapter, no confidence, no `POST .../estimates/auto`): it fills one
 item field, `spot_at_purchase`.
 
 Researched and rejected:

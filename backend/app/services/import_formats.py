@@ -4,8 +4,8 @@
   fields (suggested from the header names, adjustable in the preview). Covers
   tools without a dedicated reader: uCoin, CoinSnap, Colnect (whose export has
   a few lines above the header), PCGS's registry, a hand-kept sheet.
-- `cabinet`: Cabinet's own export (CSV or XLSX), read in full by the same
-  row reader as `POST /api/items/import`.
+- `cabinet`: Cabinet's own export (CSV or XLSX), read in full by the
+  export's row reader (`routers.items._row_to_payload`).
 - `numista_file`: the CSV/XLSX export from numista.com ("My coins" → export).
   Users choose its columns, so it is read by header name.
 - `opennumismat`: an OpenNumismat collection (`.db`, SQLite). Up to schema

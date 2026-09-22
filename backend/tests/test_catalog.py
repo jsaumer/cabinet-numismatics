@@ -3,7 +3,7 @@
 import csv
 import io
 
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 
 
 def _grade_id(client, code, scale="sheldon"):
@@ -155,24 +155,20 @@ def test_csv_round_trip(client):
     assert row["tags"] == "silver|type set"
     assert row["catalog_refs"] == "numista:N-1"
 
-    # delete everything, then re-import the export
+    # delete everything for good (a trashed item's id still counts as known),
+    # then re-import the export
     items = client.get("/api/items").json()["items"]
     for item in items:
-        client.delete(f"/api/items/{item['id']}")
+        client.delete(f"/api/items/{item['id']}?permanent=true")
     assert client.get("/api/items").json()["total"] == 0
 
-    resp = client.post(
-        "/api/items/import", files={"file": ("items.csv", exported.encode(), "text/csv")}
-    )
-    assert resp.status_code == 200
-    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
+    result = import_cabinet_csv(client, exported)
+    assert (result["created"], result["skipped"], result["errors"]) == (1, 0, [])
 
     # re-importing an export of the CURRENT collection is a no-op (id dedupe)
     re_exported = client.get("/api/items/export.csv").text
-    resp = client.post(
-        "/api/items/import", files={"file": ("again.csv", re_exported.encode(), "text/csv")}
-    )
-    assert resp.json() == {"created": 0, "skipped": 1, "errors": []}
+    result = import_cabinet_csv(client, re_exported, "again.csv")
+    assert (result["created"], result["skipped"], result["errors"]) == (0, 1, [])
     assert client.get("/api/items").json()["total"] == 1  # no duplicates
 
     body = client.get("/api/items").json()
@@ -190,12 +186,13 @@ def test_import_reports_row_errors(client):
         "coin,France,1 franc,9999,,\n"  # year out of range
         "coin,France,1 franc,1962,sheldon,ZZ-99\n"  # unknown grade
     )
-    resp = client.post(
-        "/api/items/import", files={"file": ("bad.csv", csv_text.encode(), "text/csv")}
-    )
-    assert resp.status_code == 200
-    body = resp.json()
+    body = import_cabinet_csv(client, csv_text, "bad.csv")
     assert body["created"] == 1
     assert len(body["errors"]) == 2
-    assert body["errors"][0]["row"] == 3
+    assert body["errors"][0]["row"] == 2  # data rows count from 1
     assert "ZZ-99" in body["errors"][1]["error"]
+
+
+def test_old_import_route_is_gone(client):
+    resp = client.post("/api/items/import", files={"file": ("a.csv", b"type\ncoin\n", "text/csv")})
+    assert resp.status_code in (404, 405)

@@ -28,7 +28,8 @@ data). Display currency and melt cadence are DB-backed with env fallback.
 M2 and M3: `services/numista.py` prices coins and notes by `numista` catalog
 ref + grade, `services/pcgs.py` prices US coins by PCGS cert (or `pcgs` ref
 + Sheldon grade), preferring realized auction prices over the price guide.
-Both are selected with `POST /api/items/{id}/estimate?source=`, resolved
+Both are selected with `POST /api/items/{id}/estimates/auto?source=` (it was
+`.../estimate` until v0.30.0), resolved
 through `pricing.get_adapter`, and share `NotApplicable` (422) /
 `SourceUnavailable` (502) plus `pricing.cached_response` over the
 `source_cache` table (migration `0009`).
@@ -346,7 +347,7 @@ National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
   recomputed the next time their serial is saved; a rule change that must
   reach existing rows needs a new data migration).
 - **`pricing.add_estimate(db, item, row)` is the one way a `price_estimates`
-  row is added** (the manual endpoint, `POST .../estimate`, and both
+  row is added** (the manual endpoint, `POST .../estimates/auto`, and both
   scheduled refreshes), because it is where a wish-list target is noticed.
   Don't `db.add` an estimate anywhere else. It looks up the previous newest
   estimate before adding the row, and the caller commits.

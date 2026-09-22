@@ -10,7 +10,7 @@ from decimal import Decimal
 import pytest
 
 from app.services import alerts, currency, pricing, stack
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 
 # One troy ounce of fine silver per piece, so the arithmetic reads plainly.
 OUNCE = {
@@ -402,9 +402,8 @@ def test_export_and_import_round_trip(client):
     out = io.StringIO()
     csv.writer(out).writerows(rows)
     reimport = out.getvalue().encode()
-    resp = client.post("/api/items/import", files={"file": ("items.csv", reimport, "text/csv")})
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["created"] == 1
+    result = import_cabinet_csv(client, reimport)
+    assert result["created"] == 1, result
     copies = [i for i in client.get("/api/items").json()["items"] if i["spot_at_purchase"] == 20.0]
     assert len(copies) == 2
     assert {c["spot_at_purchase_source"] for c in copies} == {"manual"}
@@ -412,10 +411,7 @@ def test_export_and_import_round_trip(client):
 
 def test_older_export_without_the_column_still_imports(client):
     csv_text = "type,country,denomination,year\ncoin,United States,1 dollar,1921\n"
-    resp = client.post(
-        "/api/items/import", files={"file": ("old.csv", csv_text.encode(), "text/csv")}
-    )
-    assert resp.json()["created"] == 1
+    assert import_cabinet_csv(client, csv_text, "old.csv")["created"] == 1
 
 
 # --- spot alerts ------------------------------------------------------------
