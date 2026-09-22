@@ -6,7 +6,7 @@ This document records what that means concretely, what is protected and how,
 and what you must do before exposing the app more widely. Every route
 requires a sign-in or an API token (v0.30.0, roadmap Phase 7, P8 A1): one
 admin, database-backed sessions, scoped API tokens, and a deny-by-default
-gate. Single sign-on and a trusted-header mode (P8 A2) follow as v0.31.0,
+gate. Single sign-on and a trusted-header mode (P8 A2) follow as v0.32.0,
 both before v1.0.0. See Authentication & network exposure below.
 
 ## Secrets at rest
@@ -157,7 +157,7 @@ that is an accepted gap.
 **Every route needs a sign-in or an API token** (v0.30.0, roadmap Phase 7,
 P8 A1): one admin, database-backed sessions, scoped API tokens, and a
 deny-by-default gate checked before and after routing. Single sign-on and a
-trusted-header mode (A2) follow as v0.31.0. What shipped, in brief (the full
+trusted-header mode (A2) follow as v0.32.0. What shipped, in brief (the full
 design is under "Accounts and permissions" below;
 [SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) is a
 plain-language walkthrough of setup, sign-in, and the break-glass reset):
@@ -227,7 +227,7 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 ## Accounts and permissions
 
 **A1 shipped as v0.30.0**: one admin, database-backed sessions, scoped API
-tokens, and a deny-by-default gate. **A2 is next, as v0.31.0**: OpenID
+tokens, and a deny-by-default gate. **A2 is next, as v0.32.0**: OpenID
 Connect and a trusted-header mode for that same admin. This section
 describes what A1 built; the contract, with a verdict on every review
 finding, is [SPEC_0300.md](specs/SPEC_0300.md).
