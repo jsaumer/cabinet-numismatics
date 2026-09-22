@@ -9,10 +9,12 @@
 # to a throwaway compose project (COMPOSE_PROJECT_NAME below), never the
 # main "cabinet-numismatics" one: it passes -p explicitly to every command
 # so it can't collide with a stack already running under the default
-# project name. It does not read or write the repository's own .env; the
-# settings the new images need are exported into this shell's environment
-# only, the same way the main stack's are (docker compose prefers shell
-# values over a .env file), so a real .env alongside it is left untouched.
+# project name. The script itself never reads or writes .env, but docker
+# compose does: the database settings (DB_USER, DB_PASSWORD, DB_NAME) come
+# from a .env beside docker-compose.yaml, so one must exist (CI writes a
+# throwaway one first). The v0.30.0 settings are exported into this shell
+# only (docker compose prefers shell values over .env), so a real .env is
+# never changed.
 #
 # Leaves the throwaway stack running when it finishes (or fails) so its
 # state can be inspected; tear it down yourself when you're done:
