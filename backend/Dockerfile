@@ -38,8 +38,9 @@ RUN apt-get update \
 # owns. A new named volume inherits that ownership from the image.
 RUN groupadd --gid 1000 cabinet \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin cabinet \
-    && mkdir -p /data/photos /data/state /data/backups /data/documents \
-    && chown -R cabinet:cabinet /data
+    && mkdir -p /data/photos /data/state /data/backups /data/documents /data/staging \
+    && chown -R cabinet:cabinet /data \
+    && chmod 700 /data/staging
 ENV PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
@@ -51,8 +52,9 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY pyproject.toml ./
 COPY app ./app
-COPY alembic.ini ./
+COPY alembic.ini alembic_auth.ini ./
 COPY alembic ./alembic
+COPY alembic_auth ./alembic_auth
 COPY scripts ./scripts
 # pip goes last: nothing installs at runtime, and the libraries it bundles
 # (msgpack, setuptools) would otherwise sit in the image unpatched.

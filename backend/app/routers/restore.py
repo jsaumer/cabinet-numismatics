@@ -150,6 +150,8 @@ async def inspect_archive(
         raise HTTPException(413, str(exc)) from None
     except restore.Unknown as exc:
         raise HTTPException(404, str(exc)) from None
+    except restore.Busy as exc:
+        raise HTTPException(409, str(exc)) from None
     except (restore.RestoreError, backup.BackupError) as exc:
         raise HTTPException(422, str(exc)) from None
     raise HTTPException(422, "Send an archive as `file`, or the `name` of a stored one.")

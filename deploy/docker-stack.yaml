@@ -68,6 +68,10 @@ services:
       - backend_state:/data/state
       - backup_data:/data/backups
       - document_data:/data/documents
+      # Private working space where an archive's database is unpacked to be
+      # checked and restored. Keep it on the node's own disk, never on the
+      # share your backups go to.
+      - staging_data:/data/staging
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
       interval: 30s
@@ -182,3 +186,4 @@ volumes:
   backend_state:
   backup_data:
   document_data:
+  staging_data:

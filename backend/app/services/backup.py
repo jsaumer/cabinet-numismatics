@@ -3,7 +3,9 @@ volumes, and a manifest that makes the archive checkable rather than merely
 present.
 
 `db.dump`, `photos.tar.gz`, and `documents.tar.gz` are the same files
-`scripts/backup.sh` writes, so `scripts/restore.sh` restores either kind. `SHA256SUMS` lets a
+`scripts/backup.sh` writes, so `scripts/restore.sh` restores either kind. The
+dump never holds the `cabinet_auth` schema (v0.30.0): an archive carries no
+credential, so restoring one can't add, change, or revoke one. `SHA256SUMS` lets a
 shell verify an archive with `sha256sum -c`; `manifest.json` carries the same
 checksums plus the app version and schema revision for a future in-app
 restore to validate against.
@@ -53,6 +55,10 @@ STALE_TEMP_AGE = timedelta(days=1)
 CHUNK = 1024 * 1024
 # One pg_dump/pg_restore per supported server major (see backend/Dockerfile).
 PG_CLIENT_ROOT = Path("/usr/local/lib/pgclient")
+# Sign-in data: never dumped, never restored (see app/models/auth.py).
+AUTH_SCHEMA = "cabinet_auth"
+# Room kept free beyond what an unpacked member needs.
+ROOM_MARGIN = 1.05
 
 _run_lock = threading.Lock()
 
@@ -155,14 +161,19 @@ def pg_tool(name: str, server_major: int) -> str:
     return found
 
 
+def dump_command(pg_dump: str) -> list[str]:
+    """The collection, never the sign-in schema."""
+    return [pg_dump, "--format=custom", f"--exclude-schema={AUTH_SCHEMA}"]
+
+
 def dump_database(out, server_major: int) -> str:
-    """Stream a custom-format pg_dump of the whole database into `out`;
-    return the pg_dump version used."""
+    """Stream a custom-format pg_dump of the collection into `out` (every
+    schema but `cabinet_auth`); return the pg_dump version used."""
     pg_dump = pg_tool("pg_dump", server_major)
     version = subprocess.run([pg_dump, "--version"], capture_output=True, text=True).stdout
     with tempfile.TemporaryFile() as err:
         proc = subprocess.Popen(
-            [pg_dump, "--format=custom"], stdout=subprocess.PIPE, stderr=err, env=_pg_env()
+            dump_command(pg_dump), stdout=subprocess.PIPE, stderr=err, env=_pg_env()
         )
         try:
             for chunk in iter(lambda: proc.stdout.read(CHUNK), b""):
@@ -234,6 +245,9 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
             "includes_photos": include_photos,
             "includes_documents": include_photos,
             "counts": counts,
+            # Informational: the dump's own table of contents is what a restore
+            # checks (restore.refuse_auth).
+            "auth_excluded": True,
             "members": members,
             "restore": "scripts/restore.sh <this archive> (see docs/backup-restore.md)",
         }
@@ -244,6 +258,117 @@ def write_archive(path: Path, db: Session, include_photos: bool = True) -> dict:
             "SHA256SUMS", "".join(f"{m['sha256']}  {name}\n" for name, m in members.items())
         )
     return manifest
+
+
+def list_dump(path: Path, server_major: int) -> list[str]:
+    """The dump's table of contents (`pg_restore --list`), one entry a line.
+    Reads the file only; no database is touched. Tests monkeypatch this (no
+    pg_restore on the dev machine), like `dump_database`."""
+    pg_restore = pg_tool("pg_restore", server_major)
+    listing = subprocess.run([pg_restore, "--list", str(path)], capture_output=True, text=True)
+    if listing.returncode != 0:
+        raise BackupError(f"pg_restore can't read the dump: {listing.stderr.strip()[-500:]}")
+    return listing.stdout.splitlines()
+
+
+def _copy_unescape(field: str) -> str | None:
+    """One field of COPY's text format."""
+    if field == "\\N":
+        return None
+    out, chars = [], iter(field)
+    for ch in chars:
+        if ch != "\\":
+            out.append(ch)
+            continue
+        nxt = next(chars, "")
+        out.append({"t": "\t", "n": "\n", "r": "\r", "b": "\b", "f": "\f", "v": "\v"}.get(nxt, nxt))
+    return "".join(out)
+
+
+def dump_settings(path: Path, server_major: int) -> dict:
+    """The `app_settings` rows a dump holds, as {key: value}, read without a
+    database (`pg_restore --data-only` to text). Used to name the secrets an
+    archive would set. Tests monkeypatch this, like `list_dump`."""
+    pg_restore = pg_tool("pg_restore", server_major)
+    result = subprocess.run(
+        [pg_restore, "--data-only", "--schema=public", "--table=app_settings", "-f", "-"]
+        + [str(path)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise BackupError(f"pg_restore can't read the dump: {result.stderr.strip()[-500:]}")
+    rows: dict = {}
+    columns: list[str] | None = None
+    for line in result.stdout.splitlines():
+        if columns is None:
+            match = re.match(r"^COPY \S*app_settings \(([^)]*)\) FROM stdin;$", line)
+            if match:
+                columns = [c.strip().strip('"') for c in match.group(1).split(",")]
+            continue
+        if line == "\\.":
+            break
+        fields = dict(zip(columns, (_copy_unescape(f) for f in line.split("\t")), strict=False))
+        key, raw = fields.get("key"), fields.get("value")
+        if key is None:
+            continue
+        try:
+            rows[key] = json.loads(raw) if raw is not None else None
+        except ValueError:
+            rows[key] = raw
+    return rows
+
+
+# --- the private staging folder ----------------------------------------------
+
+
+def staging_dir() -> Path:
+    """The private folder an archive's dump is unpacked into: 0700, owned by
+    the app's user, never inside the backup, photo, or document directories,
+    since what lands here is the collection in plain form."""
+    config = get_settings()
+    path = Path(config.staging_dir).resolve()
+    for name, other in (
+        ("backup", config.backup_dir),
+        ("photo", config.photo_dir),
+        ("document", config.document_dir),
+    ):
+        if path.is_relative_to(Path(other).resolve()):
+            raise BackupError(f"The staging folder {path} must not be inside the {name} directory.")
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        path.chmod(0o700)
+    except OSError as exc:
+        raise BackupError(f"The staging folder {path} is not usable: {exc}") from exc
+    return path
+
+
+def empty_staging() -> None:
+    """Remove everything inside the staging folder (never the folder: it is
+    a mount point)."""
+    try:
+        entries = list(staging_dir().iterdir())
+    except (BackupError, OSError):
+        return
+    for entry in entries:
+        if entry.is_dir() and not entry.is_symlink():
+            shutil.rmtree(entry, ignore_errors=True)
+        else:
+            entry.unlink(missing_ok=True)
+
+
+def ensure_room(folder: Path, needed: int, what: str) -> None:
+    free = shutil.disk_usage(folder).free
+    if free < needed * ROOM_MARGIN:
+        raise BackupError(
+            f"Not enough space to open this archive: {what} needs {needed} bytes in "
+            f"{folder}, which has {free} free."
+        )
+
+
+def private_file(path: Path):
+    """A new file only the app's user can read (0600), opened for writing."""
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb")
 
 
 def verify_archive(path: Path) -> dict:

@@ -65,10 +65,10 @@ in-app restore:
 
 | Member | Contents |
 |--------|----------|
-| `db.dump` | `pg_dump` custom-format dump of the whole database |
+| `db.dump` | `pg_dump` custom-format dump of the collection: every schema but `cabinet_auth` (v0.30.0), so no password, session, token, or audit row is ever in an archive |
 | `photos.tar.gz` | the entire photo volume (absent from data-only archives) |
 | `documents.tar.gz` | the entire document volume (v0.19.0+; absent from data-only archives) |
-| `manifest.json` | format version, app version, schema revision, server and `pg_dump` versions, created-at, whether photos and documents are included, counts (items, of which in the trash, photos, documents, estimates), and size + SHA-256 of each member |
+| `manifest.json` | format version, app version, schema revision, server and `pg_dump` versions, created-at, whether photos and documents are included, counts (items, of which in the trash, photos, documents, estimates), `auth_excluded: true` (v0.30.0, informational: the dump's own table of contents is what a restore checks), and size + SHA-256 of each member |
 | `SHA256SUMS` | the same checksums in `sha256sum -c` format |
 
 `db.dump`, `photos.tar.gz`, and `documents.tar.gz` are the same files
@@ -139,6 +139,40 @@ off.
    staged upload; it never deletes a stored archive.
 5. The page follows the run and reloads its data when it ends.
 
+### Sign-in data is never restored
+
+An archive carries no credential and a restore never adds, changes, or
+revokes one (v0.30.0). Cabinet's dumps leave out the `cabinet_auth` schema,
+where the admin, sessions, API tokens, the audit log, and the record of
+archives live (see [data-model.md](data-model.md)); `pg_restore` runs with
+`--schema=public`, and after a restore only the collection's migrations run.
+Checking an archive (the summary, and again just before the database step)
+reads the dump's table of contents with `pg_restore --list`, and **an archive
+whose dump holds anything in `cabinet_auth` is refused** (`422`, "This
+archive contains sign-in data, which Cabinet never restores. It was not made
+by Cabinet's own backup."). `restore.sh` makes the same check before it
+changes anything. So your sign-in, sessions, API tokens, and audit log are
+kept through any restore, which the summary says, and an archive from
+before v0.30.0 (which has no `cabinet_auth` at all) restores as before.
+
+The summary also names, by name only, the stored secrets the archive would
+set (price-source keys, the alert webhook, the heartbeat URL), and any it
+holds that this deployment would clear because they aren't encrypted with
+its key.
+
+### The private staging folder
+
+To be checked and restored, an archive's database dump is unpacked into
+`/data/staging`, a volume of its own (`staging_data`), owned by the app's user
+with mode 0700 and each file 0600, never inside the backup, photo, or
+document directories. It is emptied at the start and end of every check and
+every restore, whatever the outcome, and on every start. There must be room
+there for the dump (the check says "Not enough space to open this archive"
+otherwise). What lands there is the collection in plain form, as in the
+database itself, so keep the volume on the host's own disk, not on the
+share your backups go to. Uploaded archives still wait in the backup
+directory (`.restore-staging`), as uploads only.
+
 ### What a run does, in order
 
 1. **Safety backup.** The app goes into maintenance (below), the archive is
@@ -149,14 +183,23 @@ off.
 2. **Photos, documents.** The archive's files are unpacked into a hidden
    `.restore-new` folder inside each volume, after a free-space check.
    Nothing live is touched.
-3. **Database.** `pg_restore --clean --if-exists --no-owner
-   --single-transaction`, with the client matching the server and a
-   120-second lock timeout: it either commits whole or leaves the database
-   as it was. One change is made just before it, outside that transaction:
-   tables that exist here but not in the dump (added by a migration newer
-   than the archive) are dropped, because they would block the restore and
-   collide with the migration later.
-4. **Migrations**, when the archive's revision is older than this build's.
+3. **Database.** The dump is unpacked into the private staging folder and
+   its table of contents checked again. A marker row with a fresh random
+   value is written to `app_settings` (`restore_marker`) and the same value
+   to the journal (below). Then `pg_restore --schema=public --clean
+   --if-exists --no-owner --single-transaction`, with the client matching
+   the server and a 120-second lock timeout: it either commits whole or
+   leaves the database as it was. One change is made just before it,
+   outside that transaction: tables that exist in `public` here but not in
+   the dump (added by a migration newer than the archive) are dropped,
+   because they would block the restore and collide with the migration
+   later; the journal names them first. `cabinet_auth` is never dropped.
+   Afterwards any marker row the archive brought is deleted, and every
+   stored secret this deployment can't use (plain text, or encrypted with
+   another key) is cleared and named in the outcome ("Cleared: alert
+   webhook").
+4. **Migrations**, when the archive's revision is older than this build's:
+   the collection chain only.
 5. **Finishing.** Only now, with the database committed, are the files
    swapped in, by renames inside each volume: the current entries move to
    `.restore-old`, the unpacked ones move in, and `.restore-old` is deleted
@@ -197,9 +240,20 @@ for a retry; uploads left staged are cleared after a day.
   the error says to restart the backend to try the migration again, or
   restore the safety backup.
 - **The backend stops mid-run**: a journal on the state volume
-  (`restore_journal.json`) lets the next start finish a swap that was cut
-  short, or clear the unpacked files if the database hadn't been replaced
-  yet. If putting files back ever failed, a non-empty `.restore-old` is
+  (`restore_journal.json`) tells the next start where it was. Before the
+  database step, the unpacked files are cleared ("Nothing was changed").
+  During it, the marker row answers whether the database was replaced
+  (v0.30.0): **this restore's value still there** means `pg_restore`'s
+  transaction never committed, so nothing changed (or, if tables newer than
+  the archive had already been dropped, the outcome names them and the
+  safety backup); **no marker row, or one with any other value** (an archive
+  can carry a row, never this restore's value) means the archive's database
+  is in place, so its unusable secrets are cleared, the file swap is rolled
+  forward, and startup migrates; **the database can't be reached** within a
+  minute means the journal is kept and the backend stays in maintenance
+  (health answers `restoring`) until a restart can decide, rather than serve
+  an old database with new files. After the database step, a swap cut short
+  is finished. If putting files back ever failed, a non-empty `.restore-old` is
   left in the volume and the next restore refuses until a person has moved
   those files back or removed the folder: it may hold the only copy.
 
@@ -258,7 +312,10 @@ The disaster-recovery path: it needs only the host, Docker, and a running
 ```
 
 **Destructive**: this replaces the current database contents (`pg_restore
---clean`), all photo files, and all documents with the backup's state. The
+--schema=public --clean`), all photo files, and all documents with the
+backup's state. Sign-in data is kept: the script refuses, before changing
+anything, a dump whose table of contents holds anything in `cabinet_auth`,
+and restores only the collection's schema. The
 stack must be running, and restoring an archive needs `unzip` and
 `sha256sum` on the host. After a restore, the app reflects the backup
 immediately, with no restart needed. The backend runs unprivileged while
@@ -286,7 +343,9 @@ steps on the node running the `backend` task):
 unzip cabinet-backup-20260914-031500.zip -d restore
 (cd restore && sha256sum -c SHA256SUMS)
 db=$(docker ps -q -f name=cabinet_db)
-docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' < restore/db.dump
+# must print nothing: a dump holding sign-in data is not Cabinet's own
+docker exec -i "$db" pg_restore --list < restore/db.dump | grep -v '^;' | grep -w cabinet_auth
+docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema=public --clean --if-exists' < restore/db.dump
 backend=$(docker ps -q -f name=cabinet_backend)
 docker exec "$backend" sh -c 'find /data/photos -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/photos' < restore/photos.tar.gz
@@ -304,13 +363,16 @@ Skip the photo and document steps for a data-only archive.
 
 ## Secrets in backups
 
-The database dump contains price-source API credentials, and the alert
-webhook and heartbeat URLs, **encrypted at rest** (see
-[security.md](security.md)); the encryption key is *not* in the backup:
+The dump holds no sign-in data at all (see above). It does contain
+price-source API credentials, and the alert webhook and heartbeat URLs,
+**encrypted at rest** (see [security.md](security.md)); the encryption key
+is *not* in the backup:
 it lives in `.env` (`SECRET_KEY`) or on the private `backend_state` volume.
 Restoring onto a host without the matching key works fine, from the app or
-with the script; the affected sources and alerts simply show as not
-configured, and you re-enter them in Settings.
+with the script; the affected sources and alerts show as not configured,
+the in-app restore clears them and names them, and you re-enter them in
+Settings. A secret found in plain text is never used, from any path: it is
+cleared at startup, hourly, and after an in-app restore.
 
 Back up `.env` separately and treat it as sensitive: it holds both the
 database password and the encryption key.

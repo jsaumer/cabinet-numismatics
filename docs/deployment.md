@@ -83,7 +83,7 @@ To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 
 ## 2. Storage
 
-Data lives in five named Docker volumes:
+Data lives in six named Docker volumes:
 
 | Volume | Contents |
 |--------|----------|
@@ -92,6 +92,7 @@ Data lives in five named Docker volumes:
 | `backend_state` | the generated encryption key, when `SECRET_KEY` is unset |
 | `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
 | `document_data` | attached documents: receipts, certificates, invoices (`DOCUMENT_DIR`); private, served only through the API |
+| `staging_data` | private working space (`/data/staging`, 0700): where an archive's database dump is unpacked to be checked and restored. Empty between restores. Keep it on this host's own disk, never on the share your backups go to |
 
 If you'd rather keep data in a directory you manage (common when a host has
 an established layout, or a NAS mount), replace the volume entries with bind

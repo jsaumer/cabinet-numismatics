@@ -31,8 +31,17 @@ fi
 # doesn't rewrite them into host paths.
 # In-app archives are dumped with the client matching the server's major
 # version, so the db image's own pg_restore reads them.
+# Sign-in data (the cabinet_auth schema, v0.30.0) is never restored. Cabinet's
+# own dumps leave it out, so a dump that holds any is refused before anything
+# changes, and only the collection's schema is restored either way.
+LISTING=$(docker compose exec -T db pg_restore --list < "$DIR/db.dump")
+if printf '%s\n' "$LISTING" | grep -v '^;' | grep -qw cabinet_auth; then
+  echo "$SRC contains sign-in data, which Cabinet never restores. It was not made" \
+    "by Cabinet's own backup: nothing restored" >&2
+  exit 1
+fi
 docker compose exec -T db pg_restore -U "${DB_USER:?set in .env}" -d "${DB_NAME:?set in .env}" \
-  --clean --if-exists < "$DIR/db.dump"
+  --schema=public --clean --if-exists < "$DIR/db.dump"
 
 if [ -f "$DIR/photos.tar.gz" ]; then
   docker compose exec -T backend sh -c 'find /data/photos -mindepth 1 -delete'

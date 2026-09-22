@@ -13,8 +13,9 @@ mkdir -p "$DIR"
 
 # Container paths live inside sh -c strings so Git Bash (MSYS) on Windows
 # doesn't rewrite them into host paths.
-docker compose exec -T db pg_dump -U "${DB_USER:?set in .env}" -Fc "${DB_NAME:?set in .env}" \
-  > "$DIR/db.dump"
+# Sign-in data (the cabinet_auth schema, v0.30.0) is never backed up.
+docker compose exec -T db pg_dump -U "${DB_USER:?set in .env}" -Fc \
+  --exclude-schema=cabinet_auth "${DB_NAME:?set in .env}" > "$DIR/db.dump"
 docker compose exec -T backend sh -c 'tar czf - -C /data/photos .' > "$DIR/photos.tar.gz"
 # Attached documents (v0.19.0+); an older backend has no /data/documents.
 if docker compose exec -T backend sh -c '[ -d /data/documents ]'; then

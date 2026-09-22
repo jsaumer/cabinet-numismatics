@@ -26,6 +26,8 @@ from app.config import get_settings
 from app.db import Base, get_db
 from app.main import app
 from app.models import Grade
+from app.models.auth import SCHEMA as AUTH_SCHEMA
+from app.models.auth import AuthBase
 from app.models.grades_seed import seed_rows
 from app.services import crypto
 
@@ -57,16 +59,21 @@ def _fresh_monitoring_state():
 def client(tmp_path, monkeypatch):
     """TestClient backed by a fresh in-memory SQLite DB (grades seeded) and a
     temp photo dir."""
-    engine = create_engine(
+    raw_engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
 
-    @event.listens_for(engine, "connect")
+    @event.listens_for(raw_engine, "connect")
     def _enable_fk(dbapi_conn, _record):
         # Make SQLite honor ON DELETE CASCADE / SET NULL like postgres does.
         dbapi_conn.execute("pragma foreign_keys=on")
 
+    # SQLite has no schemas: the sign-in tables (cabinet_auth on Postgres)
+    # live beside the collection's here, mapped by schema_translate_map.
+    engine = raw_engine.execution_options(schema_translate_map={AUTH_SCHEMA: None})
+
     Base.metadata.create_all(engine)
+    AuthBase.metadata.create_all(engine)
     with engine.begin() as conn:
         conn.execute(insert(Grade), seed_rows())
     TestSession = sessionmaker(bind=engine, autoflush=False)
@@ -83,6 +90,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("REQUIRE_DOCUMENT_MOUNT", "false")
     # Beside the photo dir, never inside it (the backup service refuses that).
     monkeypatch.setenv("BACKUP_DIR", str(tmp_path.with_name(tmp_path.name + "-backups")))
+    # The private staging volume (an archive's dump is only ever unpacked here).
+    monkeypatch.setenv("STAGING_DIR", str(tmp_path.with_name(tmp_path.name + "-staging")))
     # The restore outcome file is written beside the key file.
     monkeypatch.setenv(
         "SECRET_KEY_FILE", str(tmp_path.with_name(tmp_path.name + "-state") / "secret.key")
@@ -97,7 +106,7 @@ def client(tmp_path, monkeypatch):
         app.dependency_overrides.clear()
         get_settings.cache_clear()
         crypto.reset_cache()
-        engine.dispose()
+        raw_engine.dispose()
 
 
 def image_bytes(fmt: str = "PNG", size=(60, 40), color=(200, 30, 30)) -> bytes:

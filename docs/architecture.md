@@ -77,17 +77,23 @@ and health answers `db: "restoring"` without touching the database. See
 
 The container's entrypoint starts as root only to hand the data directories
 to an unprivileged user (`PUID`:`PGID`, default `1000`:`1000`), then drops to
-that user with `setpriv`; see [security.md](security.md). It mounts four
+that user with `setpriv`; see [security.md](security.md). It mounts five
 volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
-`backup_data` (`/data/backups`), and `backend_state` (`/data/state`: the
+`backup_data` (`/data/backups`), `backend_state` (`/data/state`: the
 generated encryption key when `SECRET_KEY` is unset, plus the last restore's
-outcome, `restore_last.json`, and `restore_journal.json` while one runs).
+outcome, `restore_last.json`, and `restore_journal.json` while one runs),
+and `staging_data` (`/data/staging`, 0700: where an archive's database dump
+is unpacked to be checked and restored, never the backup directory; keep it
+on the host's own disk).
 Run one replica: the loops, and a restore's state, live in the process.
 
 ### db (postgres)
 Primary relational store (`postgres:16-alpine`) for items, photo and document
-metadata, price estimates, settings, and the market-data caches; see
-[data-model.md](data-model.md). Data persists in the `db_data` volume. Under
+metadata, price estimates, settings, and the market-data caches, in the
+`public` schema, and from v0.30.0 sign-in data (the admin, sessions, API
+tokens, the audit log, the record of archives) in a schema of its own,
+`cabinet_auth`, with its own migration chain. Backups and restores never
+touch `cabinet_auth`; see [data-model.md](data-model.md). Data persists in the `db_data` volume. Under
 Compose a healthcheck gates the backend so it waits for the database to be
 ready; on a Swarm, which has no `depends_on`, the backend's own wait covers
 it.

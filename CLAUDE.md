@@ -99,14 +99,17 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 - Dependencies: the image installs `backend/requirements.txt` (hash-pinned);
   after editing `pyproject.toml`'s dependencies, regenerate it with the
   command in docs/security.md. `security.yml` audits it and scans both images.
-- Migrations: Alembic, run in `backend/` with `DATABASE_URL` set:
-  `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
-  to create. The backend also applies pending migrations itself on startup
-  (`AUTO_MIGRATE`, default true; `app/services/schema.py`, under a Postgres
-  advisory lock), so a deploy needs no manual step. Tests set
-  `AUTO_MIGRATE=false` (conftest) and build the schema with `create_all` on
-  SQLite. `/api/health` reports `schema` (current vs expected revision), shown
-  in Settings → About.
+- Migrations: Alembic, two chains, run in `backend/` with `DATABASE_URL`
+  set. The collection (`alembic/`, schema `public`): `alembic upgrade head`
+  to apply, `alembic revision --autogenerate -m "..."` to create. Sign-in
+  data (`alembic_auth/`, schema `cabinet_auth`, v0.30.0): the same with
+  `-c alembic_auth.ini`. The backend also applies both itself on startup,
+  collection first, in one transaction (`AUTO_MIGRATE`, default true;
+  `app/services/schema.py`, under a Postgres advisory lock), so a deploy
+  needs no manual step. Tests set `AUTO_MIGRATE=false` (conftest) and build
+  both schemas with `create_all` on SQLite (`cabinet_auth` mapped away by
+  `schema_translate_map`). `/api/health` reports `schema` and `auth_schema`
+  (current vs expected revision), shown in Settings → About.
 - Screenshots: `docs/screenshots/README.md` has the exact headless command.
 
 ## Current status & next step
@@ -121,6 +124,10 @@ with ten more dashboard widgets from the "group C" survey. What each release add
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
 
+- Sign-in data lives in the `cabinet_auth` schema (v0.30.0, `AuthBase`, its
+  own chain in `alembic_auth/`): never dumped, never restored, no foreign
+  key to or from `public`. An archive's dump is unpacked only in the private
+  staging folder (`/data/staging`), never in `BACKUP_DIR`.
 - Every ORM select hides trashed items (`models.item._hide_trashed`) unless
   `.execution_options(include_deleted=True)`; anything counting through a
   link table, or deciding a document's last holder, handles the trash itself.

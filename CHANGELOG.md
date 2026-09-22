@@ -46,6 +46,26 @@ backups). The upgrade notes will lead this entry when it is released.
   key.
 - `GET /api/pcgs/cert/{cert}` takes only letters, digits, and dashes (1 to
   20); anything else is 422.
+- **Sign-in data gets a database schema of its own, `cabinet_auth`**, with its
+  own migration chain (`backend/alembic_auth/`, revision `a0001`), migrated on
+  startup right after the collection's. `/api/health` reports it as
+  `auth_schema`, and Settings → About shows it. No foreign key crosses
+  between it and the collection.
+- **Backups never contain sign-in data and restores never change it.** Dumps
+  leave out `cabinet_auth` (in-app and `backup.sh`), restores take `public`
+  only (in-app and `restore.sh`), and an archive whose dump holds any sign-in
+  data is refused by both. The restore summary says your sign-in is kept and
+  names the stored secrets the archive would set or have cleared; the
+  manifest gains `auth_excluded`.
+- **An archive's database dump is unpacked only in a new private volume,
+  `staging_data` at `/data/staging`** (0700), never in the backup directory,
+  and it is emptied after every check and restore. Add the volume when
+  upgrading a Swarm stack; keep it on the node's own disk.
+- **A restore interrupted during the database step is now resolved exactly.**
+  A marker row written just before it tells the next start whether the
+  database was replaced; if the database can't be reached, the backend stays
+  in maintenance until a restart can decide. A restore also clears, and
+  names, any stored secret it brings that this deployment can't use.
 
 - **Three API endpoints renamed, before 1.0 makes paths stable** (breaking,
   for scripts that call them):
