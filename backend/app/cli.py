@@ -5,6 +5,10 @@ the machine running Cabinet is the proof of ownership.
 
 Commands (v0.30.0):
 
+    status                    the account, its sessions and tokens, the backup key
+    reset-password            set a new password (asked twice, never an argument)
+    sign-out-everywhere       end every session and known device (a lost laptop)
+    revoke-tokens [--name N]  revoke every API token, or the one named N
     backup-key show           print the backup key, to keep outside Cabinet
     backup-key rotate         put a new backup key first (older archives stay readable)
     decrypt-archive           decrypt an archive from stdin to stdout (restore.sh)
@@ -14,12 +18,17 @@ Commands (v0.30.0):
 Started as root (as `docker compose exec` does), a command first drops to
 the app's own user (PUID:PGID), so any file it writes keeps its owner.
 Nothing here prints a secret except `backup-key show`, which exists to.
+The account and backup-key commands refuse until Cabinet is set up, and
+each change is audited as `cli`; the archive commands serve the scripts,
+which work before setup too.
 """
 
 import argparse
+import getpass
 import os
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -38,12 +47,165 @@ def _fail(message: str, code: int = 1) -> int:
     return code
 
 
+class Refused(Exception):
+    pass
+
+
+@contextmanager
+def _database():
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _admin(db):
+    """The account, or Refused when Cabinet can't be reached or isn't set up."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.auth import accounts
+
+    try:
+        user = accounts.admin(db)
+    except SQLAlchemyError:
+        raise Refused("the database can't be reached, so nothing was done") from None
+    if user is None:
+        raise Refused(accounts.NOT_CLAIMED)
+    return user
+
+
+def _admin_or_refuse() -> None:
+    with _database() as db:
+        _admin(db)
+
+
+def _when(value) -> str:
+    return value.strftime("%Y-%m-%d %H:%M UTC") if value else "never"
+
+
+def _token_line(token: dict) -> str:
+    return f"{token['name']} ({token['scope']})"
+
+
+def status(_args) -> int:
+    from app.auth import accounts
+    from app.services import app_settings as store
+    from app.services import archive_keys
+
+    with _database() as db:
+        try:
+            _admin(db)
+        except Refused as exc:
+            return _fail(str(exc))
+        found = accounts.status(db)
+        saved = store.get_setting(db, "backup_key_saved")
+    print(f"Account:       {found['username']} (set up)")
+    print(f"Last sign-in:  {_when(found['last_sign_in_at'])}")
+    print(f"Failed sign-ins in the past 24 hours: {found['failed_sign_ins_24h']}")
+    print(f"Sessions ({len(found['sessions'])}):")
+    for row in found["sessions"]:
+        where = row["address"] or "unknown address"
+        print(f"  #{row['id']} last used {_when(row['last_seen_at'])} from {where}")
+        if row["user_agent"]:
+            print(f"      {row['user_agent']}")
+    print(f"API tokens ({len(found['tokens'])}):")
+    for row in found["tokens"]:
+        expires = _when(row["expires_at"]) if row["expires_at"] else "never"
+        print(f"  {_token_line(row)}, last used {_when(row['last_used_at'])}, expires {expires}")
+    try:
+        primary = archive_keys.primary()
+    except archive_keys.KeyUnavailable as exc:
+        print(f"Backup key:    unavailable ({exc})")
+        return 0
+    where = archive_keys.location()
+    message = archive_keys.LOCATION_MESSAGES.get(where)
+    print(f"Backup key:    {primary.recipient}")
+    print(f"  saved outside Cabinet: {'yes' if saved == primary.recipient else 'not confirmed'}")
+    print(f"  stored: {where}" + (f" ({message})" if message else ""))
+    return 0
+
+
+def _ask_new_password() -> str:
+    first = getpass.getpass("New password: ")
+    second = getpass.getpass("Again: ")
+    if first != second:
+        raise Refused("the two passwords differ, so nothing was changed")
+    return first
+
+
+def reset_password(_args) -> int:
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    with _database() as db:
+        try:
+            user = _admin(db)
+            password = _ask_new_password()
+            revoked = accounts.reset_password(db, password, Actor.cli(user))
+        except (Refused, accounts.PasswordRejected) as exc:
+            return _fail(str(exc))
+        name = user.username
+    listed = ", ".join(map(_token_line, revoked)) or "none"
+    print(f"The password of {name} was reset.")
+    print("Every session and known device was ended; sign in again in the browser.")
+    print(f"API tokens revoked ({len(revoked)}): {listed}")
+    print("Sign-in delays in the running backend were cleared.")
+    return 0
+
+
+def sign_out_everywhere(_args) -> int:
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    with _database() as db:
+        try:
+            user = _admin(db)
+        except Refused as exc:
+            return _fail(str(exc))
+        ended = accounts.sign_out_everywhere(db, user, Actor.cli(user))
+    print(f"Ended {ended['sessions']} session(s) and forgot {ended['devices']} known device(s).")
+    print("API tokens are unchanged: revoke-tokens ends those.")
+    return 0
+
+
+def revoke_tokens(args) -> int:
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    with _database() as db:
+        try:
+            user = _admin(db)
+        except Refused as exc:
+            return _fail(str(exc))
+        ended = accounts.revoke_tokens(db, Actor.cli(user), name=args.name)
+    if args.name is not None and not ended:
+        return _fail(f"no live token is named {args.name!r}")
+    print(f"Revoked ({len(ended)}): " + (", ".join(map(_token_line, ended)) or "none"))
+    return 0
+
+
+def _audit_key_event(action: str) -> None:
+    from app.auth import audit
+
+    with _database() as db:
+        user = _admin(db)
+        audit.record(db, action, audit.Actor.cli(user))
+        db.commit()
+
+
 def backup_key_show(_args) -> int:
     from app.services import archive_keys
 
     try:
         identities = archive_keys.identities()
     except archive_keys.KeyUnavailable as exc:
+        return _fail(str(exc))
+    try:
+        _audit_key_event("backup_key_shown")
+    except Refused as exc:
         return _fail(str(exc))
     print("# Cabinet backup key. Keep it in a password manager, outside Cabinet:")
     print("# without it the encrypted archives can't be opened by anyone.")
@@ -67,10 +229,15 @@ Nothing was changed."""
 def backup_key_rotate(_args) -> int:
     from app.services import archive_keys
 
+    try:
+        _admin_or_refuse()
+    except Refused as exc:
+        return _fail(str(exc))
     fresh = archive_keys.rotate()
     if fresh is None:
         print(ROTATE_STEPS)
         return 0
+    _audit_key_event("backup_key_rotated")
     print(f"New backup key (public key {fresh.recipient}) is now first; new archives use it.")
     print("Older archives stay readable while the old key stays in the file.")
     print("Save the new key outside Cabinet: python -m app.cli backup-key show")
@@ -150,6 +317,19 @@ def write_archive(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
+
+    commands.add_parser("status", help="the account, sessions, tokens, backup key").set_defaults(
+        run=status
+    )
+    commands.add_parser("reset-password", help="asked twice, never an argument").set_defaults(
+        run=reset_password
+    )
+    commands.add_parser(
+        "sign-out-everywhere", help="end every session and known device"
+    ).set_defaults(run=sign_out_everywhere)
+    revoke = commands.add_parser("revoke-tokens", help="every API token, or one by name")
+    revoke.add_argument("--name", help="only the live token with this name")
+    revoke.set_defaults(run=revoke_tokens)
 
     key = commands.add_parser("backup-key", help="show or rotate the backup key")
     key_commands = key.add_subparsers(dest="action", required=True)

@@ -958,12 +958,65 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   name with the `.cli-` prefix) to learn the size for the record, then
   streams it to stdout; `verify-archive -` spools stdin there the same way
   and deletes it.
-- Still to come in later stages, and not in this code yet: the restore
-  grant, the recent-password check on inspect, run, downloads, and deleting
-  unencrypted archives, the audit rows (`restore_started`,
-  `restore_finished`, `backup_key_shown`, `backup_key_rotated`, and the
-  download and deletion events), the claim check in the CLI, and the
-  Settings UI for the key (fingerprint, the saved tick, the location
+- **The credential services live in `app/auth/`**, one module per kind
+  (`passwords`, `sessions`, `tokens`, `devices`, `throttle`, `audit`,
+  `notify`), put together by `accounts`, which the routes (stage 7) and the
+  container commands both call. Each `accounts` function is one unit of
+  work and commits itself, so a failed sign-in's audit row, device failure,
+  and counters persist although the caller answers with an error. **A
+  password is only ever checked through `accounts._check_password`**: the
+  throttles first (skipped for a known device), then the slot (the reserved
+  one for a known device), then Argon2, then on failure the counters, the
+  device's failure count, the audit row, and the burst alert. A new path
+  that takes a password goes through it, never `passwords.verify` directly.
+- **Time comes from `common.now()` and `common.monotonic()`**, called
+  through the module (never imported by name), so tests freeze it by
+  patching `common`. SQLite hands times back naive: compare through
+  `common.aware`, and give bulk deletes with a time condition
+  `synchronize_session: "fetch"`, or SQLAlchemy's in-Python evaluation
+  compares naive with aware and raises.
+- **Throttles and the reserved slot are per process**, in memory, as the
+  spec says. `reset-password` runs in another process, so it touches
+  `throttle_reset` on the state volume and every throttle check clears the
+  map when that file's time changes (the first look only notes it). The
+  spec says the gate checks the flag; every throttle check reads it
+  instead, which covers the same requests, since only sign-in, confirm, and
+  setup consult the throttles.
+- **Tokens**: a live token's name is unique (the CLI revokes by name), at
+  most 50 live, `read` and `write` 1 or 7 days, `metrics` also never. The
+  secret is only in the creation answer; a pytest scans every tracked file
+  for the token pattern, so never commit a real one, and build test tokens
+  at run time. Revoked and expired tokens are kept 30 days for the list,
+  then pruned hourly (`accounts.prune`, with ended sessions, expired
+  devices, and old audit rows).
+- **The audit log** refuses an unknown event name and a detail key naming a
+  password, secret, or code. Failed sign-ins are labelled with the account's
+  name only when the typed name is the account's, otherwise `unknown`. The
+  JSON lines go to logger `cabinet.audit`, which `main._configure_logging`
+  now includes; a container command writes its row but prints no line (its
+  stdout is the operator's terminal). `secrets_cleared` is audited as
+  `system` in `scheduled.clear_secrets`.
+- **The container commands** (`status`, `reset-password`,
+  `sign-out-everywhere`, `revoke-tokens`, and `backup-key show|rotate`)
+  refuse until the instance is claimed, and when the database can't be
+  reached, since neither can then be told apart. The archive commands
+  (`decrypt-archive`, `verify-archive`, `write-archive`) don't: `backup.sh`
+  and `restore.sh` must work on a fresh machine before setup (spec section
+  6). `reset-password` reads the password only through `getpass`, twice.
+  Tests reach a command through conftest's `cli_admin` (the admin exists,
+  `app.db.SessionLocal` points at the test database).
+- **Tests never touch `/data`.** conftest's autouse `_private_paths` points
+  every data folder at a temporary one, also for tests that start the app
+  without the `client` fixture (stage 5's key generation wrote a real
+  key under `C:/data/state` on the dev machine and failed on CI, where
+  `/data` isn't writable). Tests that hash use a cheap `PasswordHasher`;
+  `test_hashing_parameters_are_pinned` checks the real one.
+- Still to come in later stages, and not in this code yet: the setup code,
+  the claimed marker, and the routes (stage 7), the restore grant, the
+  recent-password check on inspect, run, downloads, and deleting
+  unencrypted archives, the audit rows and alerts for downloads, exports,
+  restores, and deleting unencrypted archives (they need the principal),
+  and the Settings UI for the key (fingerprint, the saved tick, the location
   message) and for deleting unencrypted archives (stage 9).
 
 ## Releases

@@ -40,11 +40,12 @@ logger = logging.getLogger(__name__)
 def _configure_logging() -> None:
     """uvicorn only configures its own loggers, so without this the app's INFO
     lines (migrations, scheduled refreshes) never reach the container log.
-    Scoped to `app` and `alembic`: the root logger at INFO would also dump
-    every SQL statement and outbound HTTP request."""
+    Scoped to `app`, `alembic`, and `cabinet` (the audit lines): the root
+    logger at INFO would also dump every SQL statement and outbound HTTP
+    request."""
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s - %(message)s"))
-    for name in ("app", "alembic"):
+    for name in ("app", "alembic", "cabinet"):
         named = logging.getLogger(name)
         if not named.handlers:
             named.addHandler(handler)

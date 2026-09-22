@@ -134,6 +134,12 @@ rules that bite most often:
   archive is read, and an archive older than the newest in
   `cabinet_auth.backup_ledger` needs `RESTORE OLDER`. The key never crosses
   the API. Tests use conftest's `fake_age`.
+- The credential services are `app/auth/` (v0.30.0), used through
+  `accounts`; a password is only ever checked by `accounts._check_password`
+  (throttles, the reserved slot, then Argon2, then the failure bookkeeping).
+  Only hashes of secrets are stored, and no password, setup code, or token
+  secret reaches a log, an exception, an audit row, or argv. Time comes from
+  `app.auth.common` so tests can freeze it; tests never touch `/data`.
 - Every ORM select hides trashed items (`models.item._hide_trashed`) unless
   `.execution_options(include_deleted=True)`; anything counting through a
   link table, or deciding a document's last holder, handles the trash itself.
