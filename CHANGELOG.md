@@ -166,6 +166,16 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   alerts instead. Startup checks the key with a real encrypt and decrypt,
   and alerts when the newest recorded archive was made with a key this
   Cabinet no longer has.
+- **Deleting a photo or a document asks for the password again**, as
+  deleting an item for good does: `DELETE /api/photos/{id}`, `PUT
+  /api/photos/{id}/image` (the old files are deleted), `DELETE
+  /api/documents/{id}`, and unlinking a document from its last item are for
+  the admin with a recent password. There is no trash for either, so an API
+  token can no longer remove one. Other photo and document edits are
+  unchanged.
+- A `read` or `metrics` token is refused on any write before its body is
+  read; a wrong setup code is audited; a container command's decrypted
+  working file is removed once it is stale.
 - **Retention keeps full and data-only archives separately**: each kind
   keeps the newest `backup_keep`, so data-only backups never push out the
   last archives that hold the photos and documents.

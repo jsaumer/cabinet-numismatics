@@ -13,12 +13,12 @@ scripts run in the browser viewer's own sandbox, not this origin.
 import uuid
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth.permissions import permission
+from app.auth.permissions import permission, require
 from app.db import get_db
 from app.models import Document, Item
 from app.routers.items import get_item_or_404, record_event
@@ -141,12 +141,19 @@ def link_document(document_id: uuid.UUID, payload: DocumentLink, db: Session = D
 
 @router.delete("/items/{item_id}/documents/{document_id}", status_code=204)
 @permission("write")
-def unlink_document(item_id: uuid.UUID, document_id: uuid.UUID, db: Session = Depends(get_db)):
-    """Remove the document from this item; the file goes when no item holds it."""
+def unlink_document(
+    item_id: uuid.UUID, document_id: uuid.UUID, request: Request, db: Session = Depends(get_db)
+):
+    """Remove the document from this item; the file goes when no item holds
+    it, which is deleting for good: that needs the admin and a recent
+    password (SPEC_0300 section 16)."""
     document = _get_or_404(db, document_id)
     item = next((i for i in document.items if i.id == item_id), None)
     if item is None:
         raise HTTPException(status_code=404, detail="That document isn't attached to this item")
+    # Counted on the table, trash included: this item is its last holder.
+    if trash.links(db, document_id) <= 1:
+        require(request, "admin", fresh=True)
     document.items.remove(item)
     record_event(db, item_id, "updated", {"document": [document.title, None]})
     db.commit()
@@ -157,7 +164,7 @@ def unlink_document(item_id: uuid.UUID, document_id: uuid.UUID, db: Session = De
 
 
 @router.delete("/documents/{document_id}", status_code=204)
-@permission("write")
+@permission("admin", fresh=True)
 def delete_document(document_id: uuid.UUID, db: Session = Depends(get_db)):
     """Delete the document from every item it's attached to, and its file."""
     document = _get_or_404(db, document_id)

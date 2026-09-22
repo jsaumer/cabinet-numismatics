@@ -133,6 +133,8 @@ async def auth_setup(request: Request, db: DbSession = Depends(get_db)):
             if wait > 0:
                 raise _throttled(throttle.Throttled(wait))
             throttle.fail("setup", address)
+            audit.record(db, "setup_failed", client.actor("anonymous"))
+            db.commit()
             raise HTTPException(403, WRONG_CODE)
         try:
             started = accounts.create_admin(db, body.username, body.password, client)

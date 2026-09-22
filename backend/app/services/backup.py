@@ -25,6 +25,7 @@ import subprocess
 import tarfile
 import tempfile
 import threading
+import time
 import zipfile
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -454,19 +455,27 @@ def staging_dir() -> Path:
 
 
 CLI_PREFIX = ".cli-"  # a container command's own working files
+CLI_STALE = 10 * 60  # seconds: a `.cli-` file this old is an orphan (the command was killed)
 
 
 def empty_staging(everything: bool = False) -> None:
     """Remove what is inside the staging folder (never the folder: it is a
     mount point). A container command running in another process keeps its
-    `.cli-` files unless `everything` (at startup, when none can be running)."""
+    `.cli-` files unless `everything` (at startup, when none can be running)
+    or the file is older than CLI_STALE: a killed `verify-archive` would
+    otherwise leave a decrypted archive here until the next restart."""
     try:
         entries = list(staging_dir().iterdir())
     except (BackupError, OSError):
         return
+    now = time.time()
     for entry in entries:
         if not everything and entry.name.startswith(CLI_PREFIX):
-            continue
+            try:
+                if now - entry.stat().st_mtime < CLI_STALE:
+                    continue
+            except OSError:
+                continue
         if entry.is_dir() and not entry.is_symlink():
             shutil.rmtree(entry, ignore_errors=True)
         else:

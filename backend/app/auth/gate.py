@@ -11,7 +11,9 @@ Reads only the method, the raw path, and headers, never the body. In order:
    one is 401, never a fall back to the cookie); any other Authorization is
    ignored; otherwise the session cookie.
 4. Anonymous callers reach only the four ANONYMOUS pairs; everything else,
-   unknown paths included, is 401.
+   unknown paths included, is 401. A read or metrics token is refused on
+   any unsafe method (every such route is write or admin) before a body is
+   read.
 5. `/api/openapi.json` (the one framework route, never seen by layer 2): a
    session only, a token 403.
 6. CSRF for a cookie request: `Sec-Fetch-Site: same-origin`, or no such
@@ -46,6 +48,8 @@ RESTORE_STATUS = (b"GET", b"/api/restore/status")
 PHOTO_CHECK = (b"GET", b"/api/auth/photo")
 DOCUMENT_FILE = re.compile(rb"/api/documents/[0-9A-Fa-f-]{1,64}/file")
 CROSS_SITE = "Cross-site request refused."
+SCOPE_REFUSED = "This API token's scope doesn't allow that."
+SAFE_METHODS = {b"GET", b"HEAD", b"OPTIONS"}
 
 
 def _json(status: int, detail, headers: dict | None = None) -> JSONResponse:
@@ -226,9 +230,22 @@ class AuthGate:
             if (method, path) in SMALL_BODY and _site(headers) in ("cross-site", "same-site"):
                 await _json(403, CROSS_SITE)(scope, receive, send)
                 return
-        elif path == OPENAPI and who.kind == "token":
-            await _json(403, "The API schema is for a signed-in session.")(scope, receive, send)
-            return
+        elif who.kind == "token":
+            if path == OPENAPI:
+                await _json(403, "The API schema is for a signed-in session.")(scope, receive, send)
+                return
+            # Every unsafe-method route is write or admin (the appendix of
+            # SPEC_0300), so a read or metrics token can never use one. Refused
+            # here, before FastAPI reads a body: a low-scope token could
+            # otherwise make the backend spool a multipart upload (nginx allows
+            # 1 GB on imports) only to be told 403 by layer 2 afterwards.
+            if (
+                who.scope != "write"
+                and method not in SAFE_METHODS
+                and (method, path) not in ANONYMOUS  # public routes stay public
+            ):
+                await _json(403, SCOPE_REFUSED)(scope, receive, send)
+                return
 
         scope.setdefault("state", {})["principal"] = who
         await self.app(scope, receive, send)

@@ -93,8 +93,12 @@ def import_photo(item_id: uuid.UUID, payload: PhotoFromUrl, db: Session = Depend
     return _create_photo(db, item_id, data, payload.angle)
 
 
+# Replacing the image deletes the old files, and deleting a photo deletes
+# them for good: there is no trash for photos, so both need the admin and a
+# recent password, as purging an item does (the owner's decision, 22
+# September 2026, SPEC_0300 section 16).
 @router.put("/photos/{photo_id}/image", response_model=PhotoOut)
-@permission("write")
+@permission("admin", fresh=True)
 async def replace_photo_image(photo_id: uuid.UUID, file: UploadFile, db: Session = Depends(get_db)):
     """Swap a photo's image for an edited one, keeping its angle, primary
     flag, and position. The new file gets a fresh name so cached copies of the
@@ -149,7 +153,7 @@ def update_photo(photo_id: uuid.UUID, payload: PhotoUpdate, db: Session = Depend
 
 
 @router.delete("/photos/{photo_id}", status_code=204)
-@permission("write")
+@permission("admin", fresh=True)
 def delete_photo(photo_id: uuid.UUID, db: Session = Depends(get_db)):
     photo = _get_photo_or_404(db, photo_id)
     was_primary = photo.is_primary

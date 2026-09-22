@@ -139,3 +139,39 @@ test("ending another session", async ({ page, browser }) => {
   }
   await expect(row).toHaveCount(0);
 });
+
+test("deleting a photo asks for the password, then removes it", async ({ page }) => {
+  // A fresh session has no recent-password window, and deleting a photo is
+  // for good (stage 12): the gallery's own confirm, then the password dialog.
+  await signIn(page);
+  const origin = { Origin: new URL(page.url()).origin };
+  const item = await page.request.post("/api/items", {
+    headers: origin,
+    data: { type: "coin", country: "Photo delete", denomination: "1 test", year: 2026 },
+  });
+  expect(item.status()).toBe(201);
+  const id = (await item.json()).id as string;
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  const upload = await page.request.post(`/api/items/${id}/photos`, {
+    headers: origin,
+    multipart: { file: { name: "p.png", mimeType: "image/png", buffer: png } },
+  });
+  expect(upload.status()).toBe(201);
+
+  await page.goto(`/items/${id}`);
+  await expect(page.locator(".photo-card")).toHaveCount(1);
+  page.once("dialog", (dialog) => dialog.accept()); // "Delete this photo?"
+  await page.getByTitle("Delete photo").click();
+  const confirm = page.getByRole("dialog", { name: "Confirm your password" });
+  await expect(confirm).toBeVisible();
+  await confirm.getByLabel("Password").fill(CABINET_PASSWORD);
+  await confirm.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(page.locator(".photo-card")).toHaveCount(0);
+
+  // Inside the window now, so deleting the item for good needs no dialog.
+  const gone = await page.request.delete(`/api/items/${id}?permanent=true`, { headers: origin });
+  expect(gone.status()).toBe(204);
+});

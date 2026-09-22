@@ -29,6 +29,7 @@ logger = logging.getLogger("cabinet.audit")
 EVENTS = frozenset(
     {
         "setup",
+        "setup_failed",
         "sign_in",
         "sign_in_failed",
         "sign_out",

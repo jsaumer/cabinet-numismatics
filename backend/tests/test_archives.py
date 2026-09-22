@@ -790,3 +790,23 @@ def test_startup_clears_orphaned_uploads_and_all_staging(client):
     restore.recover()
     assert list(uploads.iterdir()) == []
     assert list(_staging().iterdir()) == []
+
+
+def test_a_stale_cli_spool_is_removed_by_the_in_app_cleanup(client):
+    """A killed `verify-archive -` leaves its decrypted spool in staging; the
+    next inspect or restore removes it once it is old, and leaves a fresh one
+    (a command still running) alone."""
+    import os
+    import time
+
+    staging = backup.staging_dir()
+    fresh = staging / f"{backup.CLI_PREFIX}fresh"
+    stale = staging / f"{backup.CLI_PREFIX}stale"
+    fresh.write_bytes(b"x")
+    stale.write_bytes(b"x")
+    old = time.time() - backup.CLI_STALE - 60
+    os.utime(stale, (old, old))
+    backup.empty_staging()
+    assert fresh.exists() and not stale.exists()
+    backup.empty_staging(everything=True)
+    assert not fresh.exists()

@@ -964,7 +964,10 @@ change must respect:
   `write-archive` stages its ciphertext in `/data/staging` (a `mkstemp`
   name with the `.cli-` prefix) to learn the size for the record, then
   streams it to stdout; `verify-archive -` spools stdin there the same way
-  and deletes it.
+  and deletes it. A killed command leaves its spool (a decrypted archive)
+  behind, so `empty_staging` removes a `.cli-` file older than `CLI_STALE`
+  (ten minutes) even while it leaves fresh ones to the command that owns
+  them.
 - **The credential services live in `app/auth/`**, one module per kind
   (`passwords`, `sessions`, `tokens`, `devices`, `throttle`, `audit`,
   `notify`), put together by `accounts`, which the routes and the container
@@ -1038,9 +1041,12 @@ change must respect:
   Every comparison uses `scope["raw_path"]` bytes. Layer 2,
   `app/auth/permissions.py`, is the app-level dependency reading
   `@permission` from the matched endpoint. It runs before body validation
-  but after FastAPI has read a multipart body, so a `read` token can make
-  `/api/imports` read an upload (nginx caps it at 1 GB) before its 403: only
-  a valid credential can, and a restore upload is streamed after the check.
+  but after FastAPI has read a multipart body, which is why layer 1 refuses
+  a `read` or `metrics` token on any unsafe method (every such route is
+  write or admin; the public setup and sign-in excepted) before a body is
+  read. A `write` token can still make an admin multipart route (replacing
+  a photo's image, 25 MB) parse its body before the 403; a restore upload
+  is streamed after the check.
 - **Declaring a route**: `@permission(cls, metrics_ok=, fresh=)` directly
   above `def`. `test_every_operation_declares_what_the_spec_says` parses
   the appendix of SPEC_0300 and compares every OpenAPI operation with it, so
@@ -1049,9 +1055,25 @@ change must respect:
   `/username` aren't `fresh`, because the current password in the body is
   the confirmation (the spec lists them as fresh). A handler whose
   permission depends on its arguments calls `permissions.require` (deleting
-  an item for good). `ReauthRequired` is rendered with `reauth_required` at
+  an item for good; unlinking a document from its last item, which deletes
+  the file). **Deleting a photo or a document, or replacing a photo's
+  image, is admin and fresh** (the owner's decision after the build
+  reviews, SPEC_0300 section 16): there is no trash for either, so they are
+  "delete for good" like purging an item. The frontend needs nothing for
+  it: those calls go through `req()`, which opens the password dialog. `ReauthRequired` is rendered with `reauth_required` at
   the top level by a handler in `main.py`; a validation error under
   `/api/auth/` lists the bad fields without echoing their values.
+- **`location /api/` stays buffered** (`proxy_request_buffering` on, the
+  default). Switching it off was tried in stage 12 and measured: when the
+  backend refuses a request before the body arrives (the gate's 401 or
+  403), nginx keeps sending the body to an upstream that has already
+  answered and blocks until `proxy_send_timeout`, so a refused 5 MB POST
+  took 60 s unbuffered against 14 ms buffered (uvicorn itself drains and
+  answers at once). Bodies on `/api/` are at most 25 MB, so the temporary
+  file is the cheaper cost. `/api/imports` and `/api/restore` must stay
+  unbuffered (1 GB and 20 GB bodies), so a refused large body there waits
+  out their send timeout (60 s on imports, 60 minutes on restore): a
+  nuisance, not a bypass, and one to remember before adding a third.
 - **nginx forwards the raw request URI** (`proxy_pass http://backend:8000;`,
   no path), so the gate sees what the client sent. A `proxy_pass` with a
   path forwards nginx's decoded, normalised URI instead, and `/api/%68ealth`
@@ -1062,7 +1084,8 @@ change must respect:
   migrations are off, re-checked inside its lock so two first requests log
   one code). A generated code is logged once, a supplied one never. The
   route compares the code first, so a right code is never throttled; a wrong
-  one counts against `setup:<address>`. The claimed marker `auth_claimed`
+  one counts against `setup:<address>` and is audited (`setup_failed`,
+  actor `anonymous`; a throttled attempt answers 429 and isn't). The claimed marker `auth_claimed`
   (beside `SECRET_KEY_FILE`) makes `SETUP_CODE` inert, and
   `config.check_startup` skips the setup-code check once it exists; a marker
   that can't be written is logged, not a failed setup, and the next start

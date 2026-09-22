@@ -745,6 +745,10 @@ for it, and new ones found while entering the collection outrank these.
 - **Physical**: nested locations (safe → box → row), printable 2×2 inserts
   and slab/box labels with QR codes, a "verified on" audit. Worth it past a
   few hundred pieces; free-text storage is fine until then.
+- **A trash for photos and documents**: today deleting either is for good
+  (admin plus the password again since v0.30.0); a soft delete with restore
+  and the trash's retention would make it recoverable, as items are. Raised
+  by the v0.30.0 build reviews.
 - **Saved views** and a choice of list columns; print or export any view.
 - **Paperwork**: an insurance schedule with a flag above the insurer's
   scheduling threshold and appraisal records; an estate packet; variety
