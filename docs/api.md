@@ -959,7 +959,8 @@ feature is off:
     "archive": "cabinet-backup-20260920-180301.zip",
     "archive_created_at": "2026-09-20T18:03:01+00:00",
     "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip",
-    "error": null, "items": 212, "photos": 388, "documents": 9
+    "error": null, "items": 212, "photos": 388, "documents": 9,
+    "secrets_cleared": []
   },
   "confirm_phrase": "RESTORE"
 }
@@ -971,7 +972,11 @@ again after a backend restart); `step`, while running, is one of
 `finishing`, in that order (`photos` and `documents` are the unpacking; the
 files are swapped in during `finishing`). `last` is read from a file on the
 state volume and is `null` until a restore has run; `items`, `photos`, and
-`documents` are the archive's counts. Switched off, it answers `enabled:
+`documents` are the archive's counts; `secrets_cleared` (v0.30.0) names the
+stored secrets the restore cleared because this deployment couldn't use
+them (plain text, or encrypted with another key), and
+`finished_after_restart` is `true` when the backend stopped after the
+database step and finished the restore on its next start. Switched off, it answers `enabled:
 false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
 
 `POST /api/restore/inspect` takes either a multipart upload (field `file`),
@@ -991,16 +996,28 @@ archive with no body. It answers:
               "documents": 9, "trashed": 0},
   "will_migrate": false,
   "replaces_files": true,
-  "secrets_note": "Saved API keys and webhook addresses in the archive…"
+  "secrets_note": "Saved API keys and webhook addresses in the archive…",
+  "credentials_note": "Your sign-in, sessions, API tokens, and audit log are kept.",
+  "secrets": ["Numista API key"],
+  "secrets_cleared": ["alert webhook"]
 }
 ```
+
+`secrets` and `secrets_cleared` (v0.30.0) name, never show, the stored
+secrets the archive would set and those it holds that would be cleared.
+The archive's dump is unpacked for this only into the private staging
+folder, checked, and removed again.
 
 It answers `422` with a plain reason for a file that isn't a Cabinet archive,
 a checksum that doesn't match, an unexpected member, a schema revision newer
 than this build knows, a tar member that is a link, a device, an absolute
 path, or holds `..`, an unreadable upload, or a request with neither `file`
-nor `name`; `404` for a `name` that isn't a stored archive; `413` for an
-upload over `RESTORE_MAX_GB`. A rejected upload is deleted at once; others
+nor `name`, a dump holding anything in the `cabinet_auth` schema ("This
+archive contains sign-in data, which Cabinet never restores. It was not made
+by Cabinet's own backup."), or too little room to unpack its dump ("Not
+enough space to open this archive…"); `404` for a `name` that isn't a stored
+archive; `409` while a restore runs; `413` for an upload over
+`RESTORE_MAX_GB`. A rejected upload is deleted at once; others
 are cleared after a day. The `restore_id` lives in memory: after a backend
 restart, inspect again.
 
@@ -1082,7 +1099,8 @@ with a `null` `current`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status`, one of `ok`, `pending` (migrations not yet
 applied), `ahead` (the database was migrated by a newer build), or `unknown`
-(database unreachable). `documents` says whether attached documents can be
+(database unreachable). `auth_schema` (v0.30.0) is the same for the sign-in
+chain (`cabinet_auth`, revision `a0001` onward). `documents` says whether attached documents can be
 stored: `ok`, `not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so
 uploads are refused), `unwritable`, or `inside_photos`. Settings → About
 displays both.

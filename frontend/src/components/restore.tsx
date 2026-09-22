@@ -264,6 +264,16 @@ export function RestoreBlock({
               Photos and documents are not in this archive and will be left as they are.
             </p>
           )}
+          <p className="muted">{inspection.credentials_note}</p>
+          {inspection.secrets.length > 0 && (
+            <p className="muted">Saved in the archive and kept: {inspection.secrets.join(", ")}.</p>
+          )}
+          {inspection.secrets_cleared.length > 0 && (
+            <p className="muted">
+              In the archive but not usable here, so cleared after the restore:{" "}
+              {inspection.secrets_cleared.join(", ")}. Enter them again in Settings.
+            </p>
+          )}
           {inspection.secrets_note && <p className="muted">{inspection.secrets_note}</p>}
           <div className="estimate-form">
             <label className="field">
@@ -304,6 +314,9 @@ export function RestoreBlock({
           {outcome?.archive ? ` from ${outcome.archive}` : ""}.
           {outcome?.safety_backup &&
             ` The collection as it was is in ${outcome.safety_backup}.`}
+          {outcome?.secrets_cleared?.length
+            ? ` Cleared: ${outcome.secrets_cleared.join(", ")}. Enter them again in Settings.`
+            : ""}
         </p>
       )}
 

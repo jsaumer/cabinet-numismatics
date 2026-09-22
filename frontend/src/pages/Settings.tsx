@@ -606,6 +606,22 @@ export default function Settings() {
                 {schemaLabel(health.schema)}
               </dd>
             </div>
+            {health.auth_schema && (
+              <div>
+                <dt>Sign-in schema</dt>
+                <dd
+                  className={
+                    health.auth_schema.status === "ok"
+                      ? undefined
+                      : health.auth_schema.status === "unknown"
+                        ? "muted"
+                        : "error"
+                  }
+                >
+                  {schemaLabel(health.auth_schema)}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Document storage</dt>
               <dd className={health.documents === "ok" ? undefined : "error"}>

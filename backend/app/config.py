@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     restore_enabled: bool = True
     # Largest archive an upload to the restore page may be, in GB.
     restore_max_gb: float = 20
+    # Where an archive's database dump is unpacked to be checked and restored:
+    # a private volume of its own (0700), never inside the backup, photo, or
+    # document directories. Fixed by the image; placed by the volume mount.
+    staging_dir: str = "/data/staging"
     # Sign-in (v0.30.0). The exact origins browsers use to reach Cabinet,
     # comma-separated (`https://cabinet.example.com`): the only list a
     # cookie-authenticated request's Origin is checked against. Required.

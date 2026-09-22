@@ -38,6 +38,10 @@ services:
       # through the API, never by nginx. Uploads are refused if this isn't
       # mounted, so they can't end up inside the container.
       - document_data:/data/documents
+      # Private working space (0700): an archive's database is unpacked here
+      # to be checked and restored, never in the backup directory. Keep it on
+      # this host's own disk.
+      - staging_data:/data/staging
     depends_on:
       db:
         condition: service_healthy
@@ -99,3 +103,4 @@ volumes:
   backend_state:
   backup_data:
   document_data:
+  staging_data:

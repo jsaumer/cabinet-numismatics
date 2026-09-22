@@ -4,6 +4,11 @@ expects, and bringing it up to date on startup.
 Migrations still live in `alembic/` and still run through Alembic. This lets
 the backend apply them itself before serving (AUTO_MIGRATE, on by default) and
 report whether the database matches the code.
+
+Two chains (v0.30.0): the collection's (`alembic/`, schema `public`) and the
+sign-in chain (`alembic_auth/`, schema `cabinet_auth`, its version table
+inside that schema). They never touch each other's schema; startup runs the
+collection chain and then the sign-in chain in one transaction.
 """
 
 import logging
@@ -37,25 +42,49 @@ def _backend_dir() -> Path:
     return source if (source / "alembic.ini").is_file() else Path.cwd()
 
 
-def alembic_config() -> Config:
+AUTH_SCHEMA = "cabinet_auth"
+
+
+def alembic_config(auth: bool = False) -> Config:
     base = _backend_dir()
-    config = Config(str(base / "alembic.ini"))
-    config.set_main_option("script_location", str(base / "alembic"))
+    name = "alembic_auth" if auth else "alembic"
+    config = Config(str(base / f"{name}.ini"))
+    config.set_main_option("script_location", str(base / name))
     return config
 
 
-@cache
-def script_revisions() -> tuple[str | None, frozenset[str]]:
-    """The newest migration this build ships, and every revision it knows."""
+def _revisions(auth: bool) -> tuple[str | None, frozenset[str]]:
     try:
-        script = ScriptDirectory.from_config(alembic_config())
+        script = ScriptDirectory.from_config(alembic_config(auth))
     except CommandError:
         return None, frozenset()
     return script.get_current_head(), frozenset(r.revision for r in script.walk_revisions())
 
 
+@cache
+def script_revisions() -> tuple[str | None, frozenset[str]]:
+    """The newest collection migration this build ships, and every one it knows."""
+    return _revisions(auth=False)
+
+
+@cache
+def auth_script_revisions() -> tuple[str | None, frozenset[str]]:
+    """The same for the sign-in chain."""
+    return _revisions(auth=True)
+
+
 def current_revision(connection: Connection) -> str | None:
     return MigrationContext.configure(connection).get_current_revision()
+
+
+def current_auth_revision(connection: Connection) -> str | None:
+    """The sign-in chain's revision, from its own version table; None before
+    the schema exists."""
+    context = MigrationContext.configure(
+        connection,
+        opts={"version_table": "alembic_version", "version_table_schema": AUTH_SCHEMA},
+    )
+    return context.get_current_revision()
 
 
 def describe(
@@ -88,20 +117,32 @@ def wait_for_database(engine: Engine, timeout: float = DB_WAIT_SECONDS) -> None:
             time.sleep(2)
 
 
-def upgrade_to_head(engine: Engine) -> None:
-    """Apply every pending migration in one transaction. On Postgres a failed
-    migration rolls back entirely, and the exception stops startup."""
+def _upgrade(conn: Connection, auth: bool) -> None:
+    config = alembic_config(auth)
+    config.attributes["connection"] = conn
+    config.attributes["configure_logger"] = False  # keep the app's logging
+    command.upgrade(config, "head")
+
+
+def upgrade_to_head(engine: Engine, auth: bool = True) -> None:
+    """Apply every pending migration in one transaction: the collection chain,
+    then (unless `auth` is false) the sign-in chain. On Postgres a failed
+    migration rolls back entirely, and the exception stops startup. A restore
+    migrates the collection only: it never touched the sign-in chain."""
     wait_for_database(engine)
     with engine.begin() as conn:
         if conn.dialect.name == "postgresql":
             conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": MIGRATION_LOCK_KEY})
         before = current_revision(conn)
-        config = alembic_config()
-        config.attributes["connection"] = conn
-        config.attributes["configure_logger"] = False  # keep the app's logging
-        command.upgrade(config, "head")
+        _upgrade(conn, auth=False)
         after = current_revision(conn)
+        if auth:
+            auth_before = current_auth_revision(conn)
+            _upgrade(conn, auth=True)
+            auth_after = current_auth_revision(conn)
     if before == after:
         logger.info("Database schema up to date (%s)", after)
     else:
         logger.info("Migrated database schema %s -> %s", before or "empty", after)
+    if auth and auth_before != auth_after:
+        logger.info("Migrated sign-in schema %s -> %s", auth_before or "empty", auth_after)

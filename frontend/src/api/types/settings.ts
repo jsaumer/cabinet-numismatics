@@ -240,6 +240,8 @@ export interface RestoreOutcome {
   items: number | null;
   photos: number | null;
   documents: number | null;
+  // By name only: stored secrets cleared because this deployment can't use them.
+  secrets_cleared?: string[];
 }
 
 export interface RestoreStatus {
@@ -273,16 +275,24 @@ export interface RestoreInspection {
   will_migrate: boolean;
   replaces_files: boolean;
   secrets_note: string | null;
+  credentials_note: string;
+  // By name only: stored secrets the archive would set, and those it holds
+  // that would be cleared (not encrypted with this deployment's key).
+  secrets: string[];
+  secrets_cleared: string[];
+}
+
+export interface SchemaState {
+  current: string | null;
+  expected: string | null;
+  status: "ok" | "pending" | "ahead" | "unknown";
 }
 
 export interface Health {
   status: string;
   db: string;
   version: string;
-  schema: {
-    current: string | null;
-    expected: string | null;
-    status: "ok" | "pending" | "ahead" | "unknown";
-  };
+  schema: SchemaState;
+  auth_schema?: SchemaState; // the sign-in chain (cabinet_auth), v0.30.0
   documents: "ok" | "not_mounted" | "unwritable" | "inside_photos";
 }

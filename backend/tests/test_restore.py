@@ -6,6 +6,8 @@ import io
 import json
 import os
 import shutil
+import stat
+import sys
 import tarfile
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -35,6 +37,35 @@ def fake_dump(monkeypatch):
     return revision
 
 
+# What a Cabinet dump's table of contents looks like (pg_restore --list),
+# with no cabinet_auth: dumps leave that schema out.
+CLEAN_LISTING = [
+    ";",
+    "; Archive created at 2026-09-14 03:15:00 UTC",
+    ";     dbname: cabinet",
+    "215; 1259 16390 TABLE public items cabinet",
+    "216; 1259 16400 TABLE public app_settings cabinet",
+    "3401; 0 16390 TABLE DATA public items cabinet",
+]
+
+
+@pytest.fixture(autouse=True)
+def dump_readers(monkeypatch):
+    """Stand in for pg_restore reading a dump (no pg_restore here): its table
+    of contents, and the app_settings rows it holds. Tests edit both."""
+    seen = {"listing": list(CLEAN_LISTING), "settings": {}, "read": []}
+
+    def list_dump(path, server_major):
+        path = Path(path)
+        seen["read"].append(path)
+        assert path.read_bytes() == FAKE_DUMP  # the archive's own dump, unpacked
+        return seen["listing"]
+
+    monkeypatch.setattr(backup, "list_dump", list_dump)
+    monkeypatch.setattr(backup, "dump_settings", lambda path, major: seen["settings"])
+    return seen
+
+
 @pytest.fixture()
 def clock(monkeypatch):
     now = [datetime(2026, 9, 14, 3, 15, tzinfo=UTC)]
@@ -47,7 +78,7 @@ def calls(monkeypatch):
     """Run the restore inline, with the database step recorded, not run."""
     seen = {"dumps": [], "migrated": 0, "during": None}
 
-    def fake_restore(dump_path):
+    def fake_restore(dump_path, on_drop=None):
         seen["dumps"].append(Path(dump_path).read_bytes())
         if seen["during"]:
             seen["during"]()
@@ -301,7 +332,7 @@ def test_upload_over_the_limit_is_413(client, coin, fake_dump, monkeypatch, tmp_
 
 
 def test_stale_staged_uploads_are_removed(client, fake_dump):
-    staging = restore.staging_dir()
+    staging = restore.upload_dir()
     old, fresh = staging / ("a" * 32 + ".zip"), staging / ("b" * 32 + ".zip")
     for path in (old, fresh):
         path.write_bytes(b"x")
@@ -739,3 +770,322 @@ def test_a_folder_the_backend_cannot_move_stops_the_restore_before_the_database(
     assert "old-item" in str(err.value) and "1 folder(s)" in str(err.value)
 
     restore.check_movable({"members": {"db.dump": {}}})  # data-only: files aren't touched
+
+
+# --- v0.30.0: sign-in data, the private staging folder, the marker -----------
+
+
+def _engine():
+    return _session().get_bind()
+
+
+def _staging() -> Path:
+    return Path(get_settings().staging_dir)
+
+
+def _plant_setting(key: str, value) -> None:
+    """Write straight into app_settings, as an archive's database would."""
+    from app.models import AppSetting
+
+    db = _session()
+    try:
+        db.merge(AppSetting(key=key, value=value))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _setting_row(key: str):
+    from app.models import AppSetting
+
+    db = _session()
+    try:
+        row = db.get(AppSetting, key)
+        return None if row is None else row.value
+    finally:
+        db.close()
+
+
+def test_inspect_refuses_an_archive_holding_sign_in_data(
+    client, coin, fake_dump, dump_readers, tmp_path
+):
+    dump_readers["listing"] += [
+        "5; 2615 16385 SCHEMA - cabinet_auth cabinet",
+        "220; 1259 16500 TABLE cabinet_auth users cabinet",
+    ]
+    resp = client.post(f"/api/restore/inspect?name={_stored(client)}")
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == restore.AUTH_REFUSED
+    # an upload holding it is not kept either
+    download = tmp_path / "dl.zip"
+    download.write_bytes(client.get("/api/backup.zip").content)
+    assert _upload(client, download).status_code == 422
+    assert list((_dirs()[2] / ".restore-staging").iterdir()) == []
+    assert list(_staging().iterdir()) == []
+
+
+def test_a_listing_line_that_only_mentions_it_in_a_comment_is_fine(
+    client, coin, fake_dump, dump_readers
+):
+    dump_readers["listing"] += [";     cabinet_auth was excluded"]
+    assert _inspect(client, _stored(client))["restore_id"]
+
+
+def test_inspect_reads_the_dump_only_in_private_staging(client, coin, fake_dump, dump_readers):
+    backups = _dirs()[2]
+    _inspect(client, _stored(client))
+    [read] = dump_readers["read"]
+    assert read.parent == _staging().resolve()
+    assert list(_staging().iterdir()) == []  # gone again
+    assert not list(backups.rglob("*.dump"))  # never on the backup share
+    if sys.platform != "win32":
+        assert stat.S_IMODE(_staging().stat().st_mode) == 0o700
+
+
+def test_staged_dump_is_owner_only(client, coin, fake_dump, dump_readers, monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("POSIX modes")
+    modes = []
+
+    def list_dump(path, major):
+        modes.append(stat.S_IMODE(Path(path).stat().st_mode))
+        return CLEAN_LISTING
+
+    monkeypatch.setattr(backup, "list_dump", list_dump)
+    _inspect(client, _stored(client))
+    assert modes == [0o600]
+
+
+def test_inspect_needs_room_in_staging(client, coin, fake_dump, monkeypatch):
+    name = _stored(client)
+    real = shutil.disk_usage
+    monkeypatch.setattr(
+        backup.shutil,
+        "disk_usage",
+        lambda path: (
+            real(path)._replace(free=0) if Path(path) == _staging().resolve() else real(path)
+        ),
+    )
+    resp = client.post(f"/api/restore/inspect?name={name}")
+    assert resp.status_code == 422
+    assert resp.json()["detail"].startswith("Not enough space to open this archive")
+
+
+def test_staging_is_never_inside_a_shared_folder(client, monkeypatch):
+    monkeypatch.setenv("STAGING_DIR", str(_dirs()[2] / "staging"))
+    get_settings.cache_clear()
+    with pytest.raises(backup.BackupError, match="must not be inside the backup directory"):
+        backup.staging_dir()
+
+
+def test_inspect_names_the_secrets_an_archive_would_set(client, coin, fake_dump, dump_readers):
+    from app.services import crypto
+
+    dump_readers["settings"] = {
+        "numista_api_key": crypto.encrypt("numista-secret-1234"),  # this key: kept
+        "alert_webhook_url": "https://planted.example/hook",  # plain text: cleared
+        "pcgs_api_token": "",
+        "display_currency": "EUR",
+    }
+    body = _inspect(client, _stored(client))
+    assert body["credentials_note"] == restore.CREDENTIALS_NOTE
+    assert body["secrets"] == ["Numista API key"]
+    assert body["secrets_cleared"] == ["alert webhook"]
+    text = json.dumps(body)
+    assert "numista-secret" not in text and "planted.example" not in text
+
+
+def test_run_refuses_sign_in_data_found_at_run_time(client, coin, fake_dump, calls, dump_readers):
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+    dump_readers["listing"] = CLEAN_LISTING + ["220; 1259 16500 TABLE cabinet_auth users x"]
+    assert _run(client, restore_id).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["ok"] is False
+    assert restore.AUTH_REFUSED in last["error"] and "Nothing was changed." in last["error"]
+    assert calls["dumps"] == []
+    assert _setting_row(restore.MARKER_KEY) is None  # never written: refused first
+    assert list(_staging().iterdir()) == []
+
+
+def test_the_marker_is_journalled_and_gone_after_a_restore(client, coin, fake_dump, calls):
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+    seen = {}
+
+    def during():
+        journal = json.loads(restore._journal_path().read_text(encoding="utf-8"))
+        seen["journal"] = journal
+        seen["row"] = _setting_row(restore.MARKER_KEY)
+        # the dump being restored is the one in private staging
+        assert [p.suffix for p in _staging().iterdir()] == [".dump"]
+
+    calls["during"] = during
+    assert _run(client, restore_id).status_code == 202
+    assert client.get("/api/restore/status").json()["last"]["ok"] is True
+    assert seen["journal"]["phase"] == "database"
+    assert len(seen["journal"]["marker"]) == 32 and seen["row"] == seen["journal"]["marker"]
+    assert seen["journal"]["dropped"] == []
+    assert _setting_row(restore.MARKER_KEY) is None
+    assert list(_staging().iterdir()) == []
+    assert not restore._journal_path().exists()
+
+
+def test_a_marker_the_archive_brought_is_removed(client, coin, fake_dump, calls):
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+    calls["during"] = lambda: _plant_setting(restore.MARKER_KEY, "f" * 32)  # the archive's row
+    assert _run(client, restore_id).status_code == 202
+    assert _setting_row(restore.MARKER_KEY) is None
+
+
+def test_a_failed_database_step_leaves_no_marker(client, coin, fake_dump, calls, monkeypatch):
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+
+    def failing(dump_path, on_drop=None):
+        raise restore.RestoreError("pg_restore failed: boom")
+
+    monkeypatch.setattr(restore, "restore_database", failing)
+    _run(client, restore_id)
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["ok"] is False and last["error"].endswith("Nothing was changed.")
+    assert _setting_row(restore.MARKER_KEY) is None
+
+
+def test_restored_plain_text_secrets_are_cleared_and_named(client, coin, fake_dump, calls):
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+    # the archive's database brings a plain-text webhook address
+    calls["during"] = lambda: _plant_setting("alert_webhook_url", "https://planted.example/x")
+    assert _run(client, restore_id).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["ok"] is True
+    assert last["secrets_cleared"] == ["alert webhook"]
+    assert _setting_row("alert_webhook_url") == ""
+    assert client.get("/api/settings").json()["secrets_cleared"] == ["alert webhook"]
+
+
+def test_sign_in_rows_are_untouched_by_a_restore(client, coin, fake_dump, calls):
+    from datetime import datetime as dt
+
+    from app.models.auth import ApiToken, User
+
+    db = _session()
+    try:
+        user = User(username="admin", password_hash="x", role="admin")
+        db.add(user)
+        db.flush()
+        db.add(
+            ApiToken(
+                public_id="abcdefghij", secret_hash=b"\x01" * 32, user_id=user.id,
+                name="CI", scope="read", expires_at=dt(2026, 9, 30, tzinfo=UTC),
+            )
+        )  # fmt: skip
+        db.commit()
+    finally:
+        db.close()
+    restore_id = _inspect(client, _stored(client))["restore_id"]
+    assert _run(client, restore_id).status_code == 202
+    assert client.get("/api/restore/status").json()["last"]["ok"] is True
+    db = _session()
+    try:
+        assert [u.username for u in db.query(User)] == ["admin"]
+        assert [t.name for t in db.query(ApiToken)] == ["CI"]
+    finally:
+        db.close()
+
+
+def test_a_restore_migrates_the_collection_chain_only(client, monkeypatch):
+    seen = []
+    monkeypatch.setattr(schema, "upgrade_to_head", lambda engine, auth=True: seen.append(auth))
+    restore.migrate(None)
+    assert seen == [False]
+
+
+# --- recover(), row by row ----------------------------------------------------
+
+
+def _database_journal(marker: str, dropped=()) -> Path:
+    path = restore._journal_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "phase": "database",
+                "marker": marker,
+                "dropped": list(dropped),
+                "archive": "x.zip",
+                "at": "2026-09-14T00:00:00",
+                "safety_backup": "cabinet-backup-20260914-031500-prerestore.zip",
+            }
+        )
+    )
+    return path
+
+
+def _unpacked_photos() -> Path:
+    photos = _dirs()[0]
+    (photos / "live.txt").write_text("live")
+    (photos / ".restore-new").mkdir()
+    (photos / ".restore-new" / "new.txt").write_text("new")
+    return photos
+
+
+def test_recover_database_step_marker_still_there_changed_nothing(client):
+    photos = _unpacked_photos()
+    _plant_setting(restore.MARKER_KEY, "a" * 32)
+    journal = _database_journal("a" * 32)
+    (_staging()).mkdir(parents=True, exist_ok=True)
+    (_staging() / "left.dump").write_bytes(b"plain")
+    restore.recover(_engine())
+    assert sorted(p.name for p in photos.iterdir()) == ["live.txt"]
+    assert not journal.exists()
+    last = restore.last_outcome()
+    assert last["ok"] is False and last["error"].endswith("Nothing was changed.")
+    assert _setting_row(restore.MARKER_KEY) is None
+    assert list(_staging().iterdir()) == []  # staging emptied at startup
+
+
+def test_recover_database_step_after_dropping_tables_is_partial(client):
+    photos = _unpacked_photos()
+    _plant_setting(restore.MARKER_KEY, "a" * 32)
+    _database_journal("a" * 32, dropped=["spot_history"])
+    restore.recover(_engine())
+    assert sorted(p.name for p in photos.iterdir()) == ["live.txt"]
+    last = restore.last_outcome()
+    assert last["ok"] is False
+    assert "spot_history" in last["error"]
+    assert "cabinet-backup-20260914-031500-prerestore.zip" in last["error"]
+
+
+@pytest.mark.parametrize("found", [None, "f" * 32], ids=["no row", "another value"])
+def test_recover_database_step_replaced_rolls_forward(client, found):
+    """No marker row, or one with another value (an archive can carry a row,
+    never this restore's value): the database is the archive's."""
+    photos = _unpacked_photos()
+    if found is not None:
+        _plant_setting(restore.MARKER_KEY, found)
+    _plant_setting("alert_webhook_url", "https://planted.example/x")
+    journal = _database_journal("a" * 32)
+    restore.recover(_engine())
+    assert sorted(p.name for p in photos.iterdir()) == ["new.txt"]
+    assert not journal.exists()
+    last = restore.last_outcome()
+    assert last["ok"] is True and last["finished_after_restart"] is True
+    assert last["secrets_cleared"] == ["alert webhook"]
+    assert _setting_row(restore.MARKER_KEY) is None
+    assert _setting_row("alert_webhook_url") == ""
+
+
+def test_recover_database_step_unreachable_stays_in_maintenance(client, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    photos = _unpacked_photos()
+    journal = _database_journal("a" * 32)
+
+    def unreachable(engine, timeout=60):
+        raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+
+    monkeypatch.setattr(schema, "wait_for_database", unreachable)
+    restore.recover(_engine())
+    assert journal.exists()  # kept for the next start to decide
+    assert maintenance.active()
+    assert (photos / ".restore-new" / "new.txt").exists()  # nothing moved either way
+    assert client.get("/api/items").status_code == 503
+    assert client.get("/api/health").json()["db"] == "restoring"

@@ -12,12 +12,20 @@ through the swap finish it on the next start.
 One restore at a time, on a background thread, with its state in memory: the
 backend is a single process. The outcome goes to a JSON file beside the key
 file, not the database, because the database is what was just replaced.
+
+Sign-in data is never part of it (v0.30.0): dumps leave out `cabinet_auth`,
+pg_restore takes `public` only, and an archive whose dump holds anything in
+`cabinet_auth` is refused. The dump is unpacked only in the private staging
+folder (`backup.staging_dir`), never in the backup directory. A marker row
+written just before the database step tells a restarted backend whether the
+database had been replaced when it stopped (`recover`).
 """
 
 import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tarfile
@@ -28,12 +36,15 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 
+from sqlalchemy import inspect as inspect_db
 from sqlalchemy import text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
-from app.services import alerts, backup, maintenance, metrics, schema
+from app.models import AppSetting
+from app.services import alerts, backup, crypto, maintenance, metrics, scheduled, schema
+from app.services import app_settings as store
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +69,17 @@ SECRETS_NOTE = (
     "a different one they will read as not set and need entering again in Settings."
 )
 NOTHING_CHANGED = "Nothing was changed."
+CREDENTIALS_NOTE = "Your sign-in, sessions, API tokens, and audit log are kept."
+AUTH_REFUSED = (
+    "This archive contains sign-in data, which Cabinet never restores. "
+    "It was not made by Cabinet's own backup."
+)
+# An app_settings row written just before the database step, by direct ORM
+# (never through get_setting: it isn't a setting). pg_restore replaces
+# app_settings wholesale, so the row survives only if the database was not
+# replaced, and an archive can't carry this restore's value. It must stay in
+# `public`: in cabinet_auth it would survive every restore.
+MARKER_KEY = "restore_marker"
 
 _lock = threading.Lock()  # held for the length of a restore
 _state_lock = threading.Lock()
@@ -109,7 +131,10 @@ def _journal_path() -> Path:
     return _state_dir() / "restore_journal.json"
 
 
-def staging_dir() -> Path:
+def upload_dir() -> Path:
+    """Where uploaded archives wait, in the backup directory (sized for
+    archives). Uploads only: a dump is never unpacked here, since this may be
+    a share (see backup.staging_dir)."""
     path = backup.backup_dir() / STAGING_DIR
     path.mkdir(exist_ok=True)
     return path
@@ -259,6 +284,45 @@ def check_archive(path: Path) -> dict:
     return manifest
 
 
+def extract_dump(archive: Path, restore_id: str) -> Path:
+    """Unpack the archive's database dump into the private staging folder
+    (0600), after checking there is room for it."""
+    folder = backup.staging_dir()
+    with zipfile.ZipFile(archive) as zf:
+        backup.ensure_room(folder, zf.getinfo("db.dump").file_size, "its database dump")
+        target = folder / f"{restore_id}.dump"
+        with zf.open("db.dump") as src, backup.private_file(target) as out:
+            shutil.copyfileobj(src, out, backup.CHUNK)
+    return target
+
+
+def refuse_auth(dump: Path, server_major: int) -> None:
+    """Refuse a dump holding anything in cabinet_auth. Cabinet's own dumps
+    leave that schema out, so such an archive was made some other way."""
+    for line in backup.list_dump(dump, server_major):
+        if not line.startswith(";") and re.search(r"\bcabinet_auth\b", line):
+            raise RestoreError(AUTH_REFUSED)
+
+
+def _server_major(engine: Engine) -> int:
+    with engine.connect() as conn:
+        return (conn.dialect.server_version_info or (0,))[0]
+
+
+def carried_secrets(settings: dict) -> tuple[list[str], list[str]]:
+    """By name only: the stored secrets an archive would set, and those it
+    holds that this deployment would clear (plain text, or encrypted with
+    another key)."""
+    sets, cleared = [], []
+    for key in sorted(store.SECRET_KEYS):
+        value = settings.get(key)
+        if not isinstance(value, str) or not value:
+            continue
+        usable = crypto.is_encrypted(value) and bool(crypto.decrypt(value))
+        (sets if usable else cleared).append(store.SECRET_LABELS[key])
+    return sets, cleared
+
+
 def _will_migrate(manifest: dict) -> bool:
     return manifest["schema_revision"] != schema.script_revisions()[0]
 
@@ -271,10 +335,10 @@ def _replaces_files(manifest: dict) -> bool:
 
 
 def clean_staging() -> None:
-    """Drop staged uploads (and unpacked dumps) older than a day."""
+    """Drop staged uploads older than a day."""
     cutoff = (datetime.now(timezone.utc) - STALE_UPLOAD_AGE).timestamp()
     try:
-        staged = list(staging_dir().iterdir())
+        staged = list(upload_dir().iterdir())
     except (backup.BackupError, OSError):
         return
     for path in staged:
@@ -289,7 +353,7 @@ def new_staging_file() -> tuple[str, Path]:
     container's own temp folder is not."""
     clean_staging()
     restore_id = uuid.uuid4().hex
-    return restore_id, staging_dir() / f"{restore_id}.zip"
+    return restore_id, upload_dir() / f"{restore_id}.zip"
 
 
 def upload_limit() -> int:
@@ -315,15 +379,33 @@ def stored_archive(name: str) -> Path:
 
 def inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str | None = None):
     """Verify an archive and describe what restoring it would do. A staged
-    upload that fails the check is deleted."""
+    upload that fails the check is deleted. Its dump is unpacked only into
+    the private staging folder, checked there, and removed again."""
+    if not _lock.acquire(blocking=False):
+        if staged:
+            path.unlink(missing_ok=True)
+        raise Busy("A restore is running; try again when it has finished.")
+    try:
+        return _inspect(db, path, name, staged, restore_id or uuid.uuid4().hex)
+    finally:
+        _lock.release()
+
+
+def _inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str) -> dict:
+    backup.empty_staging()
     try:
         manifest = check_archive(path)
+        major = (db.connection().dialect.server_version_info or (0,))[0]
+        dump = extract_dump(path, restore_id)
+        refuse_auth(dump, major)
+        sets, cleared = carried_secrets(backup.dump_settings(dump, major))
     except BaseException:
         if staged:
             path.unlink(missing_ok=True)
         raise
+    finally:
+        backup.empty_staging()
     check_movable(manifest)  # say so now, not after the database has gone
-    restore_id = restore_id or uuid.uuid4().hex
     _pending[restore_id] = {"path": path, "name": name, "staged": staged}
     counts = manifest.get("counts") or {}
     here = backup._counts(db)
@@ -352,6 +434,10 @@ def inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str | 
         "will_migrate": _will_migrate(manifest),
         "replaces_files": _replaces_files(manifest),
         "secrets_note": SECRETS_NOTE,
+        "credentials_note": CREDENTIALS_NOTE,
+        # By name only: what the archive would set, and what would be cleared.
+        "secrets": sets,
+        "secrets_cleared": cleared,
     }
 
 
@@ -363,7 +449,7 @@ def discard(restore_id: str) -> None:
         # Staged before a restart: the id is the file's name.
         if not ID_RE.match(restore_id):
             raise Unknown("No such restore")
-        path = staging_dir() / f"{restore_id}.zip"
+        path = upload_dir() / f"{restore_id}.zip"
         if not path.is_file():
             raise Unknown("No such restore")
         path.unlink(missing_ok=True)
@@ -510,7 +596,8 @@ def dispose_engine(engine: Engine) -> None:
 
 
 def migrate(engine: Engine) -> None:
-    schema.upgrade_to_head(engine)
+    """The collection chain only: the restore never touched cabinet_auth."""
+    schema.upgrade_to_head(engine, auth=False)
 
 
 def _dump_tables(pg_restore: str, dump_path: Path) -> set[str]:
@@ -522,11 +609,27 @@ def _dump_tables(pg_restore: str, dump_path: Path) -> set[str]:
     return set(re.findall(r"^\d+; \d+ \d+ TABLE public (\S+) ", listing.stdout, re.MULTILINE))
 
 
-def restore_database(dump_path: Path) -> None:
-    """pg_restore the dump over the live database in ONE transaction, so a
-    failure leaves the database as it was (but see PartialDatabase, for an
-    archive older than some of the tables here). Tests monkeypatch this
-    (SQLite has no pg_restore), like `backup.dump_database`."""
+def restore_command(pg_restore: str, database: str, dump_path: Path) -> list[str]:
+    """The collection only (`public`), in one transaction; never cabinet_auth."""
+    return [
+        pg_restore,
+        "--schema=public",
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--single-transaction",
+        f"--dbname={database}",
+        str(dump_path),
+    ]
+
+
+def restore_database(dump_path: Path, on_drop=None) -> None:
+    """pg_restore the dump's `public` schema over the live database in ONE
+    transaction, so a failure leaves the database as it was (but see
+    PartialDatabase, for an archive older than some of the tables here).
+    `on_drop(names)` is called before leftover tables are dropped, so the
+    journal names them first. cabinet_auth is never touched. Tests
+    monkeypatch this (SQLite has no pg_restore), like `backup.dump_database`."""
     from app.db import engine
 
     with engine.connect() as conn:
@@ -546,10 +649,14 @@ def restore_database(dump_path: Path) -> None:
     # transaction, so a failure after it says so (PartialDatabase).
     with engine.begin() as conn:
         conn.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
+        # `public` only: cabinet_auth holds sign-in data and must never be
+        # dropped, whatever the archive holds.
         present = conn.execute(
             text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         ).scalars()
         dropped = sorted(set(present) - tables)
+        if dropped and on_drop is not None:
+            on_drop(dropped)
         for leftover in dropped:
             logger.info("Restore: dropping %s, which the archive predates", leftover)
             conn.execute(text(f'DROP TABLE IF EXISTS public."{leftover}" CASCADE'))
@@ -559,15 +666,7 @@ def restore_database(dump_path: Path) -> None:
     env["PGOPTIONS"] = f"{env.get('PGOPTIONS', '')} -c lock_timeout={LOCK_TIMEOUT}".strip()
     database = make_url(get_settings().database_url).database
     result = subprocess.run(
-        [
-            pg_restore,
-            "--clean",
-            "--if-exists",
-            "--no-owner",
-            "--single-transaction",
-            f"--dbname={database}",
-            str(dump_path),
-        ],
+        restore_command(pg_restore, database, dump_path),
         capture_output=True,
         text=True,
         env=env,
@@ -582,6 +681,55 @@ def restore_database(dump_path: Path) -> None:
                 f"newer than the archive had already been removed ({', '.join(dropped)})."
             )
         raise RestoreError(message)
+
+
+# --- the marker ---------------------------------------------------------------
+
+
+def _write_marker(engine: Engine) -> str:
+    value = secrets.token_hex(16)
+    with Session(engine) as db:
+        db.merge(AppSetting(key=MARKER_KEY, value=value))
+        db.commit()
+    return value
+
+
+def _read_marker(engine: Engine):
+    """The marker row's value, or None when there is no row, or no
+    app_settings at all (an archive from before it existed replaced it)."""
+    with engine.connect() as conn:
+        if not inspect_db(conn).has_table(AppSetting.__tablename__):
+            return None
+    with Session(engine) as db:
+        row = db.get(AppSetting, MARKER_KEY)
+        return None if row is None else row.value
+
+
+def _delete_marker(engine: Engine) -> None:
+    """Remove any marker row, this restore's or one an archive brought in."""
+    with Session(engine) as db:
+        db.execute(AppSetting.__table__.delete().where(AppSetting.key == MARKER_KEY))
+        db.commit()
+
+
+def _after_database(engine: Engine) -> list[str]:
+    """Once the database is the archive's: drop any marker row it brought,
+    and clear every stored secret this deployment wouldn't use (plain text,
+    or encrypted with another key). Returns the cleared secrets' names."""
+    try:
+        with engine.connect() as conn:
+            if not inspect_db(conn).has_table(AppSetting.__tablename__):
+                return []  # an archive older than settings: migrations add them
+        _delete_marker(engine)
+        db = sessionmaker(bind=engine, autoflush=False)()
+        try:
+            cleared = scheduled.clear_secrets(db, undecryptable=True)
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("Restore: checking the restored secrets failed")
+        return []
+    return [store.SECRET_LABELS[key] for key in cleared]
 
 
 # --- running ----------------------------------------------------------------
@@ -637,15 +785,18 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
         "items": None,
         "photos": None,
         "documents": None,
+        "secrets_cleared": [],
     }
     swaps: list[_Swap] = []
     dump: Path | None = None
+    marker: str | None = None
     database_restored = False
     try:
         maintenance.enter()
         if not maintenance.drain():
             logger.warning("Restore: requests still running after the wait; going ahead")
         try:
+            backup.empty_staging()
             _step("safety_backup")
             manifest = check_archive(archive)  # again: time has passed since the summary
             check_movable(manifest)
@@ -678,14 +829,26 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
                     swaps.append(_Swap(folder))
 
             _step("database")
-            dump = staging_dir() / f"{restore_id}.dump"
-            with zipfile.ZipFile(archive) as zf, zf.open("db.dump") as src, open(dump, "wb") as out:
-                shutil.copyfileobj(src, out, backup.CHUNK)
+            dump = extract_dump(archive, restore_id)
+            refuse_auth(dump, _server_major(engine))  # again, from the file about to be used
+            # From here a restarted backend asks the database what happened.
+            marker = _write_marker(engine)
+            journal = {"phase": "database", "marker": marker, "dropped": [], **outcome}
+            _write_json(_journal_path(), journal)
+
+            def journal_drop(names: list[str]) -> None:
+                _write_json(_journal_path(), {**journal, "dropped": names})
+
             dispose_engine(engine)
-            restore_database(dump)
+            restore_database(dump, on_drop=journal_drop)
         except Exception as exc:
             for swap in swaps:
                 shutil.rmtree(swap.new, ignore_errors=True)
+            if marker is not None:
+                try:
+                    _delete_marker(engine)
+                except Exception:
+                    logger.exception("Restore: could not remove the marker row")
             if isinstance(exc, PartialDatabase):
                 raise RestoreError(
                     f"{exc} Restore {outcome['safety_backup']} to return to how things were."
@@ -694,13 +857,14 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
         database_restored = True
         _write_json(_journal_path(), {"phase": "swapping", **outcome})
         go_back = f"Restore {outcome['safety_backup']} to return to how things were."
+        outcome["secrets_cleared"] = _after_database(engine)
 
         migration_error = None
         if _will_migrate(manifest):
             _step("migrations")
             try:
                 dispose_engine(engine)
-                migrate(engine)
+                migrate(engine)  # the collection chain only
             except Exception as exc:
                 logger.exception("Restore: migrating the restored database failed")
                 migration_error = exc
@@ -747,6 +911,7 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
     try:
         if dump is not None:
             dump.unlink(missing_ok=True)
+        backup.empty_staging()
         if outcome["ok"] and entry["staged"]:
             entry["path"].unlink(missing_ok=True)
         if outcome["ok"] or not entry["path"].is_file():
@@ -763,29 +928,86 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
     _release()
 
 
-def recover() -> None:
-    """On startup: deal with a restore the last process didn't finish. Once
-    the database had been replaced the file swap is rolled forward (renames
-    that `_Swap.apply` can repeat); before that, the unpacked files are
-    dropped and nothing had changed."""
+def _roll_forward(folders: list[Path]) -> None:
+    for folder in folders:
+        swap = _Swap(folder)
+        if swap.new.is_dir():
+            swap.apply()
+        swap.finish()
+
+
+def _drop_unpacked(folders: list[Path]) -> None:
+    for folder in folders:
+        shutil.rmtree(folder / NEW_DIR, ignore_errors=True)
+
+
+def recover(engine: Engine | None = None) -> None:
+    """On startup: deal with a restore the last process didn't finish.
+
+    `preparing`: nothing had changed; the unpacked files are dropped.
+    `database`: the marker row answers whether the database was replaced.
+    This restore's value still there means pg_restore's transaction never
+    committed (nothing changed, unless leftover tables had been dropped
+    first: partial). No row, or any other value, means the archive's database
+    is in place: its marker rows and unusable secrets are cleared, the file
+    swap is rolled forward, and startup migrates. If the database can't be
+    reached, the journal is kept and the backend stays in maintenance until a
+    restart can decide, rather than serve an old database with new files.
+    `swapping`: the swap is rolled forward (renames `_Swap.apply` can repeat)."""
+    backup.empty_staging()
     journal = _read_json(_journal_path())
     if journal is None:
+        _clear_legacy_dumps()
         return
     phase = journal.pop("phase", None)
+    marker = journal.pop("marker", None)
+    dropped = journal.pop("dropped", None) or []
     outcome = {**journal, "ok": False}
+    folders = [folder for _m, _s, folder in _file_targets()]
     try:
-        folders = [folder for _m, _s, folder in _file_targets()]
-        if phase == "swapping":
-            for folder in folders:
-                swap = _Swap(folder)
-                if swap.new.is_dir():
-                    swap.apply()
-                swap.finish()
+        if phase == "database":
+            if engine is None:
+                from app.db import engine
+            try:
+                if not marker:
+                    raise ValueError("the journal names no marker")
+                schema.wait_for_database(engine)
+                found = _read_marker(engine)
+            except Exception:
+                logger.exception(
+                    "A restore was interrupted during the database step, and whether the "
+                    "database was replaced can't be told yet; staying in maintenance until "
+                    "a restart can decide"
+                )
+                maintenance.enter()
+                return  # the journal stays
+            _delete_marker(engine)
+            if found == marker:
+                _drop_unpacked(folders)
+                safety = outcome.get("safety_backup")
+                if dropped:
+                    outcome["error"] = (
+                        "The backend stopped during the restore after removing tables newer "
+                        f"than the archive ({', '.join(dropped)}); the rest of the database is "
+                        f"as it was. Restore {safety} to return to how things were."
+                    )
+                else:
+                    outcome["error"] = f"The backend stopped during the restore. {NOTHING_CHANGED}"
+                logger.warning("A restore was interrupted before the database was replaced")
+            else:
+                outcome["secrets_cleared"] = _after_database(engine)
+                _roll_forward(folders)
+                outcome["ok"] = True
+                outcome["finished_after_restart"] = True
+                logger.warning(
+                    "Finished a restore that was interrupted after the database was replaced"
+                )
+        elif phase == "swapping":
+            _roll_forward(folders)
             outcome["ok"] = True
             logger.warning("Finished a restore that was interrupted while replacing files")
         else:
-            for folder in folders:
-                shutil.rmtree(folder / NEW_DIR, ignore_errors=True)
+            _drop_unpacked(folders)
             outcome["error"] = f"The backend stopped during the restore. {NOTHING_CHANGED}"
             logger.warning("A restore was interrupted before the database was replaced")
     except OSError as exc:
@@ -796,8 +1018,15 @@ def recover() -> None:
         )
     _record(outcome)
     _journal_path().unlink(missing_ok=True)
+    _clear_legacy_dumps()
+
+
+def _clear_legacy_dumps() -> None:
+    """Releases before v0.30.0 unpacked dumps beside the uploads, in the
+    backup directory; remove any they left."""
     try:
-        for leftover in staging_dir().glob("*.dump"):
+        folder = backup.backup_dir() / STAGING_DIR  # looked at, never created here
+        for leftover in folder.glob("*.dump"):
             leftover.unlink(missing_ok=True)
     except (backup.BackupError, OSError):
         pass

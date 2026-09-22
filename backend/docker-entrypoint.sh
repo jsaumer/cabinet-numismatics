@@ -18,8 +18,9 @@ if [ "$(id -u)" = "0" ]; then
   gid="${PGID:-1000}"
   key_file="${SECRET_KEY_FILE:-/data/state/secret.key}"
   writable=1
+  staging="${STAGING_DIR:-/data/staging}"
   for dir in "${PHOTO_DIR:-/data/photos}" "${key_file%/*}" \
-             "${BACKUP_DIR:-/data/backups}" "${DOCUMENT_DIR:-/data/documents}"; do
+             "${BACKUP_DIR:-/data/backups}" "${DOCUMENT_DIR:-/data/documents}" "$staging"; do
     mkdir -p "$dir" 2>/dev/null || true
     # Only when the owner differs: a one-time hand-over, not a walk of the
     # whole photo volume on every start.
@@ -36,6 +37,8 @@ if [ "$(id -u)" = "0" ]; then
       writable=0
     fi
   done
+  # An archive's database is unpacked here in plain form: the app's user only.
+  chmod 700 "$staging" 2>/dev/null || true
   if [ "$writable" = "1" ]; then
     exec setpriv --reuid="$uid" --regid="$gid" --clear-groups "$@"
   fi

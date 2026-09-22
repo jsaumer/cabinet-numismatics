@@ -835,6 +835,55 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   catches that form.
 - **No `/api/docs`**: `docs_url`, `redoc_url`, and
   `swagger_ui_oauth2_redirect_url` are all `None`; `/api/openapi.json` stays.
+- **Two schemas, two chains, no crossing.** `AuthBase` (`app/models/auth.py`,
+  `MetaData(schema="cabinet_auth")`) is never on `Base.metadata`, so neither
+  chain's autogenerate sees the other; `alembic_auth/env.py` creates the
+  schema, keeps its version table inside it, and `include_name` limits it to
+  it. `schema.upgrade_to_head(engine, auth=True)` runs the collection chain
+  then the sign-in chain in one transaction under the one advisory lock; a
+  restore calls it with `auth=False`. `tests/test_auth_schema.py` fails on a
+  foreign key across the schemas and greps each `versions/` folder for the
+  other schema's name, so an auth migration must never mention `public`,
+  even in a comment. On SQLite, conftest maps `cabinet_auth` to no schema
+  with `schema_translate_map` on the engine (the FK pragma listener stays on
+  the raw engine) and creates both metadatas.
+- **Dumps and restores never touch `cabinet_auth`.** `backup.dump_command`
+  adds `--exclude-schema=cabinet_auth`, `restore.restore_command` has
+  `--schema=public`, the leftover-table drop reads `schemaname = 'public'`
+  only, and `backup.sh` / `restore.sh` match (tested by text). Refusal reads
+  the dump's table of contents: `backup.list_dump` (a monkeypatch point) and
+  `restore.refuse_auth`, which rejects any non-comment line naming
+  `cabinet_auth`, at inspect and again just before the database step.
+  `backup.dump_settings` (also a monkeypatch point) reads `app_settings` out
+  of a dump through `pg_restore --data-only` to name the secrets it carries.
+- **The private staging folder** (`backup.staging_dir`, `STAGING_DIR`,
+  `/data/staging`, not an operator setting) is the only place a dump is
+  unpacked: 0700, files 0600 (`backup.private_file`), refused inside the
+  backup, photo, or document directories, emptied (`backup.empty_staging`,
+  never the folder itself: it is a mount) at the start and end of every
+  inspect and run and by `recover()` on every start. `ensure_room` checks
+  free space first. `restore.upload_dir` (was `staging_dir`) in
+  `BACKUP_DIR/.restore-staging` holds uploads only. Inspect takes the
+  restore lock (409 while a restore runs) so two can't share staging.
+- **The marker.** `_write_marker` (direct ORM on `AppSetting`, key
+  `restore_marker`, never through `get_setting`) is committed just before
+  the journal's `database` phase, which records the same value and, via
+  `restore_database(on_drop=...)`, the leftover tables before they are
+  dropped. `recover()` compares the row with the journal: equal means
+  nothing committed (or partial, if tables were dropped); absent or
+  different means replaced (clear marker rows and unusable secrets, roll
+  the swap forward, let startup migrate); unreachable, or a journal with no
+  marker, means stay in maintenance with the journal kept. `recover(engine)`
+  takes the engine so tests can pass theirs. Don't move the marker out of
+  `public`: it works because a restore replaces that table.
+- **After the database step**, `_after_database` deletes marker rows and
+  runs `scheduled.clear_secrets(undecryptable=True)`, skipping both when
+  the restored database has no `app_settings` (an archive from before
+  `0008`); the cleared names go into the outcome's `secrets_cleared`.
+- Still to come in later stages, and not in this code yet: the restore
+  grant, the recent-password check on inspect and run, the
+  `restore_started` / `restore_finished` audit rows, encryption (stage 5),
+  and the archive record in `backup_ledger`.
 
 ## Releases
 
