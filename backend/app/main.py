@@ -3,12 +3,19 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app import __version__
+from app.auth import setup as auth_setup
+from app.auth.gate import AuthGate
+from app.auth.permissions import ReauthRequired, reauth_body, require_permission
 from app.config import ConfigError, check_startup, get_settings
 from app.db import engine
 from app.routers import (
+    auth,
     backup,
     catalogue,
     checklists,
@@ -169,6 +176,10 @@ async def lifespan(app: FastAPI):
         # have no database here; the hourly tick covers that setting too.
         await asyncio.to_thread(_in_session, scheduled.clear_secrets)
         await asyncio.to_thread(_in_session, _check_key_against_record)
+        # Unclaimed: the setup code (supplied, or generated and logged once).
+        # Claimed: the marker that makes SETUP_CODE inert. With migrations
+        # off, the first setup-state request decides instead.
+        await asyncio.to_thread(_in_session, auth_setup.prepare)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]
@@ -187,10 +198,37 @@ app = FastAPI(
     redoc_url=None,
     swagger_ui_oauth2_redirect_url=None,
     openapi_url="/api/openapi.json",
+    # Layer 2 of the gate: every route declares its permission (see
+    # app/auth/permissions.py); one that declares none is refused.
+    dependencies=[Depends(require_permission)],
 )
 
-# While a restore runs, everything but health and the restore status is 503.
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error(request: Request, exc: RequestValidationError):
+    """Under /api/auth the fields are passwords: say which field is wrong,
+    never echo what was sent."""
+    if request.url.path.startswith("/api/auth/"):
+        fields = [
+            {"loc": list(err.get("loc", ())), "msg": err.get("msg"), "type": err.get("type")}
+            for err in exc.errors()
+        ]
+        return JSONResponse({"detail": fields}, status_code=422)
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(ReauthRequired)
+async def _reauth_required(request: Request, exc: ReauthRequired):
+    return JSONResponse(reauth_body(), status_code=403, headers={"Cache-Control": "no-store"})
+
+
+# Starlette runs the last-added middleware first: maintenance outermost, so a
+# restore answers 503 before the gate looks up anything; then the gate
+# (layer 1), before routing.
+app.add_middleware(AuthGate)
 app.add_middleware(MaintenanceMiddleware)
+
+app.include_router(auth.router)
 
 app.include_router(health.router)
 app.include_router(items.router)

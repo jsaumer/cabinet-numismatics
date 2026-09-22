@@ -29,6 +29,7 @@ written just before the database step tells a restarted backend whether the
 database had been replaced when it stopped (`recover`).
 """
 
+import hmac
 import json
 import logging
 import os
@@ -38,6 +39,7 @@ import shutil
 import subprocess
 import tarfile
 import threading
+import time
 import uuid
 import zipfile
 from contextlib import contextmanager
@@ -114,6 +116,14 @@ _state_lock = threading.Lock()
 _state: dict = {"state": "idle", "step": None, "started_at": None}
 _pending: dict[str, dict] = {}
 _memory_last: dict | None = None  # if the state volume can't be written
+
+# The restore grant: the session that started a restore may keep reading the
+# status while maintenance refuses everything else. In memory only; checked
+# by the gate with no database access. Ends 10 minutes after the restore
+# does, and 2 hours after it was issued at the latest.
+GRANT_AFTER_END = 10 * 60
+GRANT_MAX = 2 * 60 * 60
+_grant: dict | None = None
 
 
 class RestoreError(Exception):
@@ -233,10 +243,49 @@ def _step(name: str) -> None:
     _set_state(step=name)
 
 
+def issue_grant(session_hash: bytes, restore_id: str, principal) -> None:
+    global _grant
+    _grant = {
+        "hash": session_hash,
+        "restore_id": restore_id,
+        "principal": principal,
+        "issued": time.monotonic(),
+        "ended": None,
+    }
+
+
+def drop_grant() -> None:
+    global _grant
+    _grant = None
+
+
+def granted(session_hash: bytes):
+    """The principal holding the grant, if this session is it and the grant
+    is still live; otherwise None."""
+    grant = _grant
+    if grant is None or not session_hash:
+        return None
+    now = time.monotonic()
+    if now - grant["issued"] > GRANT_MAX:
+        return None
+    if grant["ended"] is not None and now - grant["ended"] > GRANT_AFTER_END:
+        return None
+    if not hmac.compare_digest(grant["hash"], session_hash):
+        return None
+    return grant["principal"]
+
+
+def _end_grant(restore_id: str) -> None:
+    grant = _grant
+    if grant is not None and grant["restore_id"] == restore_id and grant["ended"] is None:
+        grant["ended"] = time.monotonic()
+
+
 def reset_memory() -> None:
     """Forget in-memory state (tests)."""
     global _memory_last
     _memory_last = None
+    drop_grant()
     _pending.clear()
     _set_state(state="idle", step=None, started_at=None)
     maintenance.leave()
@@ -854,14 +903,23 @@ def _spawn(fn) -> None:
     threading.Thread(target=fn, daemon=True, name="restore").start()
 
 
-def start(restore_id: str, engine: Engine, phrase: str | None = None) -> None:
+def start(
+    restore_id: str, engine: Engine, phrase: str | None = None, actor=None, grant=None
+) -> None:
     """Begin a restore on a background thread, or raise Unknown / Busy.
     `phrase` is what was typed; the run checks it against the archive's age
-    again, from the archive itself."""
+    again, from the archive itself. `actor` (an audit Actor) is who asked;
+    the start and the end are audited and alerted under that name. `grant`
+    (session hash, principal) is issued once this run holds the locks, so a
+    refused second run never touches the first run's grant."""
     entry = _pending.get(restore_id)
     if entry is None or not entry["path"].is_file():
         raise Unknown("No such restore; inspect the archive again.")
-    entry = {**entry, "typed": phrase if phrase is not None else entry.get("phrase")}
+    entry = {
+        **entry,
+        "typed": phrase if phrase is not None else entry.get("phrase"),
+        "actor": actor,
+    }
     if not _lock.acquire(blocking=False):
         raise Busy("A restore is already running.")
     # Held to the end, so no backup starts while the restore runs.
@@ -872,10 +930,14 @@ def start(restore_id: str, engine: Engine, phrase: str | None = None) -> None:
         backup._run_lock.release()
         _lock.release()
         raise Busy("A scheduled task is running; try again in a moment.")
+    if grant is not None:
+        issue_grant(grant[0], restore_id, grant[1])
     _set_state(state="running", step="safety_backup", started_at=_now())
+    _announce(engine, "restore_started", actor, entry["name"], f"Restoring {entry['name']}.")
     try:
         _spawn(lambda: _run(restore_id, entry, engine))
     except BaseException:
+        drop_grant()
         _release()
         _set_state(state="idle", step=None, started_at=None)
         raise
@@ -1084,8 +1146,35 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         logger.exception("Restore: tidying up failed")
     _record(outcome)
     maintenance.leave()
+    _end_grant(restore_id)
+    _announce(
+        engine,
+        "restore_finished",
+        entry.get("actor"),
+        entry["name"],
+        # Never the error itself: pg_restore's output can quote the
+        # collection's rows. The reason is in Settings and the outcome file.
+        f"Restore of {entry['name']} finished."
+        if outcome["ok"]
+        else f"Restore of {entry['name']} failed. The reason is in Settings, Backups.",
+        {"ok": bool(outcome["ok"])},
+    )
     _set_state(state="done" if outcome["ok"] else "failed", step=None)
     _release()
+
+
+def _announce(engine: Engine, action: str, actor, target: str, message: str, detail=None):
+    """Audit and alert a restore's start or end. Never fails the restore: the
+    sign-in schema is untouched by it, but the database may be unreachable."""
+    from app.auth import audit, notify
+
+    try:
+        with Session(engine) as db:
+            audit.record(db, action, actor or audit.Actor.system(), target=target, detail=detail)
+            db.commit()
+            notify.send(db, action, message)
+    except Exception:
+        logger.exception("Restore: could not record %s", action)
 
 
 def _roll_forward(folders: list[Path]) -> None:

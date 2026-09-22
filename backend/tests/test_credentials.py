@@ -65,7 +65,7 @@ def sent(monkeypatch):
 
 
 @pytest.fixture()
-def db(client):
+def db(unclaimed_client):
     return next(app.dependency_overrides[get_db]())
 
 
@@ -715,7 +715,11 @@ def test_failed_since_previous_sign_in(db, owner, clock):
     assert third.failed_since_previous == 0
 
 
-def test_alert_events_fire_once_and_carry_no_collection_data(db, owner, sent, coin, clock):
+def test_alert_events_fire_once_and_carry_no_collection_data(db, owner, sent, clock):
+    from app.models import Item
+
+    db.add(Item(type="coin", country="Wurttemberg", denomination="2 Mark", quantity=1))
+    db.commit()
     accounts.sign_in(db, "owner", PASSWORD, BROWSER)
     accounts.sign_in(db, "owner", PASSWORD, with_device(owner))  # known: no alert
     accounts.create_token(db, owner.user, "ci", "read", 1, Actor.system())
@@ -729,9 +733,8 @@ def test_alert_events_fire_once_and_carry_no_collection_data(db, owner, sent, co
         "password_changed",
         "password_reset",
     ]
-    item = coin
     for _, message in sent:
-        assert item["country"] not in message and item["denomination"] not in message
+        assert "Wurttemberg" not in message and "2 Mark" not in message
 
 
 def test_repeated_failures_alert_at_most_once_an_hour(db, owner, sent, clock):

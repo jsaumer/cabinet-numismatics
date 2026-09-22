@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import Item
 from app.schemas import ItemIds, TrashEntry, TrashList, TrashResult
@@ -27,6 +28,7 @@ def _items(db: Session, ids, *, trashed: bool | None) -> list[Item]:
 
 
 @router.get("", response_model=TrashList)
+@permission("read")
 def list_trash(db: Session = Depends(get_db)):
     """Items in the trash, most recently deleted first, with when each will be
     deleted for good (none when automatic emptying is off)."""
@@ -50,17 +52,20 @@ def list_trash(db: Session = Depends(get_db)):
 
 
 @router.post("/items", response_model=TrashResult)
+@permission("write")
 def move_to_trash(payload: ItemIds, db: Session = Depends(get_db)):
     """Move several items to the trash (ones already there are left as they are)."""
     return TrashResult(count=trash.move_to_trash(db, _items(db, payload.ids, trashed=False)))
 
 
 @router.post("/restore", response_model=TrashResult)
+@permission("write")
 def restore(payload: ItemIds, db: Session = Depends(get_db)):
     return TrashResult(count=trash.restore(db, _items(db, payload.ids, trashed=True)))
 
 
 @router.post("/purge", response_model=TrashResult)
+@permission("admin", fresh=True)
 def purge(payload: ItemIds, db: Session = Depends(get_db)):
     """Delete these items from the trash for good."""
     items = _items(db, payload.ids, trashed=True)
@@ -70,6 +75,7 @@ def purge(payload: ItemIds, db: Session = Depends(get_db)):
 
 
 @router.delete("", response_model=TrashResult)
+@permission("admin", fresh=True)
 def empty(db: Session = Depends(get_db)):
     """Delete everything in the trash for good."""
     items = trash.trashed(db)

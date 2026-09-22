@@ -1011,13 +1011,119 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   key under `C:/data/state` on the dev machine and failed on CI, where
   `/data` isn't writable). Tests that hash use a cheap `PasswordHasher`;
   `test_hashing_parameters_are_pinned` checks the real one.
-- Still to come in later stages, and not in this code yet: the setup code,
-  the claimed marker, and the routes (stage 7), the restore grant, the
-  recent-password check on inspect, run, downloads, and deleting
-  unencrypted archives, the audit rows and alerts for downloads, exports,
-  restores, and deleting unencrypted archives (they need the principal),
-  and the Settings UI for the key (fingerprint, the saved tick, the location
-  message) and for deleting unencrypted archives (stage 9).
+- **The gate is two layers** (stage 7). Layer 1, `app/auth/gate.py`, is
+  plain ASGI after the maintenance middleware (Starlette runs the
+  last-added first, and `test_middleware_order` pins it): any `%` in the raw
+  path is 400; during maintenance only health (no lookup) and the restore
+  status for the grant holder pass; a Cabinet Bearer token is looked up
+  (invalid is 401, never a fall back to the cookie), any other
+  `Authorization` is ignored, otherwise the session cookie; anonymous
+  callers reach only `gate.ANONYMOUS`, and the two anonymous posts also
+  refuse `Sec-Fetch-Site: cross-site`/`same-site`; `/api/openapi.json` is
+  session only; CSRF for session requests is decided before the lookup
+  touches `last_seen_at`, so a refused request never keeps a session alive.
+  Every comparison uses `scope["raw_path"]` bytes. Layer 2,
+  `app/auth/permissions.py`, is the app-level dependency reading
+  `@permission` from the matched endpoint. It runs before body validation
+  but after FastAPI has read a multipart body, so a `read` token can make
+  `/api/imports` read an upload (nginx caps it at 1 GB) before its 403: only
+  a valid credential can, and a restore upload is streamed after the check.
+- **Declaring a route**: `@permission(cls, metrics_ok=, fresh=)` directly
+  above `def`. `test_every_operation_declares_what_the_spec_says` parses
+  the appendix of SPEC_0300 and compares every OpenAPI operation with it, so
+  a new route, or a changed class, needs the spec table changed in the same
+  commit. The one deliberate difference: `POST /api/auth/password` and
+  `/username` aren't `fresh`, because the current password in the body is
+  the confirmation (the spec lists them as fresh). A handler whose
+  permission depends on its arguments calls `permissions.require` (deleting
+  an item for good). `ReauthRequired` is rendered with `reauth_required` at
+  the top level by a handler in `main.py`; a validation error under
+  `/api/auth/` lists the bad fields without echoing their values.
+- **nginx forwards the raw request URI** (`proxy_pass http://backend:8000;`,
+  no path), so the gate sees what the client sent. A `proxy_pass` with a
+  path forwards nginx's decoded, normalised URI instead, and `/api/%68ealth`
+  arrived as `/api/health` (found through real nginx in stage 7). A new
+  location must keep `proxy_pass` without a path.
+- **Setup** (`app/auth/setup.py`): `prepare` runs at startup after
+  migrations (lazily from the first `/api/auth/state` or setup when
+  migrations are off, re-checked inside its lock so two first requests log
+  one code). A generated code is logged once, a supplied one never. The
+  route compares the code first, so a right code is never throttled; a wrong
+  one counts against `setup:<address>`. The claimed marker `auth_claimed`
+  (beside `SECRET_KEY_FILE`) makes `SETUP_CODE` inert, and
+  `config.check_startup` skips the setup-code check once it exists; a marker
+  that can't be written is logged, not a failed setup, and the next start
+  writes it for a claimed database. Setting `SETUP_CODE` in the shell needs
+  `docker compose up` (a `restart` keeps the old environment), and a stack
+  reset to unclaimed also needs the marker removed.
+- **The restore grant** (`restore.issue_grant`/`granted`) is issued inside
+  `restore.start` once the run holds the restore lock, so a refused second
+  run can't replace or drop it, and the gate consults it only during
+  maintenance, without the database. The start and end of a restore are
+  audited under the caller's name and alerted; the alert of a failed one
+  never carries the error (pg_restore's output can quote rows), only where
+  to read it.
+- **What routes record** goes through `app/auth/events.record` (audit row
+  under the caller, commit, optional alert): both downloads, both exports
+  (recorded before streaming, since the commit would expire the rows), the
+  saved-key tick, and deleting unencrypted archives. Exports, documents, and
+  thumbnails are `private, no-store`; the gate gives every other API answer
+  without its own `Cache-Control` `private, no-store`.
+- **Health** is public: the full body for any principal, `{"status": ...}`
+  otherwise, and during a restore for everyone (the gate does no lookup
+  then).
+- **Tests**: conftest's `client` is the admin signed in over
+  `https://testserver` with `Sec-Fetch-Site: same-origin`, inside the
+  recent-password window (`client.admin` is the `Started` sign-in);
+  `unclaimed_client` is the bare app, and `anon_client`, `stale_client`, and
+  `token_client(scope)` sit beside `client`. Cookies set by hand use the
+  jar's own domain for a dotless host (`testserver.local`) so a Set-Cookie
+  replaces them. `test_gate.py`'s `dry_run` swaps layer 2's check for one
+  answering 418 wherever the real one would allow the call, so the matrices
+  call every operation without running a handler. The HTTP client
+  normalises `.` and `..` segments before sending, so those cases belong to
+  the real-nginx checks.
+- Still to come in later stages, and not in this code yet: photos through
+  `auth_request` (stage 8; `/photos/` is served unchecked until then), and
+  the pages: setup, sign-in, the password dialog, the Account section, and
+  the Settings UI for the key and for deleting unencrypted archives
+  (stage 9). Until then the app in a browser answers 401 everywhere.
+- **The CI stack job, the seed script, and Playwright's global setup move
+  onto tokens and sign-in in stage 7** (spec section 9), alongside the gate
+  and the auth routes. `scripts/ci/stack-smoke.sh` replaces the stack job's
+  inline curl: it waits for health, claims with `SETUP_CODE` if the stack is
+  unclaimed (else signs in), mints write, read, and metrics tokens, and
+  wraps every write and read call in `api()` (Bearer, write-scoped) and
+  every admin call in `admin()` (the cookie jar plus an `Origin` header,
+  since curl sends no `Sec-Fetch-Site` for the CSRF check to pass on). A
+  `fresh()` helper calls `POST /api/auth/confirm` first for the routes that
+  need a recent password (permanent delete, settings, backup download,
+  restore inspect and run); confirming again is cheap, so it just always
+  does. It runs as one call (`bash scripts/ci/stack-smoke.sh`, or `all`) or
+  as separate phases (`bootstrap`, `smoke`, `backup-restore`,
+  `restore-drill`) sharing a cookie jar and minted tokens through a fixed
+  state folder (`STACK_SMOKE_STATE`, a temp directory by default), which is
+  how the CI job keeps its four named steps readable while still sharing one
+  session. Token names carry a timestamp and PID so a second run against an
+  already-claimed stack doesn't collide, and the metrics check turns
+  `metrics_enabled` off before proving it is 404, since a previous run may
+  have left it on. One behaviour worth knowing: an anonymous request to a
+  path that doesn't exist at all (like the removed `/api/docs`) now gets 401
+  from the gate, which refuses an unlisted path before FastAPI's own routing
+  ever runs; a session or token gets past the gate and sees the real 404. The
+  smoke phase checks both.
+  `scripts/seed_demo.py` takes `--token`, or reads `CABINET_TOKEN` (a write
+  token), sent as `Authorization: Bearer`, and fails with a clear message on
+  401. `frontend/e2e/global-setup.ts` claims (with `SETUP_CODE`) or signs in
+  (with `CABINET_USER`/`CABINET_PASSWORD`) once before the suite through
+  Playwright's request API, and saves `storageState`
+  (`playwright.config.ts`'s `use.storageState`), so every spec starts signed
+  in. There is no sign-in page yet (stage 9) for a spec to drive, so
+  `smoke.spec.ts`'s `confirmPassword` helper opens the recent-password
+  window itself, through `page.request` (it shares cookies with the page)
+  with an explicit `Origin` header, right before an action that reaches a
+  fresh route: deleting an item for good, and the in-app restore's inspect
+  and run.
 
 ## Releases
 

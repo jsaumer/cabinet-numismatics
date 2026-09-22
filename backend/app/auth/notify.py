@@ -22,6 +22,7 @@ TITLES = {
     "restore_started": "Cabinet restore started",
     "restore_finished": "Cabinet restore finished",
     "secrets_cleared": "Cabinet cleared stored secrets",
+    "unencrypted_deleted": "Cabinet deleted unencrypted archives",
 }
 FAILURE_BURST = 20
 FAILURE_WINDOW = 15 * 60

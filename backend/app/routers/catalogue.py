@@ -6,6 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.schemas import NumistaSearch, NumistaType, PcgsCert
 from app.services import checklists, numista, pcgs
@@ -21,6 +22,7 @@ CERT_PATTERN = r"^[0-9A-Za-z-]{1,20}$"
 
 
 @pcgs_router.get("/cert/{cert}", response_model=PcgsCert)
+@permission("write")
 def get_cert(cert: str = Path(pattern=CERT_PATTERN), db: Session = Depends(get_db)):
     """A PCGS-graded coin as item fields ready to fill in, from its cert
     number. Needs a PCGS API token; the response is cached, so pricing the
@@ -34,6 +36,7 @@ def get_cert(cert: str = Path(pattern=CERT_PATTERN), db: Session = Depends(get_d
 
 
 @router.get("/search", response_model=NumistaSearch)
+@permission("write")
 def search(
     q: str = Query(min_length=2, max_length=100),
     category: Literal["coin", "banknote"] | None = None,
@@ -49,6 +52,7 @@ def search(
 
 
 @router.get("/types/{type_id}", response_model=NumistaType)
+@permission("write")
 def get_type(type_id: int = Path(ge=1), db: Session = Depends(get_db)):
     """A Numista type as item fields ready to fill in, its catalogue
     references, and its issues."""

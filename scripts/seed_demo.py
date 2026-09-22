@@ -11,10 +11,15 @@ and talks to the public API, so it needs no install:
 Photos are not seeded (upload a couple by hand to see them). Delete the demo
 items from the list view when you're done, or start clean by recreating the
 stack with `docker compose down -v`.
+
+Cabinet needs a sign-in (v0.30.0): pass a write-scoped API token with
+--token, or set CABINET_TOKEN. Create one in Settings -> Account, or with
+the write token minted by scripts/ci/stack-smoke.sh.
 """
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -184,20 +189,23 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
 ]
 
 
-def request(base: str, method: str, path: str, payload: dict | None = None):
+def request(base: str, method: str, path: str, payload: dict | None = None, token: str | None = None):
     data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(
-        f"{base}{path}",
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"} if data else {},
-    )
+    headers = {"Content-Type": "application/json"} if data else {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(f"{base}{path}", data=data, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read()
             return json.loads(body) if body else None
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
+        if exc.code == 401:
+            raise SystemExit(
+                "Cabinet needs a sign-in now (v0.30.0). Pass a write-scoped API token with "
+                "--token or CABINET_TOKEN (Settings -> Account -> API tokens)."
+            ) from None
         raise SystemExit(f"{method} {path} failed: HTTP {exc.code} {detail}") from None
     except urllib.error.URLError as exc:
         raise SystemExit(
@@ -211,10 +219,19 @@ def main() -> int:
     parser.add_argument(
         "--force", action="store_true", help="seed even if the collection already has items"
     )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("CABINET_TOKEN"),
+        help="a write-scoped API token, sent as Bearer (default: the CABINET_TOKEN env var)",
+    )
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
+    token = args.token
 
-    existing = request(base, "GET", "/api/items?limit=1")
+    def call(method: str, path: str, payload: dict | None = None):
+        return request(base, method, path, payload, token=token)
+
+    existing = call("GET", "/api/items?limit=1")
     if existing["total"] and not args.force:
         print(
             f"Collection already has {existing['total']} item(s); refusing to add demo data.\n"
@@ -225,7 +242,7 @@ def main() -> int:
 
     grades: dict[tuple[str, str], int] = {}
     for scale in ("sheldon", "pmg"):
-        for grade in request(base, "GET", f"/api/grades?scale={scale}"):
+        for grade in call("GET", f"/api/grades?scale={scale}"):
             grades[(scale, grade["code"])] = grade["id"]
 
     created = estimates = 0
@@ -236,11 +253,10 @@ def main() -> int:
         if code:
             payload["grade_id"] = grades[(scale, code)]
 
-        item = request(base, "POST", "/api/items", payload)
+        item = call("POST", "/api/items", payload)
         created += 1
         for value, source in values:
-            request(
-                base,
+            call(
                 "POST",
                 f"/api/items/{item['id']}/estimates",
                 {"estimated_value": value, "currency": payload.get("currency", "USD"),

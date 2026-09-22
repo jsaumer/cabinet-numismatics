@@ -14,13 +14,31 @@ Work towards 0.30.0 (roadmap Phase 7, P8 A1: sign-in and encrypted
 backups). The upgrade notes will lead this entry when it is released.
 
 ### Added
+- **Sign-in, always on, and every endpoint denied by default.** One admin,
+  created on the first visit with a one-time setup code (`SETUP_CODE` or
+  `SETUP_CODE_FILE`, or one printed in the backend's log); until then only
+  the setup is served. Browsers sign in with a session cookie; scripts use
+  API tokens (`Authorization: Bearer cabinet_...`) with a scope: `read`,
+  `write` (both 1 or 7 days), or `metrics` (totals only, may never expire).
+  Only health (just `{"status":"ok"}` without a credential), the setup
+  state, setup, and sign-in answer anonymously; every other route declares
+  who may call it, and a route that declares nothing is refused. Downloads,
+  exports, restores, settings changes, deleting for good, and managing
+  tokens and sessions ask for the password again (5 minutes, per session).
+  Cookie requests from another site are refused whatever their method.
+  New routes under `/api/auth` (setup, sign-in and out, the account, its
+  sessions and tokens, the audit log); see `docs/api.md`. Sign-in delays
+  grow per username and per address and never lock the account; a browser
+  that signed in before gets past them and keeps a password check reserved
+  for it during a flood. New-device sign-ins, repeated failures, new tokens,
+  password changes, downloads, exports, and restores reach the alert
+  webhook.
 - **Commands in the container for the account**, for when the app can't be
   reached (`docker compose exec backend python -m app.cli ...`): `status`,
   `reset-password` (asked twice, never an argument; ends every session and
   known device and revokes every API token), `sign-out-everywhere`, and
   `revoke-tokens [--name NAME]`. They, and `backup-key`, refuse until Cabinet
-  is set up, and each change is audited. The sign-in routes that use the
-  same account services arrive later in this release.
+  is set up, and each change is audited.
 - **`PUBLIC_ORIGINS` is required**: the exact address browsers use for
   Cabinet (`https://cabinet.example.com`). The backend and the proxy both
   refuse to start without it, naming the variable. `.env.example` has values
