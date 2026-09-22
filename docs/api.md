@@ -6,8 +6,11 @@ The backend exposes a REST API under `/api/`. This document is a
 human-readable summary; the authoritative, always-current spec is the
 auto-generated OpenAPI documentation served at:
 
-- Swagger UI: `http://localhost/api/docs`
 - OpenAPI JSON: `http://localhost/api/openapi.json`
+
+There is no interactive docs page (`/api/docs` is gone since v0.30.0): it
+would run a third-party script in the signed-in page. Load the schema into a
+viewer of your own instead.
 
 All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
@@ -638,8 +641,9 @@ longest Numista's API licence allows), issues shared with Numista pricing.
 
 Needs a PCGS API token, whether or not the PCGS price source is on (`422`
 without one, or when PCGS has no such cert; `502` when PCGS can't be
-reached). `cert` is up to 20 characters, and anything but its digits is
-dropped. Answers `cert`, `pcgs_number`, `name`,
+reached). `cert` is 1 to 20 letters, digits, and dashes (anything else is
+`422`, so no cert ever needs encoding in the path), and anything but its
+digits is dropped. Answers `cert`, `pcgs_number`, `name`,
 `fields` (keyed like the item payload: `type`, `country`, `denomination`,
 `year`, `mint_mark`, `series`, `variety`, `composition`, `weight_g`,
 `diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number`,
@@ -883,8 +887,11 @@ the API keys (`""` clears; reads return only `alert_webhook_hint` /
 serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed:
 `key`, `label`, `failing`, `since`, `message`), `alert_delivery` and
 `heartbeat` (the last attempt since the backend started: `at`, `ok`,
-`detail`), and `refresh_last_run` (per source: `at`, `updated`, `skipped`,
-`failed`, and `error` or `stopped` when set).
+`detail`), `refresh_last_run` (per source: `at`, `updated`, `skipped`,
+`failed`, and `error` or `stopped` when set), and `secrets_cleared` (v0.30.0:
+the names, such as `"alert webhook"`, of stored secrets Cabinet cleared
+because they weren't encrypted with this deployment's key; each leaves the
+list when it is saved again).
 
 `spot_alerts` (v0.28.0): a list of at most 12 spot-price thresholds,
 `{"metal": "gold"|"silver"|"platinum"|"palladium", "direction":

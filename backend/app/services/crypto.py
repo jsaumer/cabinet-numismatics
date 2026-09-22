@@ -91,7 +91,9 @@ def decrypt(stored: str) -> str:
     if not stored:
         return ""
     if not is_encrypted(stored):
-        return stored  # legacy plaintext; callers re-encrypt on read
+        # Plain text was never written by this deployment: an archive or a
+        # hand edit could plant it, so it is never used (v0.30.0).
+        return ""
     try:
         return get_cipher().decrypt(stored[len(PREFIX) :].encode()).decode()
     except (InvalidToken, ValueError):

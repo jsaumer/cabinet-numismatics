@@ -25,7 +25,9 @@ backend/
 ## Commands (run in `backend/`)
 
 - Install for dev: `pip install -e .[dev]`
-- Run: `uvicorn app.main:app --reload` (needs `DATABASE_URL`, `PHOTO_DIR`)
+- Run: `uvicorn app.main:app --reload` (needs `DATABASE_URL`, `PHOTO_DIR`,
+  and `PUBLIC_ORIGINS`, e.g. `http://localhost:5173` with
+  `AUTH_INSECURE_HTTP=true` for the Vite dev server)
 - Test: `pytest` (no database required)
 - Lint/format: `ruff check .` / `ruff format .`
 - Migrate: `alembic upgrade head` (needs `DATABASE_URL`)

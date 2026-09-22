@@ -156,7 +156,9 @@ Homepage fetches from its own server, not your browser. If Cabinet sits
 behind forward-auth, point `url`, `siteMonitor`, and `icon` at the proxy
 service over a Docker network both share (`http://cabinet_proxy/...` on a
 Swarm, `http://proxy/...` in one compose project) so the requests skip the
-login; keep `href` as the public address. The logo is served at
+login; keep `href` as the public address. From v0.30.0, nginx answers only
+the Host names it is told, so add that internal name to `ALLOWED_HOSTS`
+(`ALLOWED_HOSTS=cabinet_proxy`), or the request gets no response. The logo is served at
 `/logo.svg`, `/logo-512.png`, and `/favicon.ico`.
 
 ## Metrics (Prometheus)
@@ -212,7 +214,8 @@ scrape_configs:
       - targets: ["cabinet_proxy:80"]
 ```
 
-Scraping through the public hostname works too, but an authenticating proxy
+List `cabinet_proxy` in `ALLOWED_HOSTS` (v0.30.0) so nginx answers that
+name. Scraping through the public hostname works too, but an authenticating proxy
 (Traefik + Authentik forward-auth) in front will turn Prometheus away unless
 `/api/metrics` is exempted. Scraping over the internal network avoids that.
 

@@ -84,6 +84,9 @@ class SettingsOut(BaseModel):
     alert_webhook_format: AlertFormat
     heartbeat_hint: str | None
     metrics_enabled: bool
+    # Secrets cleared because they weren't encrypted with this deployment's
+    # key, by name, until each is entered again ("Re-enter: alert webhook").
+    secrets_cleared: list[str]
     spot_alerts: list[SpotAlertOut]
     alerts: list[AlertStatus]
     alert_delivery: Outcome | None  # last webhook delivery (since the backend started)
@@ -238,6 +241,11 @@ def _build(db: Session) -> SettingsOut:
         alert_webhook_format=str(store.get_setting(db, "alert_webhook_format")),
         heartbeat_hint=alerts.url_hint(str(store.get_setting(db, "heartbeat_url"))),
         metrics_enabled=bool(store.get_setting(db, "metrics_enabled")),
+        secrets_cleared=[
+            store.SECRET_LABELS[key]
+            for key in store.get_setting(db, "secrets_cleared") or []
+            if key in store.SECRET_LABELS
+        ],
         spot_alerts=spot_alerts,
         alerts=alert_statuses(db),
         alert_delivery=alerts.last_delivery(),

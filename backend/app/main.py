@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from app import __version__
-from app.config import get_settings
+from app.config import ConfigError, check_startup, get_settings
 from app.db import engine
 from app.routers import (
     backup,
@@ -90,6 +90,15 @@ async def _hourly_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = get_settings()
+    # Deployment settings first: a missing or wrong one stops startup here,
+    # with a message naming the variable, before anything is served.
+    try:
+        warnings = check_startup(config)
+    except ConfigError as exc:
+        logger.critical("Cabinet cannot start: %s", exc)
+        raise
+    for warning in warnings:
+        logger.warning(warning)
     Path(config.photo_dir).mkdir(parents=True, exist_ok=True)
     # A restore the last process didn't finish: roll its file swap forward,
     # or clear what it had unpacked.
@@ -98,6 +107,10 @@ async def lifespan(app: FastAPI):
         # Before serving anything: new code must not run against an old schema.
         # A failure raises here and stops startup rather than limping along.
         await asyncio.to_thread(schema.upgrade_to_head, engine)
+        # A secret stored as plain text is never used; clear and name it now
+        # rather than at the first hourly tick. Tests (AUTO_MIGRATE=false)
+        # have no database here; the hourly tick covers that setting too.
+        await asyncio.to_thread(_in_session, scheduled.clear_secrets)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]
@@ -110,9 +123,12 @@ app = FastAPI(
     title="Cabinet API",
     version=__version__,
     lifespan=lifespan,
-    docs_url="/api/docs",
-    openapi_url="/api/openapi.json",
+    # No interactive docs page: it would run a third-party script in the
+    # signed-in origin. The schema stays at /api/openapi.json.
+    docs_url=None,
     redoc_url=None,
+    swagger_ui_oauth2_redirect_url=None,
+    openapi_url="/api/openapi.json",
 )
 
 # While a restore runs, everything but health and the restore status is 503.

@@ -13,7 +13,40 @@ applies them itself on startup; for earlier releases, run
 Work towards 0.30.0 (roadmap Phase 7, P8 A1: sign-in and encrypted
 backups). The upgrade notes will lead this entry when it is released.
 
+### Added
+- **`PUBLIC_ORIGINS` is required**: the exact address browsers use for
+  Cabinet (`https://cabinet.example.com`). The backend and the proxy both
+  refuse to start without it, naming the variable. `.env.example` has values
+  for the local stack. Also new: `ALLOWED_HOSTS` (extra Host names nginx
+  answers, such as `cabinet_proxy` for Homepage or Prometheus),
+  `AUTH_INSECURE_HTTP` (plain-http cookies, local stack only, refused beside
+  https), `SETUP_CODE` / `SETUP_CODE_FILE` (checked at start: at least 32
+  characters), and `CABINET_PORT` (the published port).
+- **nginx answers only Cabinet's own Host names**; any other Host, a bare IP
+  address, or no Host gets no response at all (444). Add internal names to
+  `ALLOWED_HOSTS`.
+- Sign-in and setup bodies are capped at 8 KiB by nginx.
+- Every service in `docker-compose.yaml` and the Swarm stack file keeps its
+  log to three 10 MB files; the compose backend has the stack file's 1 GB
+  memory limit.
+
 ### Changed
+- **nginx believes no forwarded header.** `X-Forwarded-For`, `X-Real-IP`,
+  and `X-Forwarded-Proto` are overwritten with what nginx itself saw, and the
+  identity headers forward-auth gateways add (`Remote-User`,
+  `X-authentik-*`, `X-Auth-Request-*`, and others) are dropped before the
+  backend; uvicorn runs with `--no-proxy-headers`.
+- **A secret stored as plain text is never used.** It reads as unset and is
+  cleared (never encrypted in place) at startup and hourly, named in the log,
+  through the alert webhook, and in a Settings banner until entered again.
+  Every secret saved since v0.10 is already encrypted.
+- **The Swarm stack file:** the backend alone is on `cabinet-egress`, the
+  proxy leaves it (it needs no way out), `PUBLIC_ORIGINS` and `CABINET_PORT`
+  are required, and commented Docker secrets show the setup code and backup
+  key.
+- `GET /api/pcgs/cert/{cert}` takes only letters, digits, and dashes (1 to
+  20); anything else is 422.
+
 - **Three API endpoints renamed, before 1.0 makes paths stable** (breaking,
   for scripts that call them):
   - `POST /api/items/{id}/estimate?source=` is now
@@ -32,6 +65,10 @@ backups). The upgrade notes will lead this entry when it is released.
 - `docs/api.md` gains a stability policy: breaking changes are allowed and
   announced here until 1.0; from 1.0, `/api/` paths and response fields are
   stable within a major version, and additions are never breaking.
+
+### Removed
+- **The interactive API docs page, `/api/docs`**, so no third-party script
+  runs in the app's origin. The schema is still at `/api/openapi.json`.
 
 ## [0.29.1] - 2026-09-20
 

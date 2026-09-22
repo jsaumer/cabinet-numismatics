@@ -311,6 +311,12 @@ export default function Settings() {
       </div>
       {error && <p className="error">{error}</p>}
       {note && <p className="muted">{note}</p>}
+      {settings.secrets_cleared.length > 0 && (
+        <p className="error">
+          Re-enter: {settings.secrets_cleared.join(", ")}. Each was stored without this
+          deployment's encryption, so Cabinet cleared it rather than use it.
+        </p>
+      )}
 
       <div className="card">
         <h2>General</h2>

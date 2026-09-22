@@ -30,8 +30,9 @@ docker compose up --build
 
 The backend applies database migrations itself on startup.
 
-The app is at http://localhost/ and the API docs at
-http://localhost/api/docs. To load sample data for a populated dashboard:
+The app is at http://localhost/, and the OpenAPI schema at
+http://localhost/api/openapi.json (there is no interactive docs page). The
+sample `.env` sets `PUBLIC_ORIGINS`, which the stack needs. To load sample data for a populated dashboard:
 
 ```bash
 python scripts/seed_demo.py
@@ -53,8 +54,9 @@ autouse fixture fails any unmocked exchange-rate fetch. SQLite timestamps
 have one-second resolution, so backdate rows when a test depends on order.
 
 To run the API outside a container: `uvicorn app.main:app --reload` with
-`DATABASE_URL`, `PHOTO_DIR`, and `DOCUMENT_DIR` set, and
-`REQUIRE_DOCUMENT_MOUNT=false`.
+`DATABASE_URL`, `PHOTO_DIR`, and `DOCUMENT_DIR` set,
+`REQUIRE_DOCUMENT_MOUNT=false`, and, for the Vite dev server,
+`PUBLIC_ORIGINS=http://localhost:5173` with `AUTH_INSECURE_HTTP=true`.
 
 If you change the dependencies in `pyproject.toml`, regenerate the
 hash-pinned `backend/requirements.txt` (the image installs exactly that

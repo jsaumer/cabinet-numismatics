@@ -247,8 +247,10 @@ docker compose up --build
 ```
 
 No host Node or Python install is needed: the frontend is built inside the
-proxy image. Once running: the app is at http://localhost/, API docs at
-http://localhost/api/docs. The backend creates and updates the database schema
+proxy image. Once running: the app is at http://localhost/, the OpenAPI
+schema at http://localhost/api/openapi.json. `PUBLIC_ORIGINS` in `.env` is
+required (the sample suits the local stack; see
+[deployment.md](docs/deployment.md)). The backend creates and updates the database schema
 itself on startup. After pulling a new version, run `docker compose up --build`
 again; Settings → About shows the version and whether the schema is current.
 To run the published images instead of building, see

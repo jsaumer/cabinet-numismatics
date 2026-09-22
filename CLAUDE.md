@@ -73,13 +73,16 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 ## Build & run
 
 - Full stack: `docker compose up --build`, then nginx serves at
-  http://localhost/, API docs at http://localhost/api/docs. The frontend is
+  http://localhost/ (no API docs page; the schema is `/api/openapi.json`).
+  `PUBLIC_ORIGINS` is required (backend and proxy stop without it); nginx
+  answers only its Host names and 444s the rest. The frontend is
   built inside the proxy image (multi-stage `frontend/Dockerfile`), so no host
   Node install is needed.
 - Frontend dev: `npm run dev` in `frontend/` (the Vite dev server proxies
   `/api` to localhost:8000). Production build output is `frontend/dist`.
 - Backend dev: `uvicorn app.main:app --reload` with `DATABASE_URL`,
-  `PHOTO_DIR`, and `DOCUMENT_DIR` set, and `REQUIRE_DOCUMENT_MOUNT=false`.
+  `PHOTO_DIR`, and `DOCUMENT_DIR` set, `REQUIRE_DOCUMENT_MOUNT=false`, and
+  `PUBLIC_ORIGINS=http://localhost:5173` with `AUTH_INSECURE_HTTP=true`.
 - Tests: in `backend/`, `pip install -e .[dev]` once, then `pytest`. Tests do
   not require a running database (in-memory SQLite, every outbound call
   mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.14, a
