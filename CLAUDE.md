@@ -126,8 +126,14 @@ rules that bite most often:
 
 - Sign-in data lives in the `cabinet_auth` schema (v0.30.0, `AuthBase`, its
   own chain in `alembic_auth/`): never dumped, never restored, no foreign
-  key to or from `public`. An archive's dump is unpacked only in the private
-  staging folder (`/data/staging`), never in `BACKUP_DIR`.
+  key to or from `public`. Every archive is age-encrypted with the backup
+  key (`services/archive_keys.py`) and MAC-signed; nothing unencrypted is
+  ever written to `BACKUP_DIR` (write through `backup.encrypt_stream`, decrypt
+  only via `backup.decrypt_to_staging` into `/data/staging`), plain `.zip`
+  archives are never restored, the MAC is checked before anything in an
+  archive is read, and an archive older than the newest in
+  `cabinet_auth.backup_ledger` needs `RESTORE OLDER`. The key never crosses
+  the API. Tests use conftest's `fake_age`.
 - Every ORM select hides trashed items (`models.item._hide_trashed`) unless
   `.execution_options(include_deleted=True)`; anything counting through a
   link table, or deciding a document's last holder, handles the trash itself.

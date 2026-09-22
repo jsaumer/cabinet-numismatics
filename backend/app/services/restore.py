@@ -13,6 +13,14 @@ One restore at a time, on a background thread, with its state in memory: the
 backend is a single process. The outcome goes to a JSON file beside the key
 file, not the database, because the database is what was just replaced.
 
+Only encrypted archives made with this deployment's backup key are restored
+(v0.30.0): an archive is decrypted into the private staging folder
+(`backup.staging_dir`), its MAC checked before anything in it is read, and
+every later step reads that decrypted copy. A plain `.zip` from an earlier
+release is refused by every path. An archive older than the newest one this
+Cabinet recorded (`cabinet_auth.backup_ledger`, matched by its verified MAC)
+needs the typed confirmation `RESTORE OLDER`.
+
 Sign-in data is never part of it (v0.30.0): dumps leave out `cabinet_auth`,
 pg_restore takes `public` only, and an archive whose dump holds anything in
 `cabinet_auth` is refused. The dump is unpacked only in the private staging
@@ -37,18 +45,38 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 
 from sqlalchemy import inspect as inspect_db
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 from app.models import AppSetting
-from app.services import alerts, backup, crypto, maintenance, metrics, scheduled, schema
+from app.models.auth import BackupRecord
+from app.services import (
+    alerts,
+    archive_keys,
+    backup,
+    crypto,
+    maintenance,
+    metrics,
+    scheduled,
+    schema,
+)
 from app.services import app_settings as store
 
 logger = logging.getLogger(__name__)
 
 CONFIRM_PHRASE = "RESTORE"
+OLDER_PHRASE = "RESTORE OLDER"
+LEGACY_REFUSED = (
+    "This is an unencrypted archive from before v0.30.0. Cabinet only restores "
+    "encrypted archives made with its backup key; take a new backup instead."
+)
+NOT_AN_ARCHIVE = "Not a Cabinet backup archive."
+UNOPENABLE = (
+    "This archive can't be opened with your backup key: it was made with another "
+    "key, or it has been altered."
+)
 STEPS = ("safety_backup", "database", "migrations", "photos", "documents", "finishing")
 STAGING_DIR = backup.RESTORE_PREFIX + "staging"
 NEW_DIR = backup.RESTORE_PREFIX + "new"
@@ -254,8 +282,32 @@ def _scan_tar(path: Path, member: str) -> None:
         raise RestoreError(f"{member} in the archive can't be read: {exc}") from exc
 
 
+def require_age_header(head: bytes) -> None:
+    """Refuse, from its first bytes, anything that isn't an age file."""
+    if not head.startswith(backup.AGE_MAGIC):
+        raise RestoreError(LEGACY_REFUSED if head.startswith(b"PK") else NOT_AN_ARCHIVE)
+
+
+def open_archive(archive: Path, stem: str) -> Path:
+    """Decrypt an archive into the private staging folder and return the
+    decrypted zip. Refuses a plain (pre-v0.30.0) archive and anything that
+    isn't an age file, before decrypting anything."""
+    if not backup.looks_encrypted(archive):
+        if zipfile.is_zipfile(archive):
+            raise RestoreError(LEGACY_REFUSED)
+        raise RestoreError(NOT_AN_ARCHIVE)
+    try:
+        return backup.decrypt_to_staging(archive, stem)
+    except backup.BackupError as exc:
+        if str(exc).startswith("Not enough space"):
+            raise RestoreError(str(exc)) from None
+        logger.warning("Restore: %s", exc)
+        raise RestoreError(UNOPENABLE) from None
+
+
 def check_archive(path: Path) -> dict:
-    """Verify an archive end to end; return its manifest."""
+    """Verify a decrypted archive end to end, its MAC first; return its
+    manifest."""
     if not zipfile.is_zipfile(path):
         raise RestoreError("Not a Cabinet backup archive: the file is not a zip.")
     try:
@@ -323,6 +375,60 @@ def carried_secrets(settings: dict) -> tuple[list[str], list[str]]:
     return sets, cleared
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def provenance(db: Session, manifest: dict) -> dict:
+    """Whether this Cabinet made the (verified) archive, how many newer ones
+    it recorded, and the phrase a restore of it needs. The archive is matched
+    by its verified MAC, never its file name or time, and "older" compares its
+    verified `created_at` with the newest in the record, so a renamed or
+    re-dated old archive, or one whose own row was pruned, is still older."""
+    created = _aware(datetime.fromisoformat(manifest["created_at"]))
+    records = db.execute(select(BackupRecord)).scalars().all()
+    if not records:
+        return {
+            "made_here": False,
+            "made_at": None,
+            "newer": 0,
+            "older": False,
+            "record_empty": True,
+            "message": "Cabinet has no record of its own backups here, so it cannot tell "
+            "whether this is the newest.",
+            "confirm_phrase": CONFIRM_PHRASE,
+        }
+    digest = archive_keys.mac_digest(manifest)
+    mine = next(
+        (
+            r
+            for r in records
+            if r.mac_digest == digest and r.mac_recipient == manifest["mac_recipient"]
+        ),
+        None,
+    )
+    newest = max(_aware(r.created_at) for r in records)
+    newer = sum(1 for r in records if _aware(r.created_at) > created)
+    older = created < newest
+    if mine is not None:
+        message = f"Made by this Cabinet on {created.day} {created:%B %Y}."
+    else:
+        message = "Not made by this Cabinet."
+    if newer == 1:
+        message += " 1 newer backup exists."
+    elif newer:
+        message += f" {newer} newer backups exist."
+    return {
+        "made_here": mine is not None,
+        "made_at": created.isoformat() if mine is not None else None,
+        "newer": newer,
+        "older": older,
+        "record_empty": False,
+        "message": message,
+        "confirm_phrase": OLDER_PHRASE if older else CONFIRM_PHRASE,
+    }
+
+
 def _will_migrate(manifest: dict) -> bool:
     return manifest["schema_revision"] != schema.script_revisions()[0]
 
@@ -353,7 +459,7 @@ def new_staging_file() -> tuple[str, Path]:
     container's own temp folder is not."""
     clean_staging()
     restore_id = uuid.uuid4().hex
-    return restore_id, upload_dir() / f"{restore_id}.zip"
+    return restore_id, upload_dir() / f"{restore_id}.upload"
 
 
 def upload_limit() -> int:
@@ -394,11 +500,13 @@ def inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str | 
 def _inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str) -> dict:
     backup.empty_staging()
     try:
-        manifest = check_archive(path)
+        plain = open_archive(path, restore_id)
+        manifest = check_archive(plain)
         major = (db.connection().dialect.server_version_info or (0,))[0]
-        dump = extract_dump(path, restore_id)
+        dump = extract_dump(plain, restore_id)
         refuse_auth(dump, major)
         sets, cleared = carried_secrets(backup.dump_settings(dump, major))
+        origin = provenance(db, manifest)
     except BaseException:
         if staged:
             path.unlink(missing_ok=True)
@@ -406,7 +514,12 @@ def _inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str) 
     finally:
         backup.empty_staging()
     check_movable(manifest)  # say so now, not after the database has gone
-    _pending[restore_id] = {"path": path, "name": name, "staged": staged}
+    _pending[restore_id] = {
+        "path": path,
+        "name": name,
+        "staged": staged,
+        "phrase": origin["confirm_phrase"],
+    }
     counts = manifest.get("counts") or {}
     here = backup._counts(db)
     return {
@@ -438,6 +551,8 @@ def _inspect(db: Session, path: Path, name: str, staged: bool, restore_id: str) 
         # By name only: what the archive would set, and what would be cleared.
         "secrets": sets,
         "secrets_cleared": cleared,
+        "provenance": origin,
+        "confirm_phrase": origin["confirm_phrase"],
     }
 
 
@@ -449,7 +564,7 @@ def discard(restore_id: str) -> None:
         # Staged before a restart: the id is the file's name.
         if not ID_RE.match(restore_id):
             raise Unknown("No such restore")
-        path = upload_dir() / f"{restore_id}.zip"
+        path = upload_dir() / f"{restore_id}.upload"
         if not path.is_file():
             raise Unknown("No such restore")
         path.unlink(missing_ok=True)
@@ -739,11 +854,14 @@ def _spawn(fn) -> None:
     threading.Thread(target=fn, daemon=True, name="restore").start()
 
 
-def start(restore_id: str, engine: Engine) -> None:
-    """Begin a restore on a background thread, or raise Unknown / Busy."""
+def start(restore_id: str, engine: Engine, phrase: str | None = None) -> None:
+    """Begin a restore on a background thread, or raise Unknown / Busy.
+    `phrase` is what was typed; the run checks it against the archive's age
+    again, from the archive itself."""
     entry = _pending.get(restore_id)
     if entry is None or not entry["path"].is_file():
         raise Unknown("No such restore; inspect the archive again.")
+    entry = {**entry, "typed": phrase if phrase is not None else entry.get("phrase")}
     if not _lock.acquire(blocking=False):
         raise Busy("A restore is already running.")
     # Held to the end, so no backup starts while the restore runs.
@@ -763,6 +881,42 @@ def start(restore_id: str, engine: Engine) -> None:
         raise
 
 
+def _confirm_age(engine: Engine, manifest: dict, typed: str | None) -> None:
+    """Refuse plain RESTORE for an archive older than the newest recorded
+    one, whatever its name or file time; an older one is alerted."""
+    with Session(engine) as db:
+        origin = provenance(db, manifest)
+        if typed != origin["confirm_phrase"]:
+            raise RestoreError(
+                f"This archive is older than the newest backup this Cabinet made; type "
+                f"{OLDER_PHRASE} to restore it anyway."
+                if origin["older"]
+                else f"Type {CONFIRM_PHRASE} to confirm."
+            )
+        if origin["older"]:
+            alerts.event(
+                db,
+                "restore_older",
+                "Cabinet is restoring an older backup",
+                f"An archive from {manifest['created_at'][:10]} is being restored; "
+                f"{origin['newer']} newer backup(s) exist.",
+            )
+
+
+def _refresh_phrase(restore_id: str, engine: Engine, manifest: dict | None) -> None:
+    """After a failed run the archive stays pending for another try, but the
+    safety backup just written is now the newest archive, so a retry may need
+    RESTORE OLDER. Ask again rather than let the next run refuse halfway."""
+    entry = _pending.get(restore_id)
+    if entry is None or manifest is None:
+        return
+    try:
+        with Session(engine) as db:
+            entry["phrase"] = provenance(db, manifest)["confirm_phrase"]
+    except Exception:
+        logger.exception("Restore: could not recheck the archive's age")
+
+
 def _release() -> None:
     backup._run_lock.release()
     _lock.release()
@@ -774,7 +928,8 @@ def _sentence(exc: BaseException) -> str:
 
 
 def _run(restore_id: str, entry: dict, engine: Engine) -> None:
-    archive: Path = entry["path"]
+    stored: Path = entry["path"]  # the encrypted archive, never read directly
+    archive: Path | None = None  # its decrypted copy, in private staging
     outcome = {
         "at": _now(),
         "ok": False,
@@ -790,6 +945,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
     swaps: list[_Swap] = []
     dump: Path | None = None
     marker: str | None = None
+    manifest: dict | None = None
     database_restored = False
     try:
         maintenance.enter()
@@ -798,7 +954,10 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
         try:
             backup.empty_staging()
             _step("safety_backup")
-            manifest = check_archive(archive)  # again: time has passed since the summary
+            # Again, from the file itself: time has passed since the summary.
+            archive = open_archive(stored, restore_id)
+            manifest = check_archive(archive)
+            _confirm_age(engine, manifest, entry.get("typed"))
             check_movable(manifest)
             counts = manifest.get("counts") or {}
             outcome.update(
@@ -810,7 +969,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             _write_json(_journal_path(), {"phase": "preparing", **outcome})
             db = sessionmaker(bind=engine, autoflush=False)()
             try:
-                safety = backup.write_prerestore(db, _replaces_files(manifest), protect=archive)
+                safety = backup.write_prerestore(db, _replaces_files(manifest), protect=stored)
             except backup.BackupError as exc:
                 raise RestoreError(
                     f"The safety backup failed, so the restore didn't start: {exc}"
@@ -901,6 +1060,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             logger.error("Restore failed: %s", exc)
         tail = "" if isinstance(exc, RestoreError) or database_restored else f" {NOTHING_CHANGED}"
         outcome["error"] = _sentence(exc) + tail
+        _refresh_phrase(restore_id, engine, manifest)
     finally:
         _finish(restore_id, entry, engine, dump, outcome)
 
@@ -912,7 +1072,7 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         if dump is not None:
             dump.unlink(missing_ok=True)
         backup.empty_staging()
-        if outcome["ok"] and entry["staged"]:
+        if outcome["ok"] and entry["staged"]:  # the uploaded ciphertext
             entry["path"].unlink(missing_ok=True)
         if outcome["ok"] or not entry["path"].is_file():
             _pending.pop(restore_id, None)
@@ -953,8 +1113,10 @@ def recover(engine: Engine | None = None) -> None:
     swap is rolled forward, and startup migrates. If the database can't be
     reached, the journal is kept and the backend stays in maintenance until a
     restart can decide, rather than serve an old database with new files.
-    `swapping`: the swap is rolled forward (renames `_Swap.apply` can repeat)."""
-    backup.empty_staging()
+    `swapping`: the swap is rolled forward (renames `_Swap.apply` can repeat).
+    Staging is emptied entirely, and so are uploads a restart has orphaned."""
+    backup.empty_staging(everything=True)
+    _clear_uploads()
     journal = _read_json(_journal_path())
     if journal is None:
         _clear_legacy_dumps()
@@ -1019,6 +1181,17 @@ def recover(engine: Engine | None = None) -> None:
     _record(outcome)
     _journal_path().unlink(missing_ok=True)
     _clear_legacy_dumps()
+
+
+def _clear_uploads() -> None:
+    """At startup: a staged upload's restore id lived in memory, so none can
+    be run any more; don't leave them on the backup share."""
+    try:
+        folder = backup.backup_dir() / STAGING_DIR  # looked at, never created here
+        for leftover in folder.glob("*.upload"):
+            leftover.unlink(missing_ok=True)
+    except (backup.BackupError, OSError):
+        pass
 
 
 def _clear_legacy_dumps() -> None:

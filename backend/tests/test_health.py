@@ -39,6 +39,9 @@ def _start_with(monkeypatch, auto_migrate: str) -> list:
     monkeypatch.setattr(schema, "upgrade_to_head", lambda engine: calls.append("migrate"))
     # Stored secrets are checked right after migrating (no database here).
     monkeypatch.setattr(scheduled, "clear_secrets", lambda db: calls.append("secrets"))
+    import app.main as main
+
+    monkeypatch.setattr(main, "_check_key_against_record", lambda db: calls.append("key"))
     monkeypatch.setenv("AUTO_MIGRATE", auto_migrate)
     get_settings.cache_clear()
     try:
@@ -50,7 +53,7 @@ def _start_with(monkeypatch, auto_migrate: str) -> list:
 
 
 def test_startup_migrates_by_default(monkeypatch):
-    assert _start_with(monkeypatch, "true") == ["migrate", "secrets"]
+    assert _start_with(monkeypatch, "true") == ["migrate", "secrets", "key"]
 
 
 def test_startup_skips_migrations_when_disabled(monkeypatch):

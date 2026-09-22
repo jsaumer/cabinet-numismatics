@@ -17,7 +17,7 @@ import pytest
 
 from app.config import get_settings
 from app.services import backup, maintenance, restore, scheduled, schema
-from tests.conftest import COIN, image_bytes
+from tests.conftest import COIN, image_bytes, open_archive, seal
 from tests.test_backup import FAKE_DUMP, _session
 
 UTC = timezone.utc
@@ -115,9 +115,12 @@ def _run(client, restore_id: str, phrase: str = "RESTORE"):
     return client.post(f"/api/restore/{restore_id}/run", json={"confirm": phrase})
 
 
-def _rewrite(src: Path, dst: Path, manifest=None, replace=None, drop=()) -> Path:
-    """Copy an archive, editing its manifest or members on the way."""
-    with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w") as zout:
+def _rewrite(src: Path, dst: Path, manifest=None, replace=None, drop=(), sign=True) -> Path:
+    """Copy an archive, editing its manifest or members on the way, then
+    encrypt it again. Re-signed by default, so the checks after the MAC are
+    what's tested; `sign=False` keeps the old MAC, as a forger would have to."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(open_archive(src))) as zin, zipfile.ZipFile(buf, "w") as zout:
         for name in zin.namelist():
             if name in drop:
                 continue
@@ -129,6 +132,7 @@ def _rewrite(src: Path, dst: Path, manifest=None, replace=None, drop=()) -> Path
             if replace and name in replace:
                 data = replace[name]
             zout.writestr(name, data)
+    dst.write_bytes(seal(buf.getvalue(), sign=sign and "manifest.json" not in drop))
     return dst
 
 
@@ -160,11 +164,28 @@ def _archive_with(path: Path, files: dict[str, bytes]) -> Path:
             for name, data in members.items()
         },
     }
-    with zipfile.ZipFile(path, "w") as zf:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
         for name, data in members.items():
             zf.writestr(name, data)
         zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr(
+            "SHA256SUMS", "".join(f"{m['sha256']}  {n}\n" for n, m in manifest["members"].items())
+        )
+    path.write_bytes(seal(buf.getvalue()))
     return path
+
+
+def _plain(path: Path) -> zipfile.ZipFile:
+    """An encrypted archive's decrypted zip, opened (tests only)."""
+    return zipfile.ZipFile(io.BytesIO(open_archive(path)))
+
+
+def _restore(client, name: str):
+    """Inspect a stored archive and run it with the phrase it asks for
+    (RESTORE, or RESTORE OLDER for an archive older than the newest)."""
+    body = _inspect(client, name)
+    return _run(client, body["restore_id"], body["confirm_phrase"])
 
 
 def _upload(client, path: Path, filename: str = "my-backup.zip"):
@@ -249,7 +270,7 @@ def test_inspect_rejects_bad_archives(client, coin, fake_dump, tmp_path):
     not_zip = work / "plain.zip"
     not_zip.write_bytes(b"this is not a zip")
     cases = {
-        "not a zip": not_zip,
+        "Not a Cabinet backup archive": not_zip,
         "manifest.json": _rewrite(good, work / "nomanifest.zip", drop={"manifest.json"}),
         "Not a Cabinet backup": _rewrite(
             good, work / "format.zip", manifest=lambda m: m.update(format="something-else")
@@ -298,7 +319,7 @@ def test_upload_is_staged_and_discarded(client, coin, fake_dump, tmp_path):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["archive"]["name"] == "from-the-nas.zip"
-    staged = backups / ".restore-staging" / f"{body['restore_id']}.zip"
+    staged = backups / ".restore-staging" / f"{body['restore_id']}.upload"
     assert staged.read_bytes() == download.read_bytes()
     # the staging folder is not an archive: never listed, never pruned
     assert client.get("/api/backups").json()["backups"] == []
@@ -410,7 +431,7 @@ def test_run_restores_database_and_swaps_files(client, coin, fake_dump, calls, c
     assert last["archive"] == name
     assert last["archive_created_at"].startswith("2026-09-14T03:15")
     assert (last["items"], last["photos"], last["documents"]) == (1, 1, 1)
-    assert last["safety_backup"] == "cabinet-backup-20260914-032000-prerestore.zip"
+    assert last["safety_backup"] == "cabinet-backup-20260914-032000-prerestore.zip.age"
 
     after = {
         p.relative_to(photos).as_posix(): p.read_bytes() for p in photos.rglob("*") if p.is_file()
@@ -424,7 +445,7 @@ def test_run_restores_database_and_swaps_files(client, coin, fake_dump, calls, c
     # the safety backup holds the state just before, files included
     safety = backups / last["safety_backup"]
     with (
-        zipfile.ZipFile(safety) as zf,
+        _plain(safety) as zf,
         tarfile.open(fileobj=io.BytesIO(zf.read("photos.tar.gz"))) as tar,
     ):
         assert "./added-later.txt" in tar.getnames()
@@ -464,7 +485,7 @@ def test_data_only_archive_leaves_files_alone(client, coin, fake_dump, calls, cl
     assert (photos / "keep.txt").read_text() == "still here"
     assert (documents / "keep.pdf").read_bytes() == b"still here"
     # and the safety backup is data-only too
-    with zipfile.ZipFile(backups / last["safety_backup"]) as zf:
+    with _plain(backups / last["safety_backup"]) as zf:
         assert "photos.tar.gz" not in zf.namelist()
 
 
@@ -531,13 +552,16 @@ def test_failed_database_step_changes_nothing(client, coin, fake_dump, calls, cl
     assert status["state"] == "failed"
     assert "relation is locked" in status["last"]["error"]
     assert status["last"]["error"].endswith("Nothing was changed.")
-    assert status["last"]["safety_backup"].endswith("-prerestore.zip")
+    assert status["last"]["safety_backup"].endswith("-prerestore.zip.age")
     assert (photos / "in-archive.txt").read_text() == "changed since"
     assert not (photos / ".restore-new").exists() and not (documents / ".restore-new").exists()
-    # the id still works for another try
+    # the id still works for another try, but the safety backup it took is
+    # now the newest archive, so the retry is a restore of an older one
     calls["during"] = None
     clock[0] += timedelta(minutes=1)
-    assert _run(client, restore_id).status_code == 202
+    resp = _run(client, restore_id)
+    assert resp.status_code == 422 and "RESTORE OLDER" in resp.json()["detail"]
+    assert _run(client, restore_id, "RESTORE OLDER").status_code == 202
     assert client.get("/api/restore/status").json()["state"] == "done"
     assert (photos / "in-archive.txt").read_text() == "archived"
 
@@ -604,7 +628,10 @@ def test_extract_refuses_unsafe_members(client, tmp_path):
         "symlink": _tar([link]),
         "hardlink": _tar([hard]),
     }.items():
-        archive = _archive_with(work / f"{label}.zip", {"photos.tar.gz": tar})
+        archive = work / f"{label}.zip"  # _extract reads the decrypted zip
+        archive.write_bytes(
+            open_archive(_archive_with(work / f"{label}.age", {"photos.tar.gz": tar}))
+        )
         with pytest.raises(restore.RestoreError, match="archive holds"):
             restore._extract(archive, "photos.tar.gz", target)
         assert not (work / "outside.txt").exists()
@@ -612,9 +639,9 @@ def test_extract_refuses_unsafe_members(client, tmp_path):
 
     # a restore's own working folders inside an archive are skipped
     fine = _tar([("./keep/a.txt", b"a"), ("./.restore-old/x.txt", b"x")])
-    restore._extract(
-        _archive_with(work / "fine.zip", {"photos.tar.gz": fine}), "photos.tar.gz", target
-    )
+    plain = work / "fine.zip"
+    plain.write_bytes(open_archive(_archive_with(work / "fine.age", {"photos.tar.gz": fine})))
+    restore._extract(plain, "photos.tar.gz", target)
     assert (target / ".restore-new" / "keep" / "a.txt").read_bytes() == b"a"
     assert not (target / ".restore-new" / ".restore-old").exists()
 
@@ -627,7 +654,7 @@ def test_working_folders_stay_out_of_backups(client, coin, fake_dump, tmp_path):
     archive = tmp_path.with_name(tmp_path.name + "-dl.zip")
     archive.write_bytes(client.get("/api/backup.zip").content)
     with (
-        zipfile.ZipFile(archive) as zf,
+        _plain(archive) as zf,
         tarfile.open(fileobj=io.BytesIO(zf.read("photos.tar.gz"))) as tar,
     ):
         names = tar.getnames()
@@ -692,9 +719,10 @@ def test_prerestore_archives_have_their_own_retention(client, coin, fake_dump, c
     safeties = []
     for _ in range(5):
         clock[0] += timedelta(minutes=1)
-        assert _run(client, _inspect(client, name)["restore_id"]).status_code == 202
+        # each run's safety backup is newer, so from the second on it is "older"
+        assert _restore(client, name).status_code == 202
         safeties.append(client.get("/api/restore/status").json()["last"]["safety_backup"])
-    kept = sorted(p.name for p in backups.glob("*-prerestore.zip"))
+    kept = sorted(p.name for p in backups.glob("*-prerestore.zip.age"))
     assert kept == sorted(safeties[-3:])
 
     # ordinary retention neither counts nor removes them
@@ -708,7 +736,7 @@ def test_prerestore_archives_have_their_own_retention(client, coin, fake_dump, c
     # and one of them restores like any other, without pruning itself away
     oldest = kept[0]
     clock[0] += timedelta(minutes=1)
-    assert _run(client, _inspect(client, oldest)["restore_id"]).status_code == 202
+    assert _restore(client, oldest).status_code == 202
     assert client.get("/api/restore/status").json()["state"] == "done"
     assert client.get(f"/api/backups/{oldest}").status_code == 200
 
@@ -874,7 +902,7 @@ def test_inspect_needs_room_in_staging(client, coin, fake_dump, monkeypatch):
 def test_staging_is_never_inside_a_shared_folder(client, monkeypatch):
     monkeypatch.setenv("STAGING_DIR", str(_dirs()[2] / "staging"))
     get_settings.cache_clear()
-    with pytest.raises(backup.BackupError, match="must not be inside the backup directory"):
+    with pytest.raises(backup.BackupError, match="must be apart from the backup directory"):
         backup.staging_dir()
 
 
@@ -915,8 +943,9 @@ def test_the_marker_is_journalled_and_gone_after_a_restore(client, coin, fake_du
         journal = json.loads(restore._journal_path().read_text(encoding="utf-8"))
         seen["journal"] = journal
         seen["row"] = _setting_row(restore.MARKER_KEY)
-        # the dump being restored is the one in private staging
-        assert [p.suffix for p in _staging().iterdir()] == [".dump"]
+        # the dump being restored, and the archive it came from, decrypted,
+        # are both in private staging, and only there
+        assert sorted(p.suffix for p in _staging().iterdir()) == [".dump", ".zip"]
 
     calls["during"] = during
     assert _run(client, restore_id).status_code == 202

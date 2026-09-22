@@ -61,6 +61,37 @@ backups). The upgrade notes will lead this entry when it is released.
   `staging_data` at `/data/staging`** (0700), never in the backup directory,
   and it is emptied after every check and restore. Add the volume when
   upgrading a Swarm stack; keep it on the node's own disk.
+- **Every backup is encrypted** with a backup key, as a standard
+  [age](https://age-encryption.org) file (`cabinet-backup-….zip.age`), and
+  carries a MAC keyed by that key: an archive on the backup share can be
+  neither read nor forged without it. Every write path (download, scheduled,
+  run now, the safety backup before a restore, and `backup.sh`) streams the
+  zip straight into `age`, so nothing unencrypted is ever written to the
+  backup directory. The key comes from `BACKUP_KEY_FILE` (a Docker secret)
+  or is generated on the state volume at first start; `python -m app.cli
+  backup-key show` prints it inside the container (it never crosses the
+  API) and `backup-key rotate` replaces it while older archives stay
+  readable. **Save a copy outside Cabinet**: without it the archives can't
+  be opened. Settings reports whether the key sits beside the backups.
+- **Restores take only encrypted archives made with this deployment's key.**
+  An archive is decrypted in private staging and its MAC checked before
+  anything in it is read. Every archive Cabinet writes is recorded, by its
+  MAC, in a record no restore rewrites; the restore summary says whether
+  this Cabinet made the archive and how many newer ones exist, and restoring
+  an older one needs `RESTORE OLDER`, whatever its file name or time.
+  `restore.sh` decrypts into a private temporary folder, removed afterwards,
+  and verifies the MAC through the backend (`decrypt-archive`,
+  `verify-archive`). An archive must hold exactly the members its MAC
+  covers, each once, on every path. A plain upload is refused on its first
+  bytes, before any of it is stored.
+- The backup key is generated only on a first start, and never over an
+  existing one; at runtime a key that can't be read fails the backup and
+  alerts instead. Startup checks the key with a real encrypt and decrypt,
+  and alerts when the newest recorded archive was made with a key this
+  Cabinet no longer has.
+- New: `POST /api/backups/key/saved`, `DELETE /api/backups/unencrypted`;
+  `GET /api/backups` gains `encrypted` per archive and the key's status;
+  the restore inspection gains `provenance` and `confirm_phrase`.
 - **A restore interrupted during the database step is now resolved exactly.**
   A marker row written just before it tells the next start whether the
   database was replaced; if the database can't be reached, the backend stays
@@ -89,6 +120,10 @@ backups). The upgrade notes will lead this entry when it is released.
 ### Removed
 - **The interactive API docs page, `/api/docs`**, so no third-party script
   runs in the app's origin. The schema is still at `/api/openapi.json`.
+- **Restoring unencrypted archives.** Plain `.zip` archives from before
+  v0.30.0, and `backup.sh` directories, can't be restored by any path. They
+  are listed as unencrypted; **Delete unencrypted archives** removes them
+  once a new encrypted backup exists.
 
 ## [0.29.1] - 2026-09-20
 

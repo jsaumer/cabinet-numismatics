@@ -910,23 +910,36 @@ the alert fires.
 
 | Method | Path                    | Purpose                                              |
 |--------|-------------------------|------------------------------------------------------|
-| `GET`  | `/api/backup.zip`       | Build and download a fresh archive; `?photos=false` for data only |
-| `GET`  | `/api/backups`          | Backup directory, free space, last run, stored archives (newest first) |
+| `GET`  | `/api/backup.zip`       | Build and download a fresh encrypted archive (`….zip.age`); `?photos=false` for data only |
+| `GET`  | `/api/backups`          | Backup directory, free space, last run, stored archives (newest first), the backup key's status |
 | `POST` | `/api/backups`          | Write an archive into the backup directory now, then apply retention; `?photos=` overrides the setting |
 | `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
+| `POST` | `/api/backups/key/saved` | Record that the owner saved the backup key (v0.30.0) |
+| `DELETE` | `/api/backups/unencrypted` | Delete every plain `.zip` archive from before v0.30.0 (v0.30.0) |
 
-An archive is a zip of `db.dump` (pg_dump custom format), `photos.tar.gz` and
-`documents.tar.gz` (unless data-only), `manifest.json`, and `SHA256SUMS`; see
-[backup-restore.md](backup-restore.md). A failed backup returns `500` with the
+An archive (v0.30.0) is an [age](https://age-encryption.org) file, encrypted
+with the backup key, around a zip of `db.dump` (pg_dump custom format, never
+the `cabinet_auth` schema), `photos.tar.gz` and `documents.tar.gz` (unless
+data-only), `manifest.json` (with a MAC keyed by the backup key), and
+`SHA256SUMS`; see [backup-restore.md](backup-restore.md). The download is
+`application/octet-stream` and built as ciphertext before it is sent. A failed backup returns `500` with the
 reason (for example, `pg_dump failed: …`) and is recorded as the last run
 (`at`, `ok: false`, `error`); a successful `POST` answers, and records, `at`,
 `ok`, `file`, `size`, `includes_photos`, and `pruned`. `GET /api/backups`
-answers `directory`, `free_bytes`, `last_run`, and `backups` (`name`, `size`,
-`created_at`, and `prerestore`: true for the safety archive an in-app
-restore took first); a second `POST` while one is running returns `409`.
-Stored archive names must match
-`cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip`; anything else is
-`404`. Pre-restore archives sit outside `backup_keep`: the newest three are
+answers `directory`, `free_bytes`, `last_run`, `backups` (`name`, `size`,
+`created_at`, `prerestore`: true for the safety archive an in-app restore
+took first, and `encrypted`: false for a plain `.zip` from before v0.30.0,
+which can't be restored), and `key`: `fingerprint` (the backup key's public
+key, `age1…`; the key itself never crosses the API), `saved`, `supplied`
+(from `BACKUP_KEY_FILE`), `location` (`separate`, `shared`, `not_verified`,
+or `secret`), and `location_message`. `POST /api/backups/key/saved` records
+the current public key as saved (a rotated key asks again) and answers the
+`key` object. `DELETE /api/backups/unencrypted` deletes every plain
+`cabinet-backup-*.zip` in the backup directory, nothing else, sends an
+alert event, and answers `{"deleted": [names]}`. A second `POST
+/api/backups` while one is running returns `409`. Stored archive names must
+match `cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age` (or `.zip`
+for an old one); anything else is `404`. Pre-restore archives sit outside `backup_keep`: the newest three are
 kept. **These endpoints hand over the whole collection and are
 unauthenticated**; see [security.md](security.md).
 
@@ -956,9 +969,9 @@ feature is off:
   "started_at": null,
   "last": {
     "at": "2026-09-20T18:04:11+00:00", "ok": true,
-    "archive": "cabinet-backup-20260920-180301.zip",
+    "archive": "cabinet-backup-20260920-180301.zip.age",
     "archive_created_at": "2026-09-20T18:03:01+00:00",
-    "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip",
+    "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip.age",
     "error": null, "items": 212, "photos": 388, "documents": 9,
     "secrets_cleared": []
   },
@@ -987,7 +1000,7 @@ archive with no body. It answers:
 {
   "restore_id": "3f0c…",
   "archive": {
-    "name": "cabinet-backup-20260920-180301.zip", "size": 48211934,
+    "name": "cabinet-backup-20260920-180301.zip.age", "size": 48211934,
     "created_at": "2026-09-20T18:03:01+00:00", "app_version": "0.26.0",
     "revision": "0018", "includes_photos": true, "includes_documents": true,
     "items": 212, "photos": 388, "documents": 9, "trashed": 3
@@ -999,16 +1012,32 @@ archive with no body. It answers:
   "secrets_note": "Saved API keys and webhook addresses in the archive…",
   "credentials_note": "Your sign-in, sessions, API tokens, and audit log are kept.",
   "secrets": ["Numista API key"],
-  "secrets_cleared": ["alert webhook"]
+  "secrets_cleared": ["alert webhook"],
+  "provenance": {
+    "made_here": true, "made_at": "2026-09-20T18:03:01+00:00", "newer": 3,
+    "older": true, "record_empty": false,
+    "message": "Made by this Cabinet on 20 September 2026. 3 newer backups exist."
+  },
+  "confirm_phrase": "RESTORE OLDER"
 }
 ```
+
+`provenance` (v0.30.0) says whether this Cabinet made the archive (matched
+in its record of archives by the verified MAC, never the name), how many
+newer ones it recorded, and whether the archive is older than the newest;
+`confirm_phrase` is then `RESTORE OLDER` instead of `RESTORE`. With no
+record at all, `record_empty` is true and the message says Cabinet can't
+tell whether this is the newest.
 
 `secrets` and `secrets_cleared` (v0.30.0) name, never show, the stored
 secrets the archive would set and those it holds that would be cleared.
 The archive's dump is unpacked for this only into the private staging
 folder, checked, and removed again.
 
-It answers `422` with a plain reason for a file that isn't a Cabinet archive,
+It answers `422` with a plain reason for an unencrypted archive from before
+v0.30.0, one that can't be opened with the backup key (another key made it,
+or it was altered), one whose MAC doesn't verify ("This archive was not made
+with your backup key."), a file that isn't a Cabinet archive,
 a checksum that doesn't match, an unexpected member, a schema revision newer
 than this build knows, a tar member that is a link, a device, an absolute
 path, or holds `..`, an unreadable upload, or a request with neither `file`
@@ -1021,9 +1050,14 @@ archive; `409` while a restore runs; `413` for an upload over
 are cleared after a day. The `restore_id` lives in memory: after a backend
 restart, inspect again.
 
-`POST /api/restore/{restore_id}/run` takes `{"confirm": "RESTORE"}` and
-answers `202` `{"state": "running"}`; poll the status. `404` for an unknown
-id, `422` for a wrong phrase, `409` while a restore, a backup, or a
+`POST /api/restore/{restore_id}/run` takes `{"confirm": "RESTORE"}` (or the
+inspection's `confirm_phrase`, `RESTORE OLDER` for an older archive) and
+answers `202` `{"state": "running"}`; poll the status. The run decrypts and
+verifies the archive again and checks its age again from the archive
+itself, failing with "type RESTORE OLDER" if it has become older since the
+inspection. After a failed run the id stays for another try, with the phrase
+rechecked (the safety backup it took is now the newest). `404` for an
+unknown id, `422` for a wrong phrase, `409` while a restore, a backup, or a
 scheduled task is running. The outcome, including a failure's `error`
 (ending "Nothing was changed." when that is true), arrives in the status's
 `last`.

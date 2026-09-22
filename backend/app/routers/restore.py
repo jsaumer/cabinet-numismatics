@@ -89,6 +89,10 @@ async def _stage_upload(request: Request) -> tuple[str, Path, str] | None:
     restore_id, path = await run_in_threadpool(restore.new_staging_file)
     limit = restore.upload_limit()
     size = 0
+    # Nothing is written to the backup share until the upload has shown it is
+    # an age file: a plain archive (the whole collection, unencrypted) is
+    # refused on its first bytes rather than stored while it arrives.
+    head = b""
     try:
         with open(path, "wb") as out:
             async for block in request.stream():
@@ -99,8 +103,16 @@ async def _stage_upload(request: Request) -> tuple[str, Path, str] | None:
                     size += len(data)
                     if size > limit:
                         raise restore.too_large()
+                    if head is not None:
+                        head += data
+                        if len(head) < len(backup.AGE_MAGIC):
+                            continue
+                        restore.require_age_header(head)
+                        data, head = head, None
                     await run_in_threadpool(out.write, data)
             parser.finalize()
+            if head:  # shorter than the header: not an archive at all
+                restore.require_age_header(head)
     except MultipartParseError as exc:
         path.unlink(missing_ok=True)
         raise restore.RestoreError(f"The upload could not be read: {exc}") from exc
@@ -160,14 +172,17 @@ async def inspect_archive(
 @guarded.post("/{restore_id}/run", status_code=202)
 def run_restore(restore_id: str, body: RunRequest, db: Session = Depends(get_db)) -> dict:
     """Start the restore in the background; poll `/api/restore/status`."""
-    if restore_id not in restore._pending:
+    entry = restore._pending.get(restore_id)
+    if entry is None:
         raise HTTPException(404, "No such restore; inspect the archive again.")
-    if body.confirm != restore.CONFIRM_PHRASE:
-        raise HTTPException(422, f"Type {restore.CONFIRM_PHRASE} to confirm.")
+    # RESTORE, or RESTORE OLDER for an archive older than the newest recorded.
+    phrase = entry.get("phrase", restore.CONFIRM_PHRASE)
+    if body.confirm != phrase:
+        raise HTTPException(422, f"Type {phrase} to confirm.")
     engine = db.get_bind()
     db.close()  # the restore replaces the database; hold nothing open on it
     try:
-        restore.start(restore_id, engine)
+        restore.start(restore_id, engine, body.confirm)
     except restore.Unknown as exc:
         raise HTTPException(404, str(exc)) from None
     except restore.Busy as exc:

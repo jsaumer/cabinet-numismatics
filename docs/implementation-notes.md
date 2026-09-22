@@ -880,10 +880,91 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   runs `scheduled.clear_secrets(undecryptable=True)`, skipping both when
   the restored database has no `app_settings` (an archive from before
   `0008`); the cleared names go into the outcome's `secrets_cleared`.
+- **Every archive is encrypted, and nothing plain touches `BACKUP_DIR`.**
+  `backup.write_archive(out, ...)` writes the zip into a stream (unseekable:
+  zipfile uses data descriptors) that `backup.encrypt_stream` pipes into
+  `age`, which writes `<name>.zip.age.partial`, renamed when complete and
+  removed on any failure (`_write_encrypted`). The download is the same,
+  into `.download-*.zip.age`. Decrypting happens only in
+  `backup.decrypt_to_staging` (a 0600 file in `/data/staging`, after a
+  free-space check against the archive's size); the pre-restore archive is
+  verified by decrypting it there and deleting the copy (`verify_stored`).
+  A new path that reads an archive must go through `restore.open_archive`,
+  which also refuses plain `.zip` (`LEGACY_REFUSED`) before decrypting.
+  `encrypt_stream` and `decrypt_stream` are the monkeypatch points;
+  conftest's autouse `fake_age` stands in (authenticated, bound to the
+  recipient, unseekable like a pipe), with `open_archive` and `seal` helpers
+  for tests that read or build archives. Real `age` is only in the image.
+- **Exactly the covered members.** After the MAC, `verify_archive` requires
+  the zip's names to be unique and equal to the manifest's members plus
+  `manifest.json` and `SHA256SUMS`, and `SHA256SUMS` to be exactly the one
+  the manifest implies. `zipfile` reads the last of two same-named entries
+  and `unzip` the first, so without this a doubled or extra member could
+  reach `restore.sh` unverified (found in the stage 5 review). Both small
+  members are size-capped (`MAX_SMALL_MEMBER`) before the MAC, since
+  anyone can encrypt to the public key.
+- **The MAC is checked first.** `backup.verify_archive` reads
+  `manifest.json` and `SHA256SUMS`, verifies `mac` with the one configured
+  identity its `mac_recipient` names (`archive_keys.verify`,
+  `hmac.compare_digest`), and only then checks the members. The canonical
+  form is `json.dumps(manifest without mac, sort_keys=True,
+  separators=(",", ":"), ensure_ascii=False)` in UTF-8, then `SHA256SUMS`;
+  `test_mac_is_exactly_the_specified_bytes` pins it. Don't change it
+  without a new `info` string, or every stored archive stops verifying.
+- **Keys** (`services/archive_keys.py`): bech32 and X25519 by hand over
+  `cryptography` (checked against the real `age-keygen` both ways during
+  the build), so no Python dependency. **A key is generated only by
+  `ensure_key`, at startup, and only by `os.link` from a synced partial**,
+  which fails if the name exists, so an existing key is never overwritten,
+  even when a stat of it failed (ESTALE on NFS). At runtime
+  `identities()` only reads; a key that can't be read raises
+  `KeyUnavailable`, which `backup.signing_key` turns into a failed backup,
+  never a new key. Writes are fsynced, file and folder. Identities must
+  start `AGE-SECRET-KEY-1` in capitals, as `age` requires. A bad
+  `BACKUP_KEY_FILE` is a `ConfigError`. The key file is also what `age
+  --identity` reads, so the secret never goes on a command line. `rotate`
+  only ever rewrites a generated file. Startup also runs `backup.self_test`
+  (a real age round trip in staging; failure is logged as critical) and,
+  after migrations, `backup.record_key_mismatch`, which alerts when the
+  newest recorded archive was made with a key no longer configured.
+- **The archive record** (`backup.record_archive`, `cabinet_auth.backup_ledger`)
+  is written for every archive (`scheduled`, `manual`, `download`,
+  `prerestore`, and `backup.sh` through `cli write-archive`), matched by
+  `archive_keys.mac_digest` (SHA-256 of the MAC), pruned on write (180
+  days, never below 50). Names are to the second, so a row with the same
+  name is taken over rather than duplicated. `restore.provenance` compares
+  the archive's verified `created_at` with the newest recorded (naive
+  datetimes from SQLite are read as UTC); older means `RESTORE OLDER`, set
+  in `_pending` at inspect, rechecked from the archive in `_confirm_age` at
+  the start of the run, and recomputed after a failed run
+  (`_refresh_phrase`), since that run's safety backup is now the newest.
+- **Key location** (`archive_keys.compare_locations`) is pure over a
+  mountinfo text, so tests pass fixtures. `separate` only for two
+  `LOCAL_FS` filesystems on different devices; one mount or overlapping
+  folders on one device are `shared`; everything else, sibling folders on
+  one device included, is `not_verified`. False reassurance is the failure
+  to avoid. Mount paths are unescaped as octal only. It compares POSIX
+  paths as given; `location()` resolves the real ones first.
+- **Staging is apart from every other data folder in both directions**
+  (backup, photo, document, state), since it is emptied on every start.
+  `empty_staging()` leaves `.cli-` files (a container command in another
+  process); `recover()` empties everything and also deletes staged uploads
+  a restart has orphaned. An upload is refused on its first bytes unless it
+  is an age file, so a plain archive never lands on the share. The
+  entrypoint puts back the owner and mode of `BACKUP_KEY_FILE` and
+  `SETUP_CODE_FILE` if a folder hand-over touched them.
+- **The CLI** (`app/cli.py`) drops to `PUID:PGID` when started as root.
+  `write-archive` stages its ciphertext in `/data/staging` (a `mkstemp`
+  name with the `.cli-` prefix) to learn the size for the record, then
+  streams it to stdout; `verify-archive -` spools stdin there the same way
+  and deletes it.
 - Still to come in later stages, and not in this code yet: the restore
-  grant, the recent-password check on inspect and run, the
-  `restore_started` / `restore_finished` audit rows, encryption (stage 5),
-  and the archive record in `backup_ledger`.
+  grant, the recent-password check on inspect, run, downloads, and deleting
+  unencrypted archives, the audit rows (`restore_started`,
+  `restore_finished`, `backup_key_shown`, `backup_key_rotated`, and the
+  download and deletion events), the claim check in the CLI, and the
+  Settings UI for the key (fingerprint, the saved tick, the location
+  message) and for deleting unencrypted archives (stage 9).
 
 ## Releases
 

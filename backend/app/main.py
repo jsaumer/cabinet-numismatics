@@ -29,8 +29,9 @@ from app.routers import (
     stats,
     trash,
 )
+from app.services import archive_keys, scheduled, schema
+from app.services import backup as backups
 from app.services import restore as restores
-from app.services import scheduled, schema
 from app.services.maintenance import MaintenanceMiddleware
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,48 @@ async def _hourly_loop() -> None:
         await asyncio.sleep(3600)
 
 
+def _check_key_against_record(db) -> None:
+    """Say loudly if the newest archive this Cabinet recorded was made with a
+    key it no longer has: the key was replaced or lost, and those archives
+    can't be restored here until it is put back."""
+    from app.services import alerts
+
+    try:
+        missing = backups.record_key_mismatch(db)
+    except Exception:
+        logger.exception("Could not check the backup key against the archive record")
+        return
+    if missing:
+        message = (
+            f"The newest backup was made with a key this Cabinet no longer has ({missing}). "
+            "Put the old key back (BACKUP_KEY_FILE, or the backup.key you saved) or those "
+            "archives can't be restored."
+        )
+        logger.critical(message)
+        alerts.event(db, "backup_key_changed", "Cabinet's backup key changed", message)
+
+
+def _key_location_messages() -> list[str]:
+    """Said on every start: where the keys sit relative to the backups.
+    Silence is never presented as a safety result."""
+    messages = []
+    where = archive_keys.location()
+    if where in archive_keys.LOCATION_MESSAGES:
+        messages.append(archive_keys.LOCATION_MESSAGES[where])
+    secret_where = archive_keys.secret_key_location()
+    if secret_where == "shared":
+        messages.append(
+            "The generated SECRET_KEY file is stored beside your backups; set SECRET_KEY "
+            "or move the state volume."
+        )
+    elif secret_where == "not_verified":
+        messages.append(
+            "Cabinet cannot tell where the generated SECRET_KEY file is stored relative to "
+            "your backups; setting SECRET_KEY removes the doubt."
+        )
+    return messages
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     config = get_settings()
@@ -99,6 +142,19 @@ async def lifespan(app: FastAPI):
         raise
     for warning in warnings:
         logger.warning(warning)
+    # The backup key: a supplied one that can't be read stops startup here,
+    # before any backup could be written; otherwise one is generated.
+    try:
+        await asyncio.to_thread(archive_keys.ensure_key)
+    except ConfigError as exc:
+        logger.critical("Cabinet cannot start: %s", exc)
+        raise
+    for message in _key_location_messages():
+        logger.warning(message)
+    try:
+        await asyncio.to_thread(backups.self_test)
+    except backups.BackupError as exc:
+        logger.critical("Backups will fail: %s", exc)
     Path(config.photo_dir).mkdir(parents=True, exist_ok=True)
     # A restore the last process didn't finish: roll its file swap forward,
     # or clear what it had unpacked.
@@ -111,6 +167,7 @@ async def lifespan(app: FastAPI):
         # rather than at the first hourly tick. Tests (AUTO_MIGRATE=false)
         # have no database here; the hourly tick covers that setting too.
         await asyncio.to_thread(_in_session, scheduled.clear_secrets)
+        await asyncio.to_thread(_in_session, _check_key_against_record)
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]

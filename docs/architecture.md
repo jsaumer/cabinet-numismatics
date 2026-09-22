@@ -81,7 +81,8 @@ that user with `setpriv`; see [security.md](security.md). It mounts five
 volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
 `backup_data` (`/data/backups`), `backend_state` (`/data/state`: the
 generated encryption key when `SECRET_KEY` is unset, plus the last restore's
-outcome, `restore_last.json`, and `restore_journal.json` while one runs),
+outcome, `restore_last.json`, and `restore_journal.json` while one runs,
+and the generated backup key `backup.key` when `BACKUP_KEY_FILE` is unset),
 and `staging_data` (`/data/staging`, 0700: where an archive's database dump
 is unpacked to be checked and restored, never the backup directory; keep it
 on the host's own disk).
@@ -165,6 +166,7 @@ app's Settings page and stored in the database.
 | `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets no response |
 | `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |
 | `SETUP_CODE` / `SETUP_CODE_FILE` | The one-time setup code, or a file holding it (a Docker secret); at least 32 characters, checked at start. Unset, one is generated |
+| `BACKUP_KEY_FILE` | The backup key (age identities, one a line, the first encrypting), typically a Docker secret, never modified by Cabinet; unreadable or unparsable stops startup. Unset, one is generated into `backup.key` on the state volume |
 | `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`

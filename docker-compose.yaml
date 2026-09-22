@@ -26,6 +26,8 @@ services:
       - AUTH_INSECURE_HTTP=${AUTH_INSECURE_HTTP:-false}
       - SETUP_CODE=${SETUP_CODE:-}
       - SETUP_CODE_FILE=${SETUP_CODE_FILE:-}
+      # The backup key; unset, one is generated on the state volume.
+      - BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-}
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the

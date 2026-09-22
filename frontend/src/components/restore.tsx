@@ -150,7 +150,9 @@ export function useRestore(onFinished: () => void): RestoreControl {
     outcome,
     error,
     step,
-    phrase: status?.confirm_phrase || "RESTORE",
+    // RESTORE, or RESTORE OLDER for an archive older than the newest backup
+    // this Cabinet recorded: the archive's own answer, from the inspection.
+    phrase: inspection?.confirm_phrase || status?.confirm_phrase || "RESTORE",
     inspectArchive: (name) => inspect(api.inspectRestoreArchive(name), false),
     inspectFile: (file) => inspect(api.inspectRestoreFile(file), true),
     cancel: () => {
@@ -168,7 +170,14 @@ export function useRestore(onFinished: () => void): RestoreControl {
           setStep("safety_backup");
           setPhase("running");
         })
-        .catch((e: Error) => setError(e.message));
+        .catch((e: Error) => {
+          // A failed run's safety backup is now the newest archive, so a retry
+          // can need RESTORE OLDER; the server says so, and the form follows.
+          if (e.message.includes("RESTORE OLDER")) {
+            setInspection({ ...inspection, confirm_phrase: "RESTORE OLDER" });
+          }
+          setError(e.message);
+        });
     },
   };
 }
@@ -264,6 +273,11 @@ export function RestoreBlock({
               Photos and documents are not in this archive and will be left as they are.
             </p>
           )}
+          <p className={inspection.provenance.older ? "error" : "muted"}>
+            {inspection.provenance.message}
+            {inspection.provenance.older &&
+              " Restoring it rolls the collection back past newer backups."}
+          </p>
           <p className="muted">{inspection.credentials_note}</p>
           {inspection.secrets.length > 0 && (
             <p className="muted">Saved in the archive and kept: {inspection.secrets.join(", ")}.</p>
