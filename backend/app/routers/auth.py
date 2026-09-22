@@ -468,7 +468,8 @@ def auth_audit(before: int | None = None, limit: int = 50, db: DbSession = Depen
 
 @router.get("/photo", status_code=204)
 @permission("read")
-def auth_photo():
+async def auth_photo():
     """For nginx's `auth_request` before it serves anything under /photos/:
-    204 for a session or a read or write token."""
+    204 for a session or a read or write token. Async (it waits on nothing),
+    since a page of thumbnails asks it once per photo."""
     return Response(status_code=204, headers=NO_STORE)

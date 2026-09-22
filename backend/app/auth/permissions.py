@@ -121,8 +121,10 @@ def require(request: Request, cls: str, *, fresh: bool = False) -> Principal | N
     return who
 
 
-def require_permission(request: Request) -> None:
-    """The app-level dependency: every API route passes through here."""
+async def require_permission(request: Request) -> None:
+    """The app-level dependency: every API route passes through here. Async
+    because it waits on nothing: a plain function would cost every request a
+    hop to a worker thread."""
     endpoint = request.scope.get("endpoint")
     found = declared(endpoint)
     if found is None:

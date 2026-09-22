@@ -415,3 +415,26 @@ def test_a_marker_that_cannot_be_written_still_finishes_setup(unclaimed_client, 
     body = {"code": setup._code, "username": "owner", "password": PASSWORD}
     resp = unclaimed_client.post("/api/auth/setup", json=body)
     assert resp.status_code == 201 and SESSION in set_cookies(resp)
+
+
+def test_photo_check_during_a_restore_is_503(client):
+    """nginx turns anything but 401 or 403 from the check into its own 503
+    with a retry, so a restore never shows photos to anyone."""
+    from app.services import maintenance
+
+    maintenance.enter()
+    try:
+        assert client.get("/api/auth/photo").status_code == 503
+    finally:
+        maintenance.leave()
+
+
+def test_anonymous_health_touches_nothing(anon_client, monkeypatch):
+    """Anyone can call it, so it costs nothing: no database, no schema read."""
+    from app.routers import health
+
+    def boom(*args, **kwargs):
+        raise AssertionError("anonymous health did work")
+
+    monkeypatch.setattr(health, "_health", boom)
+    assert anon_client.get("/api/health").json() == {"status": "ok"}

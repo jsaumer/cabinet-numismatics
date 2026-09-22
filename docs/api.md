@@ -125,6 +125,12 @@ own `Cache-Control` get `private, no-store`.
 | `GET` | `/api/auth/audit` | admin | The audit log, newest first: `?before=<id>&limit=` (at most 200) |
 | `GET` | `/api/auth/photo` | read | `204`: nginx asks this before serving a photo (a `metrics` token and `Sec-Fetch-Site: cross-site` get `403`) |
 
+Photos themselves (`/photos/{file_key}`, `/photos/{thumb_key}`) are files
+nginx serves after that check: the same credentials as a `read` route, the
+check's `401` or `403` otherwise (before nginx looks for the file, so a
+missing photo tells a stranger nothing), `503` with `Retry-After: 5` while
+the backend can't answer, and `Cache-Control: private, no-store`.
+
 Codes: `401` for a missing, invalid, expired, or revoked credential; `403`
 for a valid one that isn't allowed; `429` with `Retry-After` when sign-in
 is being slowed down. Sign-in delays grow per username (after 5 failures)

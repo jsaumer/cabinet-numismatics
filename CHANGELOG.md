@@ -33,6 +33,12 @@ backups). The upgrade notes will lead this entry when it is released.
   for it during a flood. New-device sign-ins, repeated failures, new tokens,
   password changes, downloads, exports, and restores reach the alert
   webhook.
+- **Photos are only for the signed-in.** nginx asks the backend before
+  serving anything under `/photos/`: the admin's browser, or a `read` or
+  `write` token, gets the file (never cached); anyone else gets 401 or 403,
+  and 503 while the backend is restarting. The app's own files and the
+  logo stay public. Measured on a page of 50 thumbnails: about 3.5 ms per
+  photo.
 - **Commands in the container for the account**, for when the app can't be
   reached (`docker compose exec backend python -m app.cli ...`): `status`,
   `reset-password` (asked twice, never an argument; ends every session and

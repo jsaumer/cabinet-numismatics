@@ -17,7 +17,8 @@ changelog entry when releasing.
   files directly, proxies `/api/` to the backend.
 - **db**: PostgreSQL.
 - Frontend is React + Vite, built to static files that nginx serves.
-- Photos are plain files on a shared volume (backend writes, nginx serves);
+- Photos are plain files on a shared volume (backend writes, nginx serves
+  after asking the backend, `auth_request`, from v0.30.0);
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.

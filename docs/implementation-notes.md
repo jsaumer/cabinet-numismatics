@@ -1083,11 +1083,41 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   call every operation without running a handler. The HTTP client
   normalises `.` and `..` segments before sending, so those cases belong to
   the real-nginx checks.
-- Still to come in later stages, and not in this code yet: photos through
-  `auth_request` (stage 8; `/photos/` is served unchecked until then), and
-  the pages: setup, sign-in, the password dialog, the Account section, and
-  the Settings UI for the key and for deleting unencrypted archives
-  (stage 9). Until then the app in a browser answers 401 everywhere.
+- **Photos go through nginx's `auth_request`** (stage 8). It is set at
+  server level in `proxy/nginx.conf`, and every other location turns it off
+  (`location /`, each `/api` location, the named 503 location): **a new
+  location is checked unless it says `auth_request off`**, which is the safe
+  way round. `location = /_auth/photo` is `internal` and proxies to `GET
+  /api/auth/photo` without the body; it includes `cabinet-proxy.conf`, so the
+  cookie, `Authorization`, and `Sec-Fetch-Site` reach the gate like any
+  request and the photo rule (only `cross-site` refused) applies. nginx
+  passes the check's 401 and 403 through and turns anything else into 500,
+  which `/photos/` maps to `@photos_unavailable` (503, `Retry-After: 5`).
+  The check runs before nginx looks for the file, so a missing photo is 401
+  to a stranger and 404 only when signed in. The dot-name 404 is a `return`
+  in the rewrite phase, before the check, which is fine: it serves nothing.
+  `/photos/` sends `private, no-store` and repeats the security headers
+  (its own `add_header` replaces the server's). The real-nginx cases are
+  `stack-smoke.sh photos`, a CI step; pytest covers the route itself.
+- **The measurement** (the spec asked for one before any caching is
+  considered; local stack, 16 cores, one uvicorn process, 50 thumbnails):
+  the check alone 3.7 ms; one thumbnail 3.8 ms with it, 0.6 ms without; 50
+  thumbnails over 6 connections 162 ms with, 14 ms without, since the
+  backend is one process and the checks queue behind each other at about
+  3.3 ms each. In Chromium, the collection page with 50 photos loaded in a
+  median 1,125 ms with the check and 1,050 ms without, and the dashboard
+  with a 30-photo mosaic in 924 ms and 826 ms. No cache is proposed: about
+  75 to 100 ms on a full page, for one user, doesn't ask for one. Two things
+  came out of measuring. Anonymous health built the full body (database and
+  schema reads) and threw it away: it now answers `{"status": "ok"}` at
+  once (6.4 ms to 1.6 ms), which matters because anyone can call it. And
+  `require_permission` and the photo route are `async`, since they wait on
+  nothing and a plain function costs a hop to a worker thread (182 ms to
+  162 ms for the 50). The rest is the session lookup itself.
+- Still to come in stage 9: the pages (setup, sign-in, the password dialog,
+  the Account section, and the Settings UI for the key and for deleting
+  unencrypted archives). Until then the app in a browser answers 401
+  everywhere, photos included.
 - **The CI stack job, the seed script, and Playwright's global setup move
   onto tokens and sign-in in stage 7** (spec section 9), alongside the gate
   and the auth routes. `scripts/ci/stack-smoke.sh` replaces the stack job's
