@@ -163,6 +163,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Write a throwaway .env
+        # docker-compose.yaml reads the database settings from .env (the
+        # stack job writes its own the same way). The v0.30.0 settings come
+        # from the script's own shell exports, so they are not repeated here.
+        run: |
+          {
+            echo "DB_USER=cabinet"
+            echo "DB_PASSWORD=ci-$(openssl rand -hex 12)"
+            echo "DB_NAME=cabinet"
+          } > .env
+
       - name: Run the upgrade test
         # Independent of the "stack" job's compose project: starts v0.29.1
         # (pulled from GHCR; the last release with no sign-in) against a
