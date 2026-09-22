@@ -1,7 +1,12 @@
 # Cabinet as a Docker Swarm stack. Deploy from the repo root:
 #
 #   set -a; . ./.env; set +a           # stack deploy reads the shell, not .env
-#   TAG=0.29.1 docker stack deploy -c deploy/docker-stack.yaml cabinet
+#   TAG=0.29.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+#
+# From v0.30.0 set PUBLIC_ORIGINS (required: the https address browsers use),
+# ALLOWED_HOSTS for any internal name (cabinet_proxy for Homepage or
+# Prometheus on an overlay), and CABINET_PORT. The setup code and the backup
+# key are best given as Docker secrets (the commented blocks below).
 #
 # Differences from docker-compose.yaml, which stays the single-host path:
 #   - images are pulled, never built (stack deploy ignores `build:`), so TAG
@@ -15,6 +20,13 @@
 #     a task can move between nodes. The backend refuses document uploads
 #     unless /data/documents is a real mount, so don't leave that one out.
 # See docs/deployment.md §7.
+
+# Every service keeps its log to three 10 MB files.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
 
 services:
   backend:
@@ -36,6 +48,21 @@ services:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
+      # Sign-in (v0.30.0). The exact https origin browsers use; required.
+      - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:?set PUBLIC_ORIGINS}
+      # The setup code: from the secret below (preferred; Portainer, Dozzle,
+      # and `docker service inspect` show environment variables but not
+      # secret contents), or leave both unset and read the generated one from
+      # `docker service logs cabinet_backend`. Ignored once set up; delete the
+      # secret then.
+      # - SETUP_CODE_FILE=/run/secrets/cabinet_setup_code
+      # The backup key (from v0.30.0 every archive is encrypted with it).
+      # Unset, one is generated on the state volume; a secret keeps it off
+      # the storage your backups live on.
+      # - BACKUP_KEY_FILE=/run/secrets/cabinet_backup_key
+    # secrets:
+    #   - cabinet_setup_code
+    #   - cabinet_backup_key
     volumes:
       - photo_data:/data/photos
       - backend_state:/data/state
@@ -51,8 +78,11 @@ services:
     networks:
       - cabinet-internal
       # Outbound only: spot prices, exchange rates, price sources, and the
-      # alert webhook. Attach whatever network in your Swarm has egress.
+      # alert webhook. Keep this the backend's own network: never swap it
+      # for a shared overlay, or other services could reach the backend
+      # without going through nginx.
       - cabinet-egress
+    logging: *logging
     deploy:
       replicas: 1
       resources:
@@ -70,14 +100,22 @@ services:
     image: ghcr.io/jsaumer/cabinet-numismatics-proxy:${TAG:-latest}
     # Published on the routing mesh. Behind Traefik or another ingress, drop
     # `ports:` and add that proxy's labels here instead (see deployment.md
-    # §3 for Traefik + Authentik forward-auth).
+    # §3 for Traefik with forward-auth).
     ports:
-      - "80:80"
+      - "${CABINET_PORT:?set CABINET_PORT}:80"
+    environment:
+      # The Host names nginx answers: those of PUBLIC_ORIGINS, plus internal
+      # names (cabinet_proxy, a LAN name). Anything else gets no response.
+      - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:?set PUBLIC_ORIGINS}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
     volumes:
       - photo_data:/usr/share/nginx/photos:ro
     networks:
       - cabinet-internal
-      - cabinet-egress
+      # Behind Traefik, also join its network (declared below), and nothing
+      # else: the proxy needs no way out.
+      # - traefik-public
+    logging: *logging
     deploy:
       replicas: 1
       resources:
@@ -106,6 +144,7 @@ services:
       retries: 5
     networks:
       - cabinet-internal
+    logging: *logging
     deploy:
       replicas: 1
       resources:
@@ -120,14 +159,22 @@ services:
         delay: 10s
 
 networks:
-  # Backend ↔ db ↔ proxy only; nothing here is reachable from outside.
+  # db, backend, and proxy only; nothing here is reachable from outside.
   cabinet-internal:
     driver: overlay
     internal: true
-  # Replace with your Swarm's existing egress/ingress overlay (`external: true`)
-  # if you have one; this default just gives the two services a way out.
+  # The backend's way out, and nothing else's. Nothing but nginx should reach
+  # the backend, so don't replace this with a network other services share.
   cabinet-egress:
     driver: overlay
+  # traefik-public:
+  #   external: true
+
+# secrets:
+#   cabinet_setup_code:
+#     external: true   # openssl rand -hex 32 | docker secret create cabinet_setup_code -
+#   cabinet_backup_key:
+#     external: true   # see docs/backup-restore.md for making and keeping one
 
 volumes:
   db_data:

@@ -8,6 +8,8 @@ import tempfile
 os.environ.setdefault("PHOTO_DIR", os.path.join(tempfile.gettempdir(), "cabinet-test-photos"))
 # Tests build their schema with create_all on SQLite; never migrate at startup.
 os.environ.setdefault("AUTO_MIGRATE", "false")
+# Required at startup since v0.30.0; the TestClient's own origin.
+os.environ.setdefault("PUBLIC_ORIGINS", "https://testserver")
 # Deterministic encryption key so tests never generate or read a key file.
 os.environ.setdefault(
     "SECRET_KEY", base64.urlsafe_b64encode(b"cabinet-test-key-32-bytes-long!!").decode()

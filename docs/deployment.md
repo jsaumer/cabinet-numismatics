@@ -17,6 +17,26 @@ cp .env.example .env
 
 Edit `.env`:
 
+- `PUBLIC_ORIGINS` (required): the exact address browsers use to reach
+  Cabinet, `scheme://host[:port]`, comma-separated if there is more than one,
+  for example `https://cabinet.example.com`. Both the backend and the proxy
+  refuse to start without it, naming the variable. The sample,
+  `http://localhost,http://proxy`, suits the local stack only.
+- `ALLOWED_HOSTS` (optional): extra Host names nginx answers besides those of
+  `PUBLIC_ORIGINS`: internal names such as `cabinet_proxy` (for Homepage or
+  Prometheus on the same network) or a LAN name. **Any other Host gets no
+  response at all**, so a request by bare IP address, or by a name you didn't
+  list, is dropped. Names only: no scheme or port.
+- `AUTH_INSECURE_HTTP` (optional, default `false`): sign-in cookies without
+  `Secure`, for plain http. The sample sets it for the local stack; remove it
+  for any real deployment. It is refused when any `PUBLIC_ORIGINS` entry is
+  https.
+- `CABINET_PORT` (optional, default `80`): the port the proxy publishes.
+- `SETUP_CODE` or `SETUP_CODE_FILE` (optional): the one-time code for creating
+  the admin, at least 32 characters (`openssl rand -hex 32`); a code that is
+  too short or mostly one character stops the backend. Unset, one is
+  generated. `SETUP_CODE_FILE` names a file holding it, such as a Docker
+  secret, and wins over `SETUP_CODE`.
 - `DB_PASSWORD`: a generated password, not the sample value.
 - `SECRET_KEY`: generate one; it encrypts the secrets saved in Settings
   (price-source credentials, the alert webhook and heartbeat URLs):
@@ -49,8 +69,9 @@ Then bring it up:
 docker compose up --build -d
 ```
 
-The app is at http://localhost/ and the API docs at
-http://localhost/api/docs. The backend creates the database schema itself
+The app is at http://localhost/. There is no interactive API docs page; the
+OpenAPI schema is at http://localhost/api/openapi.json, to load into a viewer
+of your own ([api.md](api.md)). The backend creates the database schema itself
 before it starts serving. Check `curl http://localhost/api/health`: it
 reports database reachability, the running version, `schema` (`status: "ok"`
 once migrations are applied), and `documents` (`ok`, or `not_mounted` /
@@ -122,6 +143,18 @@ tokens; v0.31.0 adds single sign-on and a trusted-header mode, so a proxy
 like Authentik can sign you straight in). Until then, this section is the
 only protection. Do not expose it directly to the internet. Put it behind a
 reverse proxy that terminates TLS and handles authentication.
+
+**The Host header and forwarded headers.** Cabinet's nginx answers only the
+Host names from `PUBLIC_ORIGINS` and `ALLOWED_HOSTS`, so set
+`PUBLIC_ORIGINS` to the public address the edge proxy serves (Traefik passes
+the original Host through by default). nginx believes no forwarded header
+from anyone: `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto` are
+overwritten with what nginx itself saw (the edge proxy's address, and
+`http`), and the identity headers forward-auth gateways add (`Remote-User`,
+`X-authentik-*`, `X-Auth-Request-*`, and the like) are dropped before the
+backend sees them, so an edge proxy's login is a door in front of Cabinet,
+never a way into it. **Nothing but Cabinet's nginx should be able to reach
+the backend**: keep the backend off any network other services share.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:
 
@@ -272,8 +305,13 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.29.1 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.29.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
+
+`PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy
+stops and names them if they are missing); add `cabinet_proxy` to
+`ALLOWED_HOSTS` if Homepage or Prometheus reach Cabinet over an overlay by
+its service name.
 
 What that file does differently from `docker-compose.yaml`, and why:
 
@@ -285,13 +323,19 @@ What that file does differently from `docker-compose.yaml`, and why:
   first two, and the stack file passes the backend only the variables it
   names: the database URL, the data paths, `SECRET_KEY` (left empty, the key
   falls back to the one generated on the `backend_state` volume),
-  `REESTIMATE_DAYS`, `RESTORE_ENABLED`, `RESTORE_MAX_GB`, `PUID`/`PGID`, and
-  `TZ`. `AUTO_MIGRATE` and
+  `REESTIMATE_DAYS`, `RESTORE_ENABLED`, `RESTORE_MAX_GB`, `PUID`/`PGID`,
+  `TZ`, and `PUBLIC_ORIGINS`. A commented `secrets:` block shows the setup
+  code as a Docker secret (`SETUP_CODE_FILE=/run/secrets/cabinet_setup_code`),
+  preferred over `SETUP_CODE` on a Swarm because Portainer, Dozzle, and
+  `docker service inspect` show environment variables but not secret
+  contents. `AUTO_MIGRATE` and
   `REQUIRE_DOCUMENT_MOUNT` are not among them; add a line to the backend's
   `environment:` if you change either from its default. The backend waits up to 60 seconds for Postgres before migrating,
   and its health check gives a first boot 90 seconds;
   `restart_policy: any` replaces `restart`.
 - **Memory limits**: 1 GB each for the backend and db, 256 MB for the proxy.
+- **Logs rotate**: every service keeps three 10 MB `json-file` logs, here
+  and in `docker-compose.yaml`.
 - **One replica each.** The refresh, backup, and alert schedulers run inside
   the backend process; a second replica would run them twice.
 - **Storage is named volumes so the file works as is.** On a real Swarm,
@@ -301,13 +345,17 @@ What that file does differently from `docker-compose.yaml`, and why:
   with the task) and `/data/documents` (uploads are refused unless it's a
   real mount, so the omission is loud rather than silent).
 - **Networks.** `cabinet-internal` is an internal overlay for the three
-  services; `cabinet-egress` is a plain overlay so the backend can reach its
-  price sources and the proxy can be reached. Replace it with your Swarm's
-  own ingress network (`external: true`) and, behind Traefik or similar,
-  drop the proxy's `ports:` for that proxy's labels (see section 3 for the
-  Traefik + Authentik pattern). `/api/metrics` is easiest scraped over the
+  services. `cabinet-egress` is the backend's alone, its way out to price
+  sources and the alert webhook; the proxy is not on it, since it needs no
+  way out. **Nothing but nginx should reach the backend**, so don't replace
+  `cabinet-egress` with a network other services share. Behind Traefik,
+  put only the proxy on Traefik's network (a commented example is in the
+  file), drop its `ports:` for Traefik's labels (see section 3), and keep
+  Traefik in ingress mode or not as you prefer: Cabinet reads no forwarded
+  client address either way. `/api/metrics` is easiest scraped over the
   internal network rather than exempted from the auth proxy
-  ([monitoring.md](monitoring.md)).
+  ([monitoring.md](monitoring.md)); list the name it is reached by in
+  `ALLOWED_HOSTS`.
 
 Upgrading is a tag bump: change `TAG`, deploy again, and the backend
 migrates on startup. Restore from Settings → Backups works on a Swarm as it

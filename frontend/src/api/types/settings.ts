@@ -41,6 +41,9 @@ export interface AppSettings {
   alert_webhook_format: AlertFormat;
   heartbeat_hint: string | null;
   metrics_enabled: boolean;
+  // Secrets cleared because they weren't encrypted with this deployment's
+  // key, by name, until each is entered again.
+  secrets_cleared: string[];
   alerts: AlertStatus[];
   alert_delivery: MonitorOutcome | null;
   heartbeat: MonitorOutcome | null;

@@ -28,8 +28,13 @@ request bodies).
 
 If a secret cannot be decrypted (the key was rotated away or lost), the app
 reports that source as *not configured* rather than failing. Re-enter the key
-in Settings. A value stored as plaintext by a release from before encryption
-existed is encrypted in place the first time it is read.
+in Settings. **A value stored as plain text is never used** (from v0.30.0):
+Cabinet only ever writes encrypted values, so plain text came from somewhere
+else, such as an edited backup archive planting a webhook address. It reads
+as unset, and at startup and every hour it is cleared, never encrypted in
+place, and named (by name only) in the log, through the alert webhook if one
+is still saved, and in a Settings banner ("Re-enter: alert webhook") until
+it is entered again. Every secret saved since v0.10 is already encrypted.
 
 ## Key management
 

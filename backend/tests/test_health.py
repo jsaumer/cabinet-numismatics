@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
-from app.services import schema
+from app.services import scheduled, schema
 
 LATEST = sorted(
     p.name.split("_")[0] for p in (Path(__file__).parents[1] / "alembic" / "versions").glob("0*.py")
@@ -36,7 +36,9 @@ def test_schema_states():
 
 def _start_with(monkeypatch, auto_migrate: str) -> list:
     calls: list = []
-    monkeypatch.setattr(schema, "upgrade_to_head", lambda engine: calls.append(engine))
+    monkeypatch.setattr(schema, "upgrade_to_head", lambda engine: calls.append("migrate"))
+    # Stored secrets are checked right after migrating (no database here).
+    monkeypatch.setattr(scheduled, "clear_secrets", lambda db: calls.append("secrets"))
     monkeypatch.setenv("AUTO_MIGRATE", auto_migrate)
     get_settings.cache_clear()
     try:
@@ -48,7 +50,7 @@ def _start_with(monkeypatch, auto_migrate: str) -> list:
 
 
 def test_startup_migrates_by_default(monkeypatch):
-    assert len(_start_with(monkeypatch, "true")) == 1
+    assert _start_with(monkeypatch, "true") == ["migrate", "secrets"]
 
 
 def test_startup_skips_migrations_when_disabled(monkeypatch):

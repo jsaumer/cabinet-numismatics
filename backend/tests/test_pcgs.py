@@ -427,3 +427,19 @@ def test_cert_fill_needs_a_token_and_a_known_cert(client, upstream):
     resp = client.get("/api/pcgs/cert/1")
     assert resp.status_code == 422 and "no record" in resp.json()["detail"]
     assert client.get("/api/pcgs/cert/abc").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "cert",
+    ["1234%205678", "12.34", "12_34", "123456789012345678901", "12%2F34"],
+)
+def test_cert_route_takes_only_letters_digits_and_dashes(client, upstream, cert):
+    """Nothing that needs percent-encoding, and at most 20 characters, so the
+    sign-in gate's refusal of encoded paths never meets a real cert. (An
+    encoded digit such as `%31` decodes before routing, so only the gate can
+    refuse it; that case is the gate's test, stage 7.)"""
+    configure(client)
+    upstream.body = CERT_FACTS
+    resp = client.get(f"/api/pcgs/cert/{cert}")
+    assert resp.status_code in (404, 422), (cert, resp.status_code)
+    assert list(upstream) == []  # refused before PCGS is asked

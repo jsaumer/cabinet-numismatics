@@ -281,9 +281,9 @@ owner. The image installs `requirements.txt` with `--require-hashes`, then
 the project with `--no-deps`, then uninstalls pip (Trivy flags the msgpack
 and setuptools pip bundles), so there is no pip in the running container.
 `proxy/nginx.conf`: an `add_header` inside a `location` replaces the
-server-level ones, so `location /` repeats them alongside its CSP; `/api/`
-gets no CSP from nginx (documents set their own, and `/api/docs` loads its
-viewer from a CDN). New inline scripts, external fonts, or iframes will trip
+server-level ones, so `location /` repeats them alongside its CSP (from
+v0.30.0 by including `cabinet-headers.conf`); `/api/` gets no CSP from nginx
+(documents set their own). New inline scripts, external fonts, or iframes will trip
 the CSP, and the e2e header test visits the main pages to catch that.
 
 ## Interface polish (v0.24.0)
@@ -794,6 +794,47 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   `pycparser` were already there for `cryptography`). The real hashing
   parameters arrive with the password service (stage 6);
   `tests/test_dependencies.py` only proves it installs and round-trips.
+- **Deployment settings are checked before anything starts.**
+  `config.check_startup` runs first in the lifespan and raises `ConfigError`
+  naming the variable (`PUBLIC_ORIGINS` required and made of exact origins,
+  `AUTH_INSECURE_HTTP` only beside http origins, a supplied setup code at
+  least 32 characters with no character over a quarter of it, a readable
+  `SETUP_CODE_FILE`); uvicorn then exits 3. `config.normalize_origin` is the
+  one origin parser (lowercase, default port dropped, no path); CSRF will use
+  it. Tests get `PUBLIC_ORIGINS=https://testserver` from conftest. Once the
+  claimed marker exists (stage 7) the setup code is ignored, so its check
+  moves behind that.
+- **Every proxied nginx location includes `cabinet-proxy.conf`**, and a
+  location with its own `add_header` includes `cabinet-headers.conf`: nginx
+  drops the server-level `proxy_set_header` and `add_header` lines in any
+  location that sets one of its own, so a new location without the include
+  would pass a client's `X-Forwarded-For` or identity headers straight
+  through. Forwarded headers are overwritten, never appended; identity
+  headers are set to `""` (not passed). The backend runs uvicorn with
+  `--no-proxy-headers`, so it never rewrites the client from a header either.
+- **Host names.** `proxy/40-cabinet-hosts.sh` writes `server_name` from the
+  hosts of `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (a union, so listing an
+  internal name can't drop the public one); underscores are allowed
+  (`cabinet_proxy`), `_` alone, ports, schemes, and wildcards are not. The
+  nginx image's entrypoint stops the container when the script fails
+  (confirmed). Anything else hits the `default_server` and gets 444.
+- **Plain-text secrets are never used or healed.** `crypto.decrypt` returns
+  `""` for unprefixed input and `get_setting` no longer encrypts it in place.
+  `app_settings.clear_unusable_secrets` clears it and records the key in
+  `secrets_cleared` (a setting written only by the service, shown in
+  Settings, removed per key when that secret is saved again);
+  `scheduled.clear_secrets` wraps it with a commit and an `alerts.event` that
+  names, never shows. It runs at startup after migrations (only when
+  `AUTO_MIGRATE` is on, since tests have no database there) and first in
+  every hourly tick, which also covers a database put back by `restore.sh`.
+  The in-app restore calls it with `undecryptable=True` (stage 4); the audit
+  event `secrets_cleared` joins it in stage 6.
+- **The PCGS cert route takes `^[0-9A-Za-z-]{1,20}$`** (`CERT_PATTERN`), so
+  no real cert needs a percent-encoded path. An encoded digit (`%31`)
+  decodes before routing, so only the gate's refusal of any `%` (stage 7)
+  catches that form.
+- **No `/api/docs`**: `docs_url`, `redoc_url`, and
+  `swagger_ui_oauth2_redirect_url` are all `None`; `/api/openapi.json` stays.
 
 ## Releases
 

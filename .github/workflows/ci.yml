@@ -80,6 +80,10 @@ jobs:
             echo "DB_PASSWORD=ci-$(openssl rand -hex 12)"
             echo "DB_NAME=cabinet"
             echo "SECRET_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+            # The runner reaches the stack as http://localhost (curl and Playwright).
+            echo "PUBLIC_ORIGINS=http://localhost"
+            echo "ALLOWED_HOSTS=localhost"
+            echo "AUTH_INSECURE_HTTP=true"
           } > .env
 
       - name: Build and start
@@ -107,7 +111,15 @@ jobs:
       - name: Smoke-test the API through the proxy
         run: |
           set -euo pipefail
-          curl -fsS http://localhost/api/docs > /dev/null
+          # no interactive docs page; the schema stays
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/docs)" = 404
+          curl -fsS http://localhost/api/openapi.json > /dev/null
+          # nginx answers only its own Host names: anything else gets no
+          # response at all (444 closes the connection; curl exits 52)
+          set +e; curl -s -o /dev/null -H 'Host: elsewhere.example' http://localhost/; rc=$?; set -e
+          test "$rc" = 52
+          # sign-in and setup take at most 8 KiB, refused by nginx itself
+          test "$(head -c 9216 /dev/zero | curl -s -o /dev/null -w '%{http_code}'                   -X POST --data-binary @- http://localhost/api/auth/login)" = 413
           # create → read → trash → restore → delete for good, end to end
           id=$(curl -fsS -X POST http://localhost/api/items \
                  -H 'Content-Type: application/json' \

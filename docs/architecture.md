@@ -29,7 +29,15 @@ a single-user collection manager has modest performance needs.
 ## Services
 
 ### proxy (nginx, built image)
-The single public entry point. Its image is built from the multi-stage
+The single public entry point. It answers only the Host names of
+`PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (written into `server_name` by
+`proxy/40-cabinet-hosts.sh` when the container starts, which stops the
+container on a bad value); a default server closes the connection on any
+other Host (444). Every proxied location includes `cabinet-proxy.conf`,
+which overwrites `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto`
+with nginx's own peer and scheme and drops forward-auth identity headers,
+so the backend never trusts a client's claim; sign-in and setup take at most
+8 KiB. Its image is built from the multi-stage
 `frontend/Dockerfile` (Node build stage → nginx stage with the static files
 baked in), so `docker compose up --build` needs no host Node install. It serves
 the frontend and photo files directly, and proxies `/api/` to the backend. The
@@ -147,6 +155,11 @@ app's Settings page and stored in the database.
 | `RESTORE_ENABLED` | In-app restore (default `true`); `false` makes every restore endpoint answer 404 and hides it in Settings |
 | `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
 | `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.29.1`) |
+| `PUBLIC_ORIGINS`  | Required. The exact origins browsers use (`https://cabinet.example.com`), comma-separated; read by the backend (checked at start) and the proxy (its Host names) |
+| `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets no response |
+| `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |
+| `SETUP_CODE` / `SETUP_CODE_FILE` | The one-time setup code, or a file holding it (a Docker secret); at least 32 characters, checked at start. Unset, one is generated |
+| `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
@@ -160,7 +173,8 @@ rotation.
 
 - **Backend:** run FastAPI with `uvicorn app.main:app --reload`, with
   `DATABASE_URL` pointed at a local or containerized postgres, `PHOTO_DIR`
-  and `DOCUMENT_DIR` set to local directories, and `REQUIRE_DOCUMENT_MOUNT=false`.
+  and `DOCUMENT_DIR` set to local directories, `REQUIRE_DOCUMENT_MOUNT=false`,
+  and `PUBLIC_ORIGINS=http://localhost:5173` with `AUTH_INSECURE_HTTP=true`.
 - **Frontend:** `npm run dev` runs the Vite dev server, which proxies `/api`
   to localhost:8000. `npm run build` emits static files to `frontend/dist`
   (only needed for local inspection: the container build does this itself).
