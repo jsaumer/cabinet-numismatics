@@ -39,6 +39,15 @@ backups). The upgrade notes will lead this entry when it is released.
   and 503 while the backend is restarting. The app's own files and the
   logo stay public. Measured on a page of 50 thumbnails: about 3.5 ms per
   photo.
+- **The setup and sign-in pages, and the rest of the frontend for all of the
+  above.** `/setup` and `/login` (a plain warning when the connection isn't
+  secure, the server's error and throttle text shown as it happens); a
+  password-confirmation dialog that opens itself when a "fresh" action needs
+  it and retries; a failed-sign-ins notice after signing in; Settings →
+  Account (change the password or username, see and end sessions, create
+  and revoke API tokens, read the audit log); and, in Settings → Backups,
+  the backup key's fingerprint, a reminder to save it until it's ticked
+  done, and deleting old unencrypted archives.
 - **Commands in the container for the account**, for when the app can't be
   reached (`docker compose exec backend python -m app.cli ...`): `status`,
   `reset-password` (asked twice, never an argument; ends every session and

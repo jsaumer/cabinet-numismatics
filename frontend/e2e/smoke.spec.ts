@@ -13,26 +13,28 @@ let itemUrl: string;
 
 const acceptDialogs = (page: Page) => page.on("dialog", (dialog) => dialog.accept());
 
-// global-setup.ts signs the whole suite in, but a "fresh" route (a recent
-// password confirmation, docs/specs/SPEC_0300.md section 5) still needs its
-// own 5-minute window per session, and there is no confirmation dialog yet
-// (that is stage 9). Call this through the page's own request context right
-// before an action that reaches a fresh route (restore inspect and run,
-// here): it shares cookies with the page, so the confirmation applies to the
-// session the UI is about to use. Sent with an explicit Origin because the
-// request context sends no Sec-Fetch-Site header, which the CSRF check
-// otherwise needs on a cookie request (section 4).
-const BASE_URL = process.env.BASE_URL ?? "http://localhost";
+const CABINET_USER = process.env.CABINET_USER ?? "owner";
 const CABINET_PASSWORD = process.env.CABINET_PASSWORD ?? "correct horse battery";
 
-async function confirmPassword(page: Page) {
-  const response = await page.request.post("/api/auth/confirm", {
-    headers: { Origin: BASE_URL },
-    data: { password: CABINET_PASSWORD },
-  });
-  if (!response.ok()) {
-    throw new Error(`Password confirmation failed: ${response.status()} ${await response.text()}`);
-  }
+// global-setup.ts signs the whole suite in, but a "fresh" route (a recent
+// password confirmation, docs/specs/SPEC_0300.md section 5) still needs its
+// own 5-minute window per session. Run the action that reaches such a route
+// (restore inspect and run, deleting for good, here); if the window has
+// lapsed, the app's own confirm-password dialog appears (client.ts's req()
+// caught the 403 and is waiting), so answer it and let the original action
+// retry itself. Within the window (most calls after the first in a test),
+// no dialog appears and this is a no-op.
+async function withPasswordConfirm(page: Page, act: () => Promise<void>) {
+  await act();
+  const dialog = page.getByRole("dialog", { name: "Confirm your password" });
+  const appeared = await dialog
+    .waitFor({ state: "visible", timeout: 3000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!appeared) return;
+  await dialog.getByLabel("Password").fill(CABINET_PASSWORD);
+  await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(dialog).toBeHidden();
 }
 
 test("the dashboard renders", async ({ page }) => {
@@ -165,10 +167,11 @@ test("trash it, restore it, then delete it for good", async ({ page }) => {
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.goto("/trash");
   // deleting for good is admin, fresh (already-trashed items too).
-  await confirmPassword(page);
-  await page.getByRole("row", { name: new RegExp(COUNTRY) })
-    .getByRole("button", { name: "delete for good" })
-    .click();
+  await withPasswordConfirm(page, () =>
+    page.getByRole("row", { name: new RegExp(COUNTRY) })
+      .getByRole("button", { name: "delete for good" })
+      .click(),
+  );
   await expect(page.getByText("Deleted 1 item for good.")).toBeVisible();
 
   await page.goto(itemUrl);
@@ -186,10 +189,11 @@ async function deleteForGood(page: Page, url: string, country: string) {
   await expect(page).toHaveURL(/\/collection$/);
   await page.goto("/trash");
   // DELETE /api/items/{id}?permanent=true is admin, fresh.
-  await confirmPassword(page);
-  await page.getByRole("row", { name: new RegExp(country) })
-    .getByRole("button", { name: "delete for good" })
-    .click();
+  await withPasswordConfirm(page, () =>
+    page.getByRole("row", { name: new RegExp(country) })
+      .getByRole("button", { name: "delete for good" })
+      .click(),
+  );
   await expect(page.getByText("Deleted 1 item for good.")).toBeVisible();
 }
 
@@ -327,27 +331,122 @@ test("restore the backup just taken", async ({ page }) => {
   await expect(written).toBeVisible({ timeout: 60_000 });
   const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip\.age/)![0];
 
-  // POST /api/restore/inspect is a fresh route.
-  await confirmPassword(page);
-  await page
-    .getByRole("row")
-    .filter({ has: page.getByRole("link", { name, exact: true }) })
-    .getByRole("button", { name: "Restore…" })
-    .click();
+  // POST /api/restore/inspect is a fresh route: the confirm-password dialog
+  // answers it the first time it's needed.
+  await withPasswordConfirm(page, () =>
+    page
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name, exact: true }) })
+      .getByRole("button", { name: "Restore…" })
+      .click(),
+  );
   await expect(page.getByRole("columnheader", { name: "This archive" })).toBeVisible({
     timeout: 60_000,
   });
   await expect(page.getByRole("columnheader", { name: "Here now" })).toBeVisible();
 
-  // POST /api/restore/{id}/run is fresh too; the window from above still
-  // covers it, but confirming again is cheap and makes that dependency explicit.
-  await confirmPassword(page);
+  // POST /api/restore/{id}/run is fresh too; the window from above usually
+  // still covers it, so no dialog is expected here, but withPasswordConfirm
+  // answers one if it appears.
   const run = page.getByRole("button", { name: "Restore this archive" });
   await expect(run).toBeDisabled();
   await page.getByLabel("Type RESTORE to confirm").fill("RESTORE");
-  await run.click();
+  await withPasswordConfirm(page, () => run.click());
 
   await expect(page.getByText(/^Restore complete:/)).toBeVisible({ timeout: 120_000 });
   // The page reloaded its data: the safety backup is in the list.
   await expect(page.getByText("before restore").first()).toBeVisible({ timeout: 30_000 });
+});
+
+// These two change the admin's password and username, which (per
+// SPEC_0300.md section 5) signs out every OTHER session: that includes the
+// one session baked into e2e/.auth/storage-state.json, which is what every
+// other test's page fixture is freshly loaded from (Playwright reads that
+// file for each new context; it isn't the live cookie of any running page).
+// So the moment the first test here rotates its own session, that stored
+// session dies for anyone else who starts from it, including the second
+// test in this very describe. Both therefore sign themselves in through the
+// form first, exactly as the task calls for ("a separate browser context
+// that signs in itself"), rather than trusting the ambient storageState.
+// They run last, after the restore above, and in their own serial,
+// no-retry describe: a retry that assumed the password was still
+// CABINET_PASSWORD after a first attempt left it as something else would
+// only compound the problem. playwright.config.ts's workers: 1 keeps
+// everything else from making a request while the password is briefly
+// something else. A restore never touches cabinet_auth, so running after
+// one is no different from running before it.
+test.describe("account changes (isolated, self-reverting)", () => {
+  test.describe.configure({ mode: "serial", retries: 0 });
+
+  async function signIn(page: Page, username: string, password: string) {
+    await page.goto("/login");
+    // The first of these two tests gets a fresh page fixture that's often
+    // still signed in from the shared storageState (nothing has rotated it
+    // yet): /login then bounces straight back to "/", with nothing to fill
+    // in. The second test's fresh page never is (the first just revoked
+    // that stored session), so it sees the form.
+    const usernameField = page.getByLabel("Username");
+    const dashboard = page.getByRole("heading", { level: 1, name: "Dashboard" });
+    await expect(usernameField.or(dashboard)).toBeVisible();
+    if (await usernameField.isVisible().catch(() => false)) {
+      await usernameField.fill(username);
+      await page.getByLabel("Password").fill(password);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(dashboard).toBeVisible();
+    }
+  }
+
+  test("changing the password revokes tokens, and can be changed back", async ({ page }) => {
+    await signIn(page, CABINET_USER, CABINET_PASSWORD);
+    await page.goto("/settings");
+    const tokenName = `e2e-pw-token-${Date.now()}`;
+    const tokenForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Create token" }) });
+    await tokenForm.getByLabel("Name").fill(tokenName);
+    await tokenForm.getByRole("button", { name: "Create token" }).click();
+    // Creating a token is fresh too; the window from the restore test just
+    // above usually still covers it, but answer the dialog if it appears.
+    const dialog = page.getByRole("dialog", { name: "Confirm your password" });
+    if (await dialog.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false)) {
+      await dialog.getByLabel("Password").fill(CABINET_PASSWORD);
+      await dialog.getByRole("button", { name: "Confirm", exact: true }).click();
+    }
+    await expect(page.getByText(`${tokenName} (read): copy it now, it won't be shown again.`)).toBeVisible();
+
+    const passwordForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Change password" }) });
+    async function changePassword(current: string, next: string) {
+      await passwordForm.getByLabel("Current password").fill(current);
+      await passwordForm.getByLabel("New password", { exact: true }).fill(next);
+      await passwordForm.getByLabel("Confirm new password").fill(next);
+      await passwordForm.getByRole("button", { name: "Change password" }).click();
+    }
+
+    const temp = `${CABINET_PASSWORD} temp`;
+    await changePassword(CABINET_PASSWORD, temp);
+    await expect(page.getByText(/^Password changed\./)).toBeVisible();
+    await expect(page.getByText(new RegExp(`Revoked: .*${tokenName}`))).toBeVisible();
+
+    await changePassword(temp, CABINET_PASSWORD);
+    await expect(page.getByText(/^Password changed\./)).toBeVisible();
+  });
+
+  test("changing the username, and back", async ({ page }) => {
+    // The password test just above rotated and restored the session it
+    // used, but that killed the storageState session every fresh page
+    // fixture (this one included) would otherwise start from: sign in again.
+    await signIn(page, CABINET_USER, CABINET_PASSWORD);
+    await page.goto("/settings");
+    const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Change username" }) });
+    async function changeUsername(username: string) {
+      await form.getByLabel("Current password").fill(CABINET_PASSWORD);
+      await form.getByLabel("New username").fill(username);
+      await form.getByRole("button", { name: "Change username" }).click();
+    }
+
+    const temp = `${CABINET_USER}-e2e`;
+    await changeUsername(temp);
+    await expect(page.getByText("Username changed.")).toBeVisible();
+
+    await changeUsername(CABINET_USER);
+    await expect(page.getByText("Username changed.")).toBeVisible();
+  });
 });
