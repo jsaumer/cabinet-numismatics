@@ -1192,6 +1192,50 @@ Roadmap Phase 7, P8 A1, built stage by stage to
   with an explicit `Origin` header, right before an action that reaches a
   fresh route: deleting an item for good, and the in-app restore's inspect
   and run.
+- **The outside-in suite and the upgrade test, stage 10.**
+  `scripts/ci/stack-smoke.sh` gained two phases. `race` fires two concurrent
+  `POST /api/auth/setup` calls at a fresh stack and requires exactly one
+  `201` and one `409`; it only means anything before a stack is claimed, so
+  it checks `GET /api/auth/state` itself and skips with a message otherwise,
+  which is what lets `all` still pass against an already-claimed stack (CI's,
+  or the owner's own). `outside-in` (after `bootstrap`) checks every class
+  of caller against the same four routes (`GET /api/health` public,
+  `GET /api/items` read, `POST /api/items` write, `GET /api/settings`
+  admin), that anonymous callers are refused on `/api/openapi.json`,
+  `/api/settings`, `/api/backups`, a document file, `/api/metrics`, and
+  `/api/items/{id}`, that a revoked token is `401` and not `403`, and that a
+  spoofed `X-Forwarded-For`/`X-Real-IP` never reaches the audit log (nginx
+  overwrites them before the backend ever sees them). `backup_restore` and
+  `restore_drill` both end with `password_and_token_still_work`, a fresh
+  `POST /api/auth/login` plus a `GET /api/items` on the bootstrap write
+  token, proving `cabinet_auth` really did survive the restore rather than
+  merely reporting success. All three archive-touching steps write their
+  scratch files under `STATE_DIR`, never the repository root, and `sync`
+  the just-downloaded archive before decrypting it: on this project's
+  Windows dev machine, a file `curl -o` just wrote isn't always visible yet
+  to `docker compose exec` a moment later, which reads it as wrongly keyed
+  rather than as truncated (a `sync` closes that window; CI's Linux runner
+  never needed it, but it's harmless there too). `scripts/ci/upgrade-test.sh`
+  is new and separate: it starts v0.29.1 (pulled from GHCR; the last release
+  with no sign-in) against a fresh database, adds an item anonymously,
+  switches to the images built from the commit under test with
+  `docker compose up --build -d`, claims the upgraded stack, and checks
+  `GET /api/health`'s `schema.status` and `auth_schema.status` both read
+  `ok` with the item intact. Both scripts take their settings from
+  exported shell variables, never a `.env` file (`docker compose` prefers
+  shell values over one anyway), and both take `-p`-equivalent isolation
+  through `COMPOSE_PROJECT_NAME` and a `CABINET_PORT`, so they run against a
+  disposable project without touching one already in use; CONTRIBUTING.md
+  has the exact commands. CI wires `race` in right after the stack comes up
+  (a fresh stack there always answers `setup_required`), then `bootstrap`,
+  `smoke`, `outside-in`, `backup-restore`, `restore-drill`, `photos`, in
+  that order, and adds `upgrade` as its own job, independent of `stack`.
+  `docs/screenshots/capture.cjs` signs in through the sign-in form before
+  capturing (`CABINET_USER`/`CABINET_PASSWORD`) and gained a `signin` mode
+  for the sign-in page itself, captured signed out; `docs/screenshots/README.md`
+  now walks through a throwaway compose project end to end (claim, seed,
+  configure settings through a signed-in session, capture, tear down)
+  rather than the anonymous curl calls it documented before sign-in existed.
 
 ## Releases
 

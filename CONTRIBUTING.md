@@ -144,15 +144,66 @@ and data migrations.
   3.10 (the floor in `pyproject.toml`) and 3.14 (what the image runs).
 - **frontend**: `npm ci` and `npm run build` (typecheck and build) on
   Node 22.
-- **stack**: builds and starts the compose stack, waits for
-  `/api/health`, confirms the schema migrated itself, smoke-tests the API
-  with curl through the proxy (create, trash, restore, permanent delete,
-  settings, metrics, the test alert), rehearses an in-app backup and
-  `scripts/restore.sh` with an attached PDF, then runs the Playwright tests.
-  If you change an endpoint those steps use, update them: pytest won't
-  catch it.
-- **publish**: on a `v*` tag only, after the three jobs pass, pushes the
+- **stack**: builds and starts the compose stack, then runs
+  `scripts/ci/stack-smoke.sh` (`bootstrap`, `smoke`, `outside-in`,
+  `backup-restore`, `restore-drill`, `photos`, in that order) through the
+  proxy: bootstrap signs in and mints tokens; smoke covers create, trash,
+  restore, permanent delete, settings, metrics, the test alert; outside-in
+  checks every anonymous route is refused, each token's scope holds (read,
+  write, metrics, and the session, one route per class), a revoked token is
+  refused, and a spoofed `X-Forwarded-For`/`X-Real-IP` never reaches the
+  audit log; backup-restore and restore-drill rehearse an in-app backup,
+  `scripts/restore.sh`, and an in-app restore, each checking the admin
+  password and the write token still work afterwards; photos checks nginx's
+  `auth_request` gate. Then Playwright runs against the same stack. The
+  script runs the same way locally, and locally it also has a `race` phase
+  (two concurrent `POST /api/auth/setup` calls on a fresh stack must leave
+  exactly one `201` and one `409`; it skips itself with a message on a stack
+  that's already claimed, since that's what CI's stack always is by the
+  time it runs). If you change an endpoint any of these steps use, update
+  them: pytest won't catch it.
+- **upgrade**: starts the last release before sign-in (v0.29.1, pulled from
+  GHCR) against a fresh database, adds an item anonymously (that release has
+  no login), switches to the images built from the commit under test, claims
+  the instance, and checks both migration chains reached head and the item
+  is still there. Runs `scripts/ci/upgrade-test.sh`, independent of the
+  `stack` job's compose project.
+- **publish**: on a `v*` tag only, after the earlier jobs pass, pushes the
   backend and proxy images to GHCR.
+
+### Running the stack checks locally
+
+Both scripts talk to whatever compose project you point them at with `-p`,
+so they're safe to run against a scratch stack without touching one you're
+already using for manual testing. Never point them at a project you rely on:
+`stack-smoke.sh`'s `smoke` phase deletes items it created itself, but
+`restore-drill` and the `race` phase are destructive to whatever is signed
+in when they run, and `upgrade-test.sh` rebuilds the stack's images in
+place. For a throwaway project (a different `-p` name and `CABINET_PORT`
+than any stack you're already running):
+
+```bash
+export PUBLIC_ORIGINS=http://localhost:8081,http://proxy
+export ALLOWED_HOSTS=localhost,proxy
+export AUTH_INSECURE_HTTP=true
+export SETUP_CODE=<32+ hex characters>
+export CABINET_PORT=8081
+docker compose -p cabinet-ci up --build -d
+BASE=http://localhost:8081 STACK_SMOKE_STATE=/tmp/cabinet-ci-smoke \
+  scripts/ci/stack-smoke.sh race
+BASE=http://localhost:8081 STACK_SMOKE_STATE=/tmp/cabinet-ci-smoke \
+  scripts/ci/stack-smoke.sh all
+docker compose -p cabinet-ci down -v
+```
+
+```bash
+COMPOSE_PROJECT_NAME=cabinet-upgrade CABINET_PORT=8082 scripts/ci/upgrade-test.sh
+docker compose -p cabinet-upgrade down -v
+```
+
+Both scripts prefer variables you export in the shell over anything in
+`.env` (compose does too), so they never need their own `.env` file, and
+running them this way never touches one you already have.
 
 `.github/workflows/security.yml` runs on the same events and weekly:
 `pip-audit` against `backend/requirements.txt`, `npm audit` on the frontend's

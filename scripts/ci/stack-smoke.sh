@@ -5,8 +5,14 @@
 # job; it moved here so it can also run against the local stack before any
 # push (docs/specs/SPEC_0300.md section 9, stage 7 of section 10).
 #
-# Usage: scripts/ci/stack-smoke.sh [bootstrap|smoke|backup-restore|restore-drill|photos|all]
+# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|all]
 #   (no argument, or "all", runs every phase in order)
+#
+# race must run before bootstrap, on a fresh, unclaimed stack (it skips
+# itself with a message on one already claimed, so "all" still works
+# against a stack that's already been signed into, such as the owner's main
+# one). outside-in runs after bootstrap; it is independent of smoke,
+# backup-restore, restore-drill, and photos.
 #
 # Run from the repository root, with the stack already up
 # (docker compose up -d) and PUBLIC_ORIGINS/ALLOWED_HOSTS/AUTH_INSECURE_HTTP
@@ -20,6 +26,12 @@
 #   STACK_SMOKE_STATE  Where the cookie jar and minted tokens are kept between
 #                       phases, so bootstrap/smoke/backup-restore/restore-drill
 #                       can run as separate steps (default a temp folder)
+#
+# The `docker compose exec` calls below (a document's PDF, a photo, decrypting
+# an archive) take no -p: they rely on COMPOSE_PROJECT_NAME (export it) to
+# reach the right stack when BASE points at a throwaway project rather than
+# the default "cabinet-numismatics" one docker compose infers from this
+# directory's name.
 #
 # Idempotent: bootstrap mints tokens named with the current timestamp and PID,
 # so running the whole script twice against the same claimed stack is safe.
@@ -104,7 +116,71 @@ wait_for_health() {
   exit 1
 }
 
+# Run after a restore replaces the database: a fresh sign-in (its own cookie
+# jar, so it doesn't disturb $COOKIES) and the bootstrap write token both
+# still work, which proves neither the password hash nor the token survived
+# by accident from before the restore, but by the restore itself keeping
+# cabinet_auth untouched.
+password_and_token_still_work() {
+  echo "-- the password and the write token still work --"
+  local jar
+  jar="$(mktemp)"
+  local status
+  status=$(curl -s -o /dev/null -w '%{http_code}' -c "$jar" -H "Origin: $BASE" \
+    -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"$CABINET_PASSWORD\"}")
+  rm -f "$jar"
+  test "$status" = 200
+  test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/items")" = 200
+}
+
 # --- phases ------------------------------------------------------------------
+
+# Two concurrent POST /api/auth/setup calls on a fresh, unclaimed stack must
+# leave exactly one 201 and one 409: the setup race the gate is meant to
+# close (docs/specs/SPEC_0300.md section 9). Meaningless once a stack is
+# claimed, so it runs before bootstrap and skips itself on an already-claimed
+# one rather than failing "all" on the main stack.
+race() {
+  echo "== race =="
+  wait_for_health
+
+  local required
+  required=$(curl -fsS "$BASE/api/auth/state" | field setup_required)
+  if [ "$required" != "True" ]; then
+    echo "already claimed; race is only meaningful on a fresh stack, skipping"
+    return 0
+  fi
+  : "${SETUP_CODE:?SETUP_CODE must be set to race a fresh stack}"
+
+  # Both calls use CABINET_USER/CABINET_PASSWORD, so whichever wins is the
+  # account bootstrap then signs in as: distinct usernames would leave
+  # bootstrap not knowing which one to log in with.
+  local out1 out2
+  out1="$STATE_DIR/race-1.status"
+  out2="$STATE_DIR/race-2.status"
+  local body
+  body="{\"code\":\"$SETUP_CODE\",\"username\":\"$CABINET_USER\",\"password\":\"$CABINET_PASSWORD\"}"
+  curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/setup" \
+    -H 'Content-Type: application/json' -d "$body" > "$out1" &
+  local pid1=$!
+  curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/setup" \
+    -H 'Content-Type: application/json' -d "$body" > "$out2" &
+  local pid2=$!
+  wait "$pid1"
+  wait "$pid2"
+  local c1 c2
+  c1="$(cat "$out1")"
+  c2="$(cat "$out2")"
+  rm -f "$out1" "$out2"
+  echo "concurrent setup calls answered $c1 and $c2"
+  if { [ "$c1" = 201 ] && [ "$c2" = 409 ]; } || { [ "$c1" = 409 ] && [ "$c2" = 201 ]; }; then
+    echo "race passed: exactly one 201, one 409"
+  else
+    echo "race FAILED: wanted one 201 and one 409" >&2
+    exit 1
+  fi
+}
 
 bootstrap() {
   echo "== bootstrap =="
@@ -231,45 +307,63 @@ backup_restore() {
     -H 'Content-Type: application/json' \
     -d '{"type":"coin","country":"Backup drill","denomination":"1 test","year":2026}' \
     | field id)
-  # attach a PDF (made by Pillow inside the backend image) as a document
-  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (200, 280), "white").save(b, "PDF"); sys.stdout.buffer.write(b.getvalue())' > receipt.pdf
+  # attach a PDF (made by Pillow inside the backend image) as a document.
+  # Scratch files live in STATE_DIR, never the repo root, so a run never
+  # leaves stray files behind and separate CI steps (which share
+  # STACK_SMOKE_STATE) see the same ones.
+  receipt="$STATE_DIR/receipt.pdf"
+  backup_age="$STATE_DIR/backup.zip.age"
+  flipped_age="$STATE_DIR/flipped.zip.age"
+  restored_pdf="$STATE_DIR/restored.pdf"
+  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (200, 280), "white").save(b, "PDF"); sys.stdout.buffer.write(b.getvalue())' > "$receipt"
   doc=$(apif -X POST "$BASE/api/items/$id/documents" \
-    -F kind=receipt -F file=@receipt.pdf \
+    -F kind=receipt -F file=@"$receipt" \
     | field id)
 
   # every archive is encrypted with the backup key (age); downloading one is
-  # admin, fresh
-  fresh -o backup.zip.age "$BASE/api/backup.zip"
-  test "$(head -c 21 backup.zip.age)" = "age-encryption.org/v1"
+  # admin, fresh. sync before the very next read: on some Windows/Docker
+  # Desktop setups, a file curl just wrote isn't reliably visible yet to a
+  # process started a moment later inside the WSL2-backed daemon, and
+  # decrypt-archive would see it as truncated or wrongly keyed.
+  fresh -o "$backup_age" "$BASE/api/backup.zip"
+  sync "$backup_age" 2>/dev/null || sync
+  test "$(head -c 21 "$backup_age")" = "age-encryption.org/v1"
   # decrypt-archive and restore.sh need no token: they run on the host and in
   # the backend container, never through the API
-  docker compose exec -T backend python -m app.cli decrypt-archive < backup.zip.age > plain.zip
-  unzip -l plain.zip | grep -q documents.tar.gz
-  unzip -p plain.zip db.dump | docker compose exec -T db pg_restore --list > toc.txt
-  if grep -v '^;' toc.txt | grep -qw cabinet_auth; then
+  plain="$STATE_DIR/plain.zip"
+  toc="$STATE_DIR/toc.txt"
+  docker compose exec -T backend python -m app.cli decrypt-archive < "$backup_age" > "$plain"
+  unzip -l "$plain" | grep -q documents.tar.gz
+  unzip -p "$plain" db.dump | docker compose exec -T db pg_restore --list > "$toc"
+  if grep -v '^;' "$toc" | grep -qw cabinet_auth; then
     echo "the dump holds sign-in data"
     exit 1
   fi
-  rm plain.zip toc.txt
+  rm -f "$plain" "$toc"
 
   # a flipped byte is refused before anything changes
-  cp backup.zip.age flipped.zip.age
-  printf '\x01' | dd of=flipped.zip.age bs=1 seek=300 conv=notrunc status=none
-  if ./scripts/restore.sh flipped.zip.age; then
+  cp "$backup_age" "$flipped_age"
+  printf '\x01' | dd of="$flipped_age" bs=1 seek=300 conv=notrunc status=none
+  sync "$flipped_age" 2>/dev/null || sync
+  if ./scripts/restore.sh "$flipped_age"; then
     echo "an altered archive was restored"
     exit 1
   fi
+  rm -f "$flipped_age"
 
   fresh -X DELETE "$BASE/api/items/$id?permanent=true" -o /dev/null
   if adminf "$BASE/api/documents/$doc/file" -o /dev/null; then
     echo "the document outlived its only item"
     exit 1
   fi
-  ./scripts/restore.sh backup.zip.age
+  ./scripts/restore.sh "$backup_age"
   apif "$BASE/api/items/$id" > /dev/null
-  adminf "$BASE/api/documents/$doc/file" -o restored.pdf
-  cmp receipt.pdf restored.pdf
+  adminf "$BASE/api/documents/$doc/file" -o "$restored_pdf"
+  cmp "$receipt" "$restored_pdf"
   echo "item $id and its document are back after restore"
+  rm -f "$receipt" "$backup_age" "$restored_pdf"
+
+  password_and_token_still_work
 
   adminf -X POST "$BASE/api/backups" | "$PY" -c '
 import json, sys
@@ -322,6 +416,7 @@ restore_drill() {
   test "$(drill_items)" = "$before"
   adminf "$BASE/api/backups" | grep -q -- '-prerestore.zip.age'
   apif "$BASE/api/health" | grep -q '"db":"ok"'
+  password_and_token_still_work
   echo "in-app restore drill passed"
 }
 
@@ -373,21 +468,129 @@ photos() {
   echo "photo checks passed"
 }
 
+outside_in() {
+  load_tokens
+  echo "== outside-in =="
+
+  # Anonymous, one per class, before any principal is involved: public GET
+  # /api/health is checked elsewhere (it answers 200); everything below is
+  # either read, write, or admin, so it is 401.
+  test "$(status_of "$BASE/api/openapi.json")" = 401
+  test "$(status_of "$BASE/api/settings")" = 401
+  test "$(status_of "$BASE/api/backups")" = 401
+  test "$(status_of "$BASE/api/metrics")" = 401
+  test "$(status_of "$BASE/api/items/1")" = 401
+
+  # A document file is admin, session only: create an item and attach a
+  # small PNG with the write token, then check the file itself anonymously.
+  id=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d '{"type":"coin","country":"Outside-in","denomination":"1 test","year":2026}' | field id)
+  doc_png="$STATE_DIR/outside-in-doc.png"
+  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (60, 40), "white").save(b, "PNG"); sys.stdout.buffer.write(b.getvalue())' > "$doc_png"
+  doc=$(apif -X POST "$BASE/api/items/$id/documents" \
+    -F "file=@-;filename=doc.png;type=image/png" < "$doc_png" | field id)
+  rm -f "$doc_png"
+  test "$(status_of "$BASE/api/documents/$doc/file")" = 401
+
+  # Each token's scope against one route per class: public GET /api/health,
+  # read GET /api/items, write POST /api/items, admin GET /api/settings.
+  # docs/api.md's table; the session gets 200 on all four.
+  # A POST's status and body are captured together (status on its own last
+  # line) and split in bash, never round-tripped through a file: curl and
+  # python disagree about what a POSIX-looking path like $STATE_DIR/... means
+  # on this Windows dev machine (curl is handed it as a bare argument and a
+  # native launcher rewrites it; python sees it only as a substring of its
+  # -c script and never rewrites it), so a file one writes the other can't
+  # reliably reopen. Piping through stdin, like field() already does
+  # everywhere else in this script, sidesteps the whole question.
+  post_class_check() {
+    local header="$1"
+    curl -s -w '\n%{http_code}' -H "$header" -H 'Content-Type: application/json' -X POST \
+      -d '{"type":"coin","country":"Class check","denomination":"1 test","year":2026}' \
+      "$BASE/api/items"
+  }
+  check_class() {
+    local label="$1" header="$2" want_health="$3" want_get="$4" want_post="$5" want_admin="$6"
+    local got resp body new_id
+    got=$(status_of -H "$header" "$BASE/api/health")
+    [ "$got" = "$want_health" ] || { echo "$label GET /api/health: got $got, wanted $want_health" >&2; exit 1; }
+    got=$(status_of -H "$header" "$BASE/api/items")
+    [ "$got" = "$want_get" ] || { echo "$label GET /api/items: got $got, wanted $want_get" >&2; exit 1; }
+    resp=$(post_class_check "$header")
+    got=$(printf '%s\n' "$resp" | tail -n1)
+    body=$(printf '%s\n' "$resp" | sed '$d')
+    [ "$got" = "$want_post" ] || { echo "$label POST /api/items: got $got, wanted $want_post" >&2; exit 1; }
+    if [ "$got" = 201 ]; then
+      new_id=$(printf '%s' "$body" | field id)
+      fresh -X DELETE "$BASE/api/items/$new_id?permanent=true" -o /dev/null
+    fi
+    got=$(status_of -H "$header" "$BASE/api/settings")
+    [ "$got" = "$want_admin" ] || { echo "$label GET /api/settings: got $got, wanted $want_admin" >&2; exit 1; }
+  }
+  check_class read "Authorization: Bearer $READ_TOKEN" 200 200 403 403
+  check_class write "Authorization: Bearer $WRITE_TOKEN" 200 200 201 403
+  check_class metrics "Authorization: Bearer $METRICS_TOKEN" 200 403 403 403
+  # The session cookie (no bearer header; Origin covers CSRF) gets all four.
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" "$BASE/api/health")" = 200
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" "$BASE/api/items")" = 200
+  session_resp=$(curl -s -w '\n%{http_code}' -b "$COOKIES" -H "Origin: $BASE" \
+    -H 'Content-Type: application/json' -X POST \
+    -d '{"type":"coin","country":"Class check","denomination":"1 test","year":2026}' "$BASE/api/items")
+  session_post=$(printf '%s\n' "$session_resp" | tail -n1)
+  session_body=$(printf '%s\n' "$session_resp" | sed '$d')
+  test "$session_post" = 201
+  session_id=$(printf '%s' "$session_body" | field id)
+  fresh -X DELETE "$BASE/api/items/$session_id?permanent=true" -o /dev/null
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" "$BASE/api/settings")" = 200
+
+  fresh -X DELETE "$BASE/api/items/$id?permanent=true" -o /dev/null
+
+  # A token minted then revoked is 401 everywhere, not 403: it no longer
+  # exists as far as the gate is concerned.
+  revoked=$(fresh -X POST "$BASE/api/auth/tokens" -H 'Content-Type: application/json' \
+    -d '{"name":"ci-revoke-'"$$"'","scope":"read","days":1}')
+  revoked_token=$(echo "$revoked" | field token)
+  revoked_id=$(echo "$revoked" | field id)
+  test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $revoked_token" "$BASE/api/items")" = 200
+  fresh -X DELETE "$BASE/api/auth/tokens/$revoked_id" -o /dev/null
+  test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $revoked_token" "$BASE/api/items")" = 401
+
+  # Spoofed forwarded headers are overwritten by nginx before the backend
+  # ever sees them: a failed login carrying a fake X-Forwarded-For/X-Real-IP
+  # must not show up in the audit log under that address.
+  curl -s -o /dev/null -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -H 'X-Forwarded-For: 203.0.113.99' -H 'X-Real-IP: 203.0.113.99' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"not the password, spoof check\"}"
+  adminf "$BASE/api/auth/audit?limit=5" | "$PY" -c '
+import json, sys
+rows = json.load(sys.stdin)
+row = next(r for r in rows if r["action"] == "sign_in_failed")
+assert row["address"] != "203.0.113.99", f"spoofed address reached the audit log: {row}"
+print("failed sign-in recorded from", row["address"], "not the spoofed address")
+'
+
+  echo "outside-in checks passed"
+}
+
 case "$phase" in
+  race) race ;;
   bootstrap) bootstrap ;;
   smoke) smoke ;;
+  outside-in) outside_in ;;
   backup-restore) backup_restore ;;
   restore-drill) restore_drill ;;
   photos) photos ;;
   all)
+    race
     bootstrap
     smoke
+    outside_in
     backup_restore
     restore_drill
     photos
     ;;
   *)
-    echo "Usage: $0 [bootstrap|smoke|backup-restore|restore-drill|photos|all]" >&2
+    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|all]" >&2
     exit 2
     ;;
 esac
