@@ -1,7 +1,7 @@
 # How it works: the sign-in front door and the one admin
 
-Companion to [SPEC_0300.md](SPEC_0300.md), the v0.30.0 contract. Draft of
-21 September 2026, awaiting the owner's approval; nothing is built.
+Companion to [SPEC_0300.md](SPEC_0300.md), the v0.30.0 contract. Approved
+by the owner on 21 September 2026; the build follows the contract.
 
 **One admin, one password, a front door that turns everyone else away, and
 three ways back in when something goes wrong: the setup code (once, at the
