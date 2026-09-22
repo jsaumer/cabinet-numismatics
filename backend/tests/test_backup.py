@@ -272,3 +272,18 @@ def test_backup_settings(client):
     # the outcome record is the service's to write, not the API's
     client.put("/api/settings", json={"backup_last_run": {"ok": True}})
     assert client.get("/api/backups").json()["last_run"] is None
+
+
+def test_data_only_archives_never_push_out_full_ones(tmp_path):
+    """A run of quick data-only backups (from a session with no recent
+    password, say) can't prune the last archives holding photos and
+    documents: the two kinds are kept to `backup_keep` each (stage 11 review)."""
+    full = [f"cabinet-backup-2026090{d}-010000.zip.age" for d in range(1, 8)]
+    data = [f"cabinet-backup-2026091{d}-010000-data.zip.age" for d in range(1, 8)]
+    for name in full + data:
+        (tmp_path / name).write_bytes(b"x")
+    removed = backup.prune(tmp_path, keep=3)
+    left = sorted(p.name for p in tmp_path.iterdir())
+    assert [n for n in left if "-data" not in n] == full[-3:]
+    assert [n for n in left if "-data" in n] == data[-3:]
+    assert len(removed) == 8

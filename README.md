@@ -6,28 +6,27 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.29.1-informational)
+![Version](https://img.shields.io/badge/version-0.30.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.29.1, feature-complete and in daily use.** Pre-1.0 signals that
-the HTTP API may still change; the data model and migration path are stable.
-1.0 will mean a stable HTTP API. There is no application login yet, so
-Cabinet belongs on a trusted network or behind an authenticating reverse
-proxy. Login is what comes next: one admin with scoped API tokens in
-v0.30.0, then single sign-on in v0.31.0, both before 1.0.
-What's next is the roadmap's Phase 7, a parity plan drawn from a survey of
-other collection tools, alongside what entering a real collection turns up
-rather
-than by a schedule. See the [roadmap](docs/roadmap.md) and
-[changelog](CHANGELOG.md).
+**Status: v0.29.1 released; v0.30.0 (sign-in) built and pending release.**
+Pre-1.0 signals that the HTTP API may still change; the data model and
+migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
+requires signing in: one admin, created with a one-time setup code, plus
+scoped API tokens for scripts and dashboards. Single sign-on follows in
+v0.31.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
+plan drawn from a survey of other collection tools, alongside what entering
+a real collection turns up rather than by a schedule. See the
+[roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
-> **Deploying it?** Cabinet has no built-in login yet (it is the next
-> release): keep it on a trusted network or put it behind an authenticating
-> reverse proxy. See [docs/deployment.md](docs/deployment.md).
+> **Deploying it?** Cabinet has its own sign-in (one admin, claimed with a
+> setup code on first start), but still benefits from an authenticating
+> reverse proxy as a second door until single sign-on ships in v0.31.0. See
+> [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
 
@@ -37,6 +36,7 @@ Dark is the default; the header toggle switches to light and remembers it.
 
 | Dark | Light |
 |---|---|
+| [![Sign in, dark](docs/screenshots/signin-dark.png)](docs/screenshots/signin-dark.png) | [![Sign in, light](docs/screenshots/signin-light.png)](docs/screenshots/signin-light.png) |
 | [![Dashboard, dark](docs/screenshots/dashboard-dark.png)](docs/screenshots/dashboard-dark.png) | [![Dashboard, light](docs/screenshots/dashboard-light.png)](docs/screenshots/dashboard-light.png) |
 | [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
 | [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
@@ -220,6 +220,14 @@ Dark is the default; the header toggle switches to light and remembers it.
   reached; an Uptime Kuma heartbeat;
   Prometheus metrics; and a recipe for a [Homepage](https://gethomepage.dev)
   tile. See [docs/monitoring.md](docs/monitoring.md).
+- **Sign-in**: one admin, claimed with a one-time setup code on first start,
+  database-backed sessions, and scoped API tokens (`read`, `write`,
+  `metrics`) for scripts and dashboards. Every route is denied by default;
+  sensitive actions (backups, exports, restore, settings, tokens) ask for
+  the password again. Photos go through the same check as the API. No
+  interactive API docs page; the OpenAPI schema stays at
+  `/api/openapi.json` for a signed-in session. See
+  [docs/security.md](docs/security.md).
 - **Hardened by default**: the backend container drops to an unprivileged
   user (`PUID`/`PGID`), the image installs a hash-pinned lockfile, nginx
   sets a Content-Security-Policy and the usual security headers, and a
@@ -250,20 +258,26 @@ docker compose up --build
 ```
 
 No host Node or Python install is needed: the frontend is built inside the
-proxy image. Once running: the app is at http://localhost/, the OpenAPI
-schema at http://localhost/api/openapi.json. `PUBLIC_ORIGINS` in `.env` is
-required (the sample suits the local stack; see
-[deployment.md](docs/deployment.md)). The backend creates and updates the database schema
-itself on startup. After pulling a new version, run `docker compose up --build`
-again; Settings → About shows the version and whether the schema is current.
-To run the published images instead of building, see
-[docs/deployment.md](docs/deployment.md).
+proxy image. `PUBLIC_ORIGINS` in `.env` is required (the sample suits the
+local stack; see [deployment.md](docs/deployment.md)). The backend creates
+and updates the database schema itself on startup. Once running, open
+http://localhost/: **nothing but the setup page is served until you claim
+it**. Enter the setup code from `docker compose logs backend` (or the
+`SETUP_CODE` you set) and choose a username and password; that account is
+the only one. The OpenAPI schema is at http://localhost/api/openapi.json,
+for a signed-in browser. After pulling a new version, run
+`docker compose up --build` again; Settings → About shows the version and
+whether the schema is current. To run the published images instead of
+building, see [docs/deployment.md](docs/deployment.md).
 
 **Want something to look at first?** Load a small demo collection (14 items
-across several countries, decades, and grades, with value history):
+across several countries, decades, and grades, with value history). Mint a
+write-scoped API token first (Settings → Account → API tokens, or
+`POST /api/auth/tokens`):
 
 ```bash
-python scripts/seed_demo.py
+python scripts/seed_demo.py --token cabinet_...
+# or: CABINET_TOKEN=cabinet_... python scripts/seed_demo.py
 ```
 
 It uses only the standard library and refuses to run if you already have
@@ -276,6 +290,12 @@ from `.env.example`).
 
 | Variable          | Purpose                                              |
 |-------------------|------------------------------------------------------|
+| `PUBLIC_ORIGINS`  | Required: the exact address(es) browsers use to reach Cabinet, comma-separated (`https://cabinet.example.com`). The backend and the proxy both refuse to start without it |
+| `ALLOWED_HOSTS`   | Optional: extra Host names nginx answers besides those of `PUBLIC_ORIGINS` (an internal name such as `cabinet_proxy`). Any other Host gets no response |
+| `AUTH_INSECURE_HTTP` | Optional, default `false`: sign-in cookies without `Secure`, for a plain-http local stack. Refused beside an `https` origin |
+| `SETUP_CODE` / `SETUP_CODE_FILE` | Optional: the one-time code for creating the admin, at least 32 characters. `SETUP_CODE_FILE` names a file holding it (a Docker secret) and wins. Unset, one is generated and logged. Ignored once the admin exists |
+| `BACKUP_KEY_FILE` | Optional: a file of [age](https://age-encryption.org) identities that encrypt every backup archive, typically a Docker secret. Unset, one is generated onto the state volume. Save a copy outside Cabinet either way: see [docs/backup-restore.md](docs/backup-restore.md#the-backup-key) |
+| `CABINET_PORT`    | Optional, default `80`: the port the proxy publishes |
 | `DB_USER`         | Postgres username                                    |
 | `DB_PASSWORD`     | Postgres password                                    |
 | `DB_NAME`         | Postgres database name                               |
@@ -300,13 +320,14 @@ nothing else.
 ## Backup & restore
 
 Settings → Backups downloads an archive or schedules them, and restores one
-(a safety backup is taken first). From the host, and when the app won't
-start:
+(a safety backup is taken first). Every archive is encrypted with a backup
+key you keep a copy of outside Cabinet (`python -m app.cli backup-key
+show`); without it, nobody can open one. From the host, and when the app
+won't start:
 
 ```bash
-./scripts/backup.sh                     # → backups/<timestamp>/{db.dump, photos.tar.gz, documents.tar.gz}
-./scripts/restore.sh backups/<timestamp>
-./scripts/restore.sh cabinet-backup-20260914-031500.zip   # an in-app archive
+./scripts/backup.sh                     # → backups/cabinet-backup-<UTC stamp>.zip.age
+./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
 ```
 
 Run from Git Bash on Windows. Copy backups off the machine. See

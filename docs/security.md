@@ -3,8 +3,10 @@
 Cabinet is a single-user, self-hosted application. The design assumes the
 stack runs on a network you control, and that the operator is the only user.
 This document records what that means concretely, what is protected and how,
-and what you must do before exposing the app more widely. There is no
-application login yet: it is the next thing built, as v0.30.0 and v0.31.0,
+and what you must do before exposing the app more widely. Every route
+requires a sign-in or an API token (v0.30.0, roadmap Phase 7, P8 A1): one
+admin, database-backed sessions, scoped API tokens, and a deny-by-default
+gate. Single sign-on and a trusted-header mode (P8 A2) follow as v0.31.0,
 both before v1.0.0. See Authentication & network exposure below.
 
 ## Secrets at rest
@@ -96,21 +98,18 @@ backups (separate, shared, or not verified); supply it as a secret when
 backups leave the host. See
 [backup-restore.md](backup-restore.md#the-backup-key).
 
-The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) are as
-unauthenticated as the rest of the API, but they hand over the entire
-collection (database, photos, and documents) in one request. That is
-acceptable on a
-trusted LAN or behind an authenticating proxy, and a clear reason not to
-expose the stack directly. The backup directory is kept out of the publicly
+The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) hand over
+the entire collection (database, photos, and documents) in one request, so
+they are admin-only and, for downloading, ask for the password again in the
+last 5 minutes (v0.30.0). The backup directory is kept out of the publicly
 served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
 
-**Restore from inside the app** (`/api/restore/…`, v0.26.0) is open in the
-same way, and it is the most destructive thing the API does: it replaces
-the database, the photos, and the documents. The owner chose to ship it
-before login because anyone who can reach an open Cabinet can already
-download everything and delete everything. Until authentication ships
-(when it becomes admin-only, see the table below), what stands in front of
-it:
+**Restore from inside the app** (`/api/restore/…`, v0.26.0) is the most
+destructive thing the API does: it replaces the database, the photos, and
+the documents. The owner shipped it before login existed because anyone who
+could reach an open Cabinet could already download everything and delete
+everything; it is now admin-only and asks for the password again, both to
+inspect an archive and to run the restore. What else stands in front of it:
 
 - **Verification before anything changes**: the archive decrypted with the
   backup key, in private staging; its MAC (v0.30.0), which covers the
@@ -135,11 +134,14 @@ read as not set. An uploaded archive can therefore replace saved keys and
 webhook addresses only with values it could already have set through
 Settings.
 
-`/api/metrics` is off by default. Turned on, it's as open as the rest of the
-API and includes the collection's value and cost; scrape it over the
+`/api/metrics` is off by default, and needs the admin's session or a
+`metrics`-scoped token even once turned on (a `read` or `write` token gets
+403): it includes the collection's value and cost. Scrape it over the
 internal Docker network (see [monitoring.md](monitoring.md)) rather than
-exempting it from an authenticating proxy. Alert webhooks and heartbeats send
-only a check's name and its error message, never collection data.
+exempting it from an authenticating proxy in front, since that proxy is a
+second door, not the one Cabinet itself checks. Alert webhooks and
+heartbeats send only a check's name and its error message, never collection
+data.
 
 Importing a photo from a URL makes the backend fetch it, so the fetch is
 fenced: only http(s), only hosts that resolve to public addresses (private,
@@ -152,46 +154,83 @@ that is an accepted gap.
 
 ## Authentication & network exposure
 
-Cabinet has **no application-level authentication yet, and it is the next
-thing being built**: roadmap Phase 7, P8, shipping as **v0.30.0** (one admin,
-database-backed sessions, scoped API tokens, and a deny-by-default gate) and
-**v0.31.0** (OpenID Connect single sign-on and a trusted-header mode). The
-design is settled rather than sketched, and is written out under "Next:
-accounts and permissions" below. Until those releases land, everything in
-this section is what stands between the collection and anyone who can reach
-the port:
+**Every route needs a sign-in or an API token** (v0.30.0, roadmap Phase 7,
+P8 A1): one admin, database-backed sessions, scoped API tokens, and a
+deny-by-default gate checked before and after routing. Single sign-on and a
+trusted-header mode (A2) follow as v0.31.0. What shipped, in brief (the full
+design is under "Accounts and permissions" below;
+[SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) is a
+plain-language walkthrough of setup, sign-in, and the break-glass reset):
 
-- Put it behind an authenticating reverse proxy (for example Traefik with a
-  forward-auth or SSO gateway such as Authentik, Authelia, or oauth2-proxy),
-  which requires no application changes. Keep one there after v0.30.0 too,
-  until v0.31.0 brings single sign-on and two-factor sign-in.
-  [deployment.md](deployment.md) has the configuration.
-- Terminate TLS at the proxy so credentials entered in Settings and photos are
-  not transmitted in the clear.
-- Do not port-forward the stack to the internet as-is.
+- **Deny by default.** Anonymous callers reach only four routes (health,
+  whether setup is still open, setup, and sign-in); every other route
+  answers 401 without one, and a route that doesn't declare a permission is
+  refused rather than silently allowed. A path containing `%` is refused
+  before routing.
+- **Sessions.** A signed-in browser gets an HttpOnly, Secure,
+  `SameSite=Lax` cookie, valid a day after its last use and seven days at
+  the most.
+- **API tokens.** Scoped `read`, `write`, or `metrics`, created in Settings,
+  shown once, stored hashed. `read` and `write` last at most seven days;
+  `metrics` (which sees only totals) may not expire, so a Homepage tile or
+  Prometheus scrape keeps working unattended.
+- **CSRF fails closed.** A cookie-authenticated request of any method needs
+  `Sec-Fetch-Site: same-origin`, or an `Origin`/`Referer` matching
+  `PUBLIC_ORIGINS` exactly. Bearer tokens aren't checked (a cross-site page
+  can't set that header).
+- **Setup, once.** The admin is created from a one-time code (a Docker
+  secret, an environment variable, or generated and logged); a right code is
+  compared before any throttle counts it, and the setup page closes for
+  good once the admin exists.
+- **Throttled sign-in, never a lock.** Failures delay further attempts per
+  username and per address, up to a minute; a known-device cookie from an
+  earlier successful sign-in lifts those delays and has a password-check
+  slot reserved for it, so a flood elsewhere can't keep the owner out.
+- **Recent password ("fresh") on sensitive actions.** Downloading a backup,
+  exporting, restoring, deleting for good, any settings change, and
+  managing sessions or tokens ask for the password again if it hasn't been
+  confirmed in the last five minutes.
+- **Audit log.** Every sign-in, failure, token, session, backup download,
+  export, and restore is recorded (`cabinet_auth.audit_log`), with a
+  separate cap for failed sign-ins so a flood can't push out anything else.
+  Nothing from the collection is ever written to it, a log line, or the
+  alert webhook.
+- **Alerts through the existing webhook**: a new-device sign-in, repeated
+  failures, a password change or reset, a new token, a backup download or
+  export, a restore, secrets cleared.
+- **Photos need the same check as the API.** nginx asks the backend
+  (`auth_request`) before serving anything under `/photos/`; photos,
+  documents, and exports are sent `Cache-Control: private, no-store`, and
+  signing out tells the browser to clear its cache of Cabinet's pages.
+- **No interactive API docs page.** `/api/docs` is off, so no third-party
+  script runs in the signed-in origin; `/api/openapi.json` stays, for a
+  signed-in session only.
+- **Every archive is encrypted** with a backup key and carries a keyed MAC;
+  see "What is *not* encrypted" above and
+  [backup-restore.md](backup-restore.md).
 
-Photos under `/photos/` are served by nginx without going through the API;
-their UUID file names are not guessable, but only the reverse proxy's
-authentication actually protects them, like everything else. Any path under
-`/photos/` with a segment starting with a dot answers 404, so a restore's
-working folders inside the photo volume are never served. When login ships,
-nginx authorises each photo request against the session (`auth_request`), so
-one rule covers the files and the API alike.
+### What this does and doesn't cover
 
-Four things concentrate the most in a single unauthenticated request, which
-is why the proxy matters today: `GET /api/backup.zip` (the whole collection
-in one download), the restore endpoints (destructive, and they replace
-everything), `GET /api/settings` (what is configured, though the secrets
-themselves are masked), and `/api/metrics` (counts and the collection's
-value, which is why it is off by default).
+| Risk | Covered by |
+|---|---|
+| Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot |
+| A stolen password reused later, or a token outliving a compromise | Password change revokes every other session, every known device, and every API token; `read`/`write` tokens expire within a week regardless |
+| An unlocked, signed-in browser | The recent-password window on sensitive actions; `no-store` and `Clear-Site-Data` on sign-out |
+| A tampered or planted archive | The backup key's MAC (see "What is *not* encrypted"); a stored secret only used if it decrypts with this deployment's key |
+| **Shared Docker networks.** A container on the same network as the backend could otherwise reach it directly, bypassing nginx and the gate | Not enforced by Cabinet: the docs say nothing but nginx should reach the backend, and the example Swarm stack puts it on a network of its own. A deployment that shares a network with the backend anyway loses this protection |
+| **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |
+| **Supply chain.** A compromised dependency or base image | Hash-pinned lockfiles, `pip-audit`, `npm audit`, and Trivy image scans on every change and weekly (see Dependencies below); no runtime pip in the built image |
+| **Anyone who can read the container's environment or a Docker secret before the claim.** `docker service inspect`, Portainer, and Dozzle show environment variables (not secret contents) | `SETUP_CODE_FILE` (a Docker secret) over `SETUP_CODE` on a Swarm; the code is inert for good once the admin exists, so remove it from the stack file afterwards |
+| **A plain-text `Authorization: Bearer` header on the LAN.** Cabinet does not terminate TLS itself | Terminate TLS at a reverse proxy in front (section 3 of [deployment.md](deployment.md)); a token sent over plain HTTP is as exposed as a password would be |
+| **A device shared with someone who already has the browser's own session or password manager unlocked** | The recent-password window narrows the blast radius for sensitive actions, but a shared, unlocked device is out of scope by design: use per-person devices, or end sessions from Settings, Account afterwards |
 
-## Next: accounts and permissions
+## Accounts and permissions
 
-**Not built yet, and next in line.** A1 ships as **v0.30.0**: one admin,
-database-backed sessions, scoped API tokens, and a deny-by-default gate. A2
-follows as **v0.31.0**: OpenID Connect and a trusted-header mode for that
-same admin. This is a settled design, not a proposal awaiting research, and
-this section is replaced by a description of what shipped once A1 lands.
+**A1 shipped as v0.30.0**: one admin, database-backed sessions, scoped API
+tokens, and a deny-by-default gate. **A2 is next, as v0.31.0**: OpenID
+Connect and a trusted-header mode for that same admin. This section
+describes what A1 built; the contract, with a verdict on every review
+finding, is [SPEC_0300.md](specs/SPEC_0300.md).
 
 Decided on 20 September 2026: the first cut is **one admin and nothing
 else**, onboarded when the app is initialised; the setup page asks for a
@@ -200,8 +239,9 @@ environment variable), so an open instance can't be claimed by whoever gets
 there first; login is **always on**, with no switch to turn it off; and
 **scoped API tokens ship with that first cut**. Single sign-on for that
 admin is the second part. **More accounts (the editor and viewer roles and
-user maintenance) are optional**, off the planned path: the table below
-keeps their columns so the design is ready if they are ever wanted.
+user maintenance) are optional and not built**: the table below keeps their
+columns so the design is ready if they are ever wanted, but only the admin
+exists today.
 
 Decided on 21 September 2026, the details that shape the code:
 

@@ -9,9 +9,11 @@
 
 Never a lock-out. A bucket forgets its failures 15 minutes after the last
 one, and on a success. One bounded map of at most MAX_KEYS entries, oldest
-dropped first; a restart clears everything. A known-device cookie lifts the
-user, address, and global limits (the caller skips `check` and
-`check_global`), never the setup one.
+dropped first; a restart clears everything. A sign-in attempt is counted
+by `attempt` before its password is checked, so parallel requests can't all
+pass on the count as it was. A known-device cookie lifts the user, address,
+and global limits (the caller skips `attempt` and `check_global`), never the
+setup one.
 
 `reset-password` in the container can't reach this process's memory, so it
 touches a flag file on the state volume, and every check clears the map when
@@ -88,6 +90,32 @@ def check(*buckets: tuple[str, str]) -> None:
     longest = max((wait(kind, value) for kind, value in buckets), default=0.0)
     if longest > 0:
         raise Throttled(longest)
+
+
+def attempt(*buckets: tuple[str, str]) -> None:
+    """Check these buckets and, in the same step under the lock, count this
+    attempt as a failure in each: requests queued behind the password check
+    all see the attempts ahead of them, so a burst can't all read the old
+    count. `succeed` takes it back; a failure has nothing more to count."""
+    _apply_reset_flag()
+    t = common.monotonic()
+    with _lock:
+        longest = 0.0
+        for kind, value in buckets:
+            entry = _live(_key(kind, value), t)
+            if entry is not None:
+                longest = max(longest, _wait(kind, entry, t))
+        if longest > 0:
+            raise Throttled(longest)
+        for kind, value in buckets:
+            key = _key(kind, value)
+            entry = _live(key, t) or _Entry()
+            entry.failures += 1
+            entry.last = t
+            _entries[key] = entry
+            _entries.move_to_end(key)
+        while len(_entries) > MAX_KEYS:
+            _entries.popitem(last=False)
 
 
 def check_global() -> None:

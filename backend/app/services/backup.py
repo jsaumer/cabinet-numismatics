@@ -96,6 +96,10 @@ def archive_name(now: datetime, include_photos: bool) -> str:
     return f"cabinet-backup-{now:%Y%m%d-%H%M%S}{'' if include_photos else '-data'}{ENCRYPTED}"
 
 
+def is_data_only(path: Path) -> bool:
+    return "-data.zip" in path.name
+
+
 def is_prerestore(path: Path) -> bool:
     return PRERESTORE_MARK in path.name
 
@@ -669,13 +673,18 @@ def stored_backups(dest: Path) -> list[Path]:
 def prune(dest: Path, keep: int) -> list[str]:
     """Delete archives beyond the newest `keep`, and leftovers from
     interrupted runs. Only files matching Cabinet's own names are touched.
-    Pre-restore safety archives don't count toward `keep`; they have their
-    own limit."""
+    Full and data-only archives are counted separately, so a run of quick
+    data-only backups can never push out the last archives that hold the
+    photos and documents. Pre-restore safety archives don't count toward
+    `keep`; they have their own limit."""
     removed = []
     stored = stored_backups(dest)
     regular = [p for p in stored if not is_prerestore(p)]
+    full = [p for p in regular if not is_data_only(p)]
+    data_only = [p for p in regular if is_data_only(p)]
     safety = [p for p in stored if is_prerestore(p)]
-    for old in regular[max(keep, 1) :] + safety[PRERESTORE_KEEP:]:
+    keep = max(keep, 1)
+    for old in full[keep:] + data_only[keep:] + safety[PRERESTORE_KEEP:]:
         old.unlink()
         removed.append(old.name)
     cutoff = (utcnow() - STALE_TEMP_AGE).timestamp()

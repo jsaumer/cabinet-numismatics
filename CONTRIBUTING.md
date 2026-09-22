@@ -10,10 +10,10 @@ Contributions that keep it simple are very welcome.
   what the item looked like (no need to share photos).
 - **Features**: check [docs/roadmap.md](docs/roadmap.md) first: the intended
   scope, what's built, and what's deliberately deferred are all recorded
-  there. Opening an issue before a large PR saves everyone time. An
-  application login is planned (roadmap Phase 7) and not built yet: until
-  then Cabinet runs on a trusted network or behind an authenticating
-  reverse proxy. Talk to us before starting on it.
+  there. Opening an issue before a large PR saves everyone time. Cabinet now
+  has its own sign-in (one admin, scoped API tokens; roadmap Phase 7, P8
+  A1); single sign-on (P8 A2) is next. Talk to us before starting on
+  authentication work.
 - **Questions**: open a discussion or issue; there's no separate forum.
 
 ## Development setup
@@ -31,14 +31,14 @@ docker compose up --build
 The backend applies database migrations itself on startup.
 
 The app is at http://localhost/, and the OpenAPI schema at
-http://localhost/api/openapi.json (there is no interactive docs page). The
-sample `.env` sets `PUBLIC_ORIGINS`, which the stack needs. Cabinet needs a
-sign-in: claim the instance with the setup code from
-`docker compose logs backend` (or the `SETUP_CODE` you set), for example
-with `POST /api/auth/setup`, since the setup page itself is still being
-built. To load sample data for a populated dashboard, mint a write-scoped
-API token (`POST /api/auth/tokens`, or reuse the one
-`scripts/ci/stack-smoke.sh bootstrap` mints), then:
+http://localhost/api/openapi.json for a signed-in session (there is no
+interactive docs page). The sample `.env` sets `PUBLIC_ORIGINS`, which the
+stack needs. Cabinet needs a sign-in: nothing but the setup page is served
+until the admin exists. Open the app and enter the setup code from
+`docker compose logs backend` (or the `SETUP_CODE` you set), or claim it
+directly with `POST /api/auth/setup`. To load sample data for a populated
+dashboard, mint a write-scoped API token (`POST /api/auth/tokens`, or reuse
+the one `scripts/ci/stack-smoke.sh bootstrap` mints), then:
 
 ```bash
 python scripts/seed_demo.py --token cabinet_...

@@ -54,6 +54,8 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
   (file and size, or the error) shows in Settings, and a failure raises the
   backup alert if a webhook is set ([monitoring.md](monitoring.md)).
 - After each successful run, archives beyond **Keep newest** are deleted.
+  Full archives and data-only ones are counted separately, so data-only
+  backups never push out the last full ones.
   Only files named `cabinet-backup-*.zip.age` (and older `cabinet-backup-*.zip`)
   are ever touched.
 - **Back up now** writes one immediately and counts toward the same
@@ -201,9 +203,8 @@ as they are. It takes encrypted archives made with this deployment's backup
 key (download, **Back up now**, scheduled, `backup.sh`, or an earlier safety
 backup).
 
-**Destructive**, and as open as the rest of the app until login ships (see
-[security.md](security.md)), so it is fenced, and a deployment can switch it
-off.
+**Destructive**, so it is admin-only and asks for the password again (see
+[security.md](security.md)), and a deployment can switch it off.
 
 ### The procedure
 
@@ -377,7 +378,7 @@ To go back after a restore you regret, restore the `-prerestore` archive.
 
 A reverse proxy in front of the stack needs the same allowance for large
 bodies and long requests; see
-[deployment.md](deployment.md#3-reverse-proxy-tls-and-authentication).
+[deployment.md](deployment.md#3-tls-and-an-authenticating-proxy-in-front).
 
 ### What to know before relying on it
 
@@ -453,7 +454,12 @@ which has no `documents.tar.gz`, leaves the documents as they are.
 Restoring into a *fresh* deployment works the same way: bring the stack up
 with your saved backup key (`BACKUP_KEY_FILE`), wait until `/api/health`
 reports `schema.status: "ok"` (the backend creates the schema on startup),
-then restore, from the app or with the script. Without that key the
+then restore. `restore.sh` needs no sign-in, since it never touches
+`cabinet_auth`, so it can run before or after the machine is claimed. The
+in-app path needs an admin session, so claim the fresh instance with a
+setup code first, then restore from Settings → Backups. Either order leaves
+the new machine's own admin in place: an archive never carries sign-in data,
+so restoring one never changes who is claimed. Without the backup key the
 archives can't be opened.
 
 ### On a Swarm
