@@ -9,7 +9,7 @@ import pytest
 from app.config import get_settings
 from app.models import PriceEstimate
 from app.services import calendars, serials
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 from tests.test_imports import _items, _preview, _run, _upload
 from tests.test_monitoring import posted, save_hook  # noqa: F401 (fixture)
 from tests.test_numista import _session
@@ -575,8 +575,8 @@ def test_old_csv_import_reads_the_new_columns(client):
     raw = client.get("/api/items/export.csv").content
     for item in listed(client):
         client.delete(f"/api/items/{item['id']}?permanent=true")
-    resp = client.post("/api/items/import", files={"file": ("items.csv", raw, "text/csv")})
-    assert resp.json()["created"] == 1, resp.text
+    result = import_cabinet_csv(client, raw)
+    assert result["created"] == 1, result
     [copy] = listed(client)
     assert (copy["target_price"], copy["priority"], copy["die_axis"]) == (1000.0, 1, 180)
 

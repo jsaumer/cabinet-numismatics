@@ -123,3 +123,22 @@ def coin(client):
     resp = client.post("/api/items", json=COIN)
     assert resp.status_code == 201
     return resp.json()
+
+
+def import_cabinet_csv(client, text, name: str = "items.csv") -> dict:
+    """Import a CSV in Cabinet's export format through `/api/imports` (upload,
+    preview, run), read as the `cabinet` format whatever its columns, so a
+    hand-written CSV with only a few export columns reads as one. Returns the
+    run result: `created`, `skipped`, `errors` (`{row, error}`, `row` counting
+    data rows from 1), `photos_added`, `photos_failed`. Rows whose exported id
+    is already here, trash included, are skipped."""
+    body = text.encode() if isinstance(text, str) else text
+    upload = client.post("/api/imports", files={"file": (name, body, "text/csv")})
+    assert upload.status_code == 201, upload.text
+    upload_id = upload.json()["upload_id"]
+    options = {"format": "cabinet"}
+    preview = client.post(f"/api/imports/{upload_id}/preview", json=options)
+    assert preview.status_code == 200, preview.text
+    run = client.post(f"/api/imports/{upload_id}/run", json=options)
+    assert run.status_code == 200, run.text
+    return run.json()

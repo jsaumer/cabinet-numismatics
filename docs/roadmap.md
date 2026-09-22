@@ -468,7 +468,8 @@ reports. Staged so each milestone is independently useful.
   enabled only when a key is configured; medium confidence
   (collector-swap-derived estimates, 0.60, or 0.45 when the exact grade bucket
   isn't priced and the nearest lower one stands in). `POST
-  /api/items/{id}/estimate?source=numista`.
+  /api/items/{id}/estimates/auto?source=numista` (`.../estimate` until
+  v0.30.0).
 - **M3: PCGS adapter.** ✔ US coins by PCGS cert number, or PCGS number +
   Sheldon grade. CoinFacts returns both numbers in one response: Auction
   Prices Realized win when present (median of up to ten recent lots, 0.75, or
@@ -476,7 +477,7 @@ reports. Staged so each milestone is independently useful.
   PCGS public API program, 100 calls/day by default (1,000 when this was
   built), cached 7 days. Coins only:
   PCGS Banknote responses carry no price fields.
-  `POST /api/items/{id}/estimate?source=pcgs`.
+  `POST /api/items/{id}/estimates/auto?source=pcgs`.
 - **M4: Estimate provenance.** ✔ Each source's response summary is stored
   alongside the estimate (`price_estimates.details`, revision `0010`) so a
   value can be explained, not just asserted: melt's formula inputs and spot
@@ -807,7 +808,8 @@ checklist:
   `POST /api/items/{id}/estimate` becomes
   `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
   letter from the manual `POST .../estimates`. Then a written stability
-  policy in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
+  policy in `api.md`. **Both built** for v0.30.0 (unreleased): the renames
+  and the policy are in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
   sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
   where a PATCH would read better.
 - A CI check that fails on a breaking change to the OpenAPI schema.

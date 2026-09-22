@@ -130,7 +130,7 @@ export default function Dashboard() {
     setRefreshing(true);
     setRefreshNote(null);
     try {
-      const r = await api.refreshMelt();
+      const r = await api.refreshEstimates("melt");
       setRefreshNote(
         `Melt refresh: ${r.updated} updated, ${r.skipped} skipped${r.failed ? `, ${r.failed} failed` : ""}.`,
       );

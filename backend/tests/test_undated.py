@@ -6,7 +6,7 @@ import io
 import pytest
 
 from app.services import importing, numista
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 from tests.test_numista import configure, estimate, grade_id
 from tests.test_numista_catalogue import catalogue  # noqa: F401  (fixture)
 
@@ -152,9 +152,8 @@ def test_export_writes_year_nd_and_import_reads_it_back(client):
 )
 def test_import_reads_undated_year_cells(client, header, row, expected):
     body = f"{header}\n{row}\n".encode()
-    resp = client.post("/api/items/import", files={"file": ("items.csv", body, "text/csv")})
-    assert resp.status_code == 200, resp.text
-    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
+    result = import_cabinet_csv(client, body)
+    assert (result["created"], result["skipped"], result["errors"]) == (1, 0, []), result
     [item] = client.get("/api/items").json()["items"]
     assert (item["year"], item["year_nd"]) == expected
 

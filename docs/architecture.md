@@ -113,7 +113,7 @@ mount can't quietly keep documents inside the container.
 6. nginx serves the files directly at `/photos/{key}`.
 
 **Requesting a price estimate**
-1. Client POSTs to `/api/items/{id}/estimate?source=` (`melt` by default, or
+1. Client POSTs to `/api/items/{id}/estimates/auto?source=` (`melt` by default, or
    `numista`, `pcgs`, `comps`).
 2. Backend checks the source is switched on and the item has what it needs
    (weight and fineness for melt, a catalog reference and grade for Numista,

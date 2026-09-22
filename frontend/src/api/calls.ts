@@ -2,7 +2,7 @@
 
 import { json, req } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
-import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
+import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
@@ -41,11 +41,6 @@ export const api = {
     req<ImportPreview>("/api/imports/numista/preview", json("POST", options)),
   runNumistaImport: (options: NumistaImportOptions) =>
     req<ImportRunResult>("/api/imports/numista/run", json("POST", options)),
-  importCsv: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return req<ImportResult>("/api/items/import", { method: "POST", body: form });
-  },
 
   listGrades: (scale?: string) =>
     req<Grade[]>(`/api/grades${scale ? `?scale=${scale}` : ""}`),
@@ -102,7 +97,7 @@ export const api = {
     },
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
   autoEstimate: (itemId: string, source = "melt") =>
-    req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),
+    req<Estimate>(`/api/items/${itemId}/estimates/auto?source=${source}`, { method: "POST" }),
 
   uploadDocument: (itemId: string, file: File, kind: DocumentKind) => {
     const form = new FormData();
@@ -143,7 +138,9 @@ export const api = {
   valueSpread: () => req<ValueSpread>("/api/stats/value-spread"),
   dataHealth: () => req<DataHealth>("/api/stats/data-health"),
   showcase: () => req<Showcase>("/api/stats/showcase"),
-  refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
+  // Only "melt" can be refreshed by hand for now; the server refuses the rest.
+  refreshEstimates: (source: "melt") =>
+    req<RefreshResult>(`/api/estimates/refresh?source=${source}`, { method: "POST" }),
 
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
 

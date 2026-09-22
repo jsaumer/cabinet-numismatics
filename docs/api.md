@@ -16,10 +16,32 @@ so endpoints are described without an auth layer; put an authenticating proxy
 in front before exposing it beyond a trusted network. Login is the next thing
 built (roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
 tokens, with every endpoint denied by default; v0.31.0 adds single sign-on).
-When it lands, every endpoint below needs a session or a token, three of them
-change shape, and this document gains a stability policy.
+When it lands, every endpoint below needs a session or a token.
 [security.md](security.md#next-accounts-and-permissions) has the settled
-design and the table of who will be able to call what.
+design and the table of who will be able to call what. The three endpoint
+renames that release makes are already in place; see the stability policy
+below.
+
+## Stability policy
+
+Until v1.0.0, an endpoint's path, parameters, or response may change in a
+minor release when it has to; every such change is announced in
+[CHANGELOG.md](../CHANGELOG.md) under the release that makes it, with the
+old and new forms. From v1.0.0 on, paths under `/api/` and the fields of
+their responses are stable within a major version: nothing is renamed,
+removed, or given a new meaning without a new major version. Additions are
+not breaking changes: a new endpoint, a new optional parameter, a new field
+in a response, or a new value where a field already lists several (a source
+name, a status) may arrive in any release, so clients should ignore fields
+they don't know. Error messages (`detail`) are for people, not for matching.
+
+Renamed for v0.30.0, the one pass made before 1.0:
+
+| Before | Now |
+|--------|-----|
+| `POST /api/items/import` | removed; `POST /api/imports` then `.../{upload_id}/run` (the `cabinet` format) is the one import path |
+| `POST /api/estimates/refresh-melt` | `POST /api/estimates/refresh?source=melt` |
+| `POST /api/items/{id}/estimate?source=` | `POST /api/items/{id}/estimates/auto?source=` |
 
 ## Items
 
@@ -27,7 +49,6 @@ design and the table of who will be able to call what.
 |----------|---------------------------|-------------------------------------|
 | `GET`    | `/api/items`              | List items (filter/paginate)        |
 | `POST`   | `/api/items`              | Create an item                      |
-| `POST`   | `/api/items/import`       | Import items from CSV in the export format (multipart); other formats: see Imports |
 | `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
 | `GET`    | `/api/items/export.xlsx`  | Export the collection as Excel      |
 | `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
@@ -229,8 +250,8 @@ aren't shown, and deletes the old files.
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
 | `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
 | `DELETE` | `/api/items/{id}/estimates/{estimate_id}` | Delete a value that was typed in |
-| `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate            |
-| `POST` | `/api/estimates/refresh-melt` | Re-run stale melt estimates now          |
+| `POST` | `/api/items/{id}/estimates/auto` | Produce an automatic estimate (`?source=`) |
+| `POST` | `/api/estimates/refresh`      | Re-run one source's stale estimates now (`?source=melt`) |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1, optional
@@ -242,8 +263,8 @@ belongs to another item is `404`. Every estimate in a
 response carries `id`, `item_id`, `source`, `estimated_value`, `currency`,
 `confidence`, `sample_size`, `fetched_at`, and `details`: the provenance an
 automatic source recorded (see [price-sources.md](price-sources.md)),
-`{"note": …}` for a manual entry given a note, or `null`. `POST .../estimate`
-runs one automatic adapter, chosen with `?source=`: `melt` (the default: spot
+`{"note": …}` for a manual entry given a note, or `null`.
+`POST .../estimates/auto` runs one automatic adapter, chosen with `?source=`: `melt` (the default: spot
 × weight × fineness × quantity, metal detected from `composition`), `numista`
 (by the item's `numista` catalog ref and grade), `pcgs` (US coins by PCGS cert
 number, or `pcgs` catalog ref + grade; see below), or `comps` (the median of
@@ -285,8 +306,10 @@ checked against a wish-list target: for an item with status `wishlist` and a
 target sends one event through the alert webhook, unless the estimate before
 it was already there. See [monitoring.md](monitoring.md).
 
-`POST /api/estimates/refresh-melt` answers `updated`, `skipped`, and `failed`,
-or 422 when melt is switched off. An in-process scheduler re-runs stale melt
+`POST /api/estimates/refresh?source=melt` answers `updated`, `skipped`, and
+`failed`, or 422 when melt is switched off. `source` is required, and only
+`melt` is accepted for now: any other value is 422 ("Only melt can be
+refreshed by hand for now."). An in-process scheduler re-runs stale melt
 estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7; `0`
 disables); a melt refresh never supersedes an item whose latest estimate is
 manual. The same 12h loop also refreshes Numista and/or PCGS when their own
@@ -655,7 +678,7 @@ any hand-entered source text.
   when it has no estimate, a source failed or was never tried, or a source's
   last attempt came after its last estimate and didn't succeed. Reasons come
   from each adapter's local prerequisites, or from the latest recorded
-  attempt; every `POST /api/items/{id}/estimate` and scheduled refresh
+  attempt; every `POST /api/items/{id}/estimates/auto` and scheduled refresh
   records one per item and source.
 - **stale**: `days`, `checked` (latest estimates examined, one per item and
   source), and `stale` entries oldest first: value, `age_days`,
@@ -751,7 +774,7 @@ described it), `premium_included` (true / false / null for unknown), `fees`
 (`manual` or `numista`), `grade_bucket` (Numista's g…unc, on fetched sales),
 and `created_at`; `GET /api/items/{id}` includes them as `comparables`.
 
-`POST /api/items/{id}/estimate?source=comps` takes the median of the included
+`POST /api/items/{id}/estimates/auto?source=comps` takes the median of the included
 sales that match (a sale with a `grade_bucket` counts only when it matches
 the item's grade) from the last three years, or all of them when fewer than
 three are that recent, at most twenty, converted into the display currency.
@@ -778,8 +801,9 @@ explanation; an unreachable Numista is 502. One request, cached for a day.
 | `POST`   | `/api/imports/numista/run`        | Import it                                        |
 
 File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
-read by the same row reader as `POST /api/items/import`, keyed by the
-exported `id`, and a duplicate when that id is still here), `spreadsheet` (any
+keyed by the exported `id`, and a duplicate when that id is still here,
+trash included; this is the one way to import a Cabinet export, since
+v0.30.0 removed `POST /api/items/import`), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
 (numista.com's collection export, by column name), and `opennumismat` (an
 OpenNumismat `.db`). Preview and run take the same JSON

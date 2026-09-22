@@ -10,6 +10,25 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+Work towards 0.30.0 (roadmap Phase 7, P8 A1: sign-in and encrypted
+backups). The upgrade notes will lead this entry when it is released.
+
+### Changed
+- **Three API endpoints renamed, before 1.0 makes paths stable** (breaking,
+  for scripts that call them):
+  - `POST /api/items/{id}/estimate?source=` is now
+    `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
+    letter from the manual `POST /api/items/{id}/estimates`.
+  - `POST /api/estimates/refresh-melt` is now
+    `POST /api/estimates/refresh?source=melt`. `source` is required, and
+    only `melt` is accepted for now.
+  - `POST /api/items/import` is removed. `POST /api/imports`, then
+    `POST /api/imports/{upload_id}/run`, reads a Cabinet export (the
+    `cabinet` format) and is the one import path; the app already used it.
+- `docs/api.md` gains a stability policy: breaking changes are allowed and
+  announced here until 1.0; from 1.0, `/api/` paths and response fields are
+  stable within a major version, and additions are never breaking.
+
 ## [0.29.1] - 2026-09-20
 
 ### Added

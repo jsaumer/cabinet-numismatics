@@ -38,7 +38,7 @@ def _sale(client, item, price, days_ago=30, **overrides):
 
 
 def _comps(client, item):
-    return client.post(f"/api/items/{item['id']}/estimate", params={"source": "comps"})
+    return client.post(f"/api/items/{item['id']}/estimates/auto", params={"source": "comps"})
 
 
 # ---------------------------------------------------------------- the sales log
