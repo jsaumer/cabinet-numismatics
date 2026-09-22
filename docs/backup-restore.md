@@ -136,6 +136,8 @@ encrypts every archive and keys its MAC.
 
   On a Swarm, on the node running the backend task:
   `docker exec $(docker ps -q -f name=cabinet_backend) python -m app.cli backup-key show`.
+  Both `backup-key` commands work once Cabinet is set up (they refuse
+  before), and each use is written to the audit log.
 - **Losing it.** If the key and the machine are both lost, the archives can't
   be opened by anyone, you included. There is no recovery, by design.
 - **Rotating it.** `python -m app.cli backup-key rotate` puts a new identity

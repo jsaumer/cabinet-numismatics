@@ -162,6 +162,16 @@ def test_plain_text_secrets_are_cleared_and_named(client, monkeypatch):
     # named, never shown
     assert sent and "alert webhook" in sent[0] and "PCGS API token" in sent[0]
     assert "attacker" not in sent[0] and "plain-token" not in sent[0]
+    # and audited by name, as the system (v0.30.0)
+    from app.models.auth import AuditEntry
+
+    db = _session()
+    try:
+        (row,) = db.query(AuditEntry).filter_by(action="secrets_cleared").all()
+        assert row.actor_kind == "system"
+        assert row.detail == {"names": ["alert_webhook_url", "pcgs_api_token"]}
+    finally:
+        db.close()
 
     body = client.get("/api/settings").json()
     assert body["secrets_cleared"] == ["alert webhook", "PCGS API token"]

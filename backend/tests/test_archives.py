@@ -184,13 +184,13 @@ def test_the_key_is_generated_private_and_never_leaves_by_the_api(client, fake_d
     assert listing["key"]["supplied"] is False
 
 
-def test_backup_key_show_prints_it(client, capsys):
+def test_backup_key_show_prints_it(cli_admin, capsys):
     assert cli.main(["backup-key", "show"]) == 0
     out = capsys.readouterr().out
     assert archive_keys.primary().text in out and archive_keys.primary().recipient in out
 
 
-def test_a_supplied_key_is_used_and_never_changed(client, tmp_path, monkeypatch, capsys):
+def test_a_supplied_key_is_used_and_never_changed(cli_admin, tmp_path, monkeypatch, capsys):
     key_file = tmp_path.with_name(tmp_path.name + "-secret.key")
     key_file.write_text(f"# mine\n{FIXED.text}\n", encoding="utf-8")
     before = key_file.read_bytes()

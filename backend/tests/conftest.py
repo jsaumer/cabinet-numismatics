@@ -45,13 +45,35 @@ def _no_network_rates(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _private_paths(tmp_path_factory, monkeypatch):
+    """Every test's data folders are temporary, including tests that start the
+    app without the `client` fixture: the defaults under /data would write a
+    real key there (or fail, where /data isn't writable, as on CI)."""
+    base = tmp_path_factory.mktemp("data")
+    monkeypatch.setenv("PHOTO_DIR", str(base / "photos"))
+    monkeypatch.setenv("DOCUMENT_DIR", str(base / "documents"))
+    monkeypatch.setenv("BACKUP_DIR", str(base / "backups"))
+    monkeypatch.setenv("STAGING_DIR", str(base / "staging"))
+    monkeypatch.setenv("SECRET_KEY_FILE", str(base / "state" / "secret.key"))
+    monkeypatch.delenv("BACKUP_KEY_FILE", raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _fresh_monitoring_state():
-    """Alert outcomes and the metrics cache live in memory, per process."""
+    """Alert outcomes, the metrics cache, and the sign-in throttles live in
+    memory, per process."""
+    from app.auth import audit, notify, throttle
     from app.services import alerts, metrics, restore
 
     alerts.reset_memory()
     metrics.reset_cache()
     restore.reset_memory()
+    throttle.clear()
+    audit.reset_memory()
+    notify.reset_memory()
     yield
 
 
@@ -126,6 +148,27 @@ COIN = {
     "acquisition_price": 120.0,
     "currency": "USD",
 }
+
+
+@pytest.fixture()
+def cli_admin(client, monkeypatch):
+    """The admin exists, and container commands (`app.cli`) reach the test
+    database. Account commands refuse before setup."""
+    from argon2 import PasswordHasher
+
+    from app import db as app_db
+    from app.auth import accounts, passwords
+
+    make = app.dependency_overrides[get_db]
+    monkeypatch.setattr(app_db, "SessionLocal", lambda: next(make()))
+    monkeypatch.setattr(
+        passwords, "HASHER", PasswordHasher(time_cost=1, memory_cost=8, parallelism=1)
+    )
+    db = next(make())
+    try:
+        return accounts.create_admin(db, "owner", "correct horse battery", accounts.Client())
+    finally:
+        db.close()
 
 
 @pytest.fixture()

@@ -14,6 +14,13 @@ Work towards 0.30.0 (roadmap Phase 7, P8 A1: sign-in and encrypted
 backups). The upgrade notes will lead this entry when it is released.
 
 ### Added
+- **Commands in the container for the account**, for when the app can't be
+  reached (`docker compose exec backend python -m app.cli ...`): `status`,
+  `reset-password` (asked twice, never an argument; ends every session and
+  known device and revokes every API token), `sign-out-everywhere`, and
+  `revoke-tokens [--name NAME]`. They, and `backup-key`, refuse until Cabinet
+  is set up, and each change is audited. The sign-in routes that use the
+  same account services arrive later in this release.
 - **`PUBLIC_ORIGINS` is required**: the exact address browsers use for
   Cabinet (`https://cabinet.example.com`). The backend and the proxy both
   refuse to start without it, naming the variable. `.env.example` has values

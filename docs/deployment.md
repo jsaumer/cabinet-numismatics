@@ -310,6 +310,25 @@ docker compose build --pull && docker compose up -d
   root.
 - **Alert webhooks and the heartbeat** are outbound requests to the URLs you
   save; allow them if egress is filtered.
+- **Looking after the account from the container** (v0.30.0), for when the
+  app can't be reached. Shell access to the machine is the proof of
+  ownership; each command refuses until Cabinet is set up, and each change
+  is written to the audit log as `cli`:
+
+  ```bash
+  docker compose exec backend python -m app.cli status
+  ```
+
+  `status` shows the account, its last sign-in, failed sign-ins in the past
+  day, live sessions and tokens, and the backup key's public half and
+  location check, never a secret. `reset-password` asks for the new password
+  twice (it never takes it as an argument, so it stays out of your shell
+  history); it ends every session and known device, revokes every API token
+  and names them, and clears the running backend's sign-in delays.
+  `sign-out-everywhere` ends every session and known device (a lost laptop),
+  and `revoke-tokens [--name NAME]` revokes every token or one. There is
+  deliberately no command that undoes the setup or deletes the admin. On a
+  Swarm, `docker exec -it` into the backend task instead.
 
 ## 7. Swarm / multi-host deployment
 
