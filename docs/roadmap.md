@@ -960,7 +960,7 @@ v0.26.0.
   restore keeps an in-memory grant so its progress page still answers. The
   full design and the permission table are in
   [security.md](security.md#next-accounts-and-permissions), and the build
-  contract is SPEC_0300, drafted the same day and awaiting approval. **The
+  contract is SPEC_0300, approved the same day after four outside reviews. **The
   API consistency pass from the 1.0 checklist below ships with A1**, since
   auth already touches every endpoint.
   - **A1: One admin.** ◆ Single user to start: just the admin, onboarded

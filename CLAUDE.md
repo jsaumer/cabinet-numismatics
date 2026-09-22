@@ -28,8 +28,8 @@ changelog entry when releasing.
   reverse proxy. Every design decision was settled on 20 and 21 September
   2026: see "Next: accounts and permissions" in docs/security.md, and don't
   re-open them. It stays one shared collection. The build contract,
-  `docs/specs/SPEC_0300.md`, was drafted on 21 September 2026 and awaits the owner's
-  approval; that day the owner also cut forwarded-header trust
+  `docs/specs/SPEC_0300.md`, was approved by the owner on 21 September 2026 and is being
+  built (section 10 has the stages); that day the owner also cut forwarded-header trust
   (`TRUSTED_PROXIES`), pinned networks, and the `/api/docs` page from the
   design.
 
