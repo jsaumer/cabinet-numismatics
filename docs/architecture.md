@@ -226,7 +226,7 @@ rotation.
 - Sign-in is always on (v0.30.0): one admin, claimed on the first visit
   with a setup code from the backend's log (or `SETUP_CODE_FILE`), and API
   tokens for scripts. It works both directly exposed and behind an
-  authenticating reverse proxy; until single sign-on (v0.31.0) the
+  authenticating reverse proxy; until single sign-on (v0.32.0) the
   recommended deployment keeps such a proxy in front. Nothing but nginx
   should reach the backend: the audit log's addresses and the address-based
   sign-in delay come from the `X-Real-IP` nginx writes. See

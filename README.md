@@ -18,14 +18,14 @@ Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
 scoped API tokens for scripts and dashboards. Single sign-on follows in
-v0.31.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
+v0.32.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
 plan drawn from a survey of other collection tools, alongside what entering
 a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has its own sign-in (one admin, claimed with a
 > setup code on first start), but still benefits from an authenticating
-> reverse proxy as a second door until single sign-on ships in v0.31.0. See
+> reverse proxy as a second door until single sign-on ships in v0.32.0. See
 > [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots

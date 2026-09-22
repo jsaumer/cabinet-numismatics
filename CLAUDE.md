@@ -25,7 +25,9 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 (OIDC single sign-on and a trusted-header mode) is next. Every design decision was
+  start. v0.31.0 is bars and rounds (P11, `docs/specs/SPEC_0310.md`, PR 22,
+  branch `p11-bullion`); v0.32.0 (OIDC single sign-on and a trusted-header
+  mode) follows. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -252,9 +254,12 @@ P8 A1, sign-in and encrypted backups, shipped in v0.30.0
 with a setup code, sessions, scoped API tokens, and a deny-by-default gate
 (details in the rules below); see "Authentication and encrypted backups" in
 the implementation notes and `docs/specs/SPEC_0300.md`.
-**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
+**Next, in order:** P11, bars and rounds as an item type of their own, as
+v0.31.0 (SPEC_0310, staged 22 September 2026 as PR 22: the owner chose a
+third type, fully featured, and it also fixes metal detection and fineness
+parsing); then P8 A2, single sign-on (OpenID Connect and a
 trusted-header mode for the same admin, plus two-factor sign-in) as
-v0.31.0; then P9 a share view (the whole feature is an admin setting, off
+v0.32.0; then P9 a share view (the whole feature is an admin setting, off
 by default); labels, a phone app, and more accounts are optional. Research
 and propose each before building, as always. v1.0.0 follows P8 and the
 checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
