@@ -459,8 +459,14 @@ every package pinned and hash-verified (`pip install --require-hashes`);
 built with `npm ci` from `package-lock.json`. Rebuild periodically
 (`docker compose build --pull`) to pick up security fixes in the base images
 (the backend image also applies Debian's pending updates at build); Python
-package fixes arrive by regenerating the lockfile. After changing
-dependencies, regenerate it in the image's own Python:
+package fixes arrive by regenerating the lockfile. Two pieces arrive for
+sign-in and encrypted backups (v0.30.0): `argon2-cffi` (with
+`argon2-cffi-bindings`) in the lockfile, for password hashing, and Debian's
+`age` package in the backend image, which encrypts archives; `age` is
+called as a program, so it adds no Python dependency, and its version is
+the one Debian ships for the image's release (the build fails if
+`age --version` does). After changing dependencies, regenerate the lockfile
+in the image's own Python:
 
 ```bash
 docker run --rm -v "$PWD/backend:/src" -w /src python:3.14-slim sh -c \
