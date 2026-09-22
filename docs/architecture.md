@@ -49,7 +49,13 @@ its photos); `/api/backup*` and `/api/imports` get a 30-minute read timeout.
 `/api/restore` has a location of its own: 20 GB bodies (an uploaded archive
 carries every photo and document), request buffering off so the backend
 streams the upload straight to the backup volume, and 60-minute read and
-send timeouts. Any dot-name under `/photos/` answers 404: a restore's
+send timeouts. Before serving anything under `/photos/`, nginx asks the
+backend (`auth_request` to `GET /api/auth/photo`, v0.30.0): a session or a
+`read` or `write` token gets the file, sent `private, no-store`; anyone else
+gets the check's 401 or 403, and a backend that can't answer gives 503 with
+`Retry-After: 5`. The check is set for the whole server and turned off for
+the app and the API, so a location added later is checked unless it says
+otherwise. Any dot-name under `/photos/` answers 404: a restore's
 working folders sit inside the photo volume for a moment.
 It sets the security headers on every response and a Content-Security-Policy
 on the app (see [security.md](security.md)). Config lives in
@@ -137,7 +143,8 @@ mount can't quietly keep documents inside the container.
 4. Backend validates the image, corrects EXIF orientation, and writes the
    original plus a generated thumbnail to the photo volume.
 5. Backend records photo metadata (file keys) in postgres.
-6. nginx serves the files directly at `/photos/{key}`.
+6. nginx serves the files at `/photos/{key}`, after asking the backend
+   whether the caller is signed in.
 
 **Requesting a price estimate**
 1. Client POSTs to `/api/items/{id}/estimates/auto?source=` (`melt` by default, or

@@ -5,7 +5,7 @@
 # job; it moved here so it can also run against the local stack before any
 # push (docs/specs/SPEC_0300.md section 9, stage 7 of section 10).
 #
-# Usage: scripts/ci/stack-smoke.sh [bootstrap|smoke|backup-restore|restore-drill|all]
+# Usage: scripts/ci/stack-smoke.sh [bootstrap|smoke|backup-restore|restore-drill|photos|all]
 #   (no argument, or "all", runs every phase in order)
 #
 # Run from the repository root, with the stack already up
@@ -328,19 +328,66 @@ restore_drill() {
 # --- entry point -------------------------------------------------------------
 
 phase="${1:-all}"
+photos() {
+  load_tokens
+  echo "== photos =="
+  # nginx asks the backend (auth_request) before serving anything under
+  # /photos/: a session or a read or write token, nobody else.
+  id=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d '{"type":"coin","country":"Photo check","denomination":"1 test","year":2026}' | field id)
+  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (120, 90), "gray").save(b, "PNG"); sys.stdout.buffer.write(b.getvalue())' > "$STATE_DIR/photo.png"
+  # on stdin: a Windows curl can't read a Git Bash /tmp path
+  thumb=/photos/$(apif -X POST "$BASE/api/items/$id/photos" \
+    -F "file=@-;filename=photo.png;type=image/png" < "$STATE_DIR/photo.png" | field thumb_key)
+  missing="${thumb%/*}/00000000-0000-0000-0000-000000000000.jpg"
+  expect() { local want=$1; shift; local got; got=$(curl -s --path-as-is -o /dev/null -w '%{http_code}' "$@"); \
+    [ "$got" = "$want" ] || { echo "photos: got $got, wanted $want for: $*" >&2; exit 1; }; }
+  expect 401 "$BASE$thumb"
+  expect 200 -b "$COOKIES" "$BASE$thumb"
+  expect 200 -H "Authorization: Bearer $READ_TOKEN" "$BASE$thumb"
+  expect 200 -H "Authorization: Bearer $WRITE_TOKEN" "$BASE$thumb"
+  expect 403 -H "Authorization: Bearer $METRICS_TOKEN" "$BASE$thumb"
+  expect 403 -b "$COOKIES" -H 'Sec-Fetch-Site: cross-site' "$BASE$thumb"
+  expect 200 -b "$COOKIES" -H 'Sec-Fetch-Site: none' "$BASE$thumb"
+  # the check comes before the file: a missing photo tells a stranger nothing
+  expect 401 "$BASE$missing"
+  expect 404 -b "$COOKIES" "$BASE$missing"
+  # hidden names, dot segments, and encoded paths
+  expect 404 "$BASE/photos/.restore-new/x.jpg"
+  expect 401 "$BASE/photos/x/..$thumb"
+  expect 401 "$BASE/api/..$thumb"
+  expect 401 "$BASE${thumb/_thumb/%5fthumb}"
+  expect 404 "$BASE/_auth/photo"
+  curl -s -D - -o /dev/null -b "$COOKIES" "$BASE$thumb" | grep -qi '^cache-control: private, no-store'
+  # the app itself and its logo are not behind the check
+  expect 200 "$BASE/"
+  expect 200 "$BASE/logo-512.png"
+  # the backend stopped: 503 with a retry, not a broken image forever
+  docker compose stop backend > /dev/null
+  expect 503 -b "$COOKIES" "$BASE$thumb"
+  curl -s -D - -o /dev/null -b "$COOKIES" "$BASE$thumb" | grep -qi '^retry-after: 5'
+  docker compose start backend > /dev/null
+  wait_for_health
+  expect 200 -b "$COOKIES" "$BASE$thumb"
+  fresh -X DELETE "$BASE/api/items/$id?permanent=true" -o /dev/null
+  echo "photo checks passed"
+}
+
 case "$phase" in
   bootstrap) bootstrap ;;
   smoke) smoke ;;
   backup-restore) backup_restore ;;
   restore-drill) restore_drill ;;
+  photos) photos ;;
   all)
     bootstrap
     smoke
     backup_restore
     restore_drill
+    photos
     ;;
   *)
-    echo "Usage: $0 [bootstrap|smoke|backup-restore|restore-drill|all]" >&2
+    echo "Usage: $0 [bootstrap|smoke|backup-restore|restore-drill|photos|all]" >&2
     exit 2
     ;;
 esac

@@ -13,11 +13,11 @@ router = APIRouter(prefix="/api")
 @permission("public")
 def health(request: Request) -> dict:
     """Anonymous callers (a container health check, Uptime Kuma) get only
-    `{"status": ...}`; any signed-in caller or token gets the full body."""
-    body = _health()
+    `{"status": ...}`, without touching the database: anyone can call this,
+    so it must cost nothing. Any signed-in caller or token gets the full body."""
     if principal(request) is None:
-        return {"status": body["status"]}
-    return body
+        return {"status": "ok"}
+    return _health()
 
 
 def _health() -> dict:
