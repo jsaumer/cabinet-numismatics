@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from sqlalchemy import text
 
 from app import __version__
+from app.auth.permissions import permission, principal
 from app.db import engine
 from app.services import documents, maintenance, schema
 
@@ -9,7 +10,17 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/health")
-def health() -> dict:
+@permission("public")
+def health(request: Request) -> dict:
+    """Anonymous callers (a container health check, Uptime Kuma) get only
+    `{"status": ...}`; any signed-in caller or token gets the full body."""
+    body = _health()
+    if principal(request) is None:
+        return {"status": body["status"]}
+    return body
+
+
+def _health() -> dict:
     expected, known = schema.script_revisions()
     auth_expected, auth_known = schema.auth_script_revisions()
     current = auth_current = None

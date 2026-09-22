@@ -175,5 +175,8 @@ def check_startup(config: Settings) -> list[str]:
             "AUTH_INSECURE_HTTP is on: sign-in cookies are sent without Secure. "
             "Only for a plain-http local stack; never on a network you don't trust."
         )
-    supplied_setup_code(config)
+    # Once Cabinet has its admin (the claimed marker), the setup code is
+    # ignored for good, so a leftover SETUP_CODE can't stop a start.
+    if not (Path(config.secret_key_file).resolve().parent / "auth_claimed").exists():
+        supplied_setup_code(config)
     return warnings

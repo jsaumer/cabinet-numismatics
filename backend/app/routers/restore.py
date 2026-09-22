@@ -13,6 +13,8 @@ from python_multipart.exceptions import MultipartParseError
 from python_multipart.multipart import MultipartParser, parse_options_header
 from sqlalchemy.orm import Session
 
+from app.auth.events import actor_of
+from app.auth.permissions import permission, principal
 from app.db import get_db
 from app.services import backup, restore
 
@@ -31,6 +33,7 @@ class RunRequest(BaseModel):
 
 
 @router.get("/status")
+@permission("admin")
 def restore_status() -> dict:
     """Always answers: during a restore (when the rest of the API says 503)
     and when the feature is off (`enabled: false`)."""
@@ -141,6 +144,7 @@ async def _stage_upload(request: Request) -> tuple[str, Path, str] | None:
         }
     },
 )
+@permission("admin", fresh=True)
 async def inspect_archive(
     request: Request, name: str | None = None, db: Session = Depends(get_db)
 ) -> dict:
@@ -170,8 +174,13 @@ async def inspect_archive(
 
 
 @guarded.post("/{restore_id}/run", status_code=202)
-def run_restore(restore_id: str, body: RunRequest, db: Session = Depends(get_db)) -> dict:
-    """Start the restore in the background; poll `/api/restore/status`."""
+@permission("admin", fresh=True)
+def run_restore(
+    restore_id: str, body: RunRequest, request: Request, db: Session = Depends(get_db)
+) -> dict:
+    """Start the restore in the background; poll `/api/restore/status`. The
+    session that starts it keeps the status while maintenance refuses the
+    rest (the restore grant)."""
     entry = restore._pending.get(restore_id)
     if entry is None:
         raise HTTPException(404, "No such restore; inspect the archive again.")
@@ -181,8 +190,11 @@ def run_restore(restore_id: str, body: RunRequest, db: Session = Depends(get_db)
         raise HTTPException(422, f"Type {phrase} to confirm.")
     engine = db.get_bind()
     db.close()  # the restore replaces the database; hold nothing open on it
+    who = principal(request)
     try:
-        restore.start(restore_id, engine, body.confirm)
+        restore.start(
+            restore_id, engine, body.confirm, actor=actor_of(who), grant=(who.session_hash, who)
+        )
     except restore.Unknown as exc:
         raise HTTPException(404, str(exc)) from None
     except restore.Busy as exc:
@@ -191,6 +203,7 @@ def run_restore(restore_id: str, body: RunRequest, db: Session = Depends(get_db)
 
 
 @guarded.delete("/{restore_id}", status_code=204)
+@permission("admin")
 def discard_restore(restore_id: str) -> Response:
     """Discard a staged upload. An archive in the backup directory is never
     deleted here; its restore id is just forgotten."""

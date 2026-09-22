@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import Grade, Item, ItemSet, Tag, item_tags
 from app.schemas import (
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/api", tags=["reference"])
 
 
 @router.get("/sets", response_model=list[SetWithCount])
+@permission("read")
 def list_sets(db: Session = Depends(get_db)):
     rows = db.execute(
         select(ItemSet, func.count(Item.id))
@@ -36,6 +38,7 @@ def list_sets(db: Session = Depends(get_db)):
 
 
 @router.post("/sets", response_model=SetOut, status_code=201)
+@permission("write")
 def create_set(payload: SetCreate, db: Session = Depends(get_db)):
     name = payload.name.strip()
     if db.execute(select(ItemSet).where(ItemSet.name == name)).scalar_one_or_none():
@@ -48,6 +51,7 @@ def create_set(payload: SetCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/sets/{set_id}", response_model=SetOut)
+@permission("write")
 def update_set(set_id: int, payload: SetCreate, db: Session = Depends(get_db)):
     row = db.get(ItemSet, set_id)
     if row is None:
@@ -60,6 +64,7 @@ def update_set(set_id: int, payload: SetCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/sets/{set_id}", status_code=204)
+@permission("write")
 def delete_set(set_id: int, db: Session = Depends(get_db)):
     row = db.get(ItemSet, set_id)
     if row is None:
@@ -69,6 +74,7 @@ def delete_set(set_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/grades", response_model=list[GradeOut])
+@permission("read")
 def list_grades(
     scale: str | None = Query(default=None, max_length=20), db: Session = Depends(get_db)
 ):
@@ -79,6 +85,7 @@ def list_grades(
 
 
 @router.get("/tags", response_model=list[TagOut])
+@permission("read")
 def list_tags(db: Session = Depends(get_db)):
     rows = db.execute(
         # Counted through the link table, which the trash filter can't see, so
@@ -93,6 +100,7 @@ def list_tags(db: Session = Depends(get_db)):
 
 
 @router.get("/reference/serial-traits", response_model=list[SerialTraitOut])
+@permission("read")
 def serial_traits():
     """The fancy-serial traits an item's `serial_traits` can hold, in order."""
     return [
@@ -102,6 +110,7 @@ def serial_traits():
 
 
 @router.get("/reference/calendars", response_model=CalendarReference)
+@permission("read")
 def list_calendars():
     """The calendars a date as struck can be in, and the Japanese eras."""
     return {
@@ -114,6 +123,7 @@ def list_calendars():
 
 
 @router.get("/reference/convert-date", response_model=ConvertedDate)
+@permission("read")
 def convert_date(
     calendar: str = Query(max_length=20),
     year: int = Query(ge=1, le=9999),
@@ -129,6 +139,7 @@ def convert_date(
 
 
 @router.get("/reference/historic-spot", response_model=HistoricSpot)
+@permission("read")
 def historic_spot(
     metal: str = Query(max_length=20),
     on: date = Query(alias="date"),

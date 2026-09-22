@@ -87,7 +87,8 @@ src/
                         confirm, run, poll the status every 2 s through the
                         503s) and RestoreBlock; hidden when the deployment
                         switches restore off
-e2e/                  Playwright smoke tests (smoke.spec.ts)
+e2e/                  Playwright smoke tests (smoke.spec.ts) and the
+                       sign-in global setup (global-setup.ts)
 playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
@@ -150,7 +151,19 @@ run against a running stack (`docker compose up`), not the dev server, and
 they create and delete their own items; the stack test asserts on ounces
 and cost only, never on a live spot price.
 
+Cabinet needs a sign-in (v0.30.0): `global-setup.ts` runs once before the
+suite, claims an unclaimed stack with `SETUP_CODE` or signs in with
+`CABINET_USER`/`CABINET_PASSWORD` (default `owner` / `correct horse
+battery`), and saves the session as `playwright.config.ts`'s
+`use.storageState`, so every spec starts signed in. There is no sign-in page
+yet, so a spec that reaches a "fresh" route (the recent-password window,
+`docs/specs/SPEC_0300.md` section 5) confirms the password itself first,
+through `page.request` with an explicit `Origin` header (it shares cookies
+with the page, but sends none of the headers a real browser navigation
+would); see `confirmPassword` in `smoke.spec.ts`.
+
 ```bash
+export SETUP_CODE=...                  # only if the stack isn't claimed yet
 npm run e2e                            # http://localhost, through the proxy
 BASE_URL=http://proxy npm run e2e      # another host
 ```

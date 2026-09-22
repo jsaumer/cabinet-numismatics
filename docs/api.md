@@ -14,16 +14,15 @@ viewer of your own instead.
 
 All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
-document files, and metrics answer files or text). The app has no login yet,
-so endpoints are described without an auth layer; put an authenticating proxy
-in front before exposing it beyond a trusted network. Login is the next thing
-built (roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
-tokens, with every endpoint denied by default; v0.31.0 adds single sign-on).
-When it lands, every endpoint below needs a session or a token.
-[security.md](security.md#next-accounts-and-permissions) has the settled
-design and the table of who will be able to call what. The three endpoint
-renames that release makes are already in place; see the stability policy
-below.
+document files, and metrics answer files or text).
+
+**Every endpoint needs a credential** (v0.30.0) except four: `GET
+/api/health` (just `{"status": ...}` for anonymous callers), `GET
+/api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`. A
+browser signs in and carries a session cookie; scripts send an API token
+(`Authorization: Bearer cabinet_...`). What each route allows is in
+[Sign-in and permissions](#sign-in-and-permissions) below. The three
+endpoint renames of that release are in the stability policy.
 
 ## Stability policy
 
@@ -45,6 +44,91 @@ Renamed for v0.30.0, the one pass made before 1.0:
 | `POST /api/items/import` | removed; `POST /api/imports` then `.../{upload_id}/run` (the `cabinet` format) is the one import path |
 | `POST /api/estimates/refresh-melt` | `POST /api/estimates/refresh?source=melt` |
 | `POST /api/items/{id}/estimate?source=` | `POST /api/items/{id}/estimates/auto?source=` |
+
+## Sign-in and permissions
+
+**Credentials.** A session cookie from `POST /api/auth/login` (or from
+setup): `__Host-cabinet_session` (`Secure; HttpOnly; SameSite=Lax; Path=/`,
+no expiry of its own), or `cabinet_session` without `Secure` when the
+deployment sets `AUTH_INSECURE_HTTP`. It ends a day after its last use and
+seven days after sign-in. A known-device cookie
+(`__Host-cabinet_device`, `SameSite=Strict`, 7 days) lets a browser that
+signed in before past the sign-in delays; it authenticates nothing. An API
+token is `cabinet_<10 characters>_<43 characters>`, sent only as
+`Authorization: Bearer ...`, never in a query string or a cookie. A Cabinet
+token that isn't valid is `401` with no fall back to the cookie; any other
+`Authorization` value (another proxy's) is ignored.
+
+**Scopes and classes.** Every route has a class:
+
+| Caller | public | read | write | admin |
+|---|---|---|---|---|
+| Nobody signed in | yes | 401 | 401 | 401 |
+| The admin's session | yes | yes | yes | yes |
+| `write` token | yes | yes | yes | 403 |
+| `read` token | yes | yes | 403 | 403 |
+| `metrics` token | yes | 403 | 403 | 403 |
+
+`GET /api/stats/collection` (read) and `GET /api/metrics` (admin) also
+accept a `metrics` token; a `read` or `write` token gets `403` on the
+metrics. `read` covers every listing and report (items, their values and
+where they are kept, photos' metadata, stats, the dashboard layout, the
+trash). `write` adds creating, editing, and moving to the trash, and the
+lookups that spend Numista or PCGS quota. Admin, session only: settings,
+backups and restore, the exports, document files and thumbnails, the alerts
+test, saving the dashboard layout, deleting for good, `/api/openapi.json`,
+and everything under `/api/auth` that changes the account. The full table,
+route by route, is the appendix of
+[SPEC_0300](specs/SPEC_0300.md#appendix-route-permissions-v0300).
+
+**Recent password.** A few admin routes also need the password confirmed
+in the last 5 minutes by this session (`POST /api/auth/confirm`); a token
+can never have that. Without it they answer `403`
+`{"detail": "Confirm your password to continue.", "reauth_required": true}`.
+They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
+`DELETE /api/backups/unencrypted`, `POST /api/restore/inspect`, `POST
+/api/restore/{id}/run`, every `PUT /api/settings`, `POST /api/trash/purge`,
+`DELETE /api/trash`, `DELETE /api/items/{id}` when it deletes for good
+(`?permanent=true`, or an item already in the trash), creating or revoking
+a token, ending another session, and signing out everywhere. Changing the
+password or the username takes the current password in the body instead.
+
+**Cross-site requests.** A request carrying the session cookie, whatever
+its method, passes only with `Sec-Fetch-Site: same-origin`, or with no such
+header and an `Origin` (or a `Referer`) exactly matching an entry of
+`PUBLIC_ORIGINS`; otherwise `403 "Cross-site request refused."`.
+`Sec-Fetch-Site: none` (an address typed or bookmarked) is accepted only on
+`/api/openapi.json` and a document's file. Token requests aren't checked.
+Scripts that use the cookie send `Origin`.
+
+**Paths.** A path containing `%` is `400` before anything else, and
+anonymous callers get `401` for every path but the four above (unknown ones
+included); signed in, an unknown path is `404`. Responses without their
+own `Cache-Control` get `private, no-store`.
+
+| Method | Path | Class | Purpose |
+|--------|------|-------|---------|
+| `GET` | `/api/auth/state` | public | `{"setup_required": bool}` |
+| `POST` | `/api/auth/setup` | public | `{code, username, password}`: create the admin; `201` and both cookies, `403` wrong code, `409` already set up, `413` over 8 KiB, `422` a rule broken, `429` too many wrong codes |
+| `POST` | `/api/auth/login` | public | `{username, password}`: `200 {username, previous_sign_in_at, failed_since_previous}` and both cookies; `401`, `413`, `429` and `503` with `Retry-After` |
+| `POST` | `/api/auth/logout` | admin | End this session; `204`, cookies cleared, `Clear-Site-Data: "cache"` |
+| `GET` | `/api/auth/me` | read | `username`, `role`, `via` (`session` or `token`), `scope`, `confirmed_until` |
+| `POST` | `/api/auth/confirm` | admin | `{password}`: open the 5-minute window (`204`); a wrong password is `403` |
+| `POST` | `/api/auth/password` | admin | `{current_password, new_password}`: ends every other session, every known device, and every token; `200 {revoked_tokens}` and a new cookie |
+| `POST` | `/api/auth/username` | admin | `{current_password, username}`; `204` |
+| `GET` | `/api/auth/sessions` | admin | Live sessions: `id`, `created_at`, `last_seen_at`, `address`, `user_agent`, `current` |
+| `DELETE` | `/api/auth/sessions/{id}` | admin | End one (recent password unless it is this one, which signs out) |
+| `DELETE` | `/api/auth/sessions` | admin, recent password | Sign out everywhere, this session and every known device included |
+| `GET` | `/api/auth/tokens` | admin | Live tokens, never their secrets |
+| `POST` | `/api/auth/tokens` | admin, recent password | `{name, scope, days}`: `201`, the `token` shown this once. `read` and `write` last `1` or `7` days; a `metrics` token may take `null`, never expiring. Names are unique among live tokens, at most 50 |
+| `DELETE` | `/api/auth/tokens/{id}` | admin, recent password | Revoke |
+| `GET` | `/api/auth/audit` | admin | The audit log, newest first: `?before=<id>&limit=` (at most 200) |
+| `GET` | `/api/auth/photo` | read | `204`: nginx asks this before serving a photo (a `metrics` token and `Sec-Fetch-Site: cross-site` get `403`) |
+
+Codes: `401` for a missing, invalid, expired, or revoked credential; `403`
+for a valid one that isn't allowed; `429` with `Retry-After` when sign-in
+is being slowed down. Sign-in delays grow per username (after 5 failures)
+and per address (after 20), up to a minute, and never lock the account.
 
 ## Items
 
@@ -940,8 +1024,10 @@ alert event, and answers `{"deleted": [names]}`. A second `POST
 /api/backups` while one is running returns `409`. Stored archive names must
 match `cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age` (or `.zip`
 for an old one); anything else is `404`. Pre-restore archives sit outside `backup_keep`: the newest three are
-kept. **These endpoints hand over the whole collection and are
-unauthenticated**; see [security.md](security.md).
+kept. Every backup route is admin-only; both downloads and deleting old
+archives also need a recent password, and each download, the saved-key
+tick, and the deletion is written to the audit log (downloads and the
+deletion also alert).
 
 ## Restore
 
@@ -958,8 +1044,11 @@ safeguards, and what a failure leaves behind are in
 
 With `RESTORE_ENABLED=false` every endpoint but the status answers `404`.
 
-`GET /api/restore/status` always answers, during a restore and when the
-feature is off:
+`GET /api/restore/status` (admin) answers during a restore and when the
+feature is off. While a restore runs it answers only the session that
+started it (an in-memory grant, looked up without the database, ending 10
+minutes after the restore does and 2 hours after it began at the latest);
+anyone else gets `401`:
 
 ```json
 {
@@ -1067,7 +1156,8 @@ and only forgets the id of a stored archive, which is never deleted here;
 `404` for an unknown id.
 
 **While a restore runs**, every request except `GET /api/health` and
-`GET /api/restore/status` answers `503` with `Retry-After: 5` and
+`GET /api/restore/status` (for the session that started it) answers `503`
+with `Retry-After: 5` and
 `{"detail": "Cabinet is restoring a backup; try again in a moment"}`.
 
 ## Alerts & metrics
@@ -1127,9 +1217,10 @@ also carry `match_catalog`/`match_ref` or `match_country`/
 |--------|----------------|-------------------------------------|
 | `GET`  | `/api/health`  | Liveness/readiness probe            |
 
-Returns `status`, `db` (`ok` / `unreachable`, or `restoring` while an in-app
-restore runs: the database isn't touched then, and `schema` is `unknown`
-with a `null` `current`), the app `version`, and
+Anonymous callers (a container health check, Uptime Kuma) get only
+`{"status": "ok"}`, and so does everyone while an in-app restore runs (the
+check then looks nothing up). Any signed-in session or token gets the full
+body: `status`, `db` (`ok` / `unreachable`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status`, one of `ok`, `pending` (migrations not yet
 applied), `ahead` (the database was migrated by a newer build), or `unknown`
@@ -1146,4 +1237,5 @@ displays both.
 - **IDs** are UUIDs for items/photos/estimates/documents; sales, checklists,
   edit-history events, and reference tables use integers.
 - **Errors** follow a consistent JSON shape: `{ "detail": "..." }`, matching
-  FastAPI defaults, with appropriate HTTP status codes.
+  FastAPI defaults, with appropriate HTTP status codes. The one addition is
+  `reauth_required: true` on a `403` that wants the password again.

@@ -411,7 +411,8 @@ def test_run_restores_database_and_swaps_files(client, coin, fake_dump, calls, c
         assert (status["state"], status["step"]) == ("running", "database")
         assert status["started_at"]
         health = client.get("/api/health")
-        assert health.status_code == 200 and health.json()["db"] == "restoring"
+        # answered with no lookup of anyone, so only the status (v0.30.0)
+        assert health.status_code == 200 and health.json() == {"status": "ok"}
         assert scheduled.hourly(_session()) is None  # sits out
         assert scheduled.refresh(_session()) == {}
         # nothing live has been touched yet
@@ -990,32 +991,33 @@ def test_restored_plain_text_secrets_are_cleared_and_named(client, coin, fake_du
     assert client.get("/api/settings").json()["secrets_cleared"] == ["alert webhook"]
 
 
-def test_sign_in_rows_are_untouched_by_a_restore(client, coin, fake_dump, calls):
-    from datetime import datetime as dt
+def test_sign_in_rows_are_untouched_by_a_restore(client, coin, fake_dump, calls, token_client):
+    """A session, a read token, and a revoked token before the restore; after
+    it the session and the token still answer, and the revoked one doesn't."""
+    from app.auth import accounts
+    from app.auth.audit import Actor
+    from app.models.auth import User
 
-    from app.models.auth import ApiToken, User
-
+    reader = token_client("read")
+    revoked = token_client("read")
     db = _session()
     try:
-        user = User(username="admin", password_hash="x", role="admin")
-        db.add(user)
-        db.flush()
-        db.add(
-            ApiToken(
-                public_id="abcdefghij", secret_hash=b"\x01" * 32, user_id=user.id,
-                name="CI", scope="read", expires_at=dt(2026, 9, 30, tzinfo=UTC),
-            )
-        )  # fmt: skip
-        db.commit()
+        user = accounts.admin(db)
+        row = next(t for t in accounts.tokens.live(db, user.id) if t.name == "read-1")
+        accounts.revoke_token(db, user, row.id, Actor.system())
     finally:
         db.close()
+    assert revoked.get("/api/items").status_code == 401
+
     restore_id = _inspect(client, _stored(client))["restore_id"]
     assert _run(client, restore_id).status_code == 202
     assert client.get("/api/restore/status").json()["last"]["ok"] is True
+    assert client.get("/api/items").status_code == 200
+    assert reader.get("/api/items").status_code == 200
+    assert revoked.get("/api/items").status_code == 401
     db = _session()
     try:
-        assert [u.username for u in db.query(User)] == ["admin"]
-        assert [t.name for t in db.query(ApiToken)] == ["CI"]
+        assert [u.username for u in db.query(User)] == ["owner"]
     finally:
         db.close()
 
@@ -1117,4 +1119,56 @@ def test_recover_database_step_unreachable_stays_in_maintenance(client, monkeypa
     assert maintenance.active()
     assert (photos / ".restore-new" / "new.txt").exists()  # nothing moved either way
     assert client.get("/api/items").status_code == 503
-    assert client.get("/api/health").json()["db"] == "restoring"
+    assert client.get("/api/health").json() == {"status": "ok"}  # no lookup, no database
+
+
+def test_restore_alerts_and_audit_never_carry_the_error(
+    client, coin, fake_dump, calls, clock, monkeypatch
+):
+    """pg_restore's output can quote the collection's rows, so the webhook
+    says only that it failed and where to look (the start and the end are
+    also audited under the admin's name)."""
+    from app.models.auth import AuditEntry
+    from app.services import alerts
+
+    sent = []
+    monkeypatch.setattr(
+        alerts, "event", lambda db, key, title, message: sent.append((key, message))
+    )
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+
+    def fail():
+        raise restore.RestoreError("DETAIL: Failing row contains (United States, 25 cents)")
+
+    calls["during"] = fail
+    assert _run(client, _inspect(client, name)["restore_id"]).status_code == 202
+    finished = [m for k, m in sent if k == "restore_finished"]
+    assert finished == [f"Restore of {name} failed. The reason is in Settings, Backups."]
+    assert all("United States" not in m for _, m in sent)
+    db = _session()
+    try:
+        rows = db.query(AuditEntry).filter(AuditEntry.action.like("restore_%")).all()
+        assert [(r.action, r.actor_label) for r in rows] == [
+            ("restore_started", "owner"),
+            ("restore_finished", "owner"),
+        ]
+        assert rows[1].detail == {"ok": False}
+    finally:
+        db.close()
+
+
+def test_a_refused_second_run_leaves_the_first_runs_grant(client, coin, fake_dump):
+    """A second run that finds a restore under way (409) never replaces or
+    drops the grant the first run's session holds."""
+    name = _stored(client)
+    restore_id = _inspect(client, name)["restore_id"]
+    marker = object()
+    restore.issue_grant(b"first-session-hash-000000000000", "first", marker)
+    assert restore._lock.acquire(blocking=False)  # a restore is running
+    try:
+        assert _run(client, restore_id).status_code == 409
+        assert restore.granted(b"first-session-hash-000000000000") is marker
+    finally:
+        restore._lock.release()
+        restore.drop_grant()

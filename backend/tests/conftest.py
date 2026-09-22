@@ -77,10 +77,39 @@ def _fresh_monitoring_state():
     yield
 
 
+BASE_URL = "https://testserver"  # PUBLIC_ORIGINS, so CSRF's Origin rule matches
+SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin"}
+PASSWORD = "correct horse battery"
+# How the cookie jar files a dotless host, so a Set-Cookie replaces ours.
+COOKIE_DOMAIN = "testserver.local"
+
+
+def _cheap_argon2(monkeypatch):
+    from argon2 import PasswordHasher
+
+    from app.auth import passwords
+
+    monkeypatch.setattr(
+        passwords, "HASHER", PasswordHasher(time_cost=1, memory_cost=8, parallelism=1)
+    )
+
+
+def _session_db():
+    return next(app.dependency_overrides[get_db]())
+
+
+def _with_session(secret: str, **headers) -> TestClient:
+    from app.auth import sessions
+
+    c = TestClient(app, base_url=BASE_URL, headers={**SAME_ORIGIN, **headers})
+    c.cookies.set(sessions.cookie_names()[0], secret, domain=COOKIE_DOMAIN)
+    return c
+
+
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
+def unclaimed_client(tmp_path, monkeypatch):
     """TestClient backed by a fresh in-memory SQLite DB (grades seeded) and a
-    temp photo dir."""
+    temp photo dir, before anyone has set Cabinet up: no credentials."""
     raw_engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -121,14 +150,91 @@ def client(tmp_path, monkeypatch):
     get_settings.cache_clear()
     crypto.reset_cache()
     app.dependency_overrides[get_db] = override_get_db
+    _cheap_argon2(monkeypatch)
+    from app.auth import setup
+
+    setup.reset_memory()
     try:
-        with TestClient(app) as c:
+        with TestClient(app, base_url=BASE_URL, headers=SAME_ORIGIN) as c:
             yield c
     finally:
+        setup.reset_memory()
         app.dependency_overrides.clear()
         get_settings.cache_clear()
         crypto.reset_cache()
         raw_engine.dispose()
+
+
+@pytest.fixture()
+def client(unclaimed_client):
+    """The admin's browser: signed in over https://testserver, sending
+    `Sec-Fetch-Site: same-origin`, inside its recent-password window. The
+    `Started` sign-in is on `client.admin`."""
+    from app.auth import accounts, sessions
+
+    db = _session_db()
+    try:
+        started = accounts.create_admin(db, "owner", PASSWORD, accounts.Client())
+        sessions.confirm(started.session)
+        db.commit()
+    finally:
+        db.close()
+    unclaimed_client.cookies.set(
+        sessions.cookie_names()[0], started.session_secret, domain=COOKIE_DOMAIN
+    )
+    unclaimed_client.admin = started
+    return unclaimed_client
+
+
+@pytest.fixture()
+def anon_client(client):
+    """Nobody signed in, against the claimed instance `client` set up."""
+    with TestClient(app, base_url=BASE_URL, headers=SAME_ORIGIN) as c:
+        yield c
+
+
+@pytest.fixture()
+def stale_client(client):
+    """The admin signed in on another browser, outside its recent-password
+    window."""
+    from app.auth import accounts
+
+    db = _session_db()
+    try:
+        started = accounts.sign_in(db, "owner", PASSWORD, accounts.Client(address="198.51.100.2"))
+    finally:
+        db.close()
+    with _with_session(started.session_secret) as c:
+        yield c
+
+
+@pytest.fixture()
+def token_client(client):
+    """A factory: `token_client("read")` is a TestClient sending a fresh
+    token of that scope as Bearer, with no cookie."""
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    made = []
+
+    def make(scope: str) -> TestClient:
+        db = _session_db()
+        try:
+            user = accounts.admin(db)
+            days = None if scope == "metrics" else 1
+            plaintext, _ = accounts.create_token(
+                db, user, f"{scope}-{len(made)}", scope, days, Actor.system()
+            )
+        finally:
+            db.close()
+        c = TestClient(app, base_url=BASE_URL, headers={"Authorization": f"Bearer {plaintext}"})
+        c.token = plaintext
+        made.append(c)
+        return c
+
+    yield make
+    for c in made:
+        c.close()
 
 
 def image_bytes(fmt: str = "PNG", size=(60, 40), color=(200, 30, 30)) -> bytes:
@@ -154,21 +260,11 @@ COIN = {
 def cli_admin(client, monkeypatch):
     """The admin exists, and container commands (`app.cli`) reach the test
     database. Account commands refuse before setup."""
-    from argon2 import PasswordHasher
-
     from app import db as app_db
-    from app.auth import accounts, passwords
 
     make = app.dependency_overrides[get_db]
     monkeypatch.setattr(app_db, "SessionLocal", lambda: next(make()))
-    monkeypatch.setattr(
-        passwords, "HASHER", PasswordHasher(time_cost=1, memory_cost=8, parallelism=1)
-    )
-    db = next(make())
-    try:
-        return accounts.create_admin(db, "owner", "correct horse battery", accounts.Client())
-    finally:
-        db.close()
+    return client.admin
 
 
 @pytest.fixture()

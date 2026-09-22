@@ -435,11 +435,11 @@ def test_cert_fill_needs_a_token_and_a_known_cert(client, upstream):
 )
 def test_cert_route_takes_only_letters_digits_and_dashes(client, upstream, cert):
     """Nothing that needs percent-encoding, and at most 20 characters, so the
-    sign-in gate's refusal of encoded paths never meets a real cert. (An
-    encoded digit such as `%31` decodes before routing, so only the gate can
-    refuse it; that case is the gate's test, stage 7.)"""
+    sign-in gate's refusal of encoded paths never meets a real cert. An
+    encoded one is refused by the gate (400) before routing."""
     configure(client)
     upstream.body = CERT_FACTS
     resp = client.get(f"/api/pcgs/cert/{cert}")
-    assert resp.status_code in (404, 422), (cert, resp.status_code)
+    expected = (400,) if "%" in cert else (404, 422)
+    assert resp.status_code in expected, (cert, resp.status_code)
     assert list(upstream) == []  # refused before PCGS is asked

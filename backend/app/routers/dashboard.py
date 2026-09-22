@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.services import app_settings as store
 from app.services import dashboard
@@ -31,6 +32,7 @@ class LayoutUpdate(BaseModel):
 
 
 @router.get("/layout", response_model=LayoutOut)
+@permission("read")
 def get_layout(db: Session = Depends(get_db)):
     stored = store.get_setting(db, "dashboard_layout")
     layout, is_default = dashboard.normalize_for_read(stored)
@@ -38,6 +40,7 @@ def get_layout(db: Session = Depends(get_db)):
 
 
 @router.put("/layout", response_model=LayoutOut)
+@permission("admin")
 def save_layout(payload: LayoutUpdate, db: Session = Depends(get_db)):
     try:
         widgets = dashboard.validate_widgets(payload.widgets)
@@ -50,6 +53,7 @@ def save_layout(payload: LayoutUpdate, db: Session = Depends(get_db)):
 
 
 @router.delete("/layout", response_model=LayoutOut)
+@permission("admin")
 def reset_layout(db: Session = Depends(get_db)):
     store.set_setting(db, "dashboard_layout", None)
     db.commit()

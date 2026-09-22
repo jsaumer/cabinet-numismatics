@@ -43,8 +43,12 @@ Edit `.env`:
 - `SETUP_CODE` or `SETUP_CODE_FILE` (optional): the one-time code for creating
   the admin, at least 32 characters (`openssl rand -hex 32`); a code that is
   too short or mostly one character stops the backend. Unset, one is
-  generated. `SETUP_CODE_FILE` names a file holding it, such as a Docker
-  secret, and wins over `SETUP_CODE`.
+  generated and printed once in the backend's log. `SETUP_CODE_FILE` names a
+  file holding it, such as a Docker secret, and wins over `SETUP_CODE`. Once
+  the admin exists both are ignored for good (a marker on the state
+  volume), so they can stay set. The code's length is what protects an
+  unclaimed instance: wrong codes are slowed after five, but a right one
+  always passes, so use a random code, never a word.
 - `DB_PASSWORD`: a generated password, not the sample value.
 - `SECRET_KEY`: generate one; it encrypts the secrets saved in Settings
   (price-source credentials, the alert webhook and heartbeat URLs):
@@ -60,11 +64,9 @@ Edit `.env`:
   runs as and that owns its files, default `1000`:`1000`. Set them when the
   data sits on bind mounts or NFS owned by another account.
 - `RESTORE_ENABLED` (optional, default `true`): restore from Settings →
-    Backups replaces the whole collection, and Cabinet has no login yet (it
-  arrives in v0.30.0, which makes restore admin-only). Set
-  `false` to switch it off (the endpoints answer 404 and
-  `scripts/restore.sh` is the only way), for instance where the app is
-  reachable by people who shouldn't be able to do that.
+  Backups replaces the whole collection; it is for the admin only and asks
+  for the password again. Set `false` to switch it off (the endpoints
+  answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
 - `TAG` (optional): pins the image tag, e.g. `TAG=0.29.1`. `--build` builds
@@ -77,14 +79,27 @@ Then bring it up:
 docker compose up --build -d
 ```
 
-The app is at http://localhost/. There is no interactive API docs page; the
-OpenAPI schema is at http://localhost/api/openapi.json, to load into a viewer
-of your own ([api.md](api.md)). The backend creates the database schema itself
-before it starts serving. Check `curl http://localhost/api/health`: it
-reports database reachability, the running version, `schema` (`status: "ok"`
-once migrations are applied), and `documents` (`ok`, or `not_mounted` /
-`unwritable` when uploads would be refused). Settings → About shows the
-same.
+The app is at http://localhost/. **Set it up first**: until the admin
+exists, the setup page is all Cabinet serves. It asks for the setup code,
+which is your `SETUP_CODE`, or, if you set none, the one in the log:
+
+```bash
+docker compose logs backend | grep "setup code"
+```
+
+Choose a username and a password of at least 12 characters there; that
+account is the only one. Scripts and dashboards use API tokens made in
+Settings instead of the password ([api.md](api.md#sign-in-and-permissions)).
+A restart before setup generates a new code.
+
+There is no interactive API docs page; the OpenAPI schema is at
+http://localhost/api/openapi.json for a signed-in browser. The backend
+creates the database schema itself before it starts serving.
+`curl http://localhost/api/health` answers `{"status":"ok"}`; signed in, or
+with a token, it also reports database reachability, the running version,
+`schema` (`status: "ok"` once migrations are applied), and `documents`
+(`ok`, or `not_mounted` / `unwritable` when uploads would be refused).
+Settings → About shows the same.
 
 To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 `docker compose exec backend alembic upgrade head` after each deploy.
@@ -265,7 +280,11 @@ Check `docker compose logs backend`. Migrations are forward-only in practice,
 and going back to an older image doesn't undo them; take a backup first
 (Settings → Backups → **Back up now**).
 
-**Upgrading to v0.30.0**: from the first start every backup is encrypted.
+**Upgrading to v0.30.0**: nothing but the setup page is served until the
+admin is created (the setup code is your `SETUP_CODE`, or in the log), and
+anything that called the API without signing in (the Homepage tile,
+Prometheus, scripts) needs an API token from then on. From the first start
+every backup is encrypted.
 Save the backup key (`backup-key show`, above) or supply your own as a
 secret (`BACKUP_KEY_FILE`) before relying on them; take a new backup; then
 delete the old unencrypted archives (Settings → Backups → **Delete

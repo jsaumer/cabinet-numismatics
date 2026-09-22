@@ -30,7 +30,7 @@ def fast_hash(monkeypatch):
 
 
 @pytest.fixture()
-def db(client, monkeypatch):
+def db(unclaimed_client, monkeypatch):
     make = app.dependency_overrides[get_db]
     monkeypatch.setattr(app_db, "SessionLocal", lambda: next(make()))
     monkeypatch.setattr(alerts, "event", lambda *a: None)

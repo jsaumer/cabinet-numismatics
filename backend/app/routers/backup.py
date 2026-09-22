@@ -5,15 +5,17 @@ crosses the API: only its public fingerprint does."""
 import shutil
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
 
+from app.auth import events
+from app.auth.permissions import permission
 from app.db import get_db
-from app.services import alerts, archive_keys, backup
 from app.services import app_settings as store
+from app.services import archive_keys, backup
 
 router = APIRouter(prefix="/api", tags=["backup"])
 
@@ -55,7 +57,8 @@ def _unavailable(exc: backup.BackupError) -> HTTPException:
 
 
 @router.get("/backup.zip", response_class=FileResponse)
-def download_backup(photos: bool = True, db: Session = Depends(get_db)):
+@permission("admin", fresh=True)
+def download_backup(request: Request, photos: bool = True, db: Session = Depends(get_db)):
     """A fresh encrypted archive, `cabinet-backup-....zip.age`: inside, once
     decrypted with the backup key, `db.dump`, `photos.tar.gz` and
     `documents.tar.gz` (unless `photos=false`), `manifest.json`, and
@@ -64,6 +67,9 @@ def download_backup(photos: bool = True, db: Session = Depends(get_db)):
         path, name = backup.write_download(db, include_photos=photos)
     except backup.BackupError as exc:
         raise _unavailable(exc) from exc
+    events.record(
+        db, request, "backup_downloaded", target=name, alert=f"A backup ({name}) was downloaded."
+    )
     return FileResponse(
         path,
         media_type="application/octet-stream",
@@ -88,6 +94,7 @@ def _key_status(db: Session) -> BackupKey:
 
 
 @router.get("/backups", response_model=BackupList)
+@permission("admin")
 def list_backups(db: Session = Depends(get_db)):
     try:
         dest = backup.backup_dir()
@@ -114,7 +121,8 @@ def list_backups(db: Session = Depends(get_db)):
 
 
 @router.post("/backups/key/saved", response_model=BackupKey)
-def backup_key_saved(db: Session = Depends(get_db)):
+@permission("admin")
+def backup_key_saved(request: Request, db: Session = Depends(get_db)):
     """The owner says they have saved the backup key outside Cabinet (the
     setup checklist stops asking). Only the public key is recorded."""
     try:
@@ -123,11 +131,13 @@ def backup_key_saved(db: Session = Depends(get_db)):
         raise _unavailable(exc) from exc
     store.set_setting(db, "backup_key_saved", recipient)
     db.commit()
+    events.record(db, request, "backup_key_saved", target=recipient)
     return _key_status(db)
 
 
 @router.delete("/backups/unencrypted", response_model=DeletedArchives)
-def delete_unencrypted(db: Session = Depends(get_db)):
+@permission("admin", fresh=True)
+def delete_unencrypted(request: Request, db: Session = Depends(get_db)):
     """Delete every plain `.zip` archive from before v0.30.0 in the backup
     directory: each is a readable copy of the whole collection, and none can
     be restored. Encrypted archives and a restore's working folders are
@@ -142,16 +152,18 @@ def delete_unencrypted(db: Session = Depends(get_db)):
             path.unlink(missing_ok=True)
             deleted.append(path.name)
     if deleted:
-        alerts.event(
+        events.record(
             db,
+            request,
             "unencrypted_deleted",
-            "Cabinet deleted unencrypted archives",
-            f"{len(deleted)} unencrypted archive(s) from before v0.30.0 were deleted.",
+            detail={"archives": deleted},
+            alert=f"{len(deleted)} unencrypted archive(s) from before v0.30.0 were deleted.",
         )
     return DeletedArchives(deleted=deleted)
 
 
 @router.post("/backups")
+@permission("admin")
 def run_backup_now(photos: bool | None = None, db: Session = Depends(get_db)) -> dict:
     """Write an archive into the backup directory now, then apply retention.
     `photos` defaults to the scheduled-backup setting."""
@@ -162,9 +174,13 @@ def run_backup_now(photos: bool | None = None, db: Session = Depends(get_db)) ->
 
 
 @router.get("/backups/{name}", response_class=FileResponse)
-def download_stored_backup(name: str):
+@permission("admin", fresh=True)
+def download_stored_backup(name: str, request: Request, db: Session = Depends(get_db)):
     path = backup.backup_dir() / name
     if not backup.NAME_RE.match(name) or not path.is_file():
         raise HTTPException(404, "No such backup")
+    events.record(
+        db, request, "backup_downloaded", target=name, alert=f"The backup {name} was downloaded."
+    )
     media = "application/octet-stream" if backup.is_encrypted(path) else "application/zip"
     return FileResponse(path, media_type=media, filename=name)

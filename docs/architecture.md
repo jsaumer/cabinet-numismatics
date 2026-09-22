@@ -69,9 +69,21 @@ seconds for postgres and applies pending migrations before serving. Before
 that it finishes, or clears up after, an in-app restore the last process
 didn't complete.
 
+**Every request passes a gate before routing** (v0.30.0,
+`app/auth/gate.py`): an encoded path is refused, the caller is found from an
+API token (`Authorization: Bearer`) or the session cookie, anonymous callers
+reach only health, the setup state, setup, and sign-in, and a cookie request
+must come from one of `PUBLIC_ORIGINS` (CSRF). Then every route checks the
+permission it declares (`@permission`, `app/auth/permissions.py`); a route
+without one is refused. Sessions, tokens, known devices, and the audit log
+live in the `cabinet_auth` schema; the sign-in throttles, the two password
+check slots, and the restore grant live in memory, which one process makes
+enough. See [api.md](api.md#sign-in-and-permissions).
+
 While an in-app restore runs the backend is in **maintenance mode**
 (`services/maintenance.py`, in memory): every request but `GET /api/health`
-and `GET /api/restore/status` answers 503, the two loops skip their work,
+and `GET /api/restore/status` (for the session that started the restore)
+answers 503, the two loops skip their work,
 and health answers `db: "restoring"` without touching the database. See
 [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 
@@ -202,12 +214,14 @@ rotation.
   photo archive, and document archive together either way). Restore from
   Settings → Backups too, or with `./scripts/restore.sh` when the app won't
   start; see [backup-restore.md](backup-restore.md).
-- There is no application-level auth yet: Cabinet is for a trusted
-  network, or behind an authenticating reverse proxy with TLS (for example
-  Traefik + Authentik forward-auth). Application login is the next thing
-  built (roadmap Phase 7, P8: v0.30.0 one admin and API tokens, v0.31.0
-  single sign-on), and it has to work both behind such a proxy and directly
-  exposed. See [security.md](security.md).
+- Sign-in is always on (v0.30.0): one admin, claimed on the first visit
+  with a setup code from the backend's log (or `SETUP_CODE_FILE`), and API
+  tokens for scripts. It works both directly exposed and behind an
+  authenticating reverse proxy; until single sign-on (v0.31.0) the
+  recommended deployment keeps such a proxy in front. Nothing but nginx
+  should reach the backend: the audit log's addresses and the address-based
+  sign-in delay come from the `X-Real-IP` nginx writes. See
+  [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

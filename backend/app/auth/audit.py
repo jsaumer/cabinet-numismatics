@@ -48,6 +48,8 @@ EVENTS = frozenset(
         "secrets_cleared",
         "backup_key_shown",
         "backup_key_rotated",
+        "backup_key_saved",
+        "unencrypted_deleted",
     }
 )
 FAILED = "sign_in_failed"

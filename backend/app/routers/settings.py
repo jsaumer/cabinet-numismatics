@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
 from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
@@ -257,11 +258,13 @@ def _build(db: Session) -> SettingsOut:
 
 
 @router.get("", response_model=SettingsOut)
+@permission("admin")
 def get_app_settings(db: Session = Depends(get_db)):
     return _build(db)
 
 
 @router.put("", response_model=SettingsOut)
+@permission("admin", fresh=True)
 def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
     fields = payload.model_dump(exclude_unset=True)
     if "display_currency" in fields:

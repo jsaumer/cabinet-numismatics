@@ -13,6 +13,28 @@ let itemUrl: string;
 
 const acceptDialogs = (page: Page) => page.on("dialog", (dialog) => dialog.accept());
 
+// global-setup.ts signs the whole suite in, but a "fresh" route (a recent
+// password confirmation, docs/specs/SPEC_0300.md section 5) still needs its
+// own 5-minute window per session, and there is no confirmation dialog yet
+// (that is stage 9). Call this through the page's own request context right
+// before an action that reaches a fresh route (restore inspect and run,
+// here): it shares cookies with the page, so the confirmation applies to the
+// session the UI is about to use. Sent with an explicit Origin because the
+// request context sends no Sec-Fetch-Site header, which the CSRF check
+// otherwise needs on a cookie request (section 4).
+const BASE_URL = process.env.BASE_URL ?? "http://localhost";
+const CABINET_PASSWORD = process.env.CABINET_PASSWORD ?? "correct horse battery";
+
+async function confirmPassword(page: Page) {
+  const response = await page.request.post("/api/auth/confirm", {
+    headers: { Origin: BASE_URL },
+    data: { password: CABINET_PASSWORD },
+  });
+  if (!response.ok()) {
+    throw new Error(`Password confirmation failed: ${response.status()} ${await response.text()}`);
+  }
+}
+
 test("the dashboard renders", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
@@ -142,6 +164,8 @@ test("trash it, restore it, then delete it for good", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(TITLE);
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.goto("/trash");
+  // deleting for good is admin, fresh (already-trashed items too).
+  await confirmPassword(page);
   await page.getByRole("row", { name: new RegExp(COUNTRY) })
     .getByRole("button", { name: "delete for good" })
     .click();
@@ -161,6 +185,8 @@ async function deleteForGood(page: Page, url: string, country: string) {
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page).toHaveURL(/\/collection$/);
   await page.goto("/trash");
+  // DELETE /api/items/{id}?permanent=true is admin, fresh.
+  await confirmPassword(page);
   await page.getByRole("row", { name: new RegExp(country) })
     .getByRole("button", { name: "delete for good" })
     .click();
@@ -301,6 +327,8 @@ test("restore the backup just taken", async ({ page }) => {
   await expect(written).toBeVisible({ timeout: 60_000 });
   const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip\.age/)![0];
 
+  // POST /api/restore/inspect is a fresh route.
+  await confirmPassword(page);
   await page
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name, exact: true }) })
@@ -311,6 +339,9 @@ test("restore the backup just taken", async ({ page }) => {
   });
   await expect(page.getByRole("columnheader", { name: "Here now" })).toBeVisible();
 
+  // POST /api/restore/{id}/run is fresh too; the window from above still
+  // covers it, but confirming again is cheap and makes that dependency explicit.
+  await confirmPassword(page);
   const run = page.getByRole("button", { name: "Restore this archive" });
   await expect(run).toBeDisabled();
   await page.getByLabel("Type RESTORE to confirm").fill("RESTORE");

@@ -32,10 +32,17 @@ The backend applies database migrations itself on startup.
 
 The app is at http://localhost/, and the OpenAPI schema at
 http://localhost/api/openapi.json (there is no interactive docs page). The
-sample `.env` sets `PUBLIC_ORIGINS`, which the stack needs. To load sample data for a populated dashboard:
+sample `.env` sets `PUBLIC_ORIGINS`, which the stack needs. Cabinet needs a
+sign-in: claim the instance with the setup code from
+`docker compose logs backend` (or the `SETUP_CODE` you set), for example
+with `POST /api/auth/setup`, since the setup page itself is still being
+built. To load sample data for a populated dashboard, mint a write-scoped
+API token (`POST /api/auth/tokens`, or reuse the one
+`scripts/ci/stack-smoke.sh bootstrap` mints), then:
 
 ```bash
-python scripts/seed_demo.py
+python scripts/seed_demo.py --token cabinet_...
+# or: CABINET_TOKEN=cabinet_... python scripts/seed_demo.py
 ```
 
 ### Working on the backend
@@ -84,8 +91,12 @@ a valid substitute if you'd rather not install Node.
 
 The Playwright tests in `frontend/e2e/` drive the pages of a running stack
 (`docker compose up`, then `npm run e2e`; `BASE_URL` points them at another
-host; the first run needs `npx playwright install chromium`). When a page's
-behaviour or wording changes, update them in the same change.
+host; the first run needs `npx playwright install chromium`). Cabinet needs a
+sign-in, so `e2e/global-setup.ts` claims an unclaimed stack with `SETUP_CODE`
+or signs in with `CABINET_USER`/`CABINET_PASSWORD` (default `owner` /
+`correct horse battery`) before the suite runs, and saves the session for
+every spec. Export `SETUP_CODE` when the stack is still unclaimed. When a
+page's behaviour or wording changes, update them in the same change.
 
 ### Database changes
 

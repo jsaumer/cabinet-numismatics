@@ -6,6 +6,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.services import alerts, metrics
 from app.services import app_settings as store
@@ -38,6 +39,7 @@ def alert_statuses(db: Session) -> list[AlertStatus]:
 
 
 @router.post("/alerts/test", response_model=Outcome)
+@permission("admin")
 def send_test_alert(
     target: Literal["webhook", "heartbeat"] = "webhook", db: Session = Depends(get_db)
 ):
@@ -54,6 +56,7 @@ def send_test_alert(
 
 
 @router.get("/metrics", response_class=Response)
+@permission("admin", metrics_ok=True)
 def prometheus_metrics(db: Session = Depends(get_db)):
     """Prometheus exposition format. Off until turned on in Settings."""
     if not store.get_setting(db, "metrics_enabled"):

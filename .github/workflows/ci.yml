@@ -73,8 +73,12 @@ jobs:
 
       - name: Write a throwaway .env
         # Written from scratch rather than copied from .env.example, so there
-        # is exactly one definition of each variable.
+        # is exactly one definition of each variable. SETUP_CODE is also
+        # exported to GITHUB_ENV, so the host-side steps below (which sign
+        # in and claim through the proxy, not through docker compose) see
+        # the same value the backend container was started with.
         run: |
+          SETUP_CODE=5f8a2c9e1b7d4063a9e2f5c8b1d7e4a0
           {
             echo "DB_USER=cabinet"
             echo "DB_PASSWORD=ci-$(openssl rand -hex 12)"
@@ -84,151 +88,26 @@ jobs:
             echo "PUBLIC_ORIGINS=http://localhost"
             echo "ALLOWED_HOSTS=localhost"
             echo "AUTH_INSECURE_HTTP=true"
+            echo "SETUP_CODE=$SETUP_CODE"
           } > .env
+          echo "SETUP_CODE=$SETUP_CODE" >> "$GITHUB_ENV"
 
       - name: Build and start
         run: docker compose up --build -d
 
-      - name: Wait for the backend to report healthy
-        run: |
-          for i in $(seq 1 60); do
-            if curl -fsS http://localhost/api/health | grep -q '"db":"ok"'; then
-              echo "healthy after ${i}s"; exit 0
-            fi
-            sleep 1
-          done
-          echo "backend never became healthy"; docker compose logs; exit 1
-
-      - name: Confirm the schema migrated itself on startup
-        run: |
-          curl -fsS http://localhost/api/health | python3 -c '
-          import json, sys
-          schema = json.load(sys.stdin)["schema"]
-          print(schema)
-          assert schema["status"] == "ok", schema
-          '
+      - name: Bootstrap sign-in and tokens
+        # Waits for health, claims the stack with the setup code above, and
+        # mints the write/read/metrics tokens the later steps use.
+        run: scripts/ci/stack-smoke.sh bootstrap
 
       - name: Smoke-test the API through the proxy
-        run: |
-          set -euo pipefail
-          # no interactive docs page; the schema stays
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/docs)" = 404
-          curl -fsS http://localhost/api/openapi.json > /dev/null
-          # nginx answers only its own Host names: anything else gets no
-          # response at all (444 closes the connection; curl exits 52)
-          set +e; curl -s -o /dev/null -H 'Host: elsewhere.example' http://localhost/; rc=$?; set -e
-          test "$rc" = 52
-          # sign-in and setup take at most 8 KiB, refused by nginx itself
-          test "$(head -c 9216 /dev/zero | curl -s -o /dev/null -w '%{http_code}'                   -X POST --data-binary @- http://localhost/api/auth/login)" = 413
-          # create → read → trash → restore → delete for good, end to end
-          id=$(curl -fsS -X POST http://localhost/api/items \
-                 -H 'Content-Type: application/json' \
-                 -d '{"type":"coin","country":"CI","denomination":"1 test","year":2026}' \
-               | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-          curl -fsS "http://localhost/api/items/$id" > /dev/null
-          curl -fsS -X DELETE "http://localhost/api/items/$id" -o /dev/null
-          curl -fsS http://localhost/api/trash | grep -q "$id"
-          curl -fsS -X POST "http://localhost/api/items/$id/restore" -o /dev/null
-          curl -fsS -X DELETE "http://localhost/api/items/$id?permanent=true" -o /dev/null
-          if curl -fsS "http://localhost/api/items/$id" -o /dev/null; then
-            echo "the item survived a permanent delete"; exit 1
-          fi
-          curl -fsS http://localhost/api/settings > /dev/null
-          curl -fsS http://localhost/api/dashboard/layout | python3 -c '
-          import json, sys
-          layout = json.load(sys.stdin)
-          assert layout["is_default"] is True, layout
-          assert len(layout["widgets"]) == 11, layout
-          '
-          curl -fsS http://localhost/api/stack | python3 -c '
-          import json, sys
-          report = json.load(sys.stdin)
-          assert isinstance(report["metals"], list), report
-          assert report["history_start"] == "2024-03-02", report
-          '
-          # metrics: off by default, then served on real Postgres
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/api/metrics)" = 404
-          curl -fsS -X PUT http://localhost/api/settings -H 'Content-Type: application/json' \
-            -d '{"metrics_enabled": true}' -o /dev/null
-          curl -fsS http://localhost/api/metrics > metrics.txt
-          grep -q '^cabinet_schema_up_to_date 1.0' metrics.txt
-          grep -q '^cabinet_items_in_trash 0.0' metrics.txt
-          # no webhook saved: the test alert says so rather than failing
-          curl -fsS -X POST http://localhost/api/alerts/test | grep -q '"ok":false'
-          echo "smoke test passed"
+        run: scripts/ci/stack-smoke.sh smoke
 
       - name: Rehearse an in-app backup and restore
-        run: |
-          set -euo pipefail
-          id=$(curl -fsS -X POST http://localhost/api/items \
-                 -H 'Content-Type: application/json' \
-                 -d '{"type":"coin","country":"Backup drill","denomination":"1 test","year":2026}' \
-               | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-          # attach a PDF (made by Pillow inside the backend image) as a document
-          docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (200, 280), "white").save(b, "PDF"); sys.stdout.buffer.write(b.getvalue())' > receipt.pdf
-          doc=$(curl -fsS -X POST "http://localhost/api/items/$id/documents" \
-                  -F kind=receipt -F file=@receipt.pdf \
-                | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
-          # every archive is encrypted with the backup key (age); inside, the
-          # usual members, and no sign-in data in the dump
-          curl -fsS -o backup.zip.age http://localhost/api/backup.zip
-          test "$(head -c 21 backup.zip.age)" = "age-encryption.org/v1"
-          docker compose exec -T backend python -m app.cli decrypt-archive < backup.zip.age > plain.zip
-          unzip -l plain.zip | grep -q documents.tar.gz
-          unzip -p plain.zip db.dump | docker compose exec -T db pg_restore --list > toc.txt
-          if grep -v '^;' toc.txt | grep -qw cabinet_auth; then
-            echo "the dump holds sign-in data"; exit 1
-          fi
-          rm plain.zip toc.txt
-          # a flipped byte is refused before anything changes
-          cp backup.zip.age flipped.zip.age
-          printf '\x01' | dd of=flipped.zip.age bs=1 seek=300 conv=notrunc status=none
-          if ./scripts/restore.sh flipped.zip.age; then
-            echo "an altered archive was restored"; exit 1
-          fi
-          curl -fsS -X DELETE "http://localhost/api/items/$id?permanent=true" -o /dev/null
-          if curl -fsS "http://localhost/api/documents/$doc/file" -o /dev/null; then
-            echo "the document outlived its only item"; exit 1
-          fi
-          ./scripts/restore.sh backup.zip.age
-          curl -fsS "http://localhost/api/items/$id" > /dev/null
-          curl -fsS "http://localhost/api/documents/$doc/file" -o restored.pdf
-          cmp receipt.pdf restored.pdf
-          echo "item $id and its document are back after restore"
-          curl -fsS -X POST http://localhost/api/backups \
-            | python3 -c 'import json,sys; run = json.load(sys.stdin); print(run); assert run["ok"]'
+        run: scripts/ci/stack-smoke.sh backup-restore
 
       - name: Rehearse a restore from inside the app
-        run: |
-          set -euo pipefail
-          field() { python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
-          # the restore.sh drill above left its item behind: it has to survive
-          drill_items() { curl -fsS 'http://localhost/api/items?country=Backup%20drill' | field total; }
-          before=$(drill_items)
-          test "$before" -ge 1
-          keep=$(curl -fsS -X POST http://localhost/api/items                    -H 'Content-Type: application/json'                    -d '{"type":"coin","country":"Restore drill","denomination":"1 kept","year":2026}'                  | field id)
-          name=$(curl -fsS -X POST http://localhost/api/backups | field file)
-          marker=$(curl -fsS -X POST http://localhost/api/items                      -H 'Content-Type: application/json'                      -d '{"type":"coin","country":"Restore drill","denomination":"1 marker","year":2026}'                    | field id)
-          rid=$(curl -fsS -X POST "http://localhost/api/restore/inspect?name=$name" | field restore_id)
-          # a wrong phrase is refused, and nothing starts
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost/api/restore/$rid/run"                     -H 'Content-Type: application/json' -d '{"confirm":"yes"}')" = 422
-          curl -fsS -X POST "http://localhost/api/restore/$rid/run"             -H 'Content-Type: application/json' -d '{"confirm":"RESTORE"}' -o /dev/null
-          state=running
-          for _ in $(seq 1 150); do   # five minutes
-            state=$(curl -fsS http://localhost/api/restore/status | field state)
-            [ "$state" = running ] || break
-            sleep 2
-          done
-          curl -fsS http://localhost/api/restore/status
-          test "$state" = done
-          if curl -fsS "http://localhost/api/items/$marker" -o /dev/null; then
-            echo "the marker item outlived the restore"; exit 1
-          fi
-          curl -fsS "http://localhost/api/items/$keep" > /dev/null
-          test "$(drill_items)" = "$before"
-          curl -fsS http://localhost/api/backups | grep -q -- '-prerestore.zip.age'
-          curl -fsS http://localhost/api/health | grep -q '"db":"ok"'
-          echo "in-app restore drill passed"
+        run: scripts/ci/stack-smoke.sh restore-drill
 
       - uses: actions/setup-node@v7
         with:
@@ -239,7 +118,12 @@ jobs:
       - name: Drive the UI in a browser (Playwright)
         # The smoke tests above prove the API; this proves the pages. Runs
         # against the same stack, at http://localhost through the proxy.
+        # SETUP_CODE is already in the job's env (from the .env step above);
+        # named here too so global-setup.ts's needs are explicit.
         working-directory: frontend
+        env:
+          BASE_URL: http://localhost
+          SETUP_CODE: ${{ env.SETUP_CODE }}
         run: |
           npm ci
           npx playwright install --with-deps chromium

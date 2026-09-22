@@ -21,11 +21,12 @@ changelog entry when releasing.
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- No auth in the app yet, and it is **the next thing built**: roadmap Phase
-  7, P8, as v0.30.0 (one admin, database-backed sessions, scoped API tokens,
-  deny by default) then v0.31.0 (OIDC single sign-on and a trusted-header
-  mode). Until then it runs on a trusted network or behind an authenticating
-  reverse proxy. Every design decision was settled on 20 and 21 September
+- Sign-in is being built on `p8-auth-a1` as v0.30.0 (roadmap Phase 7, P8
+  A1: one admin, database-backed sessions, scoped API tokens, deny by
+  default; the gate and routes are in, the pages arrive in stage 9), then
+  v0.31.0 (OIDC single sign-on and a trusted-header mode). The released
+  v0.29.1 has no login and runs on a trusted network or behind an
+  authenticating reverse proxy. Every design decision was settled on 20 and 21 September
   2026: see "Next: accounts and permissions" in docs/security.md, and don't
   re-open them. It stays one shared collection. The build contract,
   `docs/specs/SPEC_0300.md`, was approved by the owner on 21 September 2026 and is being
@@ -134,6 +135,18 @@ rules that bite most often:
   archive is read, and an archive older than the newest in
   `cabinet_auth.backup_ledger` needs `RESTORE OLDER`. The key never crosses
   the API. Tests use conftest's `fake_age`.
+- **Every API route declares its permission** (v0.30.0):
+  `@permission("public" | "read" | "write" | "admin", metrics_ok=, fresh=)`
+  directly above `def`, below the router decorator (`app/auth/permissions.py`);
+  an undeclared route is refused, and `tests/test_gate.py` compares every
+  route with the appendix of SPEC_0300 and runs the anonymous, token-scope,
+  fresh, and CSRF matrices over the OpenAPI document. A new route needs a
+  class that matches the spec table (or a spec change first). The gate
+  (`app/auth/gate.py`) refuses any `%` in a path, lets anonymous callers
+  reach only four routes, and fails CSRF closed for every cookie request.
+  Tests: `client` is the signed-in admin inside its recent-password window;
+  `anon_client`, `stale_client`, `token_client(scope)`, and
+  `unclaimed_client` cover the rest.
 - The credential services are `app/auth/` (v0.30.0), used through
   `accounts`; a password is only ever checked by `accounts._check_password`
   (throttles, the reserved slot, then Argon2, then the failure bookkeeping).

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.schemas import BackfillResult, StackReport
 from app.services import stack
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/api/stack", tags=["stack"])
 
 
 @router.get("", response_model=StackReport)
+@permission("read")
 def stack_report(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     tag: str | None = Query(default=None, max_length=64),
@@ -28,6 +30,7 @@ def stack_report(
 
 
 @router.post("/backfill", response_model=BackfillResult)
+@permission("write")
 def backfill_spot(db: Session = Depends(get_db)):
     """Look up the purchase-day spot price for pieces that qualify and have
     none. A figure typed in by hand is never touched."""
