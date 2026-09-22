@@ -549,6 +549,9 @@ export default function Settings() {
                         {b.prerestore && (
                           <span className="badge status-wishlist">before restore</span>
                         )}
+                        {b.encrypted === false && (
+                          <span className="badge status-sold">unencrypted</span>
+                        )}
                       </td>
                       <td>{formatBytes(b.size)}</td>
                       <td className="muted">{new Date(b.created_at).toLocaleString()}</td>

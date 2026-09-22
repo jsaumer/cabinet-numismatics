@@ -113,7 +113,7 @@ def test_restores_take_the_collection_only():
 @pytest.mark.parametrize(
     "script, needle",
     [
-        ("backup.sh", "--exclude-schema=cabinet_auth"),
+        ("backup.sh", "write-archive"),  # the backend dumps, with the same exclusion
         ("restore.sh", "--schema=public"),
         ("restore.sh", "cabinet_auth"),  # the refusal
     ],
@@ -123,6 +123,7 @@ def test_the_scripts_follow_the_same_rules(script, needle):
 
 
 def test_new_archives_say_auth_is_excluded(client, coin, monkeypatch):
+    from tests.conftest import open_archive
     from tests.test_backup import FAKE_DUMP
 
     monkeypatch.setattr(
@@ -130,6 +131,6 @@ def test_new_archives_say_auth_is_excluded(client, coin, monkeypatch):
     )
     monkeypatch.setattr(schema, "current_revision", lambda conn: "0021")
     name = client.post("/api/backups").json()["file"]
-    with zipfile.ZipFile(backup.backup_dir() / name) as zf:
+    with zipfile.ZipFile(io.BytesIO(open_archive(backup.backup_dir() / name))) as zf:
         manifest = json.loads(zf.read("manifest.json"))
     assert manifest["auth_excluded"] is True

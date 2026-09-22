@@ -82,6 +82,20 @@ key, which lives in `.env` or on the state volume. A backup restored without
 the matching key works fine; you just re-enter the source API keys. Treat
 `.env` as sensitive: it holds the database password and the encryption key.
 
+**Every archive is itself encrypted** (v0.30.0) with the backup key, an
+[age](https://age-encryption.org) X25519 identity from `BACKUP_KEY_FILE` or
+generated into `backup.key` on the state volume, and carries a MAC keyed by
+that key: an archive on the backup share can be neither read nor forged
+without it, and only encrypted archives made with this deployment's key are
+restored. Nothing unencrypted is ever written to `BACKUP_DIR`; decryption
+happens only in the private `/data/staging` volume. The key is shown only by
+`python -m app.cli backup-key show` in the container, never over the API;
+keep a copy outside Cabinet, since losing it makes the archives unreadable
+by design. Cabinet reports whether a generated key shares storage with the
+backups (separate, shared, or not verified); supply it as a secret when
+backups leave the host. See
+[backup-restore.md](backup-restore.md#the-backup-key).
+
 The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) are as
 unauthenticated as the rest of the API, but they hand over the entire
 collection (database, photos, and documents) in one request. That is
@@ -98,16 +112,18 @@ download everything and delete everything. Until authentication ships
 (when it becomes admin-only, see the table below), what stands in front of
 it:
 
-- **Verification before anything changes**: the manifest, a SHA-256 for
-  every member, a schema revision this build knows, and the tar-member rules
-  under Input handling. The manifest is not itself covered by `SHA256SUMS`,
-  so this catches corruption, not an archive rewritten on purpose; an
-  attacker who can call the API needs no forged archive anyway.
+- **Verification before anything changes**: the archive decrypted with the
+  backup key, in private staging; its MAC (v0.30.0), which covers the
+  manifest and every member's checksum, so an altered or forged archive is
+  refused; a SHA-256 for every member; a schema revision this build knows;
+  and the tar-member rules under Input handling. An archive older than the
+  newest this Cabinet recorded needs `RESTORE OLDER`, so a rollback can't
+  happen quietly.
 - **A safety backup first**: the current state is written to `BACKUP_DIR`
   and verified, and the restore doesn't start without it. Pre-restore
   archives are outside the retention count, and the newest three are kept.
-- **A typed phrase** (`RESTORE`) on the request that starts it. That guards
-  against accidents, not against an attacker.
+- **A typed phrase** (`RESTORE`, or `RESTORE OLDER`) on the request that
+  starts it. That guards against accidents, not against an attacker.
 - **An off switch**: `RESTORE_ENABLED=false` makes every restore endpoint
   answer 404, leaving `scripts/restore.sh` (which needs a shell on the
   host) as the only way. Set it on any deployment where restore from the

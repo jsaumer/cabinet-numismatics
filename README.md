@@ -197,11 +197,14 @@ Dark is the default; the header toggle switches to light and remembers it.
 - Responsive UI for phone/tablet, **dark by default** with a light theme on
   the header toggle. System fonts and inline SVG icons only: the page loads
   nothing from outside the app.
-- **Backups from the app**: download the collection as one checksummed
-  `.zip` (database + photos + documents + manifest) from Settings, or schedule daily or
-  weekly archives with retention into a directory you can point at a NAS.
+- **Backups from the app**: download the collection as one encrypted,
+  tamper-evident archive (database + photos + documents + manifest, `.zip.age`,
+  encrypted with a backup key you keep a copy of) from Settings, or schedule
+  daily or weekly archives with retention into a directory you can point at
+  a NAS. Nothing unencrypted ever lands there.
 - **Restore from the app**: pick a stored archive or upload one in
-  Settings. It is verified, compared with what is there now, and restored
+  Settings. It is decrypted in private staging, its MAC checked, compared
+  with what is there now (an older archive needs `RESTORE OLDER`), and restored
   only after an automatic safety backup and a typed confirmation; a failure
   before the database is replaced changes nothing. `RESTORE_ENABLED=false`
   switches it off. `scripts/restore.sh` remains for when the app won't

@@ -13,7 +13,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.main import app
 from app.services import backup
-from tests.conftest import image_bytes
+from tests.conftest import FAKE_AGE_HEADER, image_bytes, open_archive
 
 FAKE_DUMP = b"PGDMP fake custom-format dump"
 UTC = timezone.utc
@@ -42,8 +42,13 @@ def _session():
 
 
 def _save(resp, path: Path) -> Path:
+    """Save a downloaded archive, check it is ciphertext, and return its
+    decrypted zip beside it (in the test's temp folder, never BACKUP_DIR)."""
     assert resp.status_code == 200, resp.text
-    path.write_bytes(resp.content)
+    assert resp.content.startswith(FAKE_AGE_HEADER)
+    encrypted = path.with_name(path.name + ".age")
+    encrypted.write_bytes(resp.content)
+    path.write_bytes(open_archive(encrypted))
     return path
 
 
@@ -59,9 +64,9 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
     assert receipt.status_code == 201
 
     resp = client.get("/api/backup.zip")
-    assert resp.headers["content-type"] == "application/zip"
+    assert resp.headers["content-type"] == "application/octet-stream"
     assert re.search(
-        r'filename="cabinet-backup-\d{8}-\d{6}\.zip"', resp.headers["content-disposition"]
+        r'filename="cabinet-backup-\d{8}-\d{6}\.zip\.age"', resp.headers["content-disposition"]
     )
     archive = _save(resp, tmp_path.parent / f"{tmp_path.name}-download.zip")
 
@@ -100,7 +105,7 @@ def test_download_holds_dump_photos_and_manifest(client, coin, fake_dump, tmp_pa
 
 def test_data_only_download(client, coin, fake_dump, tmp_path):
     resp = client.get("/api/backup.zip?photos=false")
-    assert "-data.zip" in resp.headers["content-disposition"]
+    assert "-data.zip.age" in resp.headers["content-disposition"]
     archive = _save(resp, tmp_path.parent / f"{tmp_path.name}-data.zip")
     assert backup.verify_archive(archive)["includes_photos"] is False
     with zipfile.ZipFile(archive) as zf:
@@ -139,7 +144,7 @@ def test_back_up_now_lists_downloads_and_prunes(client, coin, fake_dump, clock):
         resp = client.post("/api/backups")
         assert resp.status_code == 200, resp.text
         names.append(resp.json()["file"])
-    assert names[2] == "cabinet-backup-20260914-031700.zip"
+    assert names[2] == "cabinet-backup-20260914-031700.zip.age"
     assert resp.json()["pruned"] == [names[0]]
 
     listing = client.get("/api/backups").json()
@@ -150,14 +155,14 @@ def test_back_up_now_lists_downloads_and_prunes(client, coin, fake_dump, clock):
     assert (dest / "notes.txt").exists()  # retention only touches Cabinet's archives
 
     stored = client.get(f"/api/backups/{names[2]}")
-    assert stored.status_code == 200 and stored.content[:2] == b"PK"
+    assert stored.status_code == 200 and stored.content.startswith(FAKE_AGE_HEADER)
     assert client.get(f"/api/backups/{names[0]}").status_code == 404
     assert client.get("/api/backups/notes.txt").status_code == 404
 
 
 def test_back_up_now_follows_the_photos_setting(client, fake_dump, clock):
     client.put("/api/settings", json={"backup_include_photos": False})
-    assert client.post("/api/backups").json()["file"].endswith("-data.zip")
+    assert client.post("/api/backups").json()["file"].endswith("-data.zip.age")
     assert client.post("/api/backups?photos=true").status_code == 200
 
 

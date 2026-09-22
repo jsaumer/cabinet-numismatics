@@ -153,3 +153,116 @@ def import_cabinet_csv(client, text, name: str = "items.csv") -> dict:
     run = client.post(f"/api/imports/{upload_id}/run", json=options)
     assert run.status_code == 200, run.text
     return run.json()
+
+
+# --- a stand-in for the age program (not installed on the dev machine) ---------
+
+FAKE_AGE_HEADER = b"age-encryption.org/v1\n-> cabinet-test "
+_FLIP = bytes(range(256)).translate(bytes((b ^ 0xA5) for b in range(256)))
+
+
+class _PipeLike:
+    """Unseekable, like age's stdin: zipfile has to stream into it."""
+
+    def __init__(self):
+        self.chunks = []
+
+    def write(self, data) -> int:
+        self.chunks.append(bytes(data))
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+
+def fake_age_encrypt(payload: bytes, recipient: str) -> bytes:
+    import hashlib
+
+    digest = hashlib.sha256(payload).hexdigest().encode()
+    return (
+        FAKE_AGE_HEADER + recipient.encode() + b" " + digest + b"\n---\n" + payload.translate(_FLIP)
+    )
+
+
+def fake_age_decrypt(blob: bytes, recipients: set[str]) -> bytes:
+    import hashlib
+
+    from app.services import backup
+
+    head, sep, body = blob.partition(b"\n---\n")
+    if not sep or not head.startswith(FAKE_AGE_HEADER):
+        raise backup.BackupError("age could not open the archive: not an age file")
+    recipient, _, digest = head[len(FAKE_AGE_HEADER) :].decode().partition(" ")
+    if recipient not in recipients:
+        raise backup.BackupError("age could not open the archive: no identity matched")
+    payload = body.translate(_FLIP)
+    if hashlib.sha256(payload).hexdigest() != digest:
+        raise backup.BackupError("age could not open the archive: failed to decrypt")
+    return payload
+
+
+@pytest.fixture(autouse=True)
+def fake_age(monkeypatch):
+    """Authenticated and bound to the recipient, like age: a wrong key or a
+    flipped byte fails. Only ciphertext is ever written."""
+    from contextlib import contextmanager
+    from pathlib import Path
+
+    from app.services import archive_keys, backup
+
+    @contextmanager
+    def encrypt_stream(dst, recipient):
+        pipe = _PipeLike()
+        yield pipe
+        blob = fake_age_encrypt(b"".join(pipe.chunks), recipient)
+        if isinstance(dst, (str, Path)):
+            Path(dst).write_bytes(blob)
+        else:
+            dst.write(blob)
+
+    def decrypt_stream(src, dst, key_file):
+        blob = Path(src).read_bytes() if isinstance(src, (str, Path)) else src.read()
+        recipients = {
+            i.recipient
+            for i in archive_keys.parse_identities(Path(key_file).read_text(encoding="utf-8"))
+        }
+        dst.write(fake_age_decrypt(blob, recipients))
+
+    monkeypatch.setattr(backup, "encrypt_stream", encrypt_stream)
+    monkeypatch.setattr(backup, "decrypt_stream", decrypt_stream)
+
+
+def open_archive(path) -> bytes:
+    """The decrypted zip bytes of an archive Cabinet wrote (tests only)."""
+    from pathlib import Path
+
+    from app.services import archive_keys
+
+    return fake_age_decrypt(
+        Path(path).read_bytes(), {i.recipient for i in archive_keys.identities()}
+    )
+
+
+def seal(zip_bytes: bytes, sign: bool = True, identity=None) -> bytes:
+    """Encrypt a zip as an archive, re-signing its manifest (so tests can
+    build well-formed archives around odd contents); `sign=False` keeps the
+    manifest as it is, to test that a stale or missing MAC is refused."""
+    import io as _io
+    import json as _json
+    import zipfile as _zipfile
+
+    from app.services import archive_keys
+
+    identity = identity or archive_keys.primary()
+    if sign:
+        src = _zipfile.ZipFile(_io.BytesIO(zip_bytes))
+        manifest = _json.loads(src.read("manifest.json"))
+        sums = src.read("SHA256SUMS") if "SHA256SUMS" in src.namelist() else b""
+        archive_keys.sign(manifest, sums, identity)
+        out = _io.BytesIO()
+        with _zipfile.ZipFile(out, "w") as dst:
+            for name in src.namelist():
+                data = _json.dumps(manifest).encode() if name == "manifest.json" else src.read(name)
+                dst.writestr(name, data)
+        zip_bytes = out.getvalue()
+    return fake_age_encrypt(zip_bytes, identity.recipient)

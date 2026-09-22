@@ -6,6 +6,12 @@ A Cabinet backup is **three things captured together**: the postgres database
 certificates, invoices). Restoring the database without the files leaves
 items pointing at missing files, so every path here handles all three.
 
+**Every backup Cabinet makes is encrypted** (v0.30.0) with the backup key,
+because an archive is the whole collection: every item, value, storage
+location, photo, and receipt. Without the key an archive can't be read, and
+nobody without it can forge or alter one that restores. **Keep a copy of the
+key outside Cabinet**; see [The backup key](#the-backup-key).
+
 There are two ways to make one:
 
 - **From the app**: Settings → Backups. Download an archive, or schedule
@@ -18,15 +24,18 @@ And two ways to restore one:
 - **From the app**: Settings → Backups → Restore, for an in-app archive
   (stored or uploaded). See
   [Restore from inside the app](#restore-from-inside-the-app).
-- **From the host**: `scripts/restore.sh` restores either kind, and is the
-  disaster-recovery path for when the app itself won't start.
+- **From the host**: `scripts/restore.sh`, the disaster-recovery path.
+
+Both take only encrypted archives made with this deployment's key.
+Unencrypted `.zip` archives from before v0.30.0 can't be restored by any
+path; see [Old unencrypted archives](#old-unencrypted-archives).
 
 ## In-app backups
 
 ### Download
 
-**Download backup** (`GET /api/backup.zip`) builds a fresh archive and
-downloads it. The download starts once the archive is built, so allow a
+**Download backup** (`GET /api/backup.zip`) builds a fresh encrypted archive
+(`cabinet-backup-….zip.age`) and downloads it. The download starts once the archive is built, so allow a
 minute for a large photo collection. **Data only** (`?photos=false`) leaves the
 photos and documents out: a small archive for moving a catalog between
 machines, not a full backup.
@@ -45,7 +54,8 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
   (file and size, or the error) shows in Settings, and a failure raises the
   backup alert if a webhook is set ([monitoring.md](monitoring.md)).
 - After each successful run, archives beyond **Keep newest** are deleted.
-  Only files named `cabinet-backup-*.zip` are ever touched.
+  Only files named `cabinet-backup-*.zip.age` (and older `cabinet-backup-*.zip`)
+  are ever touched.
 - **Back up now** writes one immediately and counts toward the same
   retention. **Include photos** applies to scheduled and on-demand archives,
   and covers the documents too.
@@ -59,29 +69,42 @@ that publicly), and the backend refuses to write there.
 
 ### What an archive contains
 
-Named `cabinet-backup-YYYYMMDD-HHMMSS.zip` (UTC), with a `-data` suffix when
-photos are left out, or `-prerestore` for the safety backup taken before an
-in-app restore:
+Named `cabinet-backup-YYYYMMDD-HHMMSS.zip.age` (UTC), with a `-data` suffix
+when photos are left out, or `-prerestore` for the safety backup taken
+before an in-app restore. It is a standard [age](https://age-encryption.org)
+file (X25519) around a zip: the zip is streamed straight into `age`, which
+writes the only file (`….zip.age.partial` while it's being written, renamed
+when complete, removed on any failure), so no unencrypted archive, member,
+or temporary file ever touches the backup directory. Inside, once decrypted:
 
 | Member | Contents |
 |--------|----------|
 | `db.dump` | `pg_dump` custom-format dump of the collection: every schema but `cabinet_auth` (v0.30.0), so no password, session, token, or audit row is ever in an archive |
 | `photos.tar.gz` | the entire photo volume (absent from data-only archives) |
 | `documents.tar.gz` | the entire document volume (v0.19.0+; absent from data-only archives) |
-| `manifest.json` | format version, app version, schema revision, server and `pg_dump` versions, created-at, whether photos and documents are included, counts (items, of which in the trash, photos, documents, estimates), `auth_excluded: true` (v0.30.0, informational: the dump's own table of contents is what a restore checks), and size + SHA-256 of each member |
+| `manifest.json` | format version, app version, schema revision, server and `pg_dump` versions, created-at, whether photos and documents are included, counts (items, of which in the trash, photos, documents, estimates), `auth_excluded: true` (informational: the dump's own table of contents is what a restore checks), size + SHA-256 of each member, and `mac_recipient` + `mac` (below) |
 | `SHA256SUMS` | the same checksums in `sha256sum -c` format |
 
-`db.dump`, `photos.tar.gz`, and `documents.tar.gz` are the same files
-`backup.sh` writes. To check an archive by hand:
+**Tamper evidence.** age authenticates what it encrypts, but anyone who
+knows the public key could encrypt a new archive to it. So the manifest
+carries `mac_recipient` (the public key of the backup key that made the
+archive) and `mac`: HMAC-SHA256, keyed by HKDF-SHA256 over that key's raw
+32-byte X25519 secret (empty salt, info `cabinet-backup-mac-v1`), over the
+manifest itself (JSON with sorted keys and no spaces, UTF-8, without `mac`,
+so `mac_recipient` is covered) followed by `SHA256SUMS`. The manifest lists
+every member's checksum and size, so the MAC covers every byte, and only
+someone holding the private key can make one that verifies.
+
+To open an archive by hand, without Cabinet:
 
 ```bash
-unzip cabinet-backup-20260914-031500.zip -d check
-(cd check && sha256sum -c SHA256SUMS)
+age -d -i key.txt cabinet-backup-20260914-031500.zip.age > backup.zip
+unzip backup.zip -d check && (cd check && sha256sum -c SHA256SUMS)
 ```
 
-`manifest.json` itself is not listed in `SHA256SUMS` (the format has always
-worked that way): the checksums catch a corrupted or truncated archive, not
-one that was deliberately rewritten.
+(`key.txt` is the key from `backup-key show`, below.) That checks the
+contents; to check the MAC too, use the container's `verify-archive`
+command, which is what `restore.sh` does.
 
 The backend image carries PostgreSQL 14–18 clients and dumps with the one
 matching the server's major version, so an archive restores with that
@@ -90,18 +113,78 @@ rejects on restore.) Against a server newer than 18 the in-app backup
 refuses and points at `backup.sh`, which uses the db container's own
 `pg_dump`.
 
+## The backup key
+
+One [age](https://age-encryption.org) identity (`AGE-SECRET-KEY-1…`)
+encrypts every archive and keys its MAC.
+
+- **Where it comes from.** `BACKUP_KEY_FILE`, a file of identities (a Docker
+  secret on a Swarm), when set; Cabinet never modifies it, and one it can't
+  read or parse stops the backend at startup, before any backup is written.
+  Otherwise Cabinet generates one on its first start, into `backup.key` on
+  the state volume (mode 0600), and logs its public key. Settings → Backups
+  shows the public key (the fingerprint) and, until you tick **I have saved
+  it**, a "Save your backup key" reminder; ticking records only the public
+  key, so a new key asks again.
+- **Saving it.** The key is never sent over the API. Print it inside the
+  container (shell access to the machine is the proof of ownership) and put
+  it in your password manager:
+
+  ```bash
+  docker compose exec backend python -m app.cli backup-key show
+  ```
+
+  On a Swarm, on the node running the backend task:
+  `docker exec $(docker ps -q -f name=cabinet_backend) python -m app.cli backup-key show`.
+- **Losing it.** If the key and the machine are both lost, the archives can't
+  be opened by anyone, you included. There is no recovery, by design.
+- **Rotating it.** `python -m app.cli backup-key rotate` puts a new identity
+  first in a generated `backup.key` and keeps the old ones after it: new
+  archives use the new key, and each older archive is checked with the
+  identity its `mac_recipient` names, so it stays readable while that
+  identity stays in the file. Save the new key afterwards. With
+  `BACKUP_KEY_FILE` the command changes nothing and prints the steps: make a
+  new secret holding the new identity first and the old one after it.
+- **Where it lives.** A generated key is only as private as the state
+  volume. When it shares storage with the backups, the key sits beside the
+  archives it protects. On every start Cabinet reads the container's mounts
+  and says one of three things, in the log, in Settings, and in the setup
+  checklist: nothing (**separate**, said only when both sit on known local
+  disk filesystems on different devices), "Your backup key is stored beside
+  your backups; move it to a secret" (**shared**), or "Cabinet cannot tell
+  where your backup key is stored relative to your backups" (**not
+  verified**: two folders on one filesystem, whose parent may be shared; a
+  network or FUSE filesystem, whose server may export them together; or
+  anything Cabinet doesn't recognise). A default Compose install, with both
+  volumes on the host's one disk, reads **not verified**: true, since
+  Cabinet can't see how that disk is shared. A supplied key needs no check. The same check covers the
+  generated `SECRET_KEY` file. For any deployment whose backups leave the
+  host, supply the key as a secret.
+
+## Old unencrypted archives
+
+Archives from before v0.30.0 are plain `.zip` files: readable copies of the
+whole collection by anyone who can read the backup directory. They **can't be
+restored by any path** from v0.30.0 on. Settings lists them as
+**unencrypted**, with **Delete unencrypted archives**
+(`DELETE /api/backups/unencrypted`), which deletes every plain
+`cabinet-backup-*.zip` in the backup directory and nothing else. Take a new
+backup, then delete them. Copies made by the old `backup.sh` (directories of
+`db.dump` and tar files) are plain too: delete them yourself.
+
 ## Backing up from the host
 
 With the compose stack running:
 
 ```bash
-./scripts/backup.sh            # writes ./backups/<timestamp>/
-./scripts/backup.sh /mnt/nas   # or write to another root, e.g. a NAS mount
+./scripts/backup.sh               # writes ./backups/cabinet-backup-<UTC stamp>.zip.age
+./scripts/backup.sh /mnt/nas      # or another folder, e.g. a NAS mount
+./scripts/backup.sh --data-only   # without photos and documents
 ```
 
-Each backup directory contains `db.dump`, `photos.tar.gz`, and
-`documents.tar.gz`, as above (no manifest or checksums). The script reads
-`DB_USER` and `DB_NAME` from `.env`.
+The script asks the backend to write the archive (`python -m app.cli
+write-archive`), so it is the same encrypted kind as the app's, recorded like
+any other, and only ciphertext reaches the host.
 
 On Windows run the scripts from Git Bash. `backups/` is gitignored; copy
 backups somewhere off the machine (NAS, cloud): a backup on the same disk as
@@ -112,8 +195,9 @@ the data protects against mistakes, not disk failure.
 Settings → Backups → **Restore** replaces the whole collection with a
 Cabinet archive: the database, and the photos and documents when the archive
 carries them. A data-only archive restores the database and leaves the files
-as they are. It takes archives made by the app (download, **Back up now**,
-scheduled, or an earlier safety backup), not `backup.sh` directories.
+as they are. It takes encrypted archives made with this deployment's backup
+key (download, **Back up now**, scheduled, `backup.sh`, or an earlier safety
+backup).
 
 **Destructive**, and as open as the rest of the app until login ships (see
 [security.md](security.md)), so it is fenced, and a deployment can switch it
@@ -125,8 +209,15 @@ off.
    upload one. An upload is written straight into
    `BACKUP_DIR/.restore-staging/`, never through the container's temp
    folder, and may be up to `RESTORE_MAX_GB` (default 20).
-2. Cabinet verifies the archive and changes nothing: it must be a zip with a
-   `cabinet-backup` manifest, every member must match its checksum, the
+2. Cabinet verifies the archive and changes nothing. It is decrypted into
+   the private staging folder (below), never the backup directory, after a
+   free-space check; a plain `.zip` is refused ("This is an unencrypted
+   archive from before v0.30.0…"), an upload on its first bytes, before
+   any of it is stored, and one that another key made, or that was altered,
+   can't be opened. Then its MAC is checked before anything in it is read
+   ("This archive was not made with your backup key."); the zip must hold
+   exactly the members the MAC covers, each once; every member must match
+   its checksum, the
    schema revision must be one this build knows, and the photo and document
    archives may hold only plain files and folders (links, devices, absolute
    paths, and `..` are refused). An archive from a **newer** Cabinet is
@@ -134,8 +225,22 @@ off.
    the restore. An upload that fails the check is deleted at once.
 3. A summary shows the archive beside what is here now: items, photos,
    documents, trashed items, schema revision, app version, and the archive's
-   date, with notes when it will be migrated or carries no files.
-4. Type `RESTORE` and click **Restore this archive**. **Cancel** discards a
+   date, with notes when it will be migrated or carries no files. It also
+   says where the archive came from: "Made by this Cabinet on 18 September
+   2026", with "3 newer backups exist" when there are; "Not made by this
+   Cabinet" (another machine sharing the key, or a record that has lost
+   it); or, with no record at all, that Cabinet can't tell whether it is the
+   newest.
+4. Type `RESTORE` and click **Restore this archive**. **An archive older than
+   the newest backup this Cabinet recorded needs `RESTORE OLDER` instead**, so
+   nobody can quietly roll the collection back. "Older" compares the
+   archive's own verified creation time with the newest in the record of
+   archives (`cabinet_auth.backup_ledger`, which no restore rewrites), and
+   an archive is recognised by its verified MAC, never its file name or file
+   time: renaming an old archive, giving it a new file time, or pruning its
+   record doesn't make it newest. The run checks again from the archive
+   itself, restoring an older one sends an alert, and after a failed run
+   (which still took a safety backup, now the newest) a retry asks again. **Cancel** discards a
    staged upload; it never deletes a stored archive.
 5. The page follows the run and reloads its data when it ends.
 
@@ -162,13 +267,13 @@ its key.
 
 ### The private staging folder
 
-To be checked and restored, an archive's database dump is unpacked into
-`/data/staging`, a volume of its own (`staging_data`), owned by the app's user
-with mode 0700 and each file 0600, never inside the backup, photo, or
-document directories. It is emptied at the start and end of every check and
-every restore, whatever the outcome, and on every start. There must be room
-there for the dump (the check says "Not enough space to open this archive"
-otherwise). What lands there is the collection in plain form, as in the
+To be checked and restored, an archive is decrypted, and its database dump
+unpacked, into `/data/staging`, a volume of its own (`staging_data`), owned
+by the app's user with mode 0700 and each file 0600, never inside the
+backup, photo, or document directories. It is emptied at the start and end
+of every check and every restore, whatever the outcome, and on every start.
+There must be room there for the archive and its dump (the check says "Not
+enough space to open this archive" otherwise). What lands there is the collection in plain form, as in the
 database itself, so keep the volume on the host's own disk, not on the
 share your backups go to. Uploaded archives still wait in the backup
 directory (`.restore-staging`), as uploads only.
@@ -176,9 +281,11 @@ directory (`.restore-staging`), as uploads only.
 ### What a run does, in order
 
 1. **Safety backup.** The app goes into maintenance (below), the archive is
-   verified again, and the current state is written to the backup directory
-   as `cabinet-backup-YYYYMMDD-HHMMSS-prerestore.zip`, with photos and
-   documents whenever the incoming archive replaces them, and verified. If
+   decrypted and verified again from the file itself, and the current state
+   is written to the backup directory as
+   `cabinet-backup-YYYYMMDD-HHMMSS-prerestore.zip.age`, with photos and
+   documents whenever the incoming archive replaces them, and verified by
+   decrypting it in staging. If
    it fails, the restore doesn't start.
 2. **Photos, documents.** The archive's files are unpacked into a hidden
    `.restore-new` folder inside each volume, after a free-space check.
@@ -282,8 +389,10 @@ bodies and long requests; see
 - The volumes need room for a second copy of the photos and documents while
   the swap is pending, and the backup directory room for the safety backup
   (and an upload).
-- The checksums catch corruption, not tampering: the manifest isn't itself
-  signed or summed. Restore archives you made.
+- The MAC catches tampering as well as corruption, but only with your own
+  key: an archive from a machine with another backup key can't be restored
+  here. To move a collection between machines, give the new one your saved
+  key (`BACKUP_KEY_FILE`).
 - **Every folder under the photo and document volumes must be writable by
   the user the backend runs as**: the swap moves them, and moving a folder
   needs write permission on the folder itself. Folders made before v0.23.1,
@@ -303,13 +412,24 @@ bodies and long requests; see
 
 ## Restoring from the host
 
-The disaster-recovery path: it needs only the host, Docker, and a running
-`db` container, not a working app.
+The disaster-recovery path: it needs the host, Docker, and the running `db`
+and `backend` containers, but not a working web app.
 
 ```bash
-./scripts/restore.sh backups/<timestamp>                  # a backup.sh directory
-./scripts/restore.sh cabinet-backup-20260914-031500.zip   # an in-app archive
+./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
+AGE_IDENTITY=key.txt ./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
 ```
+
+The script decrypts the archive into a private temporary folder (0700,
+removed on exit, also after an interrupt), never beside the archive: with
+the running backend's key (`python -m app.cli decrypt-archive`), or with a
+key file on this host (`AGE_IDENTITY`, which needs `age` installed). It then
+checks the MAC with the backend (`python -m app.cli verify-archive`, which
+also refuses a zip holding any member the MAC doesn't cover, or one twice)
+and the checksums before touching anything, and refuses a plain `.zip` or a
+`backup.sh` directory from before v0.30.0. It is the break-glass path, so it
+has no `RESTORE OLDER` step: it restores whichever genuine archive you give
+it, and prints the date the archive was made.
 
 **Destructive**: this replaces the current database contents (`pg_restore
 --schema=public --clean`), all photo files, and all documents with the
@@ -324,14 +444,15 @@ files to whoever owns the volume. Unlike the in-app restore, the script
 takes no safety backup and doesn't pause the app: take a backup first if
 the current state matters, and don't use the app while it runs.
 
-For an archive, the script verifies the checksums first and restores nothing
-if any member doesn't match. A data-only archive restores the database and
+A data-only archive restores the database and
 leaves the photos and documents as they are; an archive from before v0.19.0,
 which has no `documents.tar.gz`, leaves the documents as they are.
 
-Restoring into a *fresh* deployment works the same way: bring the stack up,
-wait until `/api/health` reports `schema.status: "ok"` (the backend creates
-the schema on startup), then restore, from the app or with the script.
+Restoring into a *fresh* deployment works the same way: bring the stack up
+with your saved backup key (`BACKUP_KEY_FILE`), wait until `/api/health`
+reports `schema.status: "ok"` (the backend creates the schema on startup),
+then restore, from the app or with the script. Without that key the
+archives can't be opened.
 
 ### On a Swarm
 
@@ -340,13 +461,17 @@ the schema on startup), then restore, from the app or with the script.
 steps on the node running the `backend` task):
 
 ```bash
-unzip cabinet-backup-20260914-031500.zip -d restore
-(cd restore && sha256sum -c SHA256SUMS)
+backend=$(docker ps -q -f name=cabinet_backend)
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT     # private, removed afterwards
+docker exec -i "$backend" python -m app.cli decrypt-archive \
+  < cabinet-backup-20260914-031500.zip.age > "$tmp/backup.zip"
+docker exec -i "$backend" python -m app.cli verify-archive - < "$tmp/backup.zip"
+unzip -q "$tmp/backup.zip" -d "$tmp/restore"
+cd "$tmp" && (cd restore && sha256sum -c SHA256SUMS)
 db=$(docker ps -q -f name=cabinet_db)
 # must print nothing: a dump holding sign-in data is not Cabinet's own
 docker exec -i "$db" pg_restore --list < restore/db.dump | grep -v '^;' | grep -w cabinet_auth
 docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema=public --clean --if-exists' < restore/db.dump
-backend=$(docker ps -q -f name=cabinet_backend)
 docker exec "$backend" sh -c 'find /data/photos -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/photos' < restore/photos.tar.gz
 docker exec "$backend" sh -c 'chown -R "$(stat -c %u:%g /data/photos)" /data/photos'
@@ -384,9 +509,10 @@ database password and the encryption key.
 - The dump format is version-tolerant; moving to a newer postgres image is
   supported (dump on old, restore on new).
 - Restore is rehearsed: CI attaches a PDF to an item, downloads an in-app
-  archive, deletes the item for good, restores the archive with
-  `restore.sh`, and checks the item is back and the PDF matches byte for
-  byte, on every push. It then rehearses the in-app route: back up, add a
+  archive (checking it is an age file and that its dump holds no sign-in
+  data), shows that a copy with one flipped byte is refused, deletes the
+  item for good, restores the archive with `restore.sh`, and checks the
+  item is back and the PDF matches byte for byte, on every push. It then rehearses the in-app route: back up, add a
   marker item, restore that backup through `/api/restore` (a wrong phrase is
   refused first), and check the marker is gone, the earlier items are
   still there, a `-prerestore` archive is listed, and health is back to

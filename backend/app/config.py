@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # environment; unset, one is generated and logged. See check_startup.
     setup_code: str = ""
     setup_code_file: str = ""
+    # The backup key (v0.30.0): a file of age identities, typically a Docker
+    # secret, never modified by Cabinet. Unset, one is generated into
+    # backup.key on the state volume. See services/archive_keys.py.
+    backup_key_file: str = ""
 
     @property
     def sqlalchemy_url(self) -> str:

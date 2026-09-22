@@ -55,6 +55,9 @@ DEFAULTS: dict = {
     # Secrets cleared because they were not encrypted with this deployment's
     # key (clear_unusable_secrets), until each is entered again.
     "secrets_cleared": [],
+    # The public key of the backup key the owner said they saved ("I have
+    # saved it" in Settings); a rotated key asks again.
+    "backup_key_saved": None,
 }
 
 # Their names in messages, logs, and alerts; never their values.

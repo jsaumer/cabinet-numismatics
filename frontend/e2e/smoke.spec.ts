@@ -299,7 +299,7 @@ test("restore the backup just taken", async ({ page }) => {
   await page.getByRole("button", { name: "Back up now" }).click();
   const written = page.getByText(/^Backup written: cabinet-backup-/);
   await expect(written).toBeVisible({ timeout: 60_000 });
-  const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip/)![0];
+  const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip\.age/)![0];
 
   await page
     .getByRole("row")

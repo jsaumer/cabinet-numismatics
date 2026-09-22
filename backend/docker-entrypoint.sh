@@ -19,6 +19,16 @@ if [ "$(id -u)" = "0" ]; then
   key_file="${SECRET_KEY_FILE:-/data/state/secret.key}"
   writable=1
   staging="${STAGING_DIR:-/data/staging}"
+  # Secret files (the backup key, the setup code) are the operator's and are
+  # never changed: if one sits inside a folder handed over below, its owner
+  # and mode are put back afterwards.
+  secret_modes=""
+  for secret in "${BACKUP_KEY_FILE:-}" "${SETUP_CODE_FILE:-}"; do
+    if [ -n "$secret" ] && [ -f "$secret" ]; then
+      secret_modes="$secret_modes$(stat -c '%u:%g %a' "$secret") $secret
+"
+    fi
+  done
   for dir in "${PHOTO_DIR:-/data/photos}" "${key_file%/*}" \
              "${BACKUP_DIR:-/data/backups}" "${DOCUMENT_DIR:-/data/documents}" "$staging"; do
     mkdir -p "$dir" 2>/dev/null || true
@@ -39,6 +49,11 @@ if [ "$(id -u)" = "0" ]; then
   done
   # An archive's database is unpacked here in plain form: the app's user only.
   chmod 700 "$staging" 2>/dev/null || true
+  printf '%s' "$secret_modes" | while read -r owner mode secret; do
+    [ -n "$secret" ] || continue
+    chown "$owner" "$secret" 2>/dev/null || true
+    chmod "$mode" "$secret" 2>/dev/null || true
+  done
   if [ "$writable" = "1" ]; then
     exec setpriv --reuid="$uid" --regid="$gid" --clear-groups "$@"
   fi

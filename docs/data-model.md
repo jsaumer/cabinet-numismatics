@@ -29,7 +29,8 @@ list of spot-price thresholds, at most 12) with the service-written
 which needed a migration, since it's a generic key/value table), and from
 v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets
 cleared because they weren't encrypted with this deployment's key, until
-each is saved again), read through `app/services/app_settings.py` with
+each is saved again) and `backup_key_saved` (the public key of the backup
+key the owner said they saved), read through `app/services/app_settings.py` with
 defaults and env fallbacks. One more key is not a setting at all:
 `restore_marker`, written and deleted by direct ORM during an in-app
 restore and never read through `get_setting` (see

@@ -32,6 +32,14 @@ Edit `.env`:
   for any real deployment. It is refused when any `PUBLIC_ORIGINS` entry is
   https.
 - `CABINET_PORT` (optional, default `80`): the port the proxy publishes.
+- `BACKUP_KEY_FILE` (optional): a file of [age](https://age-encryption.org)
+  identities, the backup key every archive is encrypted with, typically a
+  Docker secret. Unset, Cabinet generates one on the state volume on its
+  first start. Either way, **save a copy outside Cabinet**
+  (`docker compose exec backend python -m app.cli backup-key show`): without
+  it the archives can't be opened. Supply it as a secret whenever backups
+  leave the host; see
+  [backup-restore.md](backup-restore.md#the-backup-key).
 - `SETUP_CODE` or `SETUP_CODE_FILE` (optional): the one-time code for creating
   the admin, at least 32 characters (`openssl rand -hex 32`); a code that is
   too short or mostly one character stops the backend. Unset, one is
@@ -89,7 +97,7 @@ Data lives in six named Docker volumes:
 |--------|----------|
 | `db_data` | postgres: items, estimates, settings, history |
 | `photo_data` | photo originals and generated thumbnails |
-| `backend_state` | the generated encryption key, when `SECRET_KEY` is unset |
+| `backend_state` | the generated encryption key, when `SECRET_KEY` is unset, and the generated backup key (`backup.key`), when `BACKUP_KEY_FILE` is unset. Keep it off the storage your backups go to: Settings says when it isn't |
 | `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
 | `document_data` | attached documents: receipts, certificates, invoices (`DOCUMENT_DIR`); private, served only through the API |
 | `staging_data` | private working space (`/data/staging`, 0700): where an archive's database dump is unpacked to be checked and restored. Empty between restores. Keep it on this host's own disk, never on the share your backups go to |
@@ -255,7 +263,15 @@ The backend applies any new migrations on startup, before serving, all in one
 transaction. If one fails it rolls back and the backend refuses to start.
 Check `docker compose logs backend`. Migrations are forward-only in practice,
 and going back to an older image doesn't undo them; take a backup first
-(Settings → Backups → **Back up now**). Going back then means the older
+(Settings → Backups → **Back up now**).
+
+**Upgrading to v0.30.0**: from the first start every backup is encrypted.
+Save the backup key (`backup-key show`, above) or supply your own as a
+secret (`BACKUP_KEY_FILE`) before relying on them; take a new backup; then
+delete the old unencrypted archives (Settings → Backups → **Delete
+unencrypted archives**), which can no longer be restored and are readable
+by anyone who can read the backup directory. Old `backup.sh` directories
+are plain too. Going back then means the older
 image plus that backup: an older Cabinet refuses an archive made by a newer
 one, and a newer one migrates an older archive after restoring it. The
 [CHANGELOG](../CHANGELOG.md) notes anything that needs attention.
