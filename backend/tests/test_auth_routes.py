@@ -438,3 +438,17 @@ def test_anonymous_health_touches_nothing(anon_client, monkeypatch):
 
     monkeypatch.setattr(health, "_health", boom)
     assert anon_client.get("/api/health").json() == {"status": "ok"}
+
+
+def test_a_wrong_setup_code_is_audited(unclaimed_client):
+    c = unclaimed_client
+    c.get("/api/auth/state")
+    wrong = {"code": "A" * 32, "username": "owner", "password": PASSWORD}
+    assert c.post("/api/auth/setup", json=wrong).status_code == 403
+    db = db_session()
+    try:
+        rows = db.scalars(select(AuditEntry).where(AuditEntry.action == "setup_failed")).all()
+        assert len(rows) == 1 and rows[0].actor_kind == "anonymous"
+        assert "A" * 32 not in (rows[0].detail or {}).__repr__()
+    finally:
+        db.close()

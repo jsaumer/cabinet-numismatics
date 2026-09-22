@@ -89,9 +89,17 @@ They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
 `DELETE /api/backups/unencrypted`, `POST /api/restore/inspect`, `POST
 /api/restore/{id}/run`, every `PUT /api/settings`, `POST /api/trash/purge`,
 `DELETE /api/trash`, `DELETE /api/items/{id}` when it deletes for good
-(`?permanent=true`, or an item already in the trash), creating or revoking
-a token, ending another session, and signing out everywhere. Changing the
-password or the username takes the current password in the body instead.
+(`?permanent=true`, or an item already in the trash), `DELETE
+/api/photos/{id}`, `PUT /api/photos/{id}/image` (the old files are
+deleted), `DELETE /api/documents/{id}`, `DELETE
+/api/items/{id}/documents/{id}` when this item is the document's last
+holder (the file goes with it), creating or revoking a token, ending
+another session, and signing out everywhere. Changing the password or the
+username takes the current password in the body instead.
+
+A `read` or `metrics` token is refused on any `POST`, `PUT`, `PATCH`, or
+`DELETE` before the request body is read (every such route is `write` or
+`admin`), except the public setup and sign-in.
 
 **Cross-site requests.** A request carrying the session cookie, whatever
 its method, passes only with `Sec-Fetch-Site: same-origin`, or with no such
@@ -825,7 +833,7 @@ document no other item, trashed or not, holds. Items older than
 | `POST`   | `/api/items/{id}/documents`              | Attach a file (multipart: `file`, optional `kind`, `title`, `doc_date`, `note`) |
 | `PATCH`  | `/api/documents/{doc_id}`                | Change `kind`, `title`, `doc_date`, `note` |
 | `POST`   | `/api/documents/{doc_id}/items`          | Attach it to more items (`{"item_ids": [...]}`) |
-| `DELETE` | `/api/items/{id}/documents/{doc_id}`     | Remove it from one item; the file goes with its last item |
+| `DELETE` | `/api/items/{id}/documents/{doc_id}`     | Remove it from one item; from its last item the file goes too, which needs the admin and a recent password |
 | `DELETE` | `/api/documents/{doc_id}`                | Delete it from every item                |
 | `GET`    | `/api/documents/{doc_id}/file`           | The file, inline; `?download=true` to save it |
 | `GET`    | `/api/documents/{doc_id}/thumb`          | A JPEG thumbnail (404 when there's none) |

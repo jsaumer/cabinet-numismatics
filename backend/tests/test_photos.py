@@ -243,3 +243,35 @@ def test_replace_photo_image_keeps_its_place(client, coin):
     assert client.put(f"/api/photos/{second['id']}/image", files=fake).status_code == 415
     assert (root / body["file_key"]).is_file()  # a failed replace leaves the image alone
     assert client.put(f"/api/photos/{uuid.uuid4()}/image", files=edited).status_code == 404
+
+
+# --- deleting for good needs the admin and a recent password (stage 12) --------------------
+
+
+def _photo(client, coin):
+    resp = client.post(
+        f"/api/items/{coin['id']}/photos", files={"file": ("p.png", image_bytes(), "image/png")}
+    )
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def test_deleting_a_photo_asks_for_the_password(client, stale_client, token_client, coin):
+    photo = _photo(client, coin)
+    stale = stale_client.delete(f"/api/photos/{photo['id']}")
+    assert stale.status_code == 403 and stale.json()["reauth_required"] is True
+    assert token_client("write").delete(f"/api/photos/{photo['id']}").status_code == 403
+    assert client.get(f"/api/items/{coin['id']}/photos").json()  # still there
+    assert client.delete(f"/api/photos/{photo['id']}").status_code == 204
+
+
+def test_replacing_an_image_asks_for_the_password(client, stale_client, token_client, coin):
+    photo = _photo(client, coin)
+    files = {"file": ("q.png", image_bytes(color=(0, 0, 200)), "image/png")}
+    stale = stale_client.put(f"/api/photos/{photo['id']}/image", files=files)
+    assert stale.status_code == 403 and stale.json()["reauth_required"] is True
+    assert (
+        token_client("write").put(f"/api/photos/{photo['id']}/image", files=files).status_code
+        == 403
+    )
+    assert client.put(f"/api/photos/{photo['id']}/image", files=files).status_code == 200

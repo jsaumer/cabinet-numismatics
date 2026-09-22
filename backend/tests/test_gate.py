@@ -110,8 +110,9 @@ def test_class_counts():
     for method, path in operations():
         cls = declared(endpoint_for(method, path)).cls
         counts[cls] = counts.get(cls, 0) + 1
-    # 99 existing (public 1, read 33, write 45, admin 20) and 18 new.
-    assert counts == {"public": 4, "read": 35, "write": 45, "admin": 33}
+    # 99 existing (public 1, read 33, write 42, admin 23: photo delete and
+    # replace and document delete moved to admin in stage 12) and 18 new.
+    assert counts == {"public": 4, "read": 35, "write": 42, "admin": 36}
 
 
 def test_completeness_every_operation_reaches_layer_two(client, dry_run):
@@ -258,7 +259,9 @@ def fresh_operations():
 
 def test_fresh_matrix(client, stale_client, token_client, dry_run):
     ops = fresh_operations()
-    assert len(ops) == 13  # the spec's 15, less the two confirmed by their body
+    # The spec's 15, less the two confirmed by their body, plus the three
+    # photo and document deletions (section 16).
+    assert len(ops) == 16
     for method, path in ops:
         stale = call(stale_client, method, path)
         assert stale.status_code == 403, (method, path)
@@ -503,3 +506,36 @@ def test_auth_validation_errors_never_echo_the_fields(client):
     assert resp.status_code == 422
     assert "my secret words" not in resp.text
     assert resp.json()["detail"][0]["loc"] == ["body", "new_password"]
+
+
+# --- a low-scope token never gets a body read (stage 12) --------------------------------
+
+
+@pytest.mark.parametrize("scope", ["read", "metrics"])
+def test_a_read_or_metrics_token_is_refused_before_any_body_is_read(
+    client, token_client, monkeypatch, scope
+):
+    """Every unsafe-method route is write or admin, so the gate refuses these
+    tokens before FastAPI parses a body: a metrics token in a Prometheus
+    config can't make the backend spool a 1 GB import."""
+    from starlette.requests import Request
+
+    def boom(self, *args, **kwargs):
+        raise AssertionError("the body was read")
+
+    monkeypatch.setattr(Request, "form", boom)
+    c = token_client(scope)
+    big = b"x" * (3 * 1024 * 1024)
+    resp = c.post("/api/imports", files={"file": ("big.csv", big, "text/csv")})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "This API token's scope doesn't allow that."
+    assert c.delete("/api/items/1").status_code == 403
+    assert c.get("/api/items").status_code == (200 if scope == "read" else 403)
+
+
+def test_a_write_token_still_writes(client, token_client):
+    writer = token_client("write")
+    resp = writer.post(
+        "/api/items", json={"type": "coin", "country": "Gate", "denomination": "1", "year": 2000}
+    )
+    assert resp.status_code == 201

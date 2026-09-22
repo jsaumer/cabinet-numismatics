@@ -306,6 +306,7 @@ Two more kinds of caller are not accounts:
 | Ask a price source for an estimate (spends quota) | yes | yes | no | `write` | no |
 | Move to the trash, restore from the trash | yes | yes | no | `write` | no |
 | Delete for good, empty the trash | yes, with the password again | no | no | no | no |
+| Delete a photo or replace its image, delete a document or unlink it from its last item (the files go for good) | yes, with the password again | no | no | no | no |
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
 | Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes, with the password again | view only | no | no | no |
