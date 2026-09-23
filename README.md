@@ -40,7 +40,7 @@ Dark is the default; the header toggle switches to light and remembers it.
 | [![Dashboard, dark](docs/screenshots/dashboard-dark.png)](docs/screenshots/dashboard-dark.png) | [![Dashboard, light](docs/screenshots/dashboard-light.png)](docs/screenshots/dashboard-light.png) |
 | [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
 | [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
-| [![Settings, Backups, dark](docs/screenshots/settings-backups-dark.png)](docs/screenshots/settings-backups-dark.png) | [![Settings, Backups, light](docs/screenshots/settings-backups-light.png)](docs/screenshots/settings-backups-light.png) |
+| [![Settings, dark](docs/screenshots/settings-general-dark.png)](docs/screenshots/settings-general-dark.png) | [![Settings, light](docs/screenshots/settings-general-light.png)](docs/screenshots/settings-general-light.png) |
 
 ## Features
 

@@ -1412,13 +1412,15 @@ release. Rules a later change here has to respect:
   `/settings/account` for tokens, sessions, password, and username), and
   "every Settings section renders" (`smoke.spec.ts`) now visits all six
   routes and checks each one's h2 instead of checking six headings on one
-  page. `capture.cjs`'s `settings` mode now captures two pairs,
-  `settings-backups-{dark,light}.png` and `settings-general-{dark,light}.png`,
-  at their own routes; the old single `settings-{dark,light}.png` pair and
-  the scroll-into-view hack for "Price sources" (which lived on the old
-  page, now on its own Pricing route with nothing pushing it below the
-  fold) are both gone. `README.md`'s screenshot table points at the
-  Backups pair.
+  page. `capture.cjs`'s `settings` mode captures
+  `settings-general-{dark,light}.png` at its own route (a Backups pair was
+  captured for v0.30.2 and dropped after the release: on a default Compose
+  stack that page carries the red "cannot tell where your backup key is
+  stored" notice, true there and misleading in a screenshot); the old single
+  `settings-{dark,light}.png` pair and the scroll-into-view hack for "Price
+  sources" (which lived on the old page, now on its own Pricing route with
+  nothing pushing it below the fold) are both gone. `README.md`'s screenshot
+  table points at the General pair.
 
 ## Bars and rounds (v0.31.0)
 
