@@ -450,13 +450,20 @@ Rules that go with the table:
   Nothing written to the photo volume carries metadata, whatever serves it
   (a share, nginx's `/photos/`, a backup). Photos stored before that,
   thumbnails included (an older thumbnail could carry the source's JPEG
-  comment), are all re-encoded once by a background pass at the first start
+  comment), are re-encoded once by a background pass at the first start
   (with or without `AUTO_MIGRATE`), again after an in-app restore that
   brings photos, and by `restore.sh` itself through
   `python -m app.cli strip-photo-metadata` (see
-  [backup-restore.md](backup-restore.md#photo-metadata)). Until that pass
-  has written its marker the share view trusts nothing on disk: it
-  re-encodes each photo as it serves it. The colour profile that is kept is
+  [backup-restore.md](backup-restore.md#photo-metadata)). A file Pillow
+  can't decode (damaged on disk, cut short by an interrupted restore, or
+  not an image at all) is logged and left alone, so the pass can't vouch
+  for every file on the volume, and its marker only spares work. The share
+  view checks each file before sending it (v0.32.1): as it is only when the
+  marker exists and that file's own headers show nothing beyond pixels,
+  colour, and layout, ending where the image ends (a JPEG or PNG; a WebP
+  never qualifies); otherwise it re-encodes the photo as it serves it, and
+  one it can't decode is the same `404` as any other failure. The colour
+  profile that is kept is
   usually a standard one (sRGB, Display P3), but a profile made by a device
   can name its model and the date the profile was made; nothing about where
   or when the photo was taken.
@@ -538,7 +545,7 @@ sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`,
 `Permissions-Policy` allowing only the camera (webcam capture) and denying
 the microphone, geolocation, payment, and USB; `server_tokens` is off. nginx
 adds no CSP under `/api/`, which is left to the API: documents carry
-`default-src 'none'`, and the API docs page loads its viewer from a CDN.
+`default-src 'none'`.
 HSTS belongs to whatever terminates TLS in front of the stack. A browser
 test fails the build if the headers are missing or one of the main pages
 trips the policy.

@@ -153,9 +153,11 @@ def share_photo(
     token: str, photo_id: str, variant: str, request: Request, db: Session = Depends(get_db)
 ):
     """A shared piece's photo (`thumb` or `full`), served here rather than
-    through nginx's `/photos/`, which stays for a session or a token. Until
-    the one-time pass has written its marker, the file is re-encoded without
-    metadata on every request rather than trusted as it is on disk."""
+    through nginx's `/photos/`, which stays for a session or a token. Sent
+    from disk only when the one-time pass has written its marker and this
+    file's own header shows nothing (`looks_clean`); otherwise re-encoded
+    without metadata on the request, or the one 404 if it can't be decoded.
+    The marker spares the work, it doesn't vouch for a file (v0.32.1)."""
 
     def work(link):
         if variant not in VARIANTS:
@@ -165,7 +167,7 @@ def share_photo(
         path = photo_store.path_of(key) if key else None
         if path is None or not path.is_file():
             raise share.NotFound()
-        if photo_store.marker_exists():
+        if photo_store.marker_exists() and photo_store.looks_clean(path):
             return _PhotoFile(path, headers=PHOTO_HEADERS)
         try:
             body, media_type = photo_store.cleaned_file(path)

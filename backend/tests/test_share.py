@@ -533,7 +533,7 @@ def test_a_photo_is_cleaned_on_the_fly_until_the_pass_has_run(client, anon_clien
     item = full_item(client)
     token, _ = make_link(client)
     full = _plant_over(client, item, "full", dirty("JPEG"))
-    thumb = _plant_over(client, item, "thumb", old_thumbnail())
+    _plant_over(client, item, "thumb", old_thumbnail())
     url = f"/api/share/{token}/photos/{item['photo_id']}"
     assert not photos.marker_exists()
 
@@ -550,10 +550,72 @@ def test_a_photo_is_cleaned_on_the_fly_until_the_pass_has_run(client, anon_clien
     full.write_bytes(b"not an image at all")
     assert_not_found(anon_client.get(f"{url}/full"))
 
+
+def test_the_marker_spares_work_but_never_vouches_for_a_file(client, anon_client, monkeypatch):
+    """v0.32.1: with the marker present, a clean file is sent from disk as
+    it is, and one carrying metadata (planted, or truncated so Pillow can't
+    decode it) is re-encoded or refused, never streamed raw."""
+    from app.services import photos
+    from tests.test_photo_metadata import assert_clean, dirty, old_thumbnail
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    url = f"/api/share/{token}/photos/{item['photo_id']}"
     photos._write_marker()
+
+    clean = photos.clean_bytes(*photos.open_validated(dirty("JPEG")))
+    full = _plant_over(client, item, "full", clean)
+    real_cleaned = photos.cleaned_file
+    reencoded = []
+
+    def counting(path):
+        reencoded.append(path.name)
+        return real_cleaned(path)
+
+    monkeypatch.setattr(photos, "cleaned_file", counting)
+    resp = anon_client.get(f"{url}/full")
+    assert resp.status_code == 200 and resp.content == clean and reencoded == []
+
     full.write_bytes(dirty("JPEG"))
-    assert anon_client.get(f"{url}/full").content == full.read_bytes()  # trusted once marked
-    assert anon_client.get(f"{url}/thumb").content == thumb.read_bytes()
+    resp = anon_client.get(f"{url}/full")
+    assert resp.status_code == 200 and reencoded == [full.name]
+    assert_clean(resp.content, "JPEG")
+    thumb = _plant_over(client, item, "thumb", old_thumbnail())
+    resp = anon_client.get(f"{url}/thumb")
+    assert resp.status_code == 200 and reencoded[-1] == thumb.name
+    assert b"owner Jayson" not in resp.content
+    assert_clean(resp.content, "JPEG", icc=False)
+
+    truncated = dirty("JPEG")[:-40]
+    assert b"PhoneMaker" in truncated
+    full.write_bytes(truncated)
+    resp = anon_client.get(f"{url}/full")
+    assert reencoded[-1] == full.name  # tried, couldn't decode: the one 404
+    assert_not_found(resp)
+
+
+def test_a_webp_is_always_reencoded_when_shared(client, anon_client, monkeypatch):
+    """Nothing walks a WebP's chunks, so the marker never lets one through
+    from disk, however clean it is."""
+    from app.services import photos
+    from tests.test_photo_metadata import assert_clean, dirty
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    photos._write_marker()
+    webp = photos.clean_bytes(*photos.open_validated(dirty("WEBP")))
+    _plant_over(client, item, "full", webp)
+    real_cleaned = photos.cleaned_file
+    reencoded = []
+    monkeypatch.setattr(
+        photos, "cleaned_file", lambda path: reencoded.append(path) or real_cleaned(path)
+    )
+    resp = anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/full")
+    assert resp.status_code == 200 and len(reencoded) == 1
+    assert resp.headers["content-type"] == "image/webp"
+    assert_clean(resp.content, "WEBP")
 
 
 def test_a_range_with_if_range_gets_the_whole_photo(client, anon_client):

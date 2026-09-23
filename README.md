@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.32.0-informational)
+![Version](https://img.shields.io/badge/version-0.32.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.32.0 released (the share view; sign-in and encrypted backups since v0.30.0).**
+**Status: v0.32.1 released (the share view; sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus

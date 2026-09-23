@@ -588,9 +588,11 @@ could carry the source photo's JPEG comment. It logs how many it rewrote
 and writes the marker `photos_clean` beside `auth_claimed` on the state
 volume, so later starts skip it. It never stops startup: a file that can't
 be read is logged and left alone, and a file that can't be rewritten leaves
-the marker unwritten, so the next start tries again. Until the marker
-exists, the share view doesn't trust the disk: it re-encodes each photo
-without its metadata as it serves it. An in-app restore that brings photos
+the marker unwritten, so the next start tries again. The share view never
+takes the marker's word for a file (v0.32.1): it sends one from disk only
+when the marker exists and that file's own headers carry nothing, and
+otherwise re-encodes it without its metadata as it serves it, or answers
+`404` when it can't be decoded. An in-app restore that brings photos
 removes the marker before the swap and runs the pass again after it;
 `restore.sh` removes the marker and runs the same pass through
 `python -m app.cli strip-photo-metadata` (above).
