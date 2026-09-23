@@ -264,10 +264,12 @@ so a new bullion piece's melt estimate comes from the cached spot price
 only; and Numista's bars and rounds are read by `object_type` (id 36, or
 the name Bars/Rounds/Ingots/Bullion), never by a word in the title. See
 "Bars and rounds" in the implementation notes.
-**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
-trusted-header mode for the same admin, plus two-factor sign-in) as
-v0.32.0; then P9 a share view (the whole feature is an admin setting, off
-by default); labels, a phone app, and more accounts are optional. Research
+**Next, in order:** P9, the share and showcase view, as v0.32.0
+(`docs/specs/SPEC_0320.md`, staged 23 September 2026 as PR 25 on
+`p9-share`, pending the owner's approval of the spec; the whole feature is
+an admin setting, off by default); then P8 A2, single sign-on (OpenID
+Connect and a trusted-header mode for the same admin, plus two-factor
+sign-in) as v0.33.0; labels, a phone app, and more accounts are optional. Research
 and propose each before building, as always. v1.0.0 follows P8 and the
 checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
 was demoted

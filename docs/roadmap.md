@@ -27,7 +27,9 @@ regrouped item page from the data-entry pass; authentication's first part
 (P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0; bars
 and rounds as a third item type (P11, [SPEC_0310](specs/SPEC_0310.md))
 shipped in v0.31.0.
-**What's next**: A2, single sign-on, as v0.32.0, then the share view (P9).
+**What's next**: the share and showcase view (P9), as v0.32.0
+([SPEC_0320](specs/SPEC_0320.md), pending the owner's approval), then A2,
+single sign-on, as v0.33.0.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -305,8 +307,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   [security.md](security.md#accounts-and-permissions).
 - **[Nice]** Share and showcase view: a read-only public link to a set, a
   checklist, or the collection; the whole feature switched on or off in the
-  admin's Settings, off by default. **Planned: Phase 7, P9**, blocked on
-  authentication.
+  admin's Settings, off by default. Phase 7, P9. **Planned: v0.32.0**, see
+  [SPEC_0320](specs/SPEC_0320.md).
 - ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
   frontend typecheck, and a compose build/migrate/smoke test on every push and
   PR; a `v*` tag push additionally publishes the backend and proxy images to
@@ -850,7 +852,7 @@ checklist:
 
 In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
 the rest of the app until P8 A1 made it admin-only in v0.30.0. The share
-view is Phase 7, P9, next after A2.
+view is Phase 7, P9, next as v0.32.0 ([SPEC_0320](specs/SPEC_0320.md)).
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -1087,9 +1089,10 @@ v0.26.0.
   off, no link can be made, the public routes answer "not found" as if they
   didn't exist, and links made earlier stop working without being deleted,
   so switching it back on restores them. Settings lists every live link
-  with when it was last opened. **Next, after A2 (v0.32.0)**: it is the first
-  deliberately public page, and everything else had to be closed before
-  one door is opened.
+  with when it was last opened. **Next, as v0.32.0** (planned 23 September
+  2026, [SPEC_0320](specs/SPEC_0320.md); A2 moves to v0.33.0): it is the
+  first deliberately public page, and everything else had to be closed
+  before one door is opened.
 
 - ✔ **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
   September 2026: next, now that in-app restore has shipped**, ahead of P7
@@ -1139,8 +1142,8 @@ v0.26.0.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
 P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
-P8 A1 for v0.30.0, and P11 bars and rounds for v0.31.0): P8 A2 single
-sign-on as v0.32.0, then P9 the share view.
+P8 A1 for v0.30.0, and P11 bars and rounds for v0.31.0): P9 the share view
+as v0.32.0, then P8 A2 single sign-on as v0.33.0.
 
 Optional, after the above and only if still wanted:
 
