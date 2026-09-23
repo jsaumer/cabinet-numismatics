@@ -1420,6 +1420,28 @@ release. Rules a later change here has to respect:
   fold) are both gone. `README.md`'s screenshot table points at the
   Backups pair.
 
+## Bars and rounds (v0.31.0, in progress)
+
+Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
+`p11-bullion` (PR 22), stage by stage. Rules so far:
+
+- **One detector, one parser** (stage 1): `pricing.detect_metal` and
+  `pricing.parse_fineness(text, metal)` are the only readers of a
+  composition's metal and fineness; `effective_fineness` and
+  `numista.fineness_from_composition` sit on top of them, and the frontend's
+  `detectMetal` (`pages/item-form/model.ts`) mirrors the detector, the
+  backend being the authority. The rules: whole words only; the named alloys
+  `nickel silver`, `german silver`, and `nordic gold` are not precious; a
+  metal followed by `plated`, `plate`, `plating`, `washed`, or `wash` is a
+  coating and `gilt`/`gilded` is a gold surface on the metal before it, so
+  "Gold plated silver" and "Silver-gilt" are silver; `clad` is not stripped
+  (silver-clad halves hold silver); with two metals left, the larger
+  attached percentage wins, else the first named. Fineness: the percentage
+  attached to the detected metal, then a decimal, then millesimal, then
+  sterling/Britannia/coin silver or a gold carat; nothing found is `None`.
+  The case table is `tests/test_metal.py`; add a row there before changing
+  either function, and change `detectMetal` in the same commit.
+
 ## Releases
 
 

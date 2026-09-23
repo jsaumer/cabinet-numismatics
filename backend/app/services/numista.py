@@ -20,7 +20,6 @@ item's quantity.
 """
 
 import hashlib
-import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -38,6 +37,7 @@ from app.services.pricing import (
     cached_fetch,
     detect_metal,
     freshness,
+    parse_fineness,
 )
 
 API_ROOT = "https://api.numista.com/api/v3"
@@ -387,10 +387,6 @@ SEARCH_RESULTS = 20
 _LIMITS = {"country": 100, "denomination": 100, "series": 200, "composition": 100,
            "edge": 100, "shape": 50, "issuer": 200}  # fmt: skip
 
-_FINENESS_PERCENT = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*%")
-_FINENESS_DECIMAL = re.compile(r"(?<![\d.])0?\.(\d{3,4})(?!\d)")
-_FINENESS_MILLESIMAL = re.compile(r"(?<![\d.,])(\d{3}(?:\.\d+)?)(?![\d%])")
-
 
 class CatalogueNotFound(LookupError):
     """Numista has no such type."""
@@ -418,20 +414,10 @@ def _number(value, maximum: float) -> float | None:
 
 def fineness_from_composition(text: str | None) -> float | None:
     """Fineness written into a composition, for precious metals only: "Silver
-    (.900)", "90% silver", "Gold 916.7", "Silver 999"."""
-    if not text or detect_metal(text) is None:
-        return None
-    candidates = []
-    if match := _FINENESS_PERCENT.search(text):
-        candidates.append(float(match.group(1)) / 100)
-    if match := _FINENESS_DECIMAL.search(text):
-        candidates.append(float(f"0.{match.group(1)}"))
-    if match := _FINENESS_MILLESIMAL.search(text):
-        candidates.append(float(match.group(1)) / 1000)
-    for value in candidates:
-        if 0 < value <= 1:
-            return round(value, 4)
-    return None
+    (.900)", "90% silver", "Gold 916.7", "Silver 999". The one parser,
+    `pricing.parse_fineness`, for the metal `pricing.detect_metal` finds."""
+    value = parse_fineness(text, detect_metal(text))
+    return round(float(value), 4) if value is not None else None
 
 
 def search_types(db: Session, query: str, category: str | None = None) -> dict:

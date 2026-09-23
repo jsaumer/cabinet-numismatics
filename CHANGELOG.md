@@ -10,6 +10,23 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.31.0] - unreleased
+
+Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
+
+### Fixed
+- **Metal detection** no longer counts a named alloy as the metal it is
+  named after, or a coating as the metal: nickel silver, German silver, and
+  Nordic gold (the euro 10, 20, and 50 cent alloy) are not precious, "Gold
+  plated brass" is not gold, "Gold plated silver" is silver, "golden" is not
+  gold, and with two metals named the one with the larger share wins. The
+  metal breakdown, the stack's skipped count, melt coverage, and the item
+  form's spot field all follow.
+- **Fineness read from a composition** takes the percentage attached to the
+  metal, so "Copper 10%, Silver 90%" is .900 (it read .100). One parser now
+  serves melt, the stack, and the Numista fill, and also reads ".925", "999.9",
+  sterling, Britannia, coin silver, and gold carats (24K to 9K).
+
 ## [0.30.2] - 2026-09-22
 
 The owner's second first-run pass, all on the Settings page.
