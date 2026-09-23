@@ -9,14 +9,12 @@ page is captured twice, dark first because dark is Cabinet's default:
 | `dashboard-dark.png`, `dashboard-light.png` | `/` |
 | `collection-dark.png`, `collection-light.png` | `/collection` |
 | `item-detail-dark.png`, `item-detail-light.png` | `/items/<id>` |
-| `settings-backups-dark.png`, `settings-backups-light.png` | `/settings/backups` |
 | `settings-general-dark.png`, `settings-general-light.png` | `/settings/general` |
 
-Settings is routed into sections (v0.30.2); Backups and General are the
-two worth showing, captured after the configuration step below so the
-Backups pair shows a schedule and a stored archive. The Backups pair shows
-the backup key field: that is the public key, safe to publish, but check
-the shot all the same, as you would every shot, for a token secret, a
+Settings is routed into sections (v0.30.2); General is the one shown
+(the Backups section on a default Compose stack carries the red
+"cannot tell where your backup key is stored" notice, which is true there
+and misleading in a screenshot). Check every shot for a token secret, a
 setup code, or a real API key before committing it.
 
 ## Regenerating them

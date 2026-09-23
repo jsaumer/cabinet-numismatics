@@ -1,7 +1,7 @@
 // Captures the README screenshots, each page in dark and in light.
 // Run inside the Playwright image; see README.md in this folder.
 //   node capture.cjs signin            the sign-in page only, signed out
-//   node capture.cjs settings          the Settings pages only (capture them first)
+//   node capture.cjs settings          the Settings page only (capture it first)
 //   node capture.cjs rest <item-id>    collection, dashboard, and the item page
 //
 // Cabinet needs a sign-in (v0.30.0): "settings" and "rest" sign in through
@@ -19,10 +19,7 @@ const pages =
   mode === "signin"
     ? [["signin", "/login"]]
     : mode === "settings"
-      ? [
-          ["settings-backups", "/settings/backups"],
-          ["settings-general", "/settings/general"],
-        ]
+      ? [["settings-general", "/settings/general"]]
       : [
           ["collection", "/collection"],
           ["dashboard", "/"],
