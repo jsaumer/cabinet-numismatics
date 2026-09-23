@@ -148,7 +148,10 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   or is generated on the state volume at first start; `python -m app.cli
   backup-key show` prints it inside the container (it never crosses the
   API) and `backup-key rotate` replaces it while older archives stay
-  readable. **Save a copy outside Cabinet**: without it the archives can't
+  readable. The key can also be supplied as a variable, `BACKUP_KEY`, for a
+  secret manager that sets variables (the secret file stays the better
+  choice where you have it), and `backup-key new` prints a fresh key for
+  either form. **Save a copy outside Cabinet**: without it the archives can't
   be opened. Settings reports whether the key sits beside the backups.
 - **Restores take only encrypted archives made with this deployment's key.**
   An archive is decrypted in private staging and its MAC checked before

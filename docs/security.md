@@ -85,7 +85,7 @@ the matching key works fine; you just re-enter the source API keys. Treat
 `.env` as sensitive: it holds the database password and the encryption key.
 
 **Every archive is itself encrypted** (v0.30.0) with the backup key, an
-[age](https://age-encryption.org) X25519 identity from `BACKUP_KEY_FILE` or
+[age](https://age-encryption.org) X25519 identity from `BACKUP_KEY_FILE`, from `BACKUP_KEY`, or
 generated into `backup.key` on the state volume, and carries a MAC keyed by
 that key: an archive on the backup share can be neither read nor forged
 without it, and only encrypted archives made with this deployment's key are

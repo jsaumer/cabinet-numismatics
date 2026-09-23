@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # secret, never modified by Cabinet. Unset, one is generated into
     # backup.key on the state volume. See services/archive_keys.py.
     backup_key_file: str = ""
+    # The same key as a variable: the identity text itself, for a deployment
+    # whose secret manager delivers environment variables. Written to a
+    # container-local file at start (never the state volume). Not with
+    # BACKUP_KEY_FILE.
+    backup_key: str = ""
 
     @property
     def sqlalchemy_url(self) -> str:

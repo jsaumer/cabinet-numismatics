@@ -9,6 +9,7 @@ Commands (v0.30.0):
     reset-password            set a new password (asked twice, never an argument)
     sign-out-everywhere       end every session and known device (a lost laptop)
     revoke-tokens [--name N]  revoke every API token, or the one named N
+    backup-key new            print a fresh backup key, for a secret or BACKUP_KEY
     backup-key show           print the backup key, to keep outside Cabinet
     backup-key rotate         put a new backup key first (older archives stay readable)
     decrypt-archive           decrypt an archive from stdin to stdout (restore.sh)
@@ -209,21 +210,39 @@ def backup_key_show(_args) -> int:
         return _fail(str(exc))
     print("# Cabinet backup key. Keep it in a password manager, outside Cabinet:")
     print("# without it the encrypted archives can't be opened by anyone.")
-    if archive_keys.supplied():
+    if archive_keys.source() == "file":
         print(f"# From BACKUP_KEY_FILE ({archive_keys.key_path()}).")
+    elif archive_keys.source() == "environment":
+        print("# From BACKUP_KEY (the environment).")
     for identity in identities:
         print(f"# public key: {identity.recipient}")
         print(identity.text)
     return 0
 
 
-ROTATE_STEPS = """The backup key comes from BACKUP_KEY_FILE, which Cabinet never changes.
-To rotate it:
-  1. Make a new key:  age-keygen -o new.key   (or: docker compose exec backend age-keygen)
-  2. Make a new secret holding the NEW identity first and the old one after it,
-     so archives made with the old key stay readable.
-  3. Point BACKUP_KEY_FILE at the new secret and redeploy.
+ROTATE_STEPS = """The backup key is supplied (BACKUP_KEY_FILE or BACKUP_KEY), and Cabinet
+never changes a supplied key. To rotate it:
+  1. Make a new key:  python -m app.cli backup-key new
+  2. Put the NEW identity first and the old one after it: a new secret file
+     for BACKUP_KEY_FILE, or both identities in BACKUP_KEY separated by a
+     comma, so archives made with the old key stay readable.
+  3. Redeploy, then save the new key outside Cabinet.
 Nothing was changed."""
+
+
+def backup_key_new(_args) -> int:
+    """A fresh backup key, printed and nothing else: save the whole output as
+    the secret file for BACKUP_KEY_FILE, or put the AGE-SECRET-KEY line in
+    BACKUP_KEY. Needs no database and works before setup."""
+    from datetime import datetime, timezone
+
+    from app.services import archive_keys
+
+    identity = archive_keys.new_identity()
+    print(f"# created: {datetime.now(timezone.utc).isoformat(timespec='seconds')}")
+    print(f"# public key: {identity.recipient}")
+    print(identity.text)
+    return 0
 
 
 def backup_key_rotate(_args) -> int:
@@ -333,6 +352,9 @@ def main(argv: list[str] | None = None) -> int:
 
     key = commands.add_parser("backup-key", help="show or rotate the backup key")
     key_commands = key.add_subparsers(dest="action", required=True)
+    key_commands.add_parser("new", help="print a fresh key; changes nothing").set_defaults(
+        run=backup_key_new
+    )
     key_commands.add_parser("show").set_defaults(run=backup_key_show)
     key_commands.add_parser("rotate").set_defaults(run=backup_key_rotate)
 

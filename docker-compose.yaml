@@ -28,6 +28,7 @@ services:
       - SETUP_CODE_FILE=${SETUP_CODE_FILE:-}
       # The backup key; unset, one is generated on the state volume.
       - BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-}
+      - BACKUP_KEY=${BACKUP_KEY:-}
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the

@@ -60,6 +60,9 @@ services:
       # Unset, one is generated on the state volume; a secret keeps it off
       # the storage your backups live on.
       # - BACKUP_KEY_FILE=/run/secrets/cabinet_backup_key
+      # Or the key itself, from a secret manager that sets variables (never
+      # both): the AGE-SECRET-KEY line from `python -m app.cli backup-key new`.
+      # - BACKUP_KEY=AGE-SECRET-KEY-1...
     # secrets:
     #   - cabinet_setup_code
     #   - cabinet_backup_key

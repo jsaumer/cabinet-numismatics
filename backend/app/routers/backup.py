@@ -34,8 +34,8 @@ class StoredBackup(BaseModel):
 class BackupKey(BaseModel):
     fingerprint: str  # the public key (age1...), safe to show
     saved: bool  # the owner ticked "I have saved it" for this key
-    supplied: bool  # from BACKUP_KEY_FILE rather than generated
-    # separate | shared | not_verified | secret (nothing to check)
+    supplied: bool  # from BACKUP_KEY_FILE or BACKUP_KEY rather than generated
+    # separate | shared | not_verified | secret | environment (nothing to check)
     location: str
     location_message: str | None = None
 

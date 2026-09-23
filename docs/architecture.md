@@ -186,6 +186,7 @@ app's Settings page and stored in the database.
 | `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |
 | `SETUP_CODE` / `SETUP_CODE_FILE` | The one-time setup code, or a file holding it (a Docker secret); at least 32 characters, checked at start. Unset, one is generated |
 | `BACKUP_KEY_FILE` | The backup key (age identities, one a line, the first encrypting), typically a Docker secret, never modified by Cabinet; unreadable or unparsable stops startup. Unset, one is generated into `backup.key` on the state volume |
+| `BACKUP_KEY`      | The same key as a variable (identities separated by commas or newlines), for a secret manager that sets variables; written to a container-local file at start; not with `BACKUP_KEY_FILE` |
 | `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file) |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`

@@ -219,8 +219,8 @@ export interface BackupList {
 export interface BackupKey {
   fingerprint: string; // the public key (age1...); the key itself never leaves the container
   saved: boolean;
-  supplied: boolean; // BACKUP_KEY_FILE rather than generated
-  location: "separate" | "shared" | "not_verified" | "secret";
+  supplied: boolean; // BACKUP_KEY_FILE or BACKUP_KEY rather than generated
+  location: "separate" | "shared" | "not_verified" | "secret" | "environment";
   location_message: string | null;
 }
 

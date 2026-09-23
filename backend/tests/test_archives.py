@@ -810,3 +810,58 @@ def test_a_stale_cli_spool_is_removed_by_the_in_app_cleanup(client):
     assert fresh.exists() and not stale.exists()
     backup.empty_staging(everything=True)
     assert not fresh.exists()
+
+
+# --- the key as a variable (stage 13) ------------------------------------------------
+
+
+def test_an_environment_key_is_used_and_kept_off_the_state_volume(client, monkeypatch):
+    other = archive_keys.identity_from_secret(bytes(range(33, 65)))
+    monkeypatch.setenv("BACKUP_KEY", f"# mine\n{FIXED.text}, {other.text}\n")
+    get_settings.cache_clear()
+    assert archive_keys.ensure_key() == [FIXED, other]  # commas or newlines; first encrypts
+    assert archive_keys.primary() == FIXED
+    assert archive_keys.supplied() and archive_keys.location() == "environment"
+    path = archive_keys.key_path()
+    assert path.parent != archive_keys.state_dir()  # never beside the backups' share
+    if os.name != "nt":
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert archive_keys.rotate() is None  # a supplied key is the operator's to rotate
+    assert archive_keys.ensure_key() == [FIXED, other]  # rewritten, not appended, each start
+
+
+def test_a_bad_environment_key_stops_startup(monkeypatch):
+    monkeypatch.setenv("BACKUP_KEY", "not a key")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(ConfigError, match="BACKUP_KEY: .*backup-key new"):
+            with TestClient(app):
+                pass
+    finally:
+        get_settings.cache_clear()
+
+
+def test_a_key_file_and_a_key_variable_together_stop_startup(tmp_path, monkeypatch):
+    key_file = tmp_path / "backup.key"
+    key_file.write_text(f"{FIXED.text}\n", encoding="utf-8")
+    monkeypatch.setenv("BACKUP_KEY_FILE", str(key_file))
+    monkeypatch.setenv("BACKUP_KEY", FIXED.text)
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(ConfigError, match="not both"):
+            with TestClient(app):
+                pass
+    finally:
+        get_settings.cache_clear()
+
+
+def test_backup_key_new_prints_a_usable_key_and_changes_nothing(capsys):
+    """The documented way to make a key, for a secret file or BACKUP_KEY:
+    no database, works before setup, touches no file."""
+    assert cli.main(["backup-key", "new"]) == 0
+    out = capsys.readouterr().out
+    (identity,) = archive_keys.parse_identities(out)  # the whole output is a valid key file
+    assert identity.text in out and f"# public key: {identity.recipient}" in out
+    assert not (archive_keys.state_dir() / "backup.key").exists()
+    assert cli.main(["backup-key", "new"]) == 0
+    assert archive_keys.parse_identities(capsys.readouterr().out) != [identity]

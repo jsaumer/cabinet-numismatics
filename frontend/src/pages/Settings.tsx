@@ -522,7 +522,9 @@ export default function Settings() {
             )}
             {backups.key.supplied && (
               <p className="muted" style={{ margin: 0 }}>
-                Supplied by <code>BACKUP_KEY_FILE</code>; keep your own copy of that secret safe.
+                Supplied by{" "}
+                <code>{backups.key.location === "environment" ? "BACKUP_KEY" : "BACKUP_KEY_FILE"}</code>
+                ; keep your own copy of that secret safe.
               </p>
             )}
             {backups.key.location_message && (

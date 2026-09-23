@@ -930,7 +930,18 @@ change must respect:
   start `AGE-SECRET-KEY-1` in capitals, as `age` requires. A bad
   `BACKUP_KEY_FILE` is a `ConfigError`. The key file is also what `age
   --identity` reads, so the secret never goes on a command line. `rotate`
-  only ever rewrites a generated file. Startup also runs `backup.self_test`
+  only ever rewrites a generated file. **`BACKUP_KEY`** (stage 13, the
+  owner's decision) supplies the same key as a variable: `ensure_key` parses
+  it (commas or newlines between identities) and writes it at every start
+  to `/run/cabinet/backup.key` (0600; created by the Dockerfile and handed
+  over by the entrypoint; a private temp folder outside the image), never a
+  data volume, since the state volume may be the backups' own share. Both
+  forms set is a `ConfigError`; `archive_keys.source()` says which is in
+  use (`file`, `environment`, `generated`), `location()` reports
+  `environment`, and `backup-key rotate` prints the steps for either.
+  `backup-key new` prints a fresh identity in `age-keygen`'s format with no
+  database and no claim check: the documented way to make a key for either
+  form. Startup also runs `backup.self_test`
   (a real age round trip in staging; failure is logged as critical) and,
   after migrations, `backup.record_key_mismatch`, which alerts when the
   newest recorded archive was made with a key no longer configured.
