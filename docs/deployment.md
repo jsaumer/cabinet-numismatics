@@ -74,7 +74,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.29.1`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.30.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -405,7 +405,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.29.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.30.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy

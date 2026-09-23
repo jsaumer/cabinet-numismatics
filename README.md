@@ -13,7 +13,7 @@ money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.29.1 released; v0.30.0 (sign-in) built and pending release.**
+**Status: v0.30.0 released (sign-in and encrypted backups).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus

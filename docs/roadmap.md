@@ -7,9 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): v0.29.1 is the latest published release; v0.30.0
-(sign-in and encrypted backups) is built and pending the owner's final
-review before tagging**, with versioned images published to GHCR from each
+**Status (September 2026): v0.30.0 (sign-in and encrypted backups) is the
+latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -25,7 +24,7 @@ v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
 (P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
 "group C" widgets followed in v0.29.0, alongside note details and a
 regrouped item page from the data-entry pass; authentication's first part
-(P8, A1: one admin, sessions, scoped API tokens) is built for v0.30.0.
+(P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0.
 **What's next**: A2, single sign-on, as v0.31.0, then the share view (P9).
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
@@ -802,8 +801,7 @@ P8 (and the data-entry review, if that finds nothing structural). The
 checklist:
 
 - ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
-  a deny-by-default gate). **Shipped for v0.30.0** (built, pending release;
-  see P8 below). Single sign-on (A2) follows as v0.31.0.
+  a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single sign-on (A2) follows as v0.31.0.
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -967,9 +965,9 @@ v0.26.0.
   metrics gauge. `items.weight_g` gained a fourth decimal place (a troy
   ounce is 31.1035 g) in the same migration.
 - ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
-  decisions of 20 and 21 September 2026 marked ◆). **A1 shipped for
-  v0.30.0** (built on the `p8-auth-a1` branch, pending the owner's final
-  review before tagging); **A2 is next, as v0.31.0**. A session lasts one
+  decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
+  v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 is next, as
+  v0.31.0**. A session lasts one
   day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
   Origin check, not a token; photos go through nginx `auth_request` rather
   than signed URLs; passwords use Argon2id (`argon2-cffi`, a new

@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.29.1, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.30.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -23,11 +23,9 @@ changelog entry when releasing.
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
-  scoped API tokens, deny by default) is **built on `p8-auth-a1`, complete,
-  and awaiting the owner's final review before tagging as v0.30.0**; the
-  last published release is still v0.29.1. Every route needs a session or a
-  token; setup asks for a one-time code on first start. v0.31.0 (OIDC single
-  sign-on and a trusted-header mode) is next. Every design decision was
+  scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
+  needs a session or a token; setup asks for a one-time code on first
+  start. v0.31.0 (OIDC single sign-on and a trusted-header mode) is next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -117,8 +115,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.29.1: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0021`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.30.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0021` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
@@ -249,7 +247,7 @@ Note details, the item page, and P10's "group C" widgets shipped in v0.29.0
 endpoints, `components/item-hero.tsx` and `item-facts.tsx`, and ten
 dashboard widget types; see "Note details, the item page, more widgets" in
 the implementation notes.
-P8 A1, sign-in and encrypted backups, is built on `p8-auth-a1` for v0.30.0
+P8 A1, sign-in and encrypted backups, shipped in v0.30.0
 (migration `a0001`, the `cabinet_auth` schema and chain): one admin claimed
 with a setup code, sessions, scoped API tokens, and a deny-by-default gate
 (details in the rules below); see "Authentication and encrypted backups" in
