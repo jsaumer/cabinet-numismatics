@@ -14,8 +14,10 @@ the failure and answers 404. The token is only ever read from the path and
 is never logged. What an item shows is `share.item_view`'s allowlist.
 """
 
+import threading
+
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.auth import common, throttle
@@ -37,19 +39,11 @@ PHOTO_HEADERS = {
 NOT_FOUND = {"detail": "Not found"}
 VARIANTS = ("thumb", "full")
 MAX_OFFSET = 1_000_000  # past bigint range is a database error, not a 422
-
-
-class _PhotoFile(FileResponse):
-    """No `Last-Modified` or `ETag`: both are built from the file's time,
-    which is when the photo was uploaded, close to when the piece was bought.
-    With neither, an `If-Range` can never match, so it gets the whole body
-    (Starlette's own check would read the missing headers and fail)."""
-
-    def set_stat_headers(self, stat_result) -> None:
-        self.headers.setdefault("content-length", str(stat_result.st_size))
-
-    def _should_use_range(self, http_if_range: str) -> bool:
-        return False
+# Re-encoding a large photo costs seconds of CPU, and a live link is never
+# throttled, so at most two run at once; a request past that is told to come
+# back rather than queued on a worker thread (v0.32.2).
+REENCODE_SLOTS = threading.BoundedSemaphore(2)
+BUSY = {"detail": "Photos are being prepared; try again in a few seconds."}
 
 
 def _address(request: Request) -> str:
@@ -154,10 +148,14 @@ def share_photo(
 ):
     """A shared piece's photo (`thumb` or `full`), served here rather than
     through nginx's `/photos/`, which stays for a session or a token. Sent
-    from disk only when the one-time pass has written its marker and this
-    file's own header shows nothing (`looks_clean`); otherwise re-encoded
-    without metadata on the request, or the one 404 if it can't be decoded.
-    The marker spares the work, it doesn't vouch for a file (v0.32.1)."""
+    as it is only when the one-time pass has written its marker and this
+    file passes the allowlist walk (`checked_bytes`), and then the bytes
+    that were checked, never the path reopened; otherwise re-encoded
+    without metadata on the request (at most `REENCODE_SLOTS` at once, 503
+    past that), or the one 404 if it can't be decoded or the pass listed it
+    as unreadable. The marker spares the work, it doesn't vouch for a file.
+    Either way the body is built in memory: no `Last-Modified` or `ETag`
+    (both would give the upload time) and no ranges."""
 
     def work(link):
         if variant not in VARIANTS:
@@ -167,12 +165,21 @@ def share_photo(
         path = photo_store.path_of(key) if key else None
         if path is None or not path.is_file():
             raise share.NotFound()
-        if photo_store.marker_exists() and photo_store.looks_clean(path):
-            return _PhotoFile(path, headers=PHOTO_HEADERS)
+        unreadable = photo_store.marker_unreadable()  # None: no marker
+        if unreadable is not None:
+            if key in unreadable:
+                raise share.NotFound()  # the pass couldn't rewrite it: never trusted
+            checked = photo_store.checked_bytes(path)
+            if checked is not None:
+                return Response(checked[0], media_type=checked[1], headers=PHOTO_HEADERS)
+        if not REENCODE_SLOTS.acquire(blocking=False):
+            return JSONResponse(BUSY, 503, headers={**HEADERS, "Retry-After": "5"})
         try:
             body, media_type = photo_store.cleaned_file(path)
         except ValueError:
             raise share.NotFound() from None
+        finally:
+            REENCODE_SLOTS.release()
         return Response(body, media_type=media_type, headers=PHOTO_HEADERS)
 
     return _answer(request, db, token, work)

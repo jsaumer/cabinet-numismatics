@@ -2048,6 +2048,83 @@ marker wrote it back over the restored photos. Rules:
   disable it, which is why `schema.py` keeps `configure_logger` off; a
   test pins the summary on that logger.
 
+## v0.32.2
+
+A review of v0.32.1 found four gaps in the share photo path: `applist`
+omits the reserved JPEG markers (`JPGn`, `FF F0` to `FF FD`, and `EXP`,
+`FF DF`), so one bit flipped in an APP1 marker sent EXIF and GPS from disk;
+every WebP was re-encoded on every request, with nothing capping it; the
+route reopened the path after checking it; and a file the pass couldn't
+read was trusted once it looked clean. Rules:
+
+- **The per-file check is an allowlist walk of the whole file.**
+  `photos.checked_bytes(path)` (`looks_clean` is now `checked_bytes(path)
+  is not None`) reads the file once and walks it by format, never a pixel
+  decode. JPEG (`_jpeg_walk`): SOI, then before the first scan only one
+  SOF0/1/2, DHT, DQT, DRI, one APP0 `JFIF\0` of exactly 14 bytes with no
+  thumbnail, APP2 `ICC_PROFILE\0`, one APP14 `Adobe` of exactly 12 bytes,
+  and SOS; every segment's body exactly its kind's size
+  (`_jpeg_segment_ok`: an SOF's components, a DQT's tables, a DHT's counts,
+  an SOS's components); then the scans' coded data (`_jpeg_scan_end`: `FF`
+  only before `00` or `RST0` to `RST7`), with DHT, DQT, DRI, and DNL after
+  the first scan and further scans only in a progressive file, and exactly
+  one EOI with nothing after it. No fill bytes. The count of application
+  segments must equal `len(img.applist)` from Pillow's own header read, so
+  a marker either parser sees and the other doesn't answers False. PNG
+  (`_png_walk`): the signature, IHDR first, every chunk in `HARMLESS_PNG`,
+  fitting the file, with a right CRC (`cleaned_file` would refuse a bad
+  one, so the disk path mustn't serve it), the fixed lengths
+  (`_PNG_LENGTHS`) and those set by the colour type (`_PNG_BY_COLOUR`, a
+  palette's `tRNS` at most its entries), an `iCCP` named `ICC Profile` as
+  Pillow writes it (the name is free text), and nothing after IEND. WebP
+  (`_webp_walk`, no Pillow open at all): the RIFF size equals the file
+  length less 8, then one `VP8 ` or `VP8L` alone, or `VP8X` (exactly 10
+  bytes; EXIF, XMP, and reserved flag bits clear) with `ICCP`, `ALPH`,
+  `ANIM`, each once, and `ANMF` frames whose own chunks are walked
+  (`ALPH`, `VP8 `, `VP8L` only); odd chunks padded with a zero byte, nothing
+  after the last. A new chunk or marker type is refused until it is added
+  here with its length rule; `clean_bytes`' own output (JPEG at both
+  qualities, PNG with a profile and with a palette's transparency, WebP
+  with and without alpha and a profile) must keep passing, which
+  `test_what_cabinet_writes_passes_the_walk` pins.
+- **Structure only has a known limit.** Bytes inside the compressed pixel
+  stream (text after a JPEG's last coded unit before EOI, an extra PNG
+  `IDAT` after the zlib stream ends, the tail of a WebP bitstream) look
+  like image data without decoding it. `test_what_structure_cannot_see`
+  and two strict `xfail`s in the boundary test pin that, so closing it is
+  noticed. It is why the marker still matters: only the pass's rewrite, or
+  Cabinet's own `clean_bytes`, makes a file trustworthy.
+- **An ICC profile must be shaped like one.** `_icc_ok`: at least 132
+  bytes, the declared size equal to the length, `acsp` at offset 36, every
+  tag inside it. `clean_bytes` drops a profile that fails (Pillow reports
+  whatever an `ICC_PROFILE` segment holds, and would otherwise re-encode
+  it straight back in), `carries_metadata` counts one, the JPEG walk joins
+  the APP2 fragments first (`_jpeg_icc_ok`: sequence 1 to n, n in each,
+  since Pillow drops fragments that don't add up without saying so), and
+  the WebP walk checks `ICCP`.
+- **The route serves the checked bytes.** `share_photo` answers
+  `Response(data, media_type=..., headers=PHOTO_HEADERS)` from what
+  `checked_bytes` returned, never the path reopened, so a file replaced
+  between the check and the answer (a `restore.sh` unpack) is never sent
+  unchecked. `_PhotoFile` is gone: both paths build the body in memory, so
+  there is no `Last-Modified` or `ETag` and no `Range` support (a `Range`
+  gets the whole photo, `200`). A shared photo is a few MB at most.
+- **Re-encodes are capped.** `routers/share.REENCODE_SLOTS` is a
+  `BoundedSemaphore(2)` around `cleaned_file`, taken without waiting; when
+  both are held the route answers `503` with `Retry-After: 5` and the
+  share's `HEADERS`. A live link is never throttled, so without it a link
+  holder could loop requests for a large photo and fill the worker
+  threads. The fast path takes no slot.
+- **The marker lists what the pass couldn't read.** It is JSON,
+  `{"unreadable": [...]}` (relative keys, POSIX separators, empty when
+  none), written through a temporary name and `os.replace`.
+  `photos.marker_unreadable()` reads it on every request (it is tiny):
+  `None` when there is no marker (or it can't be read or parsed, so every
+  photo goes the slow way), an empty set for a v0.32.0 or v0.32.1 prose
+  marker (so an upgrade doesn't re-run the pass), else the keys, which the
+  route answers with the one 404 whether or not the file would look clean.
+  `marker_exists()` still only asks whether the file is there.
+
 ## Releases
 
 

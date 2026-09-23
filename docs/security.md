@@ -459,11 +459,25 @@ Rules that go with the table:
   not an image at all) is logged and left alone, so the pass can't vouch
   for every file on the volume, and its marker only spares work. The share
   view checks each file before sending it (v0.32.1): as it is only when the
-  marker exists and that file's own headers show nothing beyond pixels,
-  colour, and layout, ending where the image ends (a JPEG or PNG; a WebP
-  never qualifies); otherwise it re-encodes the photo as it serves it, and
-  one it can't decode is the same `404` as any other failure. The colour
-  profile that is kept is
+  marker exists and the file passes an allowlist walk of its whole structure
+  (v0.32.2), which refuses the known metadata containers (EXIF, XMP, IPTC,
+  comments, text chunks), any marker or chunk it doesn't know (the reserved
+  JPEG markers included), a container longer than its kind specifies or
+  running past the file, a bad PNG checksum, a colour profile that isn't
+  shaped like one, and anything after the image ends. A JPEG, PNG, or WebP
+  (WebP from v0.32.2) that passes is sent as the bytes that were checked,
+  never read again. The walk reads structure only: bytes hidden inside the
+  compressed pixel data itself (after a JPEG's last coded unit, or in an
+  extra PNG `IDAT` after the image data ends) can't be told from pixels
+  without decoding them, which is why nothing is sent from disk before the
+  pass has rewritten every file. Anything else is re-encoded as it is
+  served, at most two at a time (a request past that gets `503` with
+  `Retry-After`, since a live link is never throttled and a large photo
+  costs seconds of CPU), and one it can't decode is the same `404` as any
+  other failure. A file the pass could not rewrite is listed in its marker
+  and refused outright until it is rewritten. The colour profile that is
+  kept (only when it is shaped like one: its declared size, the `acsp`
+  signature, every tag inside it) is
   usually a standard one (sRGB, Display P3), but a profile made by a device
   can name its model and the date the profile was made; nothing about where
   or when the photo was taken.
