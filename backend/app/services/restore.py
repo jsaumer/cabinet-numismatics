@@ -1404,6 +1404,10 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             for swap in swaps:
                 swap.finish()
             if _swaps_photos(manifest):
+                # Again, now that the archive's photos are in place: a pass that
+                # started after the first removal, before the swap, would
+                # otherwise write the marker over files it never saw.
+                photos.remove_marker()
                 photos.clean_in_background(force=True)
             if migration_error is not None:
                 raise RestoreError(
