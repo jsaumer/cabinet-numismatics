@@ -91,6 +91,7 @@ export function ValueSummaryWidget() {
           <span className="tile-value">{stats.counts.owned}</span>
           <span className="muted">
             {stats.counts.coins} coins · {stats.counts.notes} notes
+            {stats.counts.bullion > 0 && ` · ${stats.counts.bullion} bars and rounds`}
           </span>
         </div>
         <div className="tile">

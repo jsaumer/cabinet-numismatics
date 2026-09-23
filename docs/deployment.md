@@ -74,7 +74,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.30.2`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.31.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -173,7 +173,7 @@ things still call for one:
   front (the nginx config is baked into the proxy image, so terminating TLS
   there instead means building your own image with a certificate and a
   `443` server block).
-- **A second door, until single sign-on.** Until v0.31.0 adds OpenID Connect
+- **A second door, until single sign-on.** Until v0.32.0 adds OpenID Connect
   and a trusted-header mode, keep an authenticating reverse proxy (any
   forward-auth or SSO gateway: Traefik + Authentik, Authelia, oauth2-proxy,
   Pomerium, Cloudflare Access) in front as well. It brings its own second
@@ -405,7 +405,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.30.2 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.31.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy

@@ -39,7 +39,7 @@ def get_cert(cert: str = Path(pattern=CERT_PATTERN), db: Session = Depends(get_d
 @permission("write")
 def search(
     q: str = Query(min_length=2, max_length=100),
-    category: Literal["coin", "banknote"] | None = None,
+    category: Literal["coin", "banknote", "exonumia"] | None = None,
     db: Session = Depends(get_db),
 ):
     """Search the Numista catalogue by name. Needs a Numista API key."""

@@ -30,6 +30,15 @@ export const DIMENSIONS: Record<string, Dimension> = {
   },
 };
 
+// The type dimension's keys are the raw item type ("coin", "note",
+// "bullion"); this is the only dimension whose bars need a friendlier label
+// than the key itself.
+const TYPE_LABELS: Record<string, string> = {
+  coin: "Coin",
+  note: "Note",
+  bullion: "Bars and rounds",
+};
+
 const MEASURE_TITLES: Record<Measure, string> = {
   value: "Estimated value by",
   count: "Items by",
@@ -76,6 +85,7 @@ export function BreakdownWidget({ options }: WidgetProps) {
 
   let points: ChartDatum[] = entries.map((e) => ({
     key: e.key,
+    label: key === "type" ? (TYPE_LABELS[e.key] ?? e.key) : undefined,
     value: amount(e, measure),
     title:
       key === "acquisition_year"

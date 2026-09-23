@@ -37,6 +37,7 @@ from app.services.pricing import (
     SourceUnavailable,
     cached_fetch,
     detect_metal,
+    effective_fineness,
     freshness,
     get_spot_price,
     money,
@@ -215,6 +216,7 @@ def stack_figures(
     today = _today()
     buckets: dict[str, _Bucket] = {}
     skipped = missing_spot = 0
+    skipped_items: list[dict] = []
 
     for item in _owned(db):
         metal = detect_metal(item.composition)
@@ -222,7 +224,16 @@ def stack_figures(
             continue
         oz = item.fine_oz
         if oz is None:
-            skipped += 1  # a precious metal, but no weight or fineness
+            # A precious metal, but no weight or fineness (or neither).
+            skipped += 1
+            missing = []
+            if item.weight_g is None:
+                missing.append("weight")
+            if effective_fineness(item) is None:
+                missing.append("fineness")
+            skipped_items.append(
+                {"item_id": item.id, "label": item.label, "missing": " and ".join(missing)}
+            )
             continue
         if needs_spot(item, today):
             missing_spot += 1
@@ -332,6 +343,7 @@ def stack_figures(
         "items": rows,
         "missing_spot": missing_spot,
         "skipped": skipped,
+        "skipped_items": skipped_items,
         "excluded_other_currency": rates.excluded,
         "history_start": HISTORY_START,
     }

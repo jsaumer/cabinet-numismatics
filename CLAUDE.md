@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.30.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.31.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -25,7 +25,8 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 (OIDC single sign-on and a trusted-header mode) is next. Every design decision was
+  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 (OIDC single
+  sign-on and a trusted-header mode) is next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -115,7 +116,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.30.0: roadmap Phases 0–5.8 are complete, migrations
+Released as v0.31.0: roadmap Phases 0–5.8 are complete, migrations
 `0001`–`0021` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
@@ -252,9 +253,20 @@ P8 A1, sign-in and encrypted backups, shipped in v0.30.0
 with a setup code, sessions, scoped API tokens, and a deny-by-default gate
 (details in the rules below); see "Authentication and encrypted backups" in
 the implementation notes and `docs/specs/SPEC_0300.md`.
+P11, bars and rounds, shipped in v0.31.0 (SPEC_0310, staged 22 September
+2026 as PR 22, branch `p11-bullion`): a third item type, `bullion` ("Bar or
+round"), no migration. The rules that bite: `pricing.detect_metal` and
+`pricing.parse_fineness` are the one detector and one parser a composition's
+metal and fineness are ever read by, mirrored (never duplicated) in the
+frontend's `detectMetal`; the year-or-ND rule and fancy serial traits don't
+apply to bullion; nothing on the item save path ever makes a network call,
+so a new bullion piece's melt estimate comes from the cached spot price
+only; and Numista's bars and rounds are read by `object_type` (id 36, or
+the name Bars/Rounds/Ingots/Bullion), never by a word in the title. See
+"Bars and rounds" in the implementation notes.
 **Next, in order:** P8 A2, single sign-on (OpenID Connect and a
 trusted-header mode for the same admin, plus two-factor sign-in) as
-v0.31.0; then P9 a share view (the whole feature is an admin setting, off
+v0.32.0; then P9 a share view (the whole feature is an admin setting, off
 by default); labels, a phone app, and more accounts are optional. Research
 and propose each before building, as always. v1.0.0 follows P8 and the
 checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9

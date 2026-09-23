@@ -1420,6 +1420,190 @@ release. Rules a later change here has to respect:
   fold) are both gone. `README.md`'s screenshot table points at the
   Backups pair.
 
+## Bars and rounds (v0.31.0)
+
+Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
+`p11-bullion` (PR 22), stage by stage. Rules so far:
+
+- **One detector, one parser** (stage 1): `pricing.detect_metal` and
+  `pricing.parse_fineness(text, metal)` are the only readers of a
+  composition's metal and fineness; `effective_fineness` and
+  `numista.fineness_from_composition` sit on top of them, and the frontend's
+  `detectMetal` (`pages/item-form/model.ts`) mirrors the detector, the
+  backend being the authority. The rules: whole words only; the named alloys
+  `nickel silver`, `german silver`, and `nordic gold` are not precious; a
+  metal followed by `plated`, `plate`, `plating`, `washed`, or `wash` is a
+  coating and `gilt`/`gilded` is a gold surface on the metal before it, so
+  "Gold plated silver" and "Silver-gilt" are silver; `clad` is not stripped
+  (silver-clad halves hold silver); with two metals left, the larger
+  attached percentage wins, else the first named. Fineness: the percentage
+  attached to the detected metal, then a decimal, then millesimal, then
+  sterling/Britannia/coin silver or a gold carat; nothing found is `None`.
+  The case table is `tests/test_metal.py`; add a row there before changing
+  either function, and change `detectMetal` in the same commit.
+- **The `bullion` type, backend** (stage 2): `schemas.ItemTypeName` and
+  `models.item.ItemType` gain `bullion`; no migration (`items.type` has no
+  database constraint). The year-or-ND rule is exempt for it, in the same
+  two places it already lives (`ItemBase._year_or_nd`,
+  `routers/items._apply_struck_date`): both now check `type != "bullion"`
+  before requiring `year` or `year_nd`. `RunIssue`'s own copy of the rule
+  (schemas.py, for "Add a run") is deliberately untouched: nothing in
+  SPEC_0310 extends runs to bullion, and the run endpoint only ever builds
+  coin/note items from a catalogue date/mint range, so the rule there still
+  applies to every run unconditionally. `Item.year_label` returns `""` for a
+  bullion item with no year (coins and notes keep `"ND"`), and `Item.label`
+  for bullion is `issuer or country`, then `denomination`, then the year if
+  there is one, no mint mark, with empty parts filtered out so there's never
+  a double space. Fancy serial traits are never computed for bullion:
+  `_build_item` and `_sync_derived` (`routers/items.py`) skip
+  `serials.stored_traits` whenever `item.type == "bullion"`, and
+  `_sync_derived` recomputes them (or clears them) on a `type` change either
+  way, in create, update, and bulk edit alike. `counts.bullion` on
+  `GET /api/stats/collection` follows the same owned-items split as `coins`/
+  `notes`; the type breakdown and `cabinet_items{type=...}` needed no code
+  change, since both already group by `Item.type` directly. The list's
+  `type=` filter and bulk edit's `set.type` accept `bullion` for free (the
+  filter's pattern and `ItemUpdate.type` both use the shared enum).
+  **Numista**: `catalogue_fields` maps `category == "exonumia"` to
+  `type: "bullion"` by the type's object type (`_exonumia_is_bullion`:
+  `object_type.name` in `BULLION_OBJECT_TYPES`, matched as a whole name,
+  or `object_type.id` in `BULLION_OBJECT_TYPE_IDS`, today 36, with the
+  top-level `type` string as the fallback name). **The shape is confirmed**
+  (the owner's probe of `types/430821` on 22 September 2026): a bar carries
+  `object_type: {"id": 36, "name": "Bars"}`, a cafe token
+  `"Restaurant, bar, cafe and hotel tokens"`, and an Andorra silver bar
+  with a face value `"Collector coins"`, which is why the name is matched
+  whole and never by the word "bar". On a bullion type, `denomination` is
+  the title (no face value to read), `issuer` (the "Refiner or mint" field)
+  is the first of `mints` (PAMP before Singapore Mint on that bar), `country`
+  stays Numista's issuer, `size`/`size2` fill `width_mm`/`height_mm` and
+  never a diameter, and weight, thickness, shape, and edge read as for a
+  coin; any other exonumia raises `NotApplicable`, which the fill route
+  (`GET /api/numista/types/{id}`) turns into a 422 naming the refusal, and
+  search hits carry `object_type` so a client can say what a hit is. `type_fields` (the account import's
+  bulk lookup) catches that `NotApplicable` per type and treats it as
+  "missed", the same as a fetch failure, so a batch of mixed types never
+  fails as a whole. `GET /api/numista/search` accepts `category=exonumia`.
+  **Imports**: `routers/imports.py` no longer excludes exonumia types from
+  the account import's catalogue lookup (it used to skip them outright,
+  since Cabinet had nowhere to put them); `numista_account_candidates` now
+  decides bullion vs. refused from the fetched type's own `details`, not the
+  collected item's bare `category`, so an exonumia item whose type isn't
+  cached yet reads as refused in a preview and resolves correctly on the run
+  that follows (which always fetches uncached types). `numista_file_candidates`
+  (the export file) and the spreadsheet mapping's `_item_type` both read a
+  `bar`/`round`/`ingot`/`bullion` type cell by word (an export file and a
+  spreadsheet carry no object type, so a word is all there is). The Cabinet CSV round trip needed no
+  code change: `type` is written and read as plain text on both sides.
+- **The `bullion` type, frontend** (stage 3): `pages/ItemForm.tsx`'s type
+  select gains "Bar or round"; `/items/new?type=bullion` presets it, for a
+  new item only, in a `useEffect` keyed on `id` alone so it never re-fires
+  as the owner edits the URL. A bullion piece gets a **Metal select** whose
+  value is `detectMetal(form.composition)`, so it always reflects whatever
+  the owner typed and writes just the metal's name when changed by hand;
+  **fineness defaults to .999** (`model.ts`'s `presetBullionFineness`,
+  applied both by the query preset and by switching Type to bullion,
+  filling only while the field is still empty, so it never overwrites a
+  Numista-filled or typed value); a **product name suggestion**
+  (`model.ts`'s `suggestDenomination`, from weight, metal, and shape)
+  follows the exact `autoYear` pattern already used for the date-as-struck
+  conversion: a ref (`autoDenomination`) remembers the last suggestion, and
+  a fresh one is written only while Denomination is empty or still holds
+  that remembered value, so it stops the moment the owner types their own.
+  **Weight gets a g / oz switch** (coins too, since bullion reuses the same
+  field): unit choice is form-only state in `localStorage`
+  `cabinet.form.weightUnit`, never sent to the server; the payload's
+  `weight_g` is always grams, converted at the shared `TROY_OUNCE_G` and
+  rounded to four decimal places on every edit, and the field's own label
+  reads "Weight (g)" or "Weight (oz)" so existing tests that fill
+  "Weight (g)" (the default unit) keep working unchanged. Country reads
+  "Country of refiner", denomination "Product name", and Year drops "Year
+  \*"/the ND checkbox (no placeholder-free required attribute either: a
+  bar's year is optional and never ND); mint mark, series stays, variety,
+  strike, designations, die axis, the date as struck, mintage, and
+  demonetised are all hidden (`!isBullion` guards, or the block simply
+  isn't reached); shown are weight, fineness (with a ".9999 for
+  four-nines" `title`, not visible text, so `getByLabel("Fineness", {exact:
+  true})` still matches just the label), shape, the note-style width/height
+  and thickness fields, serial number, and issuer labelled "Refiner or
+  mint". A coin's Composition field gains a one-line hint about the
+  bullion stack; the Stack page's empty state says the same and links to
+  `/items/new?type=bullion`.
+  **`components/item-facts.tsx`'s `forType` now takes an `ItemType` or an
+  array of them** (`forTypeMatches`), so a fact can be offered to two of the
+  three types (weight/fineness/fine-weight/composition already had no
+  `forType` and needed no change); the item page's title
+  (`components/item-hero.tsx`) branches on `item.type === "bullion"` and
+  builds `[issuer || country, denomination, year_label].filter(Boolean).join(" ")`,
+  matching the backend's `Item.label` exactly (space-joined, no comma,
+  nothing printed for an empty year), unlike the coin/note title's own
+  comma-before-year style, which stays as it was.
+  **The list, bulk edit, and dashboard**: the type filter and bulk edit's
+  type select both gain "Bars and rounds"/"Bar or round"; the value hero
+  reads "12 coins · 3 notes · 4 bars and rounds" (the last clause only when
+  `counts.bullion` is non-zero); the type breakdown chart needed a
+  friendlier label than its raw key for the first time, so
+  `components/charts.tsx`'s `ChartDatum` gained an optional `label`
+  (falling back to `key` everywhere else) and `breakdowns.tsx` maps
+  `bullion` to "Bars and rounds" (and `coin`/`note` to "Coin"/"Note") only
+  for the `type` dimension. `lookup.tsx`'s CoinFacts link is now explicitly
+  `item.type === "coin"` (it was unconditional on a `pcgs` catalogue ref
+  existing, which a bullion piece could technically carry), so a bar's
+  lookups are the eBay search alone, as the spec asks.
+  **Numista fill**: `NumistaFill.tsx` searches `category=exonumia` when the
+  form's type is bullion and shows each hit's `object_type` beside its
+  title; a 422 from a non-bullion exonumia type surfaces through the
+  existing error handling unchanged.
+- **Stack and melt** (stage 4): `GET /api/stack` gains `skipped_items`
+  (`item_id`, `label`, `missing`: `"weight"`, `"fineness"`, or `"weight and
+  fineness"`), built alongside the existing `skipped` count in
+  `stack.stack_figures`'s same loop (no second pass), scoped by the same
+  `tag`/`set_id` as the rest of the report. The Stack page adds a "Left
+  out" card (shown whenever `skipped_items` isn't empty, in both the empty
+  and the normal state, since a piece can be flagged before anything else
+  is in the stack) listing each with a link to the item; the existing
+  empty-state message and its `/items/new?type=bullion` link are unchanged.
+  `GET /api/items` gains `metal=` (`gold`/`silver`/`platinum`/`palladium`/`none`;
+  an unknown value is a 422 from the `Query` pattern, the same way `type`
+  and `status` already validate). It's evaluated in Python
+  (`routers/items._metal_matches`, `pricing.detect_metal` again: no SQL
+  equivalent, and at a few hundred pieces no column is worth adding), so
+  `metal` is popped out of the filters dict before `_filtered()` runs, and
+  `list_items` fetches every other-filter match in order, filters in
+  Python, then paginates the filtered list itself (`total` is `len()` of
+  that list, not the SQL count); the two export routes filter their full
+  row set the same way, since the frontend's "Export the current filters"
+  menu reuses the same query string. The list page gets a Metal select next
+  to Type, in `FILTER_KEYS` like every other filter so it round-trips
+  through the URL and the export links.
+  **A value from the start**: `pricing.refresh_melt_estimates` used to skip
+  an item outright whenever it had no estimate at all (`latest is None`
+  short-circuited to skipped); it now only skips when there *is* a latest
+  estimate and that one isn't melt, or isn't stale yet, which lets a
+  never-priced owned piece through to `run_adapter` the same as a stale
+  melt one. **`pricing.melt_on_save(db, item)`** is the save-path half:
+  called after `db.flush()` (so `item.id` exists) in `create_item`,
+  `add_run`, `update_item`, and `importing.run()` (all four `_build_item`
+  callers, since none of them go through the router's `create_item`), it
+  reads `melt_from_cache(db, item)` (a new `pricing` function, the same
+  arithmetic as `melt_estimate` factored into a shared `_melt_result`, but
+  `db.get(SpotPrice, metal)` instead of `get_spot_price`, so a missing or
+  stale cache row (`freshness(...)["stale"]`) returns `None` instead of
+  fetching); nothing else in Cabinet reads `SpotPrice` without going
+  through `get_spot_price`, and this is deliberately the one exception,
+  because the save path must never make a network call, full stop. Only
+  for `item.status == "owned"` (the stack's own scope). Skipped, too, when
+  the item already carries a melt estimate (`item.estimates`, newest
+  first) whose `details` match the new one on `metal`, `weight_g`,
+  `fineness`, and `quantity` (`_MELT_INPUT_KEYS`): an edit that touches
+  none of those adds nothing, so `notes` or `storage_location` churn
+  doesn't pile up estimate rows, but a reweigh does. On success it records
+  the attempt itself (`_record_attempt(db, item, "melt", "ok", None)`, the
+  same call `run_adapter` makes) before `pricing.add_estimate`, so
+  `estimate_attempts` and the pricing-coverage report see it exactly like
+  an adapter-driven estimate. The caller commits; `melt_on_save` itself
+  never does, matching every other `pricing` write helper.
+
 ## Releases
 
 

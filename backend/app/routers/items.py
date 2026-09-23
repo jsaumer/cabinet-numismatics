@@ -320,6 +320,15 @@ def _filtered(
     return stmt
 
 
+def _metal_matches(item: Item, metal: str) -> bool:
+    """Whether `item`'s composition detects as `metal` (P11, v0.31.0);
+    "none" matches a piece with no precious metal detected. Evaluated in
+    Python, like the metal breakdown: at a few hundred pieces no column is
+    needed for it."""
+    detected = pricing.detect_metal(item.composition)
+    return detected is None if metal == "none" else detected == metal
+
+
 def _list_entry(
     item: Item,
     strategy: str,
@@ -351,7 +360,7 @@ def _value_settings(db: Session) -> tuple[str, str | None, Converter | None]:
 
 
 def filter_query(
-    type: str | None = Query(default=None, pattern="^(coin|note)$"),
+    type: str | None = Query(default=None, pattern="^(coin|note|bullion)$"),
     status: str | None = Query(default=None, pattern="^(owned|sold|wishlist)$"),
     strike: str | None = Query(default=None, pattern="^(business|proof|specimen)$"),
     country: str | None = None,
@@ -369,8 +378,10 @@ def filter_query(
     fancy: bool | None = None,
     serial_trait: str | None = Query(default=None, max_length=20),
     target_reached: bool | None = None,
+    metal: str | None = Query(default=None, pattern="^(gold|silver|platinum|palladium|none)$"),
 ) -> dict:
-    """The list filters, shared by list and both exports via Depends."""
+    """The list filters, shared by list and both exports via Depends. `metal`
+    is popped and applied separately (in Python, not SQL; P11, v0.31.0)."""
     if serial_trait is not None and serial_trait not in serials.TRAITS:
         raise HTTPException(
             status_code=422,
@@ -396,6 +407,7 @@ def filter_query(
         "fancy": fancy,
         "serial_trait": serial_trait,
         "target_reached": target_reached,
+        "metal": metal,
     }
 
 
@@ -429,17 +441,31 @@ def list_items(
     else:
         ordering = (order,)
 
+    metal = filters.pop("metal", None)
     stmt = _filtered(select(Item), **filters)
     if field == "grade":
         stmt = stmt.outerjoin(Grade, Item.grade_id == Grade.id)
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = (
-        db.execute(
-            stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id).limit(limit).offset(offset)
+    if metal:
+        # Filtered in Python (no column for it), so fetch every match in
+        # order, filter, then paginate the filtered list ourselves.
+        matching = [
+            i
+            for i in db.execute(stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id))
+            .scalars()
+            .all()
+            if _metal_matches(i, metal)
+        ]
+        total = len(matching)
+        rows = matching[offset : offset + limit]
+    else:
+        total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        rows = (
+            db.execute(
+                stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id).limit(limit).offset(offset)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
     strategy, preferred_source, converter = _value_settings(db)
     items = [_list_entry(i, strategy, preferred_source, converter) for i in rows]
     return ItemList(items=items, total=total, limit=limit, offset=offset)
@@ -454,11 +480,14 @@ def export_csv(
     events.record(
         db, request, "export_downloaded", target="csv", alert="The collection was exported (CSV)."
     )
+    metal = filters.pop("metal", None)
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
         .all()
     )
+    if metal:
+        rows = [i for i in rows if _metal_matches(i, metal)]
     strategy, preferred_source, converter = _value_settings(db)
 
     def generate():
@@ -500,11 +529,14 @@ def export_xlsx(
         target="xlsx",
         alert="The collection was exported (Excel).",
     )
+    metal = filters.pop("metal", None)
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
         .all()
     )
+    if metal:
+        rows = [i for i in rows if _metal_matches(i, metal)]
 
     strategy, preferred_source, converter = _value_settings(db)
     wb = Workbook()
@@ -692,7 +724,12 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:
     data = payload.model_dump(exclude={"tags", "catalog_refs", "grade_id"})
     item = Item(**data)
-    item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
+    # Fancy serial traits are never computed for bullion: a bar's serial isn't "fancy".
+    item.serial_traits = (
+        None
+        if item.type == "bullion"
+        else serials.stored_traits(item.serial_number, item.replacement_note)
+    )
     if item.pcgs_population is not None or item.pcgs_pop_higher is not None:
         item.population_as_of = datetime.now(timezone.utc)
     # A purchase-day spot price that arrives with the item was typed in; the
@@ -714,6 +751,7 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     db.add(item)
     db.flush()
     record_event(db, item.id, "created")
+    pricing.melt_on_save(db, item)
     db.commit()
     return get_item_or_404(db, item.id, load_related=True)
 
@@ -768,6 +806,7 @@ def add_run(payload: RunCreate, db: Session = Depends(get_db)):
         db.add(item)
         db.flush()
         record_event(db, item.id, "created")
+        pricing.melt_on_save(db, item)
         created.append(item.id)
     db.commit()
     return RunResult(created=len(created), skipped=skipped, item_ids=created)
@@ -849,6 +888,7 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
     _sync_derived(item, changes)
     if changes:
         record_event(db, item.id, "updated", changes)
+    pricing.melt_on_save(db, item)
     db.commit()
     return get_item_or_404(db, item_id, load_related=True)
 
@@ -874,15 +914,21 @@ def _apply_struck_date(item: Item, fields: dict) -> None:
             )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    # The year rule, against the item as it will be.
-    if fields.get("year", item.year) is None and not fields.get("year_nd", item.year_nd):
+    # The year rule, against the item as it will be; bullion is exempt.
+    if (
+        fields.get("type", item.type) != "bullion"
+        and fields.get("year", item.year) is None
+        and not fields.get("year_nd", item.year_nd)
+    ):
         raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
 
 
 def _sync_derived(item: Item, changed) -> None:
     """The server-set fields, after an edit: the serial's traits, when the
     population figures last changed, and where a purchase-day spot came from."""
-    if "serial_number" in changed or "replacement_note" in changed:
+    if item.type == "bullion":
+        item.serial_traits = None  # never computed for bullion; a bar's serial isn't "fancy"
+    elif "serial_number" in changed or "replacement_note" in changed or "type" in changed:
         item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
     if "pcgs_population" in changed or "pcgs_pop_higher" in changed:
         has_any = item.pcgs_population is not None or item.pcgs_pop_higher is not None

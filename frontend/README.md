@@ -70,7 +70,9 @@ src/
                       Stack, Report, Import, Trash, Settings, Setup, Login
     item-form/          the item form's parts: model.ts (form state,
                         toPayload, fromItem, the designation and problem
-                        lists), NumistaFill.tsx, PcgsFill.tsx
+                        lists, and the bullion-only helpers
+                        presetBullionFineness and suggestDenomination),
+                        NumistaFill.tsx, PcgsFill.tsx
     settings/           Settings, routed into sections (v0.30.2): shared.tsx
                         (the section list, Section, SettingRow, the
                         useSettings load/apply hook), and one file per
@@ -82,7 +84,10 @@ src/
   components/         shared pieces
     item-hero.tsx       the item page's top: photo, title, grade, value
     item-facts.tsx      the rest of an item's fields, grouped, empty ones
-                        hidden behind a "Show empty fields" toggle
+                        hidden behind a "Show empty fields" toggle; a
+                        fact's forType takes one item type or a list of
+                        them, so a field (weight, shape, serial number…)
+                        can be offered to two of the three types
     icons.tsx           inline SVG icons
     controls.tsx        FileButton (a file picker that looks like a button)
                         and Menu
@@ -121,11 +126,14 @@ playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
 Routes: `/` is the dashboard, `/collection` the list (its filters, sort, and
-page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
-`/items/:id/edit`, `/pricing`, `/stack`, `/report`, `/checklists`, `/import`,
-`/trash`, and `/settings/:section` (`general`, `pricing`, `backups`,
-`alerts`, `account`, `about`; `/settings` redirects to `/settings/general`,
-and an unknown section falls back to it too). `/dashboard` redirects to `/`.
+page live in the URL, a Metal select beside Type among them since v0.31.0),
+`/items/new`, `/items/run`, `/items/:id`, `/items/:id/edit`, `/pricing`,
+`/stack` (fine ounces by metal, and, since v0.31.0, a "Left out" card
+listing owned precious-metal pieces missing a weight or fineness), `/report`,
+`/checklists`, `/import`, `/trash`, and `/settings/:section` (`general`,
+`pricing`, `backups`, `alerts`, `account`, `about`; `/settings` redirects to
+`/settings/general`, and an unknown section falls back to it too).
+`/dashboard` redirects to `/`.
 `/setup` and
 `/login` render outside the app shell (brand only, no nav); everything else
 is gated on being signed in, see "Sign-in" below.
@@ -225,8 +233,9 @@ duplicate warning, a generated checklist
 filling itself, search, trash and restore, a note with a radar serial
 number getting its badge and its size and printer showing on the item page,
 a wishlist coin showing its target price, an
-undated piece taking ND with no year, a silver piece showing its fine ounces
-on the Stack page, the
+undated piece taking ND with no year, a bar or round getting a suggested
+product name and showing up on the Stack page, a silver piece showing its
+fine ounces on the Stack page, the
 security headers, every Settings section, an in-app restore of a backup
 taken a moment earlier, and, last of all, changing the admin's password and
 username and putting each back (see "Sign-in tests" below for why those two

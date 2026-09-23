@@ -72,7 +72,9 @@ export function NumistaFill({
     setError(null);
     setNote(null);
     try {
-      const found = await api.numistaSearch(q, form.type === "note" ? "banknote" : "coin");
+      const category =
+        form.type === "note" ? "banknote" : form.type === "bullion" ? "exonumia" : "coin";
+      const found = await api.numistaSearch(q, category);
       setResults(found.results);
     } catch (e) {
       setError((e as Error).message);
@@ -93,7 +95,7 @@ export function NumistaFill({
         next.type = found.fields.type as ItemType;
         next.grade_id = "";
         next.designations = [];
-        if (next.type === "note" && next.strike === "proof") next.strike = "business";
+        if (next.type !== "coin" && next.strike === "proof") next.strike = "business";
         filled.push(`type (${next.type})`);
       }
       for (const [field, label] of Object.entries(NUMISTA_FIELDS) as [TextField, string][]) {
@@ -217,6 +219,7 @@ export function NumistaFill({
                     {r.thumbnail ? <img src={r.thumbnail} alt="" loading="lazy" /> : <span />}
                     <div>
                       <b>{r.title}</b>
+                      {r.object_type && <span className="muted"> ({r.object_type})</span>}
                       <div className="muted">
                         {[r.issuer, yearSpan(r), `N#${r.type_id}`].filter(Boolean).join(" · ")}
                       </div>

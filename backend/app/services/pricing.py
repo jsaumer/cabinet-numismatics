@@ -32,7 +32,45 @@ CACHE_TTL = timedelta(hours=12)
 SPOT_API = "https://api.gold-api.com/price/{symbol}"
 METAL_SYMBOLS = {"gold": "XAU", "silver": "XAG", "platinum": "XPT", "palladium": "XPD"}
 
-_PERCENT_RE = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*%")
+# Metal detection and fineness parsing (P11, v0.31.0): one rule each, shared
+# by melt, the stack, the breakdowns, the Numista fill, and (mirrored) the
+# item form. A named alloy is not the precious metal it is named after, and
+# a metal followed by a surface word is a coating, not the metal; `clad` is
+# deliberately not a surface word (40% silver-clad halves hold silver).
+_METAL_WORDS = tuple(METAL_SYMBOLS)
+_ALLOYS_NOT_PRECIOUS = ("nickel silver", "german silver", "nordic gold")
+_SURFACE_RE = re.compile(
+    r"\b(?:gold|silver|platinum|palladium)[\s-]*(?:plated|plate|plating|washed|wash)\b"
+    r"|\b(?:gilt|gilded)\b"
+)
+_NUMBER = r"\d{1,3}(?:\.\d+)?"
+_METAL_RE = re.compile(
+    rf"(?:(?P<before>{_NUMBER})\s*%\s*(?:of\s+)?)?\b(?P<metal>gold|silver|platinum|palladium)\b"
+    rf"(?:\s*\(?\s*(?P<after>{_NUMBER})\s*%)?"
+)
+_FINENESS_DECIMAL_RE = re.compile(r"(?<![\d.])0?\.(\d{3,5})(?!\d)")
+_FINENESS_MILLESIMAL_RE = re.compile(r"(?<![\d.,])(\d{3}(?:\.\d+)?)(?![\d%])")
+_CARAT_RE = re.compile(r"\b(\d{1,2})\s*(?:k|kt|karat|carat)s?\b")
+_NAMED_FINENESS = (
+    ("sterling", Decimal("0.925")),
+    ("britannia", Decimal("0.958")),
+    ("coin silver", Decimal("0.900")),
+)
+_CARATS = {
+    24: Decimal("0.999"),
+    22: Decimal("0.9167"),
+    18: Decimal("0.750"),
+    14: Decimal("0.585"),
+    9: Decimal("0.375"),
+}
+
+
+def _strip_surfaces(text: str) -> str:
+    """The composition text with the named non-precious alloys and the
+    plated, washed, and gilt coatings removed."""
+    for alloy in _ALLOYS_NOT_PRECIOUS:
+        text = text.replace(alloy, " ")
+    return _SURFACE_RE.sub(" ", text)
 
 
 class NotApplicable(Exception):
@@ -177,27 +215,72 @@ def cached_fetch(
     return payload, now
 
 
+def _metal_mentions(composition: str) -> list[tuple[str, Decimal | None]]:
+    """Every precious metal named in a composition, in order, with the
+    percentage attached to it (before or after) when there is one."""
+    found = []
+    for match in _METAL_RE.finditer(_strip_surfaces(composition.lower())):
+        percent = match.group("before") or match.group("after")
+        share = Decimal(percent) if percent and 0 < Decimal(percent) <= 100 else None
+        found.append((match.group("metal"), share))
+    return found
+
+
 def detect_metal(composition: str | None) -> str | None:
+    """The precious metal a composition names, or None: whole words only
+    ("golden" is not gold); nickel silver, German silver, and Nordic gold are
+    not precious; a metal followed by plated, washed, or gilt is a surface;
+    with two metals left, the one with the larger attached percentage wins,
+    else the first named."""
     if not composition:
         return None
+    mentions = _metal_mentions(composition)
+    if not mentions:
+        return None
+    with_share = [(metal, share) for metal, share in mentions if share is not None]
+    if with_share:
+        return max(with_share, key=lambda pair: pair[1])[0]
+    return mentions[0][0]
+
+
+def parse_fineness(composition: str | None, metal: str | None) -> Decimal | None:
+    """The fineness a composition states for `metal`, or None (nothing is
+    guessed): the percentage attached to that metal ("90% silver", "silver
+    90%"), then a decimal (".925"), then millesimal ("925", "999.9", "916.7"),
+    then a named standard (sterling, Britannia, coin silver) or a gold carat
+    (24K .999, 22K .9167, 18K .750, 14K .585, 9K .375)."""
+    if not composition or metal is None:
+        return None
     text = composition.lower()
-    for metal in METAL_SYMBOLS:
-        if metal in text:
-            return metal
+    for name, share in _metal_mentions(composition):
+        if name == metal and share is not None:
+            return share / 100
+    if match := _FINENESS_DECIMAL_RE.search(text):
+        value = Decimal(f"0.{match.group(1)}")
+        if 0 < value <= 1:
+            return value
+    if match := _FINENESS_MILLESIMAL_RE.search(text):
+        value = Decimal(match.group(1)) / 1000
+        if 0 < value <= 1:
+            return value
+    for name, value in _NAMED_FINENESS:
+        if name in text:
+            return value
+    if metal == "gold" and (match := _CARAT_RE.search(text)):
+        carats = int(match.group(1))
+        if carats in _CARATS:
+            return _CARATS[carats]
+        if 0 < carats <= 24:
+            return (Decimal(carats) / 24).quantize(Decimal("0.0001"))
     return None
 
 
 def effective_fineness(item: Item) -> Decimal | None:
-    """The fineness field, falling back to a percentage in the composition
-    text (e.g. "90% silver" → 0.900)."""
+    """The fineness field, falling back to what the composition text states
+    for its metal ("Copper 10%, Silver 90%" is .900)."""
     if item.fineness is not None:
         return Decimal(item.fineness)
-    match = _PERCENT_RE.search(item.composition or "")
-    if match:
-        percent = Decimal(match.group(1))
-        if 0 < percent <= 100:
-            return percent / 100
-    return None
+    return parse_fineness(item.composition, detect_metal(item.composition))
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -252,15 +335,9 @@ def melt_prerequisite(db: Session, item: Item) -> str | None:
     return None
 
 
-def melt_estimate(db: Session, item: Item) -> EstimateResult:
-    """Melt value for a precious-metal item. Raises NotApplicable/SpotUnavailable."""
-    reason = melt_prerequisite(db, item)
-    if reason:
-        raise NotApplicable(reason)
-    metal = detect_metal(item.composition)
-    fineness = effective_fineness(item)
-
-    spot = get_spot_price(db, metal)
+def _melt_result(item: Item, metal: str, fineness: Decimal, spot) -> EstimateResult:
+    """Build the EstimateResult for one melt calculation from a spot price row
+    (live or cached). Shared by `melt_estimate` and `melt_from_cache`."""
     per_piece = Decimal(item.weight_g) * fineness * Decimal(spot.price_per_gram)
     value = (per_piece * item.quantity).quantize(Decimal("0.01"))
     return EstimateResult(
@@ -280,6 +357,60 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
             **freshness(spot.fetched_at, CACHE_TTL),
         },
     )
+
+
+def melt_estimate(db: Session, item: Item) -> EstimateResult:
+    """Melt value for a precious-metal item. Raises NotApplicable/SpotUnavailable."""
+    reason = melt_prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
+    metal = detect_metal(item.composition)
+    fineness = effective_fineness(item)
+    spot = get_spot_price(db, metal)
+    return _melt_result(item, metal, fineness, spot)
+
+
+def melt_from_cache(db: Session, item: Item) -> EstimateResult | None:
+    """The same melt calculation, but from the cached spot price only, never
+    fetching: None when the item doesn't qualify, or there is no cache entry
+    for its metal or it is stale. Used on the item save path (P11, v0.31.0),
+    where no network call is ever allowed."""
+    if melt_prerequisite(db, item) is not None:
+        return None
+    metal = detect_metal(item.composition)
+    fineness = effective_fineness(item)
+    spot = db.get(SpotPrice, metal)
+    if spot is None or freshness(spot.fetched_at, CACHE_TTL)["stale"]:
+        return None
+    return _melt_result(item, metal, fineness, spot)
+
+
+_MELT_INPUT_KEYS = ("metal", "weight_g", "fineness", "quantity")
+
+
+def melt_on_save(db: Session, item: Item) -> PriceEstimate | None:
+    """Add a melt estimate for an owned item on create or update (P11,
+    v0.31.0: "a value from the start" for a new bullion piece), from the
+    cached spot price only. None when the item isn't owned, doesn't qualify,
+    or the cached spot for its metal is missing or stale (the scheduled
+    refresh catches it later; no fetch happens here, ever). Skipped, too,
+    when the piece already has a melt estimate with the same inputs (metal,
+    weight, fineness, quantity), so an edit that changes nothing
+    melt-relevant adds no duplicate row. The caller commits."""
+    if item.status != "owned":
+        return None
+    result = melt_from_cache(db, item)
+    if result is None:
+        return None
+    latest_melt = next((e for e in item.estimates if e.source.startswith("melt:")), None)
+    if (
+        latest_melt is not None
+        and latest_melt.details
+        and all(latest_melt.details.get(key) == result.details.get(key) for key in _MELT_INPUT_KEYS)
+    ):
+        return None
+    _record_attempt(db, item, "melt", "ok", None)
+    return add_estimate(db, item, estimate_row(item.id, result))
 
 
 # Adapter registry. Sources are resolved lazily so each adapter module can
@@ -427,11 +558,13 @@ def resolve_display_value(
 
 def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     """Re-run melt estimates for owned items whose LATEST estimate is a melt
-    estimate older than max_age_days. Items whose latest estimate is manual are
-    left alone: a fresh melt value must never bury the user's own number.
-    An item that no longer qualifies (NotApplicable) counts as skipped.
-    Returns {"updated": n, "skipped": n, "failed": n}, plus "error" (the last
-    failure's message) when anything failed."""
+    estimate older than max_age_days, and for owned items with NO estimate at
+    all (P11, v0.31.0: a new bullion piece gets a value without a button
+    press). Items whose latest estimate is manual, or from another source,
+    are left alone: a fresh melt value must never bury the user's own number
+    or another source's. An item that doesn't qualify (NotApplicable) counts
+    as skipped. Returns {"updated": n, "skipped": n, "failed": n}, plus
+    "error" (the last failure's message) when anything failed."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
@@ -445,10 +578,8 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     )
     for item in items:
         latest = item.estimates[0] if item.estimates else None
-        if (
-            latest is None
-            or not latest.source.startswith("melt:")
-            or _as_utc(latest.fetched_at) > cutoff
+        if latest is not None and (
+            not latest.source.startswith("melt:") or _as_utc(latest.fetched_at) > cutoff
         ):
             skipped += 1
             continue

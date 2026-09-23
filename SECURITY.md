@@ -21,7 +21,7 @@ Cabinet is a **single-user, self-hosted** application. Every route needs a
 sign-in or an API token (v0.30.0): one admin, database-backed sessions,
 scoped API tokens, and a deny-by-default gate. It is still designed to run
 on a trusted network, or behind an authenticating reverse proxy as a second
-door until single sign-on (v0.31.0) ships; see
+door until single sign-on (v0.32.0) ships; see
 [docs/security.md](docs/security.md). Reports that amount to "the API is
 reachable without a login when exposed directly to the internet" describe a
 real bug now, not the documented deployment model, since v0.30.0.

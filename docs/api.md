@@ -173,7 +173,11 @@ serial numbers/prefix/issuer/charter number/bank city/printer/catalog
 refs/tags),
 `fancy=true` (notes with any fancy-serial trait), `serial_trait` (one trait
 key from `/api/reference/serial-traits`; an unknown one is 422),
-`target_reached=true` (see the wish-list fields below), `limit` (default 50,
+`target_reached=true` (see the wish-list fields below), `metal` (`gold`,
+`silver`, `platinum`, `palladium`, or `none`; P11, v0.31.0, evaluated in
+Python with the same detector the metal breakdown uses, not a column, since
+a few hundred pieces need no index for it; an unknown value is 422),
+`limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`,
 `value`, `pcgs_pop_higher`, or `grade`; `-` prefix for descending; default
@@ -198,7 +202,8 @@ as a single item, so `target_price`, `priority`, `target_gap`,
 ("ND (1951)"). A missing `year` without `year_nd` is 422 ("Enter the year,
 or tick ND for a piece with no date."), and `year: 0` is always 422 ("There
 is no year 0. Tick ND for a piece with no date."); `PATCH` checks the rule
-against the item as it will be after the patch. Every response carries a
+against the item as it will be after the patch. **Bullion is exempt**
+(v0.31.0): a bar may leave both `year` and `year_nd` empty. Every response carries a
 read-only `year_label` (`"1922"`, `"ND"`, or `"ND (1922)"`), used everywhere
 a year is shown; `Item.label` ends with it. `year_nd` is not accepted in a
 bulk `set` (a bulk `year` stays as it is, and can't be cleared without it).
@@ -294,6 +299,26 @@ date; coins and notes alike). None of the five are accepted in a bulk
 `set` (they're per piece). "Fill from Numista" fills them for a banknote
 type from the catalogue's `size`/`size2`, `printers`, `watermark`, and
 `demonetization` fields, when present.
+
+**Bullion (v0.31.0, roadmap Phase 7, P11)**: a third item
+`type`, `bullion` ("Bar or round" in the UI), alongside `coin` and `note`.
+The year-or-ND rule is exempt for it: a bar may have both `year` and
+`year_nd` empty, and its `year_label` is then `""` rather than `"ND"` (a bar
+needs no "ND" convention). `Item.label` for bullion is `issuer` (falling
+back to `country`), then `denomination`, then the year if there is one, with
+no mint mark: `"PAMP Suisse 1 oz silver bar"`. Fancy-serial traits are never
+computed for a bullion item (a bar's serial isn't "radar" or "solid"):
+`serial_traits` is always empty, and changing an item's `type` to `bullion`
+clears it. `GET /api/items?type=` accepts `bullion`, and it can be set in a
+bulk `set`. `GET /api/stats/collection`'s `counts` gains `bullion` (owned
+items of that type; `coins` and `notes` keep their own meaning), and
+`by_type` in `/api/stats/breakdowns` and `cabinet_items{type=...}` in
+`/api/metrics` pick it up automatically. `GET /api/numista/search` accepts
+`category=exonumia`, and filling in or importing an exonumia type maps it to
+`bullion` when it reads as a bar, round, or ingot (never a token or medal,
+which is refused); see Numista catalogue lookup and Imports below. The item
+form's own Add/edit UI (a Metal select, a g/oz weight switch, a suggested
+product name) is frontend behaviour, not part of this API.
 
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
@@ -412,8 +437,18 @@ it was already there. See [monitoring.md](monitoring.md).
 `melt` is accepted for now: any other value is 422 ("Only melt can be
 refreshed by hand for now."). An in-process scheduler re-runs stale melt
 estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7; `0`
-disables); a melt refresh never supersedes an item whose latest estimate is
-manual. The same 12h loop also refreshes Numista and/or PCGS when their own
+disables) and, since P11 (v0.31.0), also takes owned pieces that qualify for
+melt and have no estimate at all yet (a new bullion piece gets a value
+without waiting on the 12h loop or a button press); a melt refresh never
+supersedes an item whose latest estimate is manual, or from another source.
+**Saving an item** (create, update, "Add a run", and an import) also adds a
+melt estimate itself, from the cached spot price only, when the piece
+qualifies (metal, weight, fineness) and the cache for that metal is not
+stale: no network call ever happens on the save path (an absent or stale
+cache means nothing is added; the scheduled refresh above catches it later).
+It's skipped, too, when the piece already has a melt estimate with the same
+inputs (metal, weight, fineness, quantity), so an edit that doesn't touch any
+of those adds no duplicate row. The same 12h loop also refreshes Numista and/or PCGS when their own
 cadence is switched on in Settings (each off by default), independently of
 melt and of whichever source currently wins an item's overall-latest estimate,
 since `value_strategy` may prefer or average a source that isn't "latest"
@@ -434,7 +469,8 @@ right now.
 | `GET`  | `/api/stats/showcase`    | Piece of the day, oldest, newest, and pieces acquired on this day in an earlier year (`?currency=`) |
 
 `/collection` answers `currency`, `counts` (`total`, `owned`, `sold`,
-`wishlist`, and `coins` / `notes`, which count owned items only),
+`wishlist`, and `coins` / `notes` / `bullion` (v0.31.0), which count owned
+items only),
 `cost_basis` (owned items, fees included), `estimated_value` (each owned
 item's shown value under `value_strategy`) with `estimated_items` (how many
 contribute), `unrealized_gain` (owned items with both a cost and a value),
@@ -688,8 +724,10 @@ whether its other money was converted). It answers:
   `converted`.
 - `missing_spot`: pieces eligible for the purchase-day-spot backfill.
   `skipped`: pieces with a detected metal but no weight or fineness (so
-  they're not in `metals`/`items` at all). `history_start`: the earliest
-  date the purchase-day lookup covers (`2024-03-02`).
+  they're not in `metals`/`items` at all); `skipped_items` (P11, v0.31.0)
+  lists them: `item_id`, `label`, and `missing` (`"weight"`, `"fineness"`, or
+  `"weight and fineness"`). `history_start`: the earliest date the
+  purchase-day lookup covers (`2024-03-02`).
 
 `POST /api/stack/backfill` looks up the purchase-day spot for eligible
 pieces (in the stack, no `spot_at_purchase` yet, an `acquisition_date` on or
@@ -710,7 +748,7 @@ price comes from and why.
 
 | Method | Path                         | Purpose                                          |
 |--------|------------------------------|--------------------------------------------------|
-| `GET`  | `/api/numista/search`        | Search the catalogue: `q` (2–100 chars), optional `category` (`coin`/`banknote`) |
+| `GET`  | `/api/numista/search`        | Search the catalogue: `q` (2–100 chars), optional `category` (`coin`/`banknote`/`exonumia`) |
 | `GET`  | `/api/numista/types/{id}`    | A type as fillable item fields, catalogue refs, and issues |
 
 Both need a Numista API key in Settings (422 without one) and answer 502 when
@@ -723,6 +761,18 @@ when the type has a single year (left out, with `year_nd: true`, when every
 issue is undated); coins add `weight_g`, `diameter_mm`,
 `thickness_mm`, `shape`, and `edge`; notes add `issuer` (the issuing bank).
 Only values Numista has are present, trimmed to the item schema's limits.
+
+**Exonumia (v0.31.0)**: an `exonumia` type maps to `type: "bullion"` when
+its object type is a bar or round (`object_type.name` of `Bars`, `Rounds`,
+`Ingots`, or `Bullion`, or `object_type.id` 36; confirmed against the live
+API on 22 September 2026). `denomination` comes straight from the title
+(there is no face value to read), `issuer` (the item's "Refiner or mint"
+field) is the first of the type's `mints` (PAMP on a PAMP bar), `country`
+is Numista's issuer, and `size`/`size2` fill `width_mm`/`height_mm` rather
+than a diameter. Any other exonumia (a token, a medal, or a "Collector
+coins" piece with a face value) is refused with 422: "Cabinet takes bars
+and rounds from Numista's exonumia, not tokens or medals." Search hits in
+that category carry `object_type` (the name) so a client can show it.
 `catalog_refs` holds `numista:N#<id>` and the type's other references
 (`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year` (null for an undated
 issue), `nd`, `mint_letter`, `mintage`, `comment`, `reference` (the issue's
@@ -938,6 +988,17 @@ run that follows cost one fetch. Their preview's `format` is
 `numista_account`, and it adds `types`, `types_to_fetch` (requests a run would
 spend on catalogue details), and `fetched_at`. 422 without a key or when the
 key has no user; 502 when Numista is unreachable or refuses.
+
+**Bullion exonumia (v0.31.0)**: the Numista account import and the
+`numista_file` export-file import both read an exonumia type the same way
+the fill route does, mapping it to `type: "bullion"` when it reads as a bar,
+round, or ingot; a token or medal is still skipped, with an error message on
+its row. The account import now looks catalogue types up for exonumia items
+too (it used to skip them), so telling a bar from a token needs the type's
+own catalogue data; an exonumia item whose type isn't cached yet is skipped
+in a preview and resolved on the run that follows (`catalogue_details`
+fetches it there). The spreadsheet mapping reads a `type` cell of `bar`,
+`round`, `ingot`, or `bullion` the same way.
 
 ## Settings
 

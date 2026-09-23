@@ -382,7 +382,8 @@ def test_numista_account_preview(client, numista_account):
     body = resp.json()
     assert body["format"] == "numista_account"
     assert (body["total"], body["new"], body["errors"]) == (3, 2, 1)
-    assert (body["types"], body["types_to_fetch"]) == (2, 2)
+    # exonumia is looked up too now (it might be a bar or round), so all 3 types count.
+    assert (body["types"], body["types_to_fetch"]) == (3, 3)
     assert body["photos"] == 1
     assert "exonumia" in body["rows"][2]["error"]
     # types aren't looked up yet: the preview says the import fills them in
@@ -400,7 +401,8 @@ def test_numista_account_preview(client, numista_account):
 def test_numista_account_import(client, numista_account):
     result = client.post("/api/imports/numista/run", json={}).json()
     assert (result["created"], result["photos_added"]) == (2, 0)  # pictures are opt-in
-    assert sorted(numista_account["calls"][2:]) == ["types/1340", "types/7777"]
+    # exonumia's type is fetched too, to tell a bar from a token; the token is still skipped.
+    assert sorted(numista_account["calls"][2:]) == ["types/1340", "types/7777", "types/999"]
 
     items = _items(client)
     ike = items["United States 1 Dollar 1978"]

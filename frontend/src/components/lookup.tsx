@@ -34,7 +34,7 @@ export function LookupLinks({ item }: { item: Item }) {
   if (item.type === "coin") {
     links.push(["https://www.pcgs.com/photograde", "PCGS Photograde", "Reference photos for each grade"]);
   }
-  if (pcgsNumber) {
+  if (pcgsNumber && item.type === "coin") {
     links.push([
       `https://www.pcgs.com/coinfacts/coin/${encodeURIComponent(pcgsNumber.ref_code.trim())}`,
       "CoinFacts",
