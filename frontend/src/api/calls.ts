@@ -1,14 +1,46 @@
 // Every endpoint the frontend calls, one method each.
 
-import { json, req } from "./client";
+import { json, req, ReqOptions } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
-import type { ImportOptions, ImportPreview, ImportResult, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
+import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
-import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
+import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
+import type { ApiToken, AuditEntry, AuthSession, AuthState, LoginResult, Me, NewApiToken, PasswordChangeResult, TokenScope } from "./types/auth";
 
 export const api = {
+  // Sign-in, the account, sessions, tokens, and the audit log (v0.30.0).
+  // `state`, `setup`, and `login` are `raw`: they answer 401/403 as
+  // ordinary form errors, never the global sign-out redirect or reauth
+  // dialog (see client.ts and auth/AuthContext.tsx).
+  authState: () => req<AuthState>("/api/auth/state", undefined, { raw: true }),
+  setup: (payload: { code: string; username: string; password: string }) =>
+    req<Me>("/api/auth/setup", json("POST", payload), { raw: true }),
+  login: (payload: { username: string; password: string }) =>
+    req<LoginResult>("/api/auth/login", json("POST", payload), { raw: true }),
+  logout: () => req<void>("/api/auth/logout", { method: "POST" }),
+  me: (opts?: ReqOptions) => req<Me>("/api/auth/me", undefined, opts),
+  confirmPassword: (password: string) =>
+    req<void>("/api/auth/confirm", json("POST", { password }), { raw: true }),
+  changePassword: (payload: { current_password: string; new_password: string }) =>
+    req<PasswordChangeResult>("/api/auth/password", json("POST", payload)),
+  changeUsername: (payload: { current_password: string; username: string }) =>
+    req<void>("/api/auth/username", json("POST", payload)),
+  listSessions: () => req<AuthSession[]>("/api/auth/sessions"),
+  endSession: (id: string) => req<void>(`/api/auth/sessions/${id}`, { method: "DELETE" }),
+  endAllSessions: () => req<void>("/api/auth/sessions", { method: "DELETE" }),
+  listTokens: () => req<ApiToken[]>("/api/auth/tokens"),
+  createToken: (payload: { name: string; scope: TokenScope; days: number | null }) =>
+    req<NewApiToken>("/api/auth/tokens", json("POST", payload)),
+  revokeToken: (id: string) => req<void>(`/api/auth/tokens/${id}`, { method: "DELETE" }),
+  auditLog: (params: { before?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.before != null) q.set("before", String(params.before));
+    q.set("limit", String(params.limit ?? 50));
+    return req<AuditEntry[]>(`/api/auth/audit?${q}`);
+  },
+
   listItems: (params: URLSearchParams) => req<ItemPage>(`/api/items?${params}`),
   getItem: (id: string) => req<ItemDetail>(`/api/items/${id}`),
   createItem: (payload: ItemPayload) => req<Item>("/api/items", json("POST", payload)),
@@ -41,11 +73,6 @@ export const api = {
     req<ImportPreview>("/api/imports/numista/preview", json("POST", options)),
   runNumistaImport: (options: NumistaImportOptions) =>
     req<ImportRunResult>("/api/imports/numista/run", json("POST", options)),
-  importCsv: (file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    return req<ImportResult>("/api/items/import", { method: "POST", body: form });
-  },
 
   listGrades: (scale?: string) =>
     req<Grade[]>(`/api/grades${scale ? `?scale=${scale}` : ""}`),
@@ -102,7 +129,7 @@ export const api = {
     },
   ) => req<Estimate>(`/api/items/${itemId}/estimates`, json("POST", payload)),
   autoEstimate: (itemId: string, source = "melt") =>
-    req<Estimate>(`/api/items/${itemId}/estimate?source=${source}`, { method: "POST" }),
+    req<Estimate>(`/api/items/${itemId}/estimates/auto?source=${source}`, { method: "POST" }),
 
   uploadDocument: (itemId: string, file: File, kind: DocumentKind) => {
     const form = new FormData();
@@ -143,7 +170,9 @@ export const api = {
   valueSpread: () => req<ValueSpread>("/api/stats/value-spread"),
   dataHealth: () => req<DataHealth>("/api/stats/data-health"),
   showcase: () => req<Showcase>("/api/stats/showcase"),
-  refreshMelt: () => req<RefreshResult>("/api/estimates/refresh-melt", { method: "POST" }),
+  // Only "melt" can be refreshed by hand for now; the server refuses the rest.
+  refreshEstimates: (source: "melt") =>
+    req<RefreshResult>(`/api/estimates/refresh?source=${source}`, { method: "POST" }),
 
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
 
@@ -183,6 +212,9 @@ export const api = {
   testAlert: (target: "webhook" | "heartbeat") =>
     req<MonitorOutcome>(`/api/alerts/test?target=${target}`, { method: "POST" }),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
+  markBackupKeySaved: () => req<BackupKey>("/api/backups/key/saved", { method: "POST" }),
+  deleteUnencryptedBackups: () =>
+    req<{ deleted: string[] }>("/api/backups/unencrypted", { method: "DELETE" }),
 
   restoreStatus: () => req<RestoreStatus>("/api/restore/status"),
   inspectRestoreFile: (file: File) => {

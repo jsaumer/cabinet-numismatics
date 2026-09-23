@@ -3,7 +3,7 @@
 import csv
 import io
 
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 
 
 def _grade_id(client, code, scale="sheldon"):
@@ -131,11 +131,9 @@ def test_csv_round_trip_with_catalog_depth(client):
     assert float(row["acquisition_fees"]) == 12.5 and float(row["sold_fees"]) == 15.0
 
     for item in client.get("/api/items").json()["items"]:
-        client.delete(f"/api/items/{item['id']}")
-    resp = client.post(
-        "/api/items/import", files={"file": ("items.csv", exported.encode(), "text/csv")}
-    )
-    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
+        client.delete(f"/api/items/{item['id']}?permanent=true")
+    result = import_cabinet_csv(client, exported)
+    assert (result["created"], result["skipped"], result["errors"]) == (1, 0, [])
 
     [restored] = client.get("/api/items").json()["items"]
     assert restored["grade_label"] == "PR-66+ CAM RD ★ Details (Scratched)"
@@ -159,12 +157,9 @@ def test_import_reads_label_style_grades(client):
         "coin,United States,1 dollar,1962,,PF-70\n"
         "coin,United States,1 dollar,1963,,SP-99\n"  # no such grade number
     )
-    resp = client.post(
-        "/api/items/import", files={"file": ("labels.csv", csv_text.encode(), "text/csv")}
-    )
-    body = resp.json()
+    body = import_cabinet_csv(client, csv_text, "labels.csv")
     assert body["created"] == 3
-    assert [e["row"] for e in body["errors"]] == [5]
+    assert [e["row"] for e in body["errors"]] == [4]  # data rows count from 1
 
     items = client.get("/api/items").json()["items"]
     assert sorted(i["grade_label"] for i in items) == ["MS-64+", "PR-65", "PR-70"]

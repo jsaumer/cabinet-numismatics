@@ -10,6 +10,215 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-22
+
+Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
+
+**Upgrading: read this before you deploy.**
+- **Nothing but the setup page is served until the admin exists.** On the
+  first start, open Cabinet and enter the setup code: your `SETUP_CODE` (or
+  the file `SETUP_CODE_FILE` names, the better choice on a Swarm), or, if you
+  set neither, the one the backend prints once in its log (`docker compose
+  logs backend | grep "setup code"`, or `docker service logs
+  cabinet_backend`). Delete the secret or the variable afterwards; Cabinet
+  ignores it from then on.
+- **`PUBLIC_ORIGINS` is required**: the exact address browsers use, for
+  example `PUBLIC_ORIGINS=https://cabinet.example.com`. The backend and the
+  proxy refuse to start without it. Add any internal name other services
+  use (`cabinet_proxy` for Homepage or Prometheus) to `ALLOWED_HOSTS`: nginx
+  now gives no answer to any other Host. Don't set `AUTH_INSECURE_HTTP`
+  beside an https origin (it is refused).
+- **Anything that called the API without signing in stops** until it has an
+  API token (Settings, Account): the Homepage tile and Prometheus need a
+  `metrics` token (header snippets in `docs/monitoring.md`), scripts a `read`
+  or `write` token. Uptime Kuma or a container health check on `/api/health`
+  keeps working: it answers `{"status":"ok"}` without one.
+- **Every backup is encrypted from the first start.** Save the backup key
+  (`docker compose exec backend python -m app.cli backup-key show`) in your
+  password manager, or supply your own as a Docker secret
+  (`BACKUP_KEY_FILE`) or a variable (`BACKUP_KEY`), before you rely on the
+  archives: without it they
+  can't be opened by anyone. Then take a new backup and delete the old
+  unencrypted archives (Settings, Backups, **Delete unencrypted archives**):
+  they are readable copies of the collection and can no longer be restored.
+- **A Swarm deployment adds the `staging_data` volume** (`/data/staging`,
+  on the node's own disk) and the settings above; see
+  `deploy/docker-stack.yaml`.
+- An authenticating proxy in front (forward-auth or an SSO gateway) keeps
+  working and is recommended until single sign-on arrives in v0.31.0.
+- Any stored secret still in plain text is cleared and named, to be entered
+  again. Every secret saved since v0.10 is already encrypted.
+- Revision `a0001` creates the `cabinet_auth` schema; the backend applies it
+  on startup after the collection's migrations, which are unchanged.
+
+### Added
+- **Sign-in, always on, and every endpoint denied by default.** One admin,
+  created on the first visit with a one-time setup code (`SETUP_CODE` or
+  `SETUP_CODE_FILE`, or one printed in the backend's log); until then only
+  the setup is served. Browsers sign in with a session cookie; scripts use
+  API tokens (`Authorization: Bearer cabinet_...`) with a scope: `read`,
+  `write` (both 1 or 7 days), or `metrics` (totals only, may never expire).
+  Only health (just `{"status":"ok"}` without a credential), the setup
+  state, setup, and sign-in answer anonymously; every other route declares
+  who may call it, and a route that declares nothing is refused. Downloads,
+  exports, restores, settings changes, deleting for good, and managing
+  tokens and sessions ask for the password again (5 minutes, per session).
+  Cookie requests from another site are refused whatever their method.
+  New routes under `/api/auth` (setup, sign-in and out, the account, its
+  sessions and tokens, the audit log); see `docs/api.md`. Sign-in delays
+  grow per username and per address and never lock the account; a browser
+  that signed in before gets past them and keeps a password check reserved
+  for it during a flood. New-device sign-ins, repeated failures, new tokens,
+  password changes, downloads, exports, and restores reach the alert
+  webhook.
+- **Photos are only for the signed-in.** nginx asks the backend before
+  serving anything under `/photos/`: the admin's browser, or a `read` or
+  `write` token, gets the file (never cached); anyone else gets 401 or 403,
+  and 503 while the backend is restarting. The app's own files and the
+  logo stay public. Measured on a page of 50 thumbnails: about 3.5 ms per
+  photo.
+- **The setup and sign-in pages, and the rest of the frontend for all of the
+  above.** `/setup` and `/login` (a plain warning when the connection isn't
+  secure, the server's error and throttle text shown as it happens); a
+  password-confirmation dialog that opens itself when a "fresh" action needs
+  it and retries; a failed-sign-ins notice after signing in; Settings →
+  Account (change the password or username, see and end sessions, create
+  and revoke API tokens, read the audit log); and, in Settings → Backups,
+  the backup key's fingerprint, a reminder to save it until it's ticked
+  done, and deleting old unencrypted archives.
+- **Commands in the container for the account**, for when the app can't be
+  reached (`docker compose exec backend python -m app.cli ...`): `status`,
+  `reset-password` (asked twice, never an argument; ends every session and
+  known device and revokes every API token), `sign-out-everywhere`, and
+  `revoke-tokens [--name NAME]`. They, and `backup-key`, refuse until Cabinet
+  is set up, and each change is audited.
+- **`PUBLIC_ORIGINS` is required**: the exact address browsers use for
+  Cabinet (`https://cabinet.example.com`). The backend and the proxy both
+  refuse to start without it, naming the variable. `.env.example` has values
+  for the local stack. Also new: `ALLOWED_HOSTS` (extra Host names nginx
+  answers, such as `cabinet_proxy` for Homepage or Prometheus),
+  `AUTH_INSECURE_HTTP` (plain-http cookies, local stack only, refused beside
+  https), `SETUP_CODE` / `SETUP_CODE_FILE` (checked at start: at least 32
+  characters), and `CABINET_PORT` (the published port).
+- **nginx answers only Cabinet's own Host names**; any other Host, a bare IP
+  address, or no Host gets no response at all (444). Add internal names to
+  `ALLOWED_HOSTS`.
+- Sign-in and setup bodies are capped at 8 KiB by nginx.
+- Every service in `docker-compose.yaml` and the Swarm stack file keeps its
+  log to three 10 MB files; the compose backend has the stack file's 1 GB
+  memory limit.
+
+### Changed
+- **nginx believes no forwarded header.** `X-Forwarded-For`, `X-Real-IP`,
+  and `X-Forwarded-Proto` are overwritten with what nginx itself saw, and the
+  identity headers forward-auth gateways add (`Remote-User`,
+  `X-authentik-*`, `X-Auth-Request-*`, and others) are dropped before the
+  backend; uvicorn runs with `--no-proxy-headers`.
+- **A secret stored as plain text is never used.** It reads as unset and is
+  cleared (never encrypted in place) at startup and hourly, named in the log,
+  through the alert webhook, and in a Settings banner until entered again.
+  Every secret saved since v0.10 is already encrypted.
+- **The Swarm stack file:** the backend alone is on `cabinet-egress`, the
+  proxy leaves it (it needs no way out), `PUBLIC_ORIGINS` and `CABINET_PORT`
+  are required, and commented Docker secrets show the setup code and backup
+  key.
+- `GET /api/pcgs/cert/{cert}` takes only letters, digits, and dashes (1 to
+  20); anything else is 422.
+- **Sign-in data gets a database schema of its own, `cabinet_auth`**, with its
+  own migration chain (`backend/alembic_auth/`, revision `a0001`), migrated on
+  startup right after the collection's. `/api/health` reports it as
+  `auth_schema`, and Settings → About shows it. No foreign key crosses
+  between it and the collection.
+- **Backups never contain sign-in data and restores never change it.** Dumps
+  leave out `cabinet_auth` (in-app and `backup.sh`), restores take `public`
+  only (in-app and `restore.sh`), and an archive whose dump holds any sign-in
+  data is refused by both. The restore summary says your sign-in is kept and
+  names the stored secrets the archive would set or have cleared; the
+  manifest gains `auth_excluded`.
+- **An archive's database dump is unpacked only in a new private volume,
+  `staging_data` at `/data/staging`** (0700), never in the backup directory,
+  and it is emptied after every check and restore. Add the volume when
+  upgrading a Swarm stack; keep it on the node's own disk.
+- **Every backup is encrypted** with a backup key, as a standard
+  [age](https://age-encryption.org) file (`cabinet-backup-….zip.age`), and
+  carries a MAC keyed by that key: an archive on the backup share can be
+  neither read nor forged without it. Every write path (download, scheduled,
+  run now, the safety backup before a restore, and `backup.sh`) streams the
+  zip straight into `age`, so nothing unencrypted is ever written to the
+  backup directory. The key comes from `BACKUP_KEY_FILE` (a Docker secret)
+  or is generated on the state volume at first start; `python -m app.cli
+  backup-key show` prints it inside the container (it never crosses the
+  API) and `backup-key rotate` replaces it while older archives stay
+  readable. The key can also be supplied as a variable, `BACKUP_KEY`, for a
+  secret manager that sets variables (the secret file stays the better
+  choice where you have it), and `backup-key new` prints a fresh key for
+  either form. **Save a copy outside Cabinet**: without it the archives can't
+  be opened. Settings reports whether the key sits beside the backups.
+- **Restores take only encrypted archives made with this deployment's key.**
+  An archive is decrypted in private staging and its MAC checked before
+  anything in it is read. Every archive Cabinet writes is recorded, by its
+  MAC, in a record no restore rewrites; the restore summary says whether
+  this Cabinet made the archive and how many newer ones exist, and restoring
+  an older one needs `RESTORE OLDER`, whatever its file name or time.
+  `restore.sh` decrypts into a private temporary folder, removed afterwards,
+  and verifies the MAC through the backend (`decrypt-archive`,
+  `verify-archive`). An archive must hold exactly the members its MAC
+  covers, each once, on every path. A plain upload is refused on its first
+  bytes, before any of it is stored.
+- The backup key is generated only on a first start, and never over an
+  existing one; at runtime a key that can't be read fails the backup and
+  alerts instead. Startup checks the key with a real encrypt and decrypt,
+  and alerts when the newest recorded archive was made with a key this
+  Cabinet no longer has.
+- **Deleting a photo or a document asks for the password again**, as
+  deleting an item for good does: `DELETE /api/photos/{id}`, `PUT
+  /api/photos/{id}/image` (the old files are deleted), `DELETE
+  /api/documents/{id}`, and unlinking a document from its last item are for
+  the admin with a recent password. There is no trash for either, so an API
+  token can no longer remove one. Other photo and document edits are
+  unchanged.
+- A `read` or `metrics` token is refused on any write before its body is
+  read; a wrong setup code is audited; a container command's decrypted
+  working file is removed once it is stale.
+- **Retention keeps full and data-only archives separately**: each kind
+  keeps the newest `backup_keep`, so data-only backups never push out the
+  last archives that hold the photos and documents.
+- New: `POST /api/backups/key/saved`, `DELETE /api/backups/unencrypted`;
+  `GET /api/backups` gains `encrypted` per archive and the key's status;
+  the restore inspection gains `provenance` and `confirm_phrase`.
+- **A restore interrupted during the database step is now resolved exactly.**
+  A marker row written just before it tells the next start whether the
+  database was replaced; if the database can't be reached, the backend stays
+  in maintenance until a restart can decide. A restore also clears, and
+  names, any stored secret it brings that this deployment can't use.
+
+- **Three API endpoints renamed, before 1.0 makes paths stable** (breaking,
+  for scripts that call them):
+  - `POST /api/items/{id}/estimate?source=` is now
+    `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
+    letter from the manual `POST /api/items/{id}/estimates`.
+  - `POST /api/estimates/refresh-melt` is now
+    `POST /api/estimates/refresh?source=melt`. `source` is required, and
+    only `melt` is accepted for now.
+  - `POST /api/items/import` is removed. `POST /api/imports`, then
+    `POST /api/imports/{upload_id}/run`, reads a Cabinet export (the
+    `cabinet` format) and is the one import path; the app already used it.
+- New dependencies for sign-in and encrypted backups: `argon2-cffi` (password
+  hashing, with `argon2-cffi-bindings`) in the backend lockfile, and Debian's
+  `age` package in the backend image (backup encryption, called as a
+  program).
+- `docs/api.md` gains a stability policy: breaking changes are allowed and
+  announced here until 1.0; from 1.0, `/api/` paths and response fields are
+  stable within a major version, and additions are never breaking.
+
+### Removed
+- **The interactive API docs page, `/api/docs`**, so no third-party script
+  runs in the app's origin. The schema is still at `/api/openapi.json`.
+- **Restoring unencrypted archives.** Plain `.zip` archives from before
+  v0.30.0, and `backup.sh` directories, can't be restored by any path. They
+  are listed as unencrypted; **Delete unencrypted archives** removes them
+  once a new encrypted backup exists.
+
 ## [0.29.1] - 2026-09-20
 
 ### Added

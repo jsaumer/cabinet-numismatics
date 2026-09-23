@@ -17,24 +17,31 @@ personal project, so please allow a few days.
 
 ## Scope and design context
 
-Cabinet is a **single-user, self-hosted** application with **no
-application-level authentication by design**. It expects to run on a trusted
-network, or behind an authenticating reverse proxy (Traefik + Authentik
-forward-auth is the documented path). Reports that amount to "the API is
-reachable without a login when exposed directly to the internet" describe the
-documented deployment model rather than a vulnerability; see
-[docs/security.md](docs/security.md).
+Cabinet is a **single-user, self-hosted** application. Every route needs a
+sign-in or an API token (v0.30.0): one admin, database-backed sessions,
+scoped API tokens, and a deny-by-default gate. It is still designed to run
+on a trusted network, or behind an authenticating reverse proxy as a second
+door until single sign-on (v0.31.0) ships; see
+[docs/security.md](docs/security.md). Reports that amount to "the API is
+reachable without a login when exposed directly to the internet" describe a
+real bug now, not the documented deployment model, since v0.30.0.
 
 Things that *are* in scope and worth reporting:
 
-- Any way to read a stored price-source credential back through the API, the
-  logs, or a response body: these are encrypted at rest and write-only.
+- Any way to reach a route without a valid session or API token, or to act
+  outside what a token's scope allows.
+- Any way to bypass the CSRF check, guess or forge a session or token, or
+  read another user's session or token.
+- Any way to read the setup code, a password, or a stored price-source
+  credential back through the API, the logs, or a response body: passwords
+  are hashed, and credentials are encrypted at rest and write-only.
+- Any way to read or forge a backup archive without the backup key.
 - Path traversal, or any route that serves files outside the photo volume.
 - SQL or template injection.
 - Stored XSS via item fields, custom fields, tags, or filenames.
 - Anything that lets an uploaded file be served or executed as something other
   than a static image.
 
-[docs/security.md](docs/security.md) documents the full model: secrets at
-rest, key management and rotation, input handling, and what is deliberately
-not encrypted.
+[docs/security.md](docs/security.md) documents the full model: authentication,
+secrets at rest, key management and rotation, input handling, and what is
+deliberately not encrypted.

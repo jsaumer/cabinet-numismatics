@@ -122,10 +122,10 @@ def test_refresh_melt_updates_only_stale_melt_estimates(client, monkeypatch):
     monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
 
     fresh = _create(client, SILVER)
-    client.post(f"/api/items/{fresh['id']}/estimate")  # fresh melt → skipped
+    client.post(f"/api/items/{fresh['id']}/estimates/auto")  # fresh melt → skipped
 
     stale = _create(client, SILVER)
-    client.post(f"/api/items/{stale['id']}/estimate")
+    client.post(f"/api/items/{stale['id']}/estimates/auto")
 
     manual = _create(client, SILVER)
     client.post(f"/api/items/{manual['id']}/estimates", json={"estimated_value": 99.0})
@@ -138,7 +138,7 @@ def test_refresh_melt_updates_only_stale_melt_estimates(client, monkeypatch):
     db.commit()
     db.close()
 
-    result = client.post("/api/estimates/refresh-melt").json()
+    result = client.post("/api/estimates/refresh?source=melt").json()
     assert result == {"updated": 1, "skipped": 2, "failed": 0}
 
     history = client.get(f"/api/items/{stale['id']}/estimates").json()

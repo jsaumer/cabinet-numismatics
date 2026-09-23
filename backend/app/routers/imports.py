@@ -10,6 +10,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.schemas import (
     ImportField,
@@ -32,6 +33,7 @@ FORMAT_NAMES = {"spreadsheet": "Spreadsheet", "cabinet": "Cabinet export",
 
 
 @router.post("", response_model=ImportUpload, status_code=201)
+@permission("write")
 def upload(file: UploadFile):
     """Stage a file for preview and import (up to 1 GB, kept for a day)."""
     try:
@@ -79,6 +81,7 @@ def _numista_candidates(db: Session, options: NumistaImportOptions, fetch_types:
 
 
 @router.post("/numista/preview", response_model=ImportPreview)
+@permission("write")
 def numista_preview(options: NumistaImportOptions, db: Session = Depends(get_db)):
     """What importing your Numista collection would do. Spends two requests
     (cached for an hour); catalogue details only come from the cache here."""
@@ -88,6 +91,7 @@ def numista_preview(options: NumistaImportOptions, db: Session = Depends(get_db)
 
 
 @router.post("/numista/run", response_model=ImportRunResult)
+@permission("write")
 def numista_run(options: NumistaImportOptions, db: Session = Depends(get_db)):
     """Import your Numista collection's new items, looking up catalogue details
     for each type not already cached (one request each)."""
@@ -102,6 +106,7 @@ def numista_run(options: NumistaImportOptions, db: Session = Depends(get_db)):
 
 
 @router.delete("/{upload_id}", status_code=204)
+@permission("write")
 def discard(upload_id: str):
     importing.discard(upload_id)
 
@@ -152,6 +157,7 @@ def _read(upload_id: str, options: ImportOptions, db: Session):
 
 
 @router.post("/{upload_id}/preview", response_model=ImportPreview)
+@permission("write")
 def preview(upload_id: str, options: ImportOptions, db: Session = Depends(get_db)):
     """What importing the file would do. Nothing is written."""
     candidates, reader, extra = _read(upload_id, options, db)
@@ -162,6 +168,7 @@ def preview(upload_id: str, options: ImportOptions, db: Session = Depends(get_db
 
 
 @router.post("/{upload_id}/run", response_model=ImportRunResult)
+@permission("write")
 def run(upload_id: str, options: ImportOptions, db: Session = Depends(get_db)):
     """Import the file's new items (ones already imported are skipped)."""
     candidates, reader, extra = _read(upload_id, options, db)

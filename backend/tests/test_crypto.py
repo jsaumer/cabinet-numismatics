@@ -113,20 +113,95 @@ def test_unreadable_secret_degrades_to_unset(client, monkeypatch):
     assert numista["configured"] is False
 
 
-def test_legacy_plaintext_is_reencrypted_on_read(client):
-    """A value written before encryption existed self-heals on first read."""
+def _plant(key: str, value: str) -> None:
+    """Write a value straight into the table, as an edited archive could."""
     db = _session()
     try:
-        db.add(AppSetting(key="pcgs_api_token", value="legacy-plaintext-token"))
-        db.commit()
-        assert store.get_setting(db, "pcgs_api_token") == "legacy-plaintext-token"
+        row = db.get(AppSetting, key)
+        if row is None:
+            db.add(AppSetting(key=key, value=value))
+        else:
+            row.value = value
         db.commit()
     finally:
         db.close()
 
-    stored = _raw_stored("pcgs_api_token")
-    assert crypto.is_encrypted(stored)
-    assert "legacy-plaintext-token" not in stored
+
+def test_plain_text_secret_is_never_used(client):
+    """No self-heal (v0.30.0): plain text reads as unset and stays as it was
+    until the clear-out, never encrypted in place."""
+    _plant("alert_webhook_url", "https://attacker.example/hook")
+    db = _session()
+    try:
+        assert store.get_setting(db, "alert_webhook_url") == ""
+        db.commit()
+    finally:
+        db.close()
+    assert _raw_stored("alert_webhook_url") == "https://attacker.example/hook"
+    assert client.get("/api/settings").json()["alert_webhook_hint"] is None
+
+
+def test_plain_text_secrets_are_cleared_and_named(client, monkeypatch):
+    from app.services import alerts, scheduled
+
+    sent = []
+    monkeypatch.setattr(alerts, "event", lambda db, key, title, message: sent.append(message))
+    client.put("/api/settings", json={"numista_api_key": SECRET})  # encrypted: kept
+    _plant("alert_webhook_url", "https://attacker.example/hook")
+    _plant("pcgs_api_token", "plain-token-1234")
+
+    db = _session()
+    try:
+        cleared = scheduled.clear_secrets(db)
+    finally:
+        db.close()
+    assert cleared == ["alert_webhook_url", "pcgs_api_token"]
+    assert _raw_stored("alert_webhook_url") == ""
+    assert _raw_stored("pcgs_api_token") == ""
+    assert crypto.is_encrypted(_raw_stored("numista_api_key"))
+    # named, never shown
+    assert sent and "alert webhook" in sent[0] and "PCGS API token" in sent[0]
+    assert "attacker" not in sent[0] and "plain-token" not in sent[0]
+    # and audited by name, as the system (v0.30.0)
+    from app.models.auth import AuditEntry
+
+    db = _session()
+    try:
+        (row,) = db.query(AuditEntry).filter_by(action="secrets_cleared").all()
+        assert row.actor_kind == "system"
+        assert row.detail == {"names": ["alert_webhook_url", "pcgs_api_token"]}
+    finally:
+        db.close()
+
+    body = client.get("/api/settings").json()
+    assert body["secrets_cleared"] == ["alert webhook", "PCGS API token"]
+    # entering one again takes it off the list; the next run finds nothing
+    client.put("/api/settings", json={"pcgs_api_token": "new-token-5678"})
+    assert client.get("/api/settings").json()["secrets_cleared"] == ["alert webhook"]
+    db = _session()
+    try:
+        assert scheduled.clear_secrets(db) == []
+    finally:
+        db.close()
+    assert len(sent) == 1
+
+
+def test_undecryptable_secrets_are_cleared_only_when_asked(client, monkeypatch):
+    """After a restore, a secret encrypted under another key is cleared too;
+    at startup and hourly it is left alone (it already reads as unset)."""
+    from app.services import scheduled
+
+    client.put("/api/settings", json={"numista_api_key": SECRET})
+    monkeypatch.setenv("SECRET_KEY", Fernet.generate_key().decode())
+    get_settings.cache_clear()
+    crypto.reset_cache()
+    db = _session()
+    try:
+        assert scheduled.clear_secrets(db) == []
+        assert scheduled.clear_secrets(db, undecryptable=True) == ["numista_api_key"]
+    finally:
+        db.close()
+    assert _raw_stored("numista_api_key") == ""
 
 
 def test_generated_key_file_is_owner_only(tmp_path, monkeypatch):

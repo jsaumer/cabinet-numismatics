@@ -1,13 +1,14 @@
 """The work the background loops in main.py run: the 12-hourly price refresh,
-and the hourly tick (scheduled backup, trash clear-out, purchase-day spot
-backfill, spot-price alerts, heartbeat). Kept here so it can be tested without
-the loops."""
+and the hourly tick (stored secrets checked, scheduled backup, trash
+clear-out, purchase-day spot backfill, spot-price alerts, heartbeat). Kept
+here so it can be tested without the loops."""
 
 import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.auth import accounts, audit
 from app.services import alerts, maintenance, pricing, stack, trash
 from app.services import app_settings as store
 from app.services import backup as backups
@@ -67,6 +68,27 @@ def _record(db: Session, source: str, outcome: dict) -> None:
         alerts.recover(db, key)
 
 
+def clear_secrets(db: Session, undecryptable: bool = False) -> list[str]:
+    """Clear stored secrets this deployment won't use (plain text, and with
+    `undecryptable` any it can't decrypt), commit, and say so by name through
+    the webhook if one is still saved. Run at startup, after a restore, and
+    hourly, which also catches a database restored by `restore.sh`."""
+    cleared = store.clear_unusable_secrets(db, undecryptable)
+    if cleared:
+        audit.record(db, "secrets_cleared", audit.Actor.system(), detail={"names": cleared})
+    db.commit()
+    if cleared:
+        names = ", ".join(store.SECRET_LABELS[key] for key in cleared)
+        alerts.event(
+            db,
+            "secrets_cleared",
+            "Cabinet cleared stored secrets",
+            f"Not encrypted with this deployment's key, so never used: {names}. "
+            "Enter them again in Settings.",
+        )
+    return cleared
+
+
 def hourly(db: Session) -> None:
     """Back up if one is due, empty the trash of expired items, fill in
     purchase-day spot prices, check the spot-price thresholds, then push the
@@ -81,6 +103,11 @@ def hourly(db: Session) -> None:
 
 def _hourly(db: Session) -> None:
     try:
+        clear_secrets(db)
+    except Exception:
+        db.rollback()
+        logger.exception("Checking stored secrets failed")
+    try:
         if outcome := backups.run_scheduled(db):
             logger.info("Scheduled backup: %s", outcome)
     except backups.BackupError as exc:
@@ -89,6 +116,11 @@ def _hourly(db: Session) -> None:
         db.rollback()
         logger.exception("Scheduled backup failed")
         alerts.fail(db, "backup", "Scheduled backup failed unexpectedly. See the log")
+    try:
+        accounts.prune(db)
+    except Exception:
+        db.rollback()
+        logger.exception("Pruning ended sessions and old audit rows failed")
     if purged := trash.purge_expired(db):
         logger.info("Emptied %s item(s) from the trash (past retention)", purged)
     # Both are best-effort: a missing purchase-day price or spot price is not

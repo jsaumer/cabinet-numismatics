@@ -7,14 +7,15 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): released as v0.29.1**, with versioned images
-published to GHCR and running on a homelab Docker Swarm. Phases 0–5 are
+**Status (September 2026): v0.30.0 (sign-in and encrypted backups) is the
+latest published release**, with versioned images published to GHCR from each
+tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
 configurable blended-value strategy, scheduled auto-refresh for both
 sources, and estimate provenance), in-app backup (Phase 5.6 B1 + B2) shipped
 in v0.12.0, and the open-source readiness track (Phase 6) is complete.
-**What's next is Phase 7**, a parity plan chosen by the owner on 20
+**Phase 7** is the parity plan chosen by the owner on 20
 September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
@@ -22,8 +23,9 @@ depth, fancy serial numbers, die axis and foreign dates) shipped together in
 v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
 (P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
 "group C" widgets followed in v0.29.0, alongside note details and a
-regrouped item page from the data-entry pass; authentication (P8) and the
-share view (P9) remain.
+regrouped item page from the data-entry pass; authentication's first part
+(P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0.
+**What's next**: A2, single sign-on, as v0.31.0, then the share view (P9).
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -259,7 +261,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 
 - ✔ **[MVP]** Containerized deployment via Docker Compose (backend, proxy, db).
 - ✔ **[MVP]** Persistent storage for data and photos; config via `.env`.
-- ✔ **[MVP]** Auto-generated API docs (OpenAPI / Swagger).
+- ✔ **[MVP]** An auto-generated OpenAPI schema (`/api/openapi.json`; the
+  interactive Swagger page was turned off in v0.30.0, see Phase 7, P8).
 - ✔ **[Core]** Data import from CSV, round-tripping the export format with
   per-row error reporting.
 - ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive
@@ -278,16 +281,18 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 - ✔ **[Core]** Secrets handled to standard: price-source credentials are
   Fernet-encrypted at rest with env-supplied keys and rotation support, and
   are write-only through the API. See `security.md`.
-- **[Core]** Authentication: one admin with a first-run setup code,
+- ✔ **[Core]** Authentication: one admin with a first-run setup code,
   database-backed sessions, and scoped API tokens, then single sign-on
-  (OpenID Connect and a trusted-header mode). **Next: Phase 7, P8**, as
-  v0.30.0 and v0.31.0, both before v1.0.0. Until it ships, Cabinet has no
-  login and belongs on a trusted network or behind an authenticating reverse
-  proxy (e.g. Traefik + Authentik forward-auth). A decision on 20 September
-  2026 to ship v1.0.0 without login was reversed the same day, when the
-  owner chose feature parity and a share view, which needs the rest of the
-  app closed first; the design was settled on 20 and 21 September 2026 and
-  is in [security.md](security.md#next-accounts-and-permissions).
+  (OpenID Connect and a trusted-header mode). **Phase 7, P8, A1 shipped for
+  v0.30.0**: one admin, sessions, and scoped API tokens, with every route
+  denied by default. A2, single sign-on, is next, as v0.31.0, both before
+  v1.0.0. Until A2 ships, an authenticating reverse proxy (e.g. Traefik +
+  Authentik forward-auth) in front is recommended as a second door. A
+  decision on 20 September 2026 to ship v1.0.0 without login was reversed
+  the same day, when the owner chose feature parity and a share view, which
+  needs the rest of the app closed first; the design was settled on 20 and
+  21 September 2026 and is in
+  [security.md](security.md#accounts-and-permissions).
 - **[Nice]** Share and showcase view: a read-only public link to a set, a
   checklist, or the collection; the whole feature switched on or off in the
   admin's Settings, off by default. **Planned: Phase 7, P9**, blocked on
@@ -468,7 +473,8 @@ reports. Staged so each milestone is independently useful.
   enabled only when a key is configured; medium confidence
   (collector-swap-derived estimates, 0.60, or 0.45 when the exact grade bucket
   isn't priced and the nearest lower one stands in). `POST
-  /api/items/{id}/estimate?source=numista`.
+  /api/items/{id}/estimates/auto?source=numista` (`.../estimate` until
+  v0.30.0).
 - **M3: PCGS adapter.** ✔ US coins by PCGS cert number, or PCGS number +
   Sheldon grade. CoinFacts returns both numbers in one response: Auction
   Prices Realized win when present (median of up to ten recent lots, 0.75, or
@@ -476,7 +482,7 @@ reports. Staged so each milestone is independently useful.
   PCGS public API program, 100 calls/day by default (1,000 when this was
   built), cached 7 days. Coins only:
   PCGS Banknote responses carry no price fields.
-  `POST /api/items/{id}/estimate?source=pcgs`.
+  `POST /api/items/{id}/estimates/auto?source=pcgs`.
 - **M4: Estimate provenance.** ✔ Each source's response summary is stored
   alongside the estimate (`price_estimates.details`, revision `0010`) so a
   value can be explained, not just asserted: melt's formula inputs and spot
@@ -739,6 +745,10 @@ for it, and new ones found while entering the collection outrank these.
 - **Physical**: nested locations (safe → box → row), printable 2×2 inserts
   and slab/box labels with QR codes, a "verified on" audit. Worth it past a
   few hundred pieces; free-text storage is fine until then.
+- **A trash for photos and documents**: today deleting either is for good
+  (admin plus the password again since v0.30.0); a soft delete with restore
+  and the trash's retention would make it recoverable, as items are. Raised
+  by the v0.30.0 build reviews.
 - **Saved views** and a choice of list columns; print or export any view.
 - **Paperwork**: an insurance schedule with a flag above the insurer's
   scheduling threshold and appraisal records; an estate packet; variety
@@ -790,7 +800,8 @@ land before the API is declared stable. v1.0.0 therefore follows Phase 7's
 P8 (and the data-entry review, if that finds nothing structural). The
 checklist:
 
-- Authentication (Phase 7, P8: local accounts, then single sign-on).
+- ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
+  a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single sign-on (A2) follows as v0.31.0.
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -799,7 +810,7 @@ checklist:
   `watermark`, `demonetization`, added in v0.29.0) confirmed against the
   live API: it was built without a key on the dev machine, so it reads
   every shape defensively and could not be tried against a real response.
-- An API consistency pass while breaking changes are still free. **Folded
+- ✔ An API consistency pass while breaking changes are still free. **Folded
   into P8's A1 (v0.30.0)**, decided 21 September 2026, with three changes
   approved: the old `POST /api/items/import` goes, leaving `/api/imports` as
   the one import path; `POST /api/estimates/refresh-melt` becomes
@@ -807,17 +818,23 @@ checklist:
   `POST /api/items/{id}/estimate` becomes
   `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
   letter from the manual `POST .../estimates`. Then a written stability
-  policy in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
+  policy in `api.md`. **Both built** for v0.30.0: the renames
+  and the policy are in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
   sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
   where a PATCH would read better.
 - A CI check that fails on a breaking change to the OpenAPI schema.
-- A CI upgrade test: a database from an old release migrated to head.
+- ✔ A CI upgrade test: a database from an old release migrated to head.
+  **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
+  release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
+  switches to the built images, claims the instance, and checks both
+  migration chains (the collection and `cabinet_auth`) reach head with the
+  item intact.
 - A README and quick-start pass (the screenshots are current as of
-  v0.24.2).
+  v0.30.0).
 
 In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
-the rest of the app until authentication makes it admin-only. The share
-view is Phase 7, P9.
+the rest of the app until P8 A1 made it admin-only in v0.30.0. The share
+view is Phase 7, P9, next after A2.
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -837,8 +854,8 @@ gets asked.*
   release, demo seed data, screenshots.
 - ✔ Migration story for upgrades (Alembic end to end).
 - Application-level authentication was deliberately left unbuilt through
-  this phase: proxy-level forward-auth (Traefik + Authentik) is the
-  documented path until it ships. It is now planned (Phase 7, P8).
+  this phase: proxy-level forward-auth (Traefik + Authentik) was the
+  documented path until it shipped as Phase 7, P8, A1 (v0.30.0).
 - ✔ The repository is public on GitHub (since v0.10.1); versioned images are
   published to GHCR from v0.10.2.
 *Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
@@ -947,82 +964,86 @@ v0.26.0.
   clears. A `stack` dashboard widget and a `cabinet_stack_fine_ounces{metal}`
   metrics gauge. `items.weight_g` gained a fourth decimal place (a troy
   ounce is 31.1035 g) in the same migration.
-- **P8: Authentication** (L, in two parts, with more accounts optional;
-  decisions of 20 September 2026 marked ◆). **This is what is being built
-  now**, as **v0.30.0** (A1) and **v0.31.0** (A2). The remaining design
-  questions were settled on 21 September 2026: a session lasts one day from
-  last use with a 7 day cap; CSRF is the `SameSite` cookie plus an Origin
-  check, not a token; photos go through nginx `auth_request` rather than
-  signed URLs; passwords use Argon2id (`argon2-cffi`, a new dependency);
-  nginx believes no forwarded header and Cabinet pins no network ranges
-  (addressing is the operator's), because it must work both behind an
-  authenticating proxy and directly exposed; and the session that starts a
-  restore keeps an in-memory grant so its progress page still answers. The
-  full design and the permission table are in
-  [security.md](security.md#next-accounts-and-permissions), and the build
-  contract is SPEC_0300, approved the same day after four outside reviews. **The
-  API consistency pass from the 1.0 checklist below ships with A1**, since
-  auth already touches every endpoint.
-  - **A1: One admin.** ◆ Single user to start: just the admin, onboarded
-    when the app is initialised. A setup page appears while no account
-    exists and asks for ◆ a one-time **setup code the backend prints in its
-    log** at startup (or takes from an environment variable), so nobody
-    else can claim an open instance first. ◆ Login is **always on**: there
-    is no switch to turn it off. Sign-in with a database-backed session
-    cookie (HttpOnly, Secure over HTTPS, SameSite) and an origin check on
-    anything that changes data; the password hashed with Argon2id; sign-in
-    throttled per account and per address; an Account section in Settings
-    (change password and username, see and end sessions, tokens, the audit
-    log, and a notice of failed sign-ins since the last visit); commands in
-    the container to reset a forgotten password, sign out everywhere, revoke
-    tokens, and show the account's status. The whole API is **denied by
+- ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
+  decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
+  v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 is next, as
+  v0.31.0**. A session lasts one
+  day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
+  Origin check, not a token; photos go through nginx `auth_request` rather
+  than signed URLs; passwords use Argon2id (`argon2-cffi`, a new
+  dependency); nginx believes no forwarded header and Cabinet pins no
+  network ranges (addressing is the operator's), because it must work both
+  behind an authenticating proxy and directly exposed; and the session that
+  starts a restore keeps an in-memory grant so its progress page still
+  answers. The full design and the permission table are in
+  [security.md](security.md#accounts-and-permissions), and the build
+  contract is SPEC_0300, approved 21 September 2026 after four outside
+  reviews. **The API consistency pass from the 1.0 checklist below shipped
+  with A1**, since auth already touches every endpoint.
+  - **A1: One admin. Shipped.** ◆ Single user to start: just the admin,
+    onboarded when the app is initialised. A setup page appears while no
+    account exists and asks for ◆ a one-time **setup code the backend
+    prints in its log** at startup (or takes from an environment
+    variable), so nobody else can claim an open instance first. ◆ Login is
+    **always on**: there is no switch to turn it off. Sign-in with a
+    database-backed session cookie (HttpOnly, Secure over HTTPS,
+    SameSite) and an origin check on anything that changes data; the
+    password hashed with Argon2id; sign-in throttled per account and per
+    address; an Account section in Settings (change password and
+    username, see and end sessions, tokens, the audit log, and a notice
+    of failed sign-ins since the last visit); commands in the container to
+    reset a forgotten password, sign out everywhere, revoke tokens, and
+    show the account's status. The whole API is **denied by
     default** behind one gate with a short allow-list (sign-in, setup, a
-    health check trimmed to "ok" for anonymous callers), and a test fails if
-    any other route answers without a login. Photos get the same check
+    health check trimmed to "ok" for anonymous callers), tested against
+    every route in the OpenAPI document. Photos get the same check
     through nginx's `auth_request`. The interactive API docs page
     (`/api/docs`) is turned off, so no third-party script runs in the
     signed-in page; `/api/openapi.json` stays, behind the login. ◆ **API
-    tokens with scopes** (`read`, `write`, `metrics`) ship in this first
-    cut, created in Settings, shown once, stored hashed, so the Homepage
-    tile, Prometheus, the seed script, and CI keep working. The credentials
-    get a Postgres schema and migration chain of their own (`cabinet_auth`):
-    users (with a role and an external identity from the start), sessions,
-    tokens, known devices, and an audit log, never in a backup and never
-    touched by a restore. After Codex's two reviews (21 September 2026):
-    the password is asked for again before a backup download, an export, a
-    restore, any settings change, and creating or revoking a token; a
-    password change or reset revokes every token; `read` and `write` tokens
-    last at most 7 days and can't export or read documents; the alert
-    webhook reports new-device sign-ins, repeated failures, new tokens,
-    downloads, and restores; and **every backup archive is encrypted** with
-    a backup key the owner keeps, because an archive on a backup share was
-    a readable copy of the whole collection outside the login. Until
-    v0.31.0, the recommended deployment also keeps an authenticating proxy
-    (any forward-auth or SSO gateway) in front. The contract, with a walkthrough of
-    setup, password changes, and the break-glass reset, is in
+    tokens with scopes** (`read`, `write`, `metrics`) shipped in this
+    first cut, created in Settings, shown once, stored hashed, so the
+    Homepage tile, Prometheus, the seed script, and CI keep working. The
+    credentials got a Postgres schema and migration chain of their own
+    (`cabinet_auth`): users (with a role and an external identity from
+    the start), sessions, tokens, known devices, and an audit log, never
+    in a backup and never touched by a restore. After Codex's reviews
+    (21 September 2026): the password is asked for again before a backup
+    download, an export, a restore, any settings change, and creating or
+    revoking a token; a password change or reset revokes every token;
+    `read` and `write` tokens last at most 7 days and can't export or
+    read documents; the alert webhook reports new-device sign-ins,
+    repeated failures, new tokens, downloads, and restores; and **every
+    backup archive is encrypted** with a backup key the owner keeps,
+    because an archive on a backup share was a readable copy of the whole
+    collection outside the login. Until v0.31.0, the recommended
+    deployment also keeps an authenticating proxy (any forward-auth or
+    SSO gateway) in front, as a second door rather than a replacement for
+    Cabinet's own sign-in. The contract, with a walkthrough of setup,
+    password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
-    - **A2: Single sign-on.** OpenID Connect against any provider (Authentik,
-    Keycloak, Authelia, Google), signing in as the admin through an identity
-    linked to that account, and a trusted-header mode for a forward-auth
-    proxy that already authenticates, with a shared secret or signed
-    assertion rather than trust in an address. Planned from the start so
-    A1's user table and sessions carry an external identity; built second.
-    The local admin password stays, so a provider outage can't lock anyone
-    out. **Two-factor sign-in** comes with it: passkeys (WebAuthn) for the
-    local password, or the identity provider's own second factor.
+    - **A2: Single sign-on. Next, as v0.31.0.** OpenID Connect against any
+    provider (Authentik, Keycloak, Authelia, Google), signing in as the
+    admin through an identity linked to that account, and a trusted-header
+    mode for a forward-auth proxy that already authenticates, with a
+    shared secret or signed assertion rather than trust in an address.
+    Planned from the start so A1's user table and sessions carry an
+    external identity. The local admin password stays, so a provider
+    outage can't lock anyone out. **Two-factor sign-in** comes with it:
+    passkeys (WebAuthn) for the local password, or the identity provider's
+    own second factor.
   - ◆ **More accounts are optional** (see the optional list below), not
     part of this item: Cabinet stays single-user unless that is wanted.
-  - Authentication changes every endpoint, so it must land **before
+  - Authentication changes every endpoint, so it lands **before
     v1.0.0** declares the API stable (adding it afterwards would be the
-    breaking change 1.0 promises not to make). ◆ It stays at P8 in
-    the order, after the numismatic items; in-app restore (P2) is open like
-    the rest of the app until then, and admin-only afterwards. On the first
+    breaking change 1.0 promises not to make). ◆ It stayed at P8 in
+    the order, after the numismatic items; in-app restore (P2), open like
+    the rest of the app until A1, is admin-only from v0.30.0. On the first
     start after upgrading an open install, nothing is served but the setup
     page until the admin exists.
-  - **The proposed permission table** (admin, editor, viewer, API tokens,
+  - **The permission table** (admin, editor, viewer, API tokens,
     and share links, action by action, with the rules around it) is in
-    [security.md](security.md#next-accounts-and-permissions), so it is
-    reviewed before it is coded.
+    [security.md](security.md#accounts-and-permissions); only the admin
+    row is built, the editor and viewer rows stay optional.
 - **P9: Share and showcase view** (M). A read-only public page for a set, a
   checklist, or the whole collection, behind an unguessable link that can be
   revoked, with a choice of what it shows (never costs, never storage
@@ -1031,8 +1052,8 @@ v0.26.0.
   off, no link can be made, the public routes answer "not found" as if they
   didn't exist, and links made earlier stop working without being deleted,
   so switching it back on restores them. Settings lists every live link
-  with when it was last opened. **Blocked on P8**: it is the first
-  deliberately public page, and everything else has to be closed before
+  with when it was last opened. **Next, after A2**: it is the first
+  deliberately public page, and everything else had to be closed before
   one door is opened.
 
 - ✔ **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
@@ -1082,8 +1103,8 @@ v0.26.0.
   shows.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
-P7 the bullion stack figures in v0.28.0, and P10's group C widgets in
-v0.29.0): P8 authentication, then P9 the share view.
+P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
+and P8 A1 for v0.30.0): P8 A2, single sign-on, then P9 the share view.
 
 Optional, after the above and only if still wanted:
 
@@ -1093,7 +1114,7 @@ Optional, after the above and only if still wanted:
   camera; slab barcode scanning into the cert fill would ride on it.
 - **More accounts**: user maintenance by the admin (add, disable, reset a
   password) and the editor and viewer roles, per the permission table in
-  [security.md](security.md#next-accounts-and-permissions), with single
+  [security.md](security.md#accounts-and-permissions), with single
   sign-on then creating accounts and mapping a provider's groups to roles.
   Moved here from P8 by the owner on 20 September 2026. Still one shared
   collection: accounts would be logins, not separate collections.
@@ -1114,11 +1135,12 @@ handing them the keys.*
 
 ## Notes on sequencing
 
-- **Auth was deliberately late, and is now next.** For homelab deployment an
-  authenticating reverse proxy (Traefik + Authentik forward-auth) covers
-  private networked use with zero application code, and that stays the path
-  until login ships. Login became Phase 7, P8 because a share view needs the
-  rest of the app closed first, and it lands before v1.0.0 because it
+- **Auth was deliberately late, and shipped as P8 A1.** For homelab
+  deployment an authenticating reverse proxy (Traefik + Authentik
+  forward-auth) covered private networked use with zero application code
+  until it did, and stays recommended as a second door until A2 (single
+  sign-on) ships. Login became Phase 7, P8 because a share view needs the
+  rest of the app closed first, and it landed before v1.0.0 because it
   changes every endpoint. It is built to work both behind such a proxy and
   directly exposed, since which one a deployment uses is its own choice.
 - **Schema-complete before data-complete.** Phase 2 front-loaded every field

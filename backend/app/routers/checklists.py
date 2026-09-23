@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import Checklist, ChecklistSlot
 from app.schemas import (
@@ -43,6 +44,7 @@ def _detail(db: Session, checklist: Checklist) -> ChecklistDetail:
 
 
 @router.get("", response_model=list[ChecklistSummary])
+@permission("read")
 def list_checklists(db: Session = Depends(get_db)):
     rows = db.execute(select(Checklist).options(selectinload(Checklist.slots))).scalars().all()
     out = []
@@ -61,6 +63,7 @@ def list_checklists(db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ChecklistDetail, status_code=201)
+@permission("write")
 def create_checklist(payload: ChecklistCreate, db: Session = Depends(get_db)):
     checklist = Checklist(name=payload.name.strip())
     checklist.slots = [
@@ -76,6 +79,7 @@ def create_checklist(payload: ChecklistCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/generate", response_model=ChecklistDetail, status_code=201)
+@permission("write")
 def generate_checklist(payload: ChecklistGenerate, db: Session = Depends(get_db)):
     """A checklist whose slots fill themselves: one per issue of a Numista
     type, or one per year and mint mark of a range."""
@@ -130,11 +134,13 @@ def generate_checklist(payload: ChecklistGenerate, db: Session = Depends(get_db)
 
 
 @router.get("/{checklist_id}", response_model=ChecklistDetail)
+@permission("read")
 def get_checklist(checklist_id: int, db: Session = Depends(get_db)):
     return _detail(db, _get_or_404(db, checklist_id))
 
 
 @router.patch("/{checklist_id}/slots/{slot_id}", response_model=SlotOut)
+@permission("write")
 def update_slot(
     checklist_id: int, slot_id: int, payload: SlotUpdate, db: Session = Depends(get_db)
 ):
@@ -154,6 +160,7 @@ def update_slot(
 
 
 @router.delete("/{checklist_id}", status_code=204)
+@permission("write")
 def delete_checklist(checklist_id: int, db: Session = Depends(get_db)):
     db.delete(_get_or_404(db, checklist_id))
     db.commit()

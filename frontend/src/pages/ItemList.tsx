@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { api, CollectionStats, ItemPage, money, photoUrl, PRIORITY_LABELS } from "../api";
+import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 
@@ -207,12 +208,12 @@ export default function ItemList() {
           </Link>
         )}
         <Menu label="Export / import">
-          <a role="menuitem" href={`/api/items/export.csv${exportQuery}`} title={exportTitle}>
+          <FreshLink role="menuitem" href={`/api/items/export.csv${exportQuery}`} title={exportTitle}>
             Export as CSV
-          </a>
-          <a role="menuitem" href={`/api/items/export.xlsx${exportQuery}`} title={exportTitle}>
+          </FreshLink>
+          <FreshLink role="menuitem" href={`/api/items/export.xlsx${exportQuery}`} title={exportTitle}>
             Export as Excel
-          </a>
+          </FreshLink>
           <Link role="menuitem" to="/import"
             title="From Numista, OpenNumismat, a spreadsheet, or a Cabinet export">
             Import…

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import PriceEstimate
 from app.routers.items import get_item_or_404
@@ -15,16 +16,21 @@ router = APIRouter(prefix="/api/items/{item_id}", tags=["estimates"])
 refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
 
 
-@refresh_router.post("/refresh-melt", response_model=RefreshResult)
-def refresh_melt(db: Session = Depends(get_db)):
-    """Re-run stale melt estimates now (the scheduler does this automatically
-    every 12h using the cadence configured in Settings)."""
+@refresh_router.post("/refresh", response_model=RefreshResult)
+@permission("write")
+def refresh(source: str, db: Session = Depends(get_db)):
+    """Re-run one source's stale estimates now (the scheduler does this
+    automatically every 12h using the cadence configured in Settings). Only
+    `melt` can be refreshed by hand for now."""
+    if source != "melt":
+        raise HTTPException(status_code=422, detail="Only melt can be refreshed by hand for now.")
     if not get_setting(db, "melt_enabled"):
         raise HTTPException(status_code=422, detail="Melt estimation is disabled in Settings")
     return pricing.refresh_melt_estimates(db, effective_reestimate_days(db))
 
 
 @router.get("/estimates", response_model=list[EstimateOut])
+@permission("read")
 def list_estimates(item_id: uuid.UUID, db: Session = Depends(get_db)):
     get_item_or_404(db, item_id)
     return (
@@ -39,6 +45,7 @@ def list_estimates(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/estimates", response_model=EstimateOut, status_code=201)
+@permission("write")
 def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = Depends(get_db)):
     """Record a manually researched value. Append-only: history is never overwritten."""
     item = get_item_or_404(db, item_id)
@@ -55,6 +62,7 @@ def create_estimate(item_id: uuid.UUID, payload: EstimateCreate, db: Session = D
 
 
 @router.delete("/estimates/{estimate_id}", status_code=204)
+@permission("write")
 def delete_estimate(item_id: uuid.UUID, estimate_id: uuid.UUID, db: Session = Depends(get_db)):
     """Remove a value that was typed in. What a price source said stays: that
     history is the record the reports and the provenance are built on."""
@@ -71,7 +79,8 @@ def delete_estimate(item_id: uuid.UUID, estimate_id: uuid.UUID, db: Session = De
     db.commit()
 
 
-@router.post("/estimate", response_model=EstimateOut, status_code=201)
+@router.post("/estimates/auto", response_model=EstimateOut, status_code=201)
+@permission("write")
 def auto_estimate(item_id: uuid.UUID, source: str = "melt", db: Session = Depends(get_db)):
     """Produce an automatic estimate from one price source: `melt` (default),
     `numista`, or `pcgs`. The outcome is recorded for the coverage report."""

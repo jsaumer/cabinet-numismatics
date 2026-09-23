@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.29.1, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.30.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -17,19 +17,20 @@ changelog entry when releasing.
   files directly, proxies `/api/` to the backend.
 - **db**: PostgreSQL.
 - Frontend is React + Vite, built to static files that nginx serves.
-- Photos are plain files on a shared volume (backend writes, nginx serves);
+- Photos are plain files on a shared volume (backend writes, nginx serves
+  after asking the backend, `auth_request`, from v0.30.0);
   documents on their own private volume, served only by the API; the
   database stores only file keys. No MinIO/S3, no Redis: deliberately cut
   as overkill for single-user.
-- No auth in the app yet, and it is **the next thing built**: roadmap Phase
-  7, P8, as v0.30.0 (one admin, database-backed sessions, scoped API tokens,
-  deny by default) then v0.31.0 (OIDC single sign-on and a trusted-header
-  mode). Until then it runs on a trusted network or behind an authenticating
-  reverse proxy. Every design decision was settled on 20 and 21 September
-  2026: see "Next: accounts and permissions" in docs/security.md, and don't
-  re-open them. It stays one shared collection. The build contract,
-  `docs/specs/SPEC_0300.md`, was approved by the owner on 21 September 2026 and is being
-  built (section 10 has the stages); that day the owner also cut forwarded-header trust
+- Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
+  scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
+  needs a session or a token; setup asks for a one-time code on first
+  start. v0.31.0 (OIDC single sign-on and a trusted-header mode) is next. Every design decision was
+  settled on 20 and 21 September 2026: see "Accounts and permissions" in
+  docs/security.md, and don't re-open them. It stays one shared collection.
+  The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
+  on 21 September 2026 and built stage by stage (section 10 has the
+  stages); that day the owner also cut forwarded-header trust
   (`TRUSTED_PROXIES`), pinned networks, and the `/api/docs` page from the
   design.
 
@@ -73,13 +74,16 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 ## Build & run
 
 - Full stack: `docker compose up --build`, then nginx serves at
-  http://localhost/, API docs at http://localhost/api/docs. The frontend is
+  http://localhost/ (no API docs page; the schema is `/api/openapi.json`).
+  `PUBLIC_ORIGINS` is required (backend and proxy stop without it); nginx
+  answers only its Host names and 444s the rest. The frontend is
   built inside the proxy image (multi-stage `frontend/Dockerfile`), so no host
   Node install is needed.
 - Frontend dev: `npm run dev` in `frontend/` (the Vite dev server proxies
   `/api` to localhost:8000). Production build output is `frontend/dist`.
 - Backend dev: `uvicorn app.main:app --reload` with `DATABASE_URL`,
-  `PHOTO_DIR`, and `DOCUMENT_DIR` set, and `REQUIRE_DOCUMENT_MOUNT=false`.
+  `PHOTO_DIR`, and `DOCUMENT_DIR` set, `REQUIRE_DOCUMENT_MOUNT=false`, and
+  `PUBLIC_ORIGINS=http://localhost:5173` with `AUTH_INSECURE_HTTP=true`.
 - Tests: in `backend/`, `pip install -e .[dev]` once, then `pytest`. Tests do
   not require a running database (in-memory SQLite, every outbound call
   mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.14, a
@@ -96,20 +100,23 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 - Dependencies: the image installs `backend/requirements.txt` (hash-pinned);
   after editing `pyproject.toml`'s dependencies, regenerate it with the
   command in docs/security.md. `security.yml` audits it and scans both images.
-- Migrations: Alembic, run in `backend/` with `DATABASE_URL` set:
-  `alembic upgrade head` to apply, `alembic revision --autogenerate -m "..."`
-  to create. The backend also applies pending migrations itself on startup
-  (`AUTO_MIGRATE`, default true; `app/services/schema.py`, under a Postgres
-  advisory lock), so a deploy needs no manual step. Tests set
-  `AUTO_MIGRATE=false` (conftest) and build the schema with `create_all` on
-  SQLite. `/api/health` reports `schema` (current vs expected revision), shown
-  in Settings → About.
+- Migrations: Alembic, two chains, run in `backend/` with `DATABASE_URL`
+  set. The collection (`alembic/`, schema `public`): `alembic upgrade head`
+  to apply, `alembic revision --autogenerate -m "..."` to create. Sign-in
+  data (`alembic_auth/`, schema `cabinet_auth`, v0.30.0): the same with
+  `-c alembic_auth.ini`. The backend also applies both itself on startup,
+  collection first, in one transaction (`AUTO_MIGRATE`, default true;
+  `app/services/schema.py`, under a Postgres advisory lock), so a deploy
+  needs no manual step. Tests set `AUTO_MIGRATE=false` (conftest) and build
+  both schemas with `create_all` on SQLite (`cabinet_auth` mapped away by
+  `schema_translate_map`). `/api/health` reports `schema` and `auth_schema`
+  (current vs expected revision), shown in Settings → About.
 - Screenshots: `docs/screenshots/README.md` has the exact headless command.
 
 ## Current status & next step
 
-Released as v0.29.1: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0021`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.30.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0021` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
@@ -118,6 +125,34 @@ with ten more dashboard widgets from the "group C" survey. What each release add
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
 
+- Sign-in data lives in the `cabinet_auth` schema (v0.30.0, `AuthBase`, its
+  own chain in `alembic_auth/`): never dumped, never restored, no foreign
+  key to or from `public`. Every archive is age-encrypted with the backup
+  key (`services/archive_keys.py`) and MAC-signed; nothing unencrypted is
+  ever written to `BACKUP_DIR` (write through `backup.encrypt_stream`, decrypt
+  only via `backup.decrypt_to_staging` into `/data/staging`), plain `.zip`
+  archives are never restored, the MAC is checked before anything in an
+  archive is read, and an archive older than the newest in
+  `cabinet_auth.backup_ledger` needs `RESTORE OLDER`. The key never crosses
+  the API. Tests use conftest's `fake_age`.
+- **Every API route declares its permission** (v0.30.0):
+  `@permission("public" | "read" | "write" | "admin", metrics_ok=, fresh=)`
+  directly above `def`, below the router decorator (`app/auth/permissions.py`);
+  an undeclared route is refused, and `tests/test_gate.py` compares every
+  route with the appendix of SPEC_0300 and runs the anonymous, token-scope,
+  fresh, and CSRF matrices over the OpenAPI document. A new route needs a
+  class that matches the spec table (or a spec change first). The gate
+  (`app/auth/gate.py`) refuses any `%` in a path, lets anonymous callers
+  reach only four routes, and fails CSRF closed for every cookie request.
+  Tests: `client` is the signed-in admin inside its recent-password window;
+  `anon_client`, `stale_client`, `token_client(scope)`, and
+  `unclaimed_client` cover the rest.
+- The credential services are `app/auth/` (v0.30.0), used through
+  `accounts`; a password is only ever checked by `accounts._check_password`
+  (throttles, the reserved slot, then Argon2, then the failure bookkeeping).
+  Only hashes of secrets are stored, and no password, setup code, or token
+  secret reaches a log, an exception, an audit row, or argv. Time comes from
+  `app.auth.common` so tests can freeze it; tests never touch `/data`.
 - Every ORM select hides trashed items (`models.item._hide_trashed`) unless
   `.execution_options(include_deleted=True)`; anything counting through a
   link table, or deciding a document's last holder, handles the trash itself.
@@ -187,8 +222,9 @@ P2, in-app restore, shipped in v0.26.0 (no migration): `services/restore.py`
 and `maintenance.py`, `/api/restore/*`, `components/restore.tsx`; verify,
 safety backup (`-prerestore`, outside `backup_keep`), typed `RESTORE`,
 unpack, database in one transaction, then the file swap; outcome and journal
-on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Open until P8
-makes it admin-only; see "In-app restore" in the implementation notes.
+on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Admin-only and
+password-confirmed from P8 A1 (v0.30.0); see "In-app restore" in the
+implementation notes.
 P10, a customisable dashboard, shipped in v0.27.0 (no migration):
 `services/dashboard.py` and `routers/dashboard.py`, `dashboard_layout` in
 `app_settings`, `/api/dashboard/layout` (`GET`/`PUT`/`DELETE`), and
@@ -211,15 +247,18 @@ Note details, the item page, and P10's "group C" widgets shipped in v0.29.0
 endpoints, `components/item-hero.tsx` and `item-facts.tsx`, and ten
 dashboard widget types; see "Note details, the item page, more widgets" in
 the implementation notes.
-**Next, in order:** P8 authentication (decided: one admin first,
-onboarded with a setup code from the backend log, always on, scoped API
-tokens in the first cut, deny by default; then SSO for that admin; more
-accounts and roles are optional; the design and permission table are in
-docs/security.md), P9 a share view (blocked on P8; the whole feature is an
-admin setting, off by default); labels, a phone app, and more accounts are
-optional. Research and propose each before building, as always. v1.0.0
-follows P8 and the checklist under "The road to v1.0.0". Before that, the
-roadmap's Phase 5.9 was demoted
+P8 A1, sign-in and encrypted backups, shipped in v0.30.0
+(migration `a0001`, the `cabinet_auth` schema and chain): one admin claimed
+with a setup code, sessions, scoped API tokens, and a deny-by-default gate
+(details in the rules below); see "Authentication and encrypted backups" in
+the implementation notes and `docs/specs/SPEC_0300.md`.
+**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
+trusted-header mode for the same admin, plus two-factor sign-in) as
+v0.31.0; then P9 a share view (the whole feature is an admin setting, off
+by default); labels, a phone app, and more accounts are optional. Research
+and propose each before building, as always. v1.0.0 follows P8 and the
+checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
+was demoted
 on 19 September 2026 from a release train to one next item plus unordered
 **candidates** and **parked** items: the owner is entering 100–500 pieces by
 hand (runs and singles, mostly held), so don't build ahead of that beyond

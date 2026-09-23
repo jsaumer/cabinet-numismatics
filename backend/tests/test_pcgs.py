@@ -81,7 +81,7 @@ def by_cert(client, **overrides):
 
 
 def estimate(client, item):
-    return client.post(f"/api/items/{item['id']}/estimate", params={"source": "pcgs"})
+    return client.post(f"/api/items/{item['id']}/estimates/auto", params={"source": "pcgs"})
 
 
 def test_auction_prices_preferred_over_the_guide(client, upstream):
@@ -427,3 +427,19 @@ def test_cert_fill_needs_a_token_and_a_known_cert(client, upstream):
     resp = client.get("/api/pcgs/cert/1")
     assert resp.status_code == 422 and "no record" in resp.json()["detail"]
     assert client.get("/api/pcgs/cert/abc").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "cert",
+    ["1234%205678", "12.34", "12_34", "123456789012345678901", "12%2F34"],
+)
+def test_cert_route_takes_only_letters_digits_and_dashes(client, upstream, cert):
+    """Nothing that needs percent-encoding, and at most 20 characters, so the
+    sign-in gate's refusal of encoded paths never meets a real cert. An
+    encoded one is refused by the gate (400) before routing."""
+    configure(client)
+    upstream.body = CERT_FACTS
+    resp = client.get(f"/api/pcgs/cert/{cert}")
+    expected = (400,) if "%" in cert else (404, 422)
+    assert resp.status_code in expected, (cert, resp.status_code)
+    assert list(upstream) == []  # refused before PCGS is asked

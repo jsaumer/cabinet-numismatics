@@ -1585,3 +1585,72 @@ main {
     margin-left: auto;
   }
 }
+
+/* Sign-in and setup: no header, just a centred card on the page background. */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+.auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+.auth-brand-name {
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.auth-brand-subtitle {
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.auth-card {
+  width: min(26rem, 100%);
+}
+.auth-card h1 {
+  margin-top: 0;
+  font-size: 1.4rem;
+}
+/* The confirm-password dialog: a narrower modal-body so it doesn't read as
+   a full page over a small form. */
+.confirm-dialog {
+  width: min(22rem, 100%);
+}
+/* A sentence, not a card label: none of .card h2's small capitals. */
+.confirm-dialog h2 {
+  margin-top: 0;
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink);
+}
+
+/* The signed-in username and sign-out button, at the end of the header nav. */
+.account-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  margin-left: 0.25rem;
+  border-left: 1px solid var(--header-muted);
+}
+.account-name {
+  color: var(--header-muted);
+  font-size: 0.85rem;
+}
+
+/* The failed-sign-ins notice, shown once under the header. */
+.notice-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}

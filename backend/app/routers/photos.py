@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ItemPhoto
 from app.routers.items import get_item_or_404
@@ -33,6 +34,7 @@ def _item_photos(db: Session, item_id: uuid.UUID) -> list[ItemPhoto]:
 
 
 @router.get("/items/{item_id}/photos", response_model=list[PhotoOut])
+@permission("read")
 def list_photos(item_id: uuid.UUID, db: Session = Depends(get_db)):
     get_item_or_404(db, item_id)
     return _item_photos(db, item_id)
@@ -63,6 +65,7 @@ def _create_photo(db: Session, item_id: uuid.UUID, data: bytes, angle: str | Non
 
 
 @router.post("/items/{item_id}/photos", response_model=PhotoOut, status_code=201)
+@permission("write")
 async def upload_photo(
     item_id: uuid.UUID,
     file: UploadFile,
@@ -77,6 +80,7 @@ async def upload_photo(
 
 
 @router.post("/items/{item_id}/photos/url", response_model=PhotoOut, status_code=201)
+@permission("write")
 def import_photo(item_id: uuid.UUID, payload: PhotoFromUrl, db: Session = Depends(get_db)):
     """Fetch an image from a public URL and add it like an upload."""
     get_item_or_404(db, item_id)
@@ -89,7 +93,12 @@ def import_photo(item_id: uuid.UUID, payload: PhotoFromUrl, db: Session = Depend
     return _create_photo(db, item_id, data, payload.angle)
 
 
+# Replacing the image deletes the old files, and deleting a photo deletes
+# them for good: there is no trash for photos, so both need the admin and a
+# recent password, as purging an item does (the owner's decision, 22
+# September 2026, SPEC_0300 section 16).
 @router.put("/photos/{photo_id}/image", response_model=PhotoOut)
+@permission("admin", fresh=True)
 async def replace_photo_image(photo_id: uuid.UUID, file: UploadFile, db: Session = Depends(get_db)):
     """Swap a photo's image for an edited one, keeping its angle, primary
     flag, and position. The new file gets a fresh name so cached copies of the
@@ -112,6 +121,7 @@ async def replace_photo_image(photo_id: uuid.UUID, file: UploadFile, db: Session
 
 
 @router.post("/items/{item_id}/photos/order", response_model=list[PhotoOut])
+@permission("write")
 def reorder_photos(item_id: uuid.UUID, payload: PhotoOrder, db: Session = Depends(get_db)):
     get_item_or_404(db, item_id)
     photos = {p.id: p for p in _item_photos(db, item_id)}
@@ -126,6 +136,7 @@ def reorder_photos(item_id: uuid.UUID, payload: PhotoOrder, db: Session = Depend
 
 
 @router.patch("/photos/{photo_id}", response_model=PhotoOut)
+@permission("write")
 def update_photo(photo_id: uuid.UUID, payload: PhotoUpdate, db: Session = Depends(get_db)):
     photo = _get_photo_or_404(db, photo_id)
     if payload.angle is not None:
@@ -142,6 +153,7 @@ def update_photo(photo_id: uuid.UUID, payload: PhotoUpdate, db: Session = Depend
 
 
 @router.delete("/photos/{photo_id}", status_code=204)
+@permission("admin", fresh=True)
 def delete_photo(photo_id: uuid.UUID, db: Session = Depends(get_db)):
     photo = _get_photo_or_404(db, photo_id)
     was_primary = photo.is_primary

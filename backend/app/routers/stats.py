@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import Item
 from app.schemas import (
@@ -50,6 +51,7 @@ def _load_items(db: Session) -> list[Item]:
 
 
 @router.get("/collection", response_model=CollectionStats)
+@permission("read", metrics_ok=True)
 def collection_stats(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
@@ -120,6 +122,7 @@ def _entry(key: str, b: _Bucket) -> BreakdownEntry:
 
 
 @router.get("/breakdowns", response_model=Breakdowns)
+@permission("read")
 def breakdowns(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     tag: str | None = Query(default=None, max_length=64),
@@ -185,6 +188,7 @@ def breakdowns(
 
 
 @router.get("/gains", response_model=Gains)
+@permission("read")
 def gains(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
@@ -242,6 +246,7 @@ def _month_ends(months: int) -> list[date]:
 
 
 @router.get("/value-history", response_model=ValueHistory)
+@permission("read")
 def value_history(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     months: int = Query(default=24, ge=1, le=120),
@@ -276,6 +281,7 @@ def value_history(
 
 
 @router.get("/notes-by-signature", response_model=NotesBySignature)
+@permission("read")
 def notes_by_signature(db: Session = Depends(get_db)):
     """Owned notes grouped by series and signature pair: groups by series then
     signatures (those without come last), notes by serial number."""
@@ -315,6 +321,7 @@ def notes_by_signature(db: Session = Depends(get_db)):
 
 
 @router.get("/quality", response_model=QualityStats)
+@permission("read")
 def quality(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
@@ -327,6 +334,7 @@ def quality(
 
 
 @router.get("/value-spread", response_model=ValueSpread)
+@permission("read")
 def value_spread(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
@@ -339,6 +347,7 @@ def value_spread(
 
 
 @router.get("/data-health", response_model=DataHealth)
+@permission("read")
 def data_health(db: Session = Depends(get_db)):
     """Owned items missing a photo, grade, cost, value estimate,
     weight/fineness, storage location, or catalogue reference."""
@@ -346,6 +355,7 @@ def data_health(db: Session = Depends(get_db)):
 
 
 @router.get("/showcase", response_model=Showcase)
+@permission("read")
 def showcase(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),

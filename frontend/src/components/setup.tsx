@@ -95,6 +95,17 @@ export function setupChecks(
       ),
     });
   }
+  if (backups && !backups.key.saved && !backups.key.supplied) {
+    list.push({
+      key: "backup_key",
+      text: (
+        <>
+          Every backup is encrypted, and the key has no recovery. Save it from{" "}
+          <Link to="/settings">Settings → Backups</Link>.
+        </>
+      ),
+    });
+  }
   if (!settings.alert_webhook_hint && !settings.heartbeat_hint) {
     list.push({
       key: "alerts",

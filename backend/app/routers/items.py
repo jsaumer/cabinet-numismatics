@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -13,6 +13,8 @@ from pydantic import ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth import events
+from app.auth.permissions import permission, require
 from app.db import get_db
 from app.models import CatalogRef, Grade, Item, ItemEvent, ItemSet, PriceEstimate, Tag
 from app.schemas import (
@@ -20,7 +22,6 @@ from app.schemas import (
     BulkResult,
     BulkUpdate,
     EventOut,
-    ImportResult,
     ItemCreate,
     ItemDetail,
     ItemList,
@@ -399,6 +400,7 @@ def filter_query(
 
 
 @router.get("", response_model=ItemList)
+@permission("read")
 def list_items(
     filters: dict = Depends(filter_query),
     sort: str = "-created_at",
@@ -444,7 +446,14 @@ def list_items(
 
 
 @router.get("/export.csv")
-def export_csv(filters: dict = Depends(filter_query), db: Session = Depends(get_db)):
+@permission("admin", fresh=True)
+def export_csv(
+    request: Request, filters: dict = Depends(filter_query), db: Session = Depends(get_db)
+):
+    # Audited first: the commit would otherwise expire the rows being streamed.
+    events.record(
+        db, request, "export_downloaded", target="csv", alert="The collection was exported (CSV)."
+    )
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
@@ -471,12 +480,26 @@ def export_csv(filters: dict = Depends(filter_query), db: Session = Depends(get_
     return StreamingResponse(
         generate(),
         media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="cabinet-items.csv"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="cabinet-items.csv"',
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
 @router.get("/export.xlsx")
-def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get_db)):
+@permission("admin", fresh=True)
+def export_xlsx(
+    request: Request, filters: dict = Depends(filter_query), db: Session = Depends(get_db)
+):
+    # Audited first: the commit would otherwise expire the rows being streamed.
+    events.record(
+        db,
+        request,
+        "export_downloaded",
+        target="xlsx",
+        alert="The collection was exported (Excel).",
+    )
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
@@ -504,7 +527,10 @@ def export_xlsx(filters: dict = Depends(filter_query), db: Session = Depends(get
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="cabinet-items.xlsx"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="cabinet-items.xlsx"',
+            "Cache-Control": "private, no-store",
+        },
     )
 
 
@@ -663,50 +689,6 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
     return payload, grade_id
 
 
-@router.post("/import", response_model=ImportResult)
-async def import_csv(file: UploadFile, db: Session = Depends(get_db)):
-    """Import items from CSV in the export format. Creates items only (no
-    updates); rows that fail validation are reported and skipped."""
-    raw = await file.read()
-    try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=422, detail="File is not UTF-8 text") from None
-    reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames or "type" not in reader.fieldnames:
-        raise HTTPException(status_code=422, detail="Missing CSV header (expected export format)")
-
-    created = 0
-    skipped = 0
-    errors = []
-    for line_no, row in enumerate(reader, start=2):  # 1-based; header is line 1
-        # Rows whose id already exists are skipped, so re-importing an export
-        # (or importing the same file twice) never duplicates the collection.
-        raw_id = (row.get("id") or "").strip()
-        if raw_id:
-            try:
-                if db.get(Item, uuid.UUID(raw_id)) is not None:
-                    skipped += 1
-                    continue
-            except ValueError:
-                pass  # malformed id: treat the row as new
-        try:
-            payload, grade_id = _row_to_payload(row, db)
-            item = _build_item(db, payload, grade_id)
-            db.add(item)
-            db.flush()
-            record_event(db, item.id, "created", {"via": ["import", file.filename]})
-            # Commit each row: a later row's rollback must not discard this one.
-            db.commit()
-            created += 1
-        except (ValueError, ValidationError) as exc:
-            db.rollback()
-            msg = exc.errors()[0]["msg"] if isinstance(exc, ValidationError) else str(exc)
-            errors.append({"row": line_no, "error": msg})
-    db.commit()
-    return ImportResult(created=created, skipped=skipped, errors=errors)
-
-
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:
     data = payload.model_dump(exclude={"tags", "catalog_refs", "grade_id"})
     item = Item(**data)
@@ -726,6 +708,7 @@ def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -
 
 
 @router.post("", response_model=ItemOut, status_code=201)
+@permission("write")
 def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     item = _build_item(db, payload)
     db.add(item)
@@ -736,6 +719,7 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/run", response_model=RunResult, status_code=201)
+@permission("write")
 def add_run(payload: RunCreate, db: Session = Depends(get_db)):
     """One item per chosen issue of a Numista type: a date/mint run in one
     request. The type fills each item as "Fill from Numista" would; `shared`
@@ -790,6 +774,7 @@ def add_run(payload: RunCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/similar", response_model=list[SimilarItem])
+@permission("read")
 def similar_items(
     country: str | None = Query(default=None, max_length=100),
     denomination: str | None = Query(default=None, max_length=100),
@@ -829,6 +814,7 @@ def similar_items(
 
 
 @router.get("/{item_id}", response_model=ItemDetail)
+@permission("read")
 def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """One item with its photos, values, documents, and sales, including an
     item in the trash (`deleted_at` set), which is read-only until restored."""
@@ -836,6 +822,7 @@ def get_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.patch("/{item_id}", response_model=ItemOut)
+@permission("write")
 def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(get_db)):
     item = get_item_or_404(db, item_id, load_related=True)
     fields = payload.model_dump(exclude_unset=True)
@@ -905,6 +892,7 @@ def _sync_derived(item: Item, changed) -> None:
 
 
 @router.get("/{item_id}/history", response_model=list[EventOut])
+@permission("read")
 def item_history(item_id: uuid.UUID, db: Session = Depends(get_db)):
     get_item_or_404(db, item_id)
     return (
@@ -917,6 +905,7 @@ def item_history(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/bulk", response_model=BulkResult)
+@permission("write")
 def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
     """Apply the same changes to many items at once: scalar field updates via
     `set` (tags/refs inside it are ignored), plus add_tags / remove_tags."""
@@ -972,6 +961,7 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/{item_id}/clone", response_model=ItemOut, status_code=201)
+@permission("write")
 def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """Copy an item's fields (not photos or estimates) to speed up entering
     similar pieces."""
@@ -997,18 +987,24 @@ def clone_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: uuid.UUID, permanent: bool = False, db: Session = Depends(get_db)):
+@permission("write")
+def delete_item(
+    item_id: uuid.UUID, request: Request, permanent: bool = False, db: Session = Depends(get_db)
+):
     """Move the item to the trash, from where it can be restored. With
     `?permanent=true`, or for an item already in the trash, delete it for
-    good, with its photos, values, history, and documents no other item holds."""
+    good, with its photos, values, history, and documents no other item holds:
+    that needs the admin and a recent password."""
     item = get_item_or_404(db, item_id, include_deleted=True)
     if permanent or item.deleted_at is not None:
+        require(request, "admin", fresh=True)
         trash.purge(db, item)
     else:
         trash.move_to_trash(db, [item])
 
 
 @router.post("/{item_id}/restore", response_model=ItemOut)
+@permission("write")
 def restore_item(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """Take an item out of the trash, as it was."""
     item = get_item_or_404(db, item_id, include_deleted=True)

@@ -15,6 +15,7 @@ dist/
 .vite/
 frontend/test-results/
 frontend/playwright-report/
+frontend/e2e/.auth/
 
 # OS / editor
 .DS_Store
