@@ -1,10 +1,15 @@
 """Phase 3: melt estimates, spot cache, manual confidence, collection stats."""
 
+import json
+import uuid
 from datetime import timedelta
 from decimal import Decimal
 
 import pytest
 
+from app.db import get_db
+from app.main import app
+from app.models import EstimateAttempt
 from app.services import pricing
 from tests.conftest import COIN
 
@@ -187,3 +192,95 @@ def test_collection_stats(client):
 def test_old_auto_estimate_path_is_gone(client):
     item = client.post("/api/items", json=COIN).json()
     assert client.post(f"/api/items/{item['id']}/estimate").status_code in (404, 405)
+
+
+# --- melt at save time (P11, v0.31.0, stage 4) -------------------------------
+
+
+def _session():
+    """A DB session on the test engine (via the client's dependency override)."""
+    return next(app.dependency_overrides[get_db]())
+
+
+def _warm_cache(client, spot):
+    """Prime the melt spot-price cache by pricing a throwaway item."""
+    seed = _create(client, SILVER)
+    client.post(f"/api/items/{seed['id']}/estimates/auto")
+    assert spot["count"] == 1
+
+
+def test_melt_on_save_with_no_cache_makes_no_network_call(client, spot):
+    _create(client, SILVER)  # nothing cached yet: nothing added, nothing fetched
+    assert spot["count"] == 0
+
+
+def test_melt_on_save_adds_an_estimate_from_a_fresh_cache(client, spot):
+    _warm_cache(client, spot)
+    item = _create(client, {**SILVER, "denomination": "1/2 dollar"})
+    assert spot["count"] == 1  # only the seed item's fetch; the save read the cache
+
+    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    assert len(history) == 1
+    row = history[0]
+    assert row["source"].startswith("melt:silver")
+    assert row["estimated_value"] == pytest.approx(26.73 * 0.9, abs=0.01)
+    json.dumps(row["details"])  # JSON-safe: no Decimal leaked through
+
+    db = _session()
+    try:
+        attempt = db.get(EstimateAttempt, (uuid.UUID(item["id"]), "melt"))
+        assert attempt is not None and attempt.outcome == "ok"
+    finally:
+        db.close()
+
+
+def test_melt_on_save_skips_a_missing_or_stale_cache(client, spot, monkeypatch):
+    empty = _create(client, SILVER)  # no cache at all yet
+    assert client.get(f"/api/items/{empty['id']}").json()["estimates"] == []
+
+    _warm_cache(client, spot)
+    monkeypatch.setattr(pricing, "CACHE_TTL", timedelta(0))  # the cache is now stale
+    stale = _create(client, {**SILVER, "denomination": "1/2 dollar"})
+    assert client.get(f"/api/items/{stale['id']}").json()["estimates"] == []
+
+
+def test_melt_on_save_no_duplicate_on_an_unrelated_edit(client, spot):
+    _warm_cache(client, spot)
+    item = _create(client, {**SILVER, "denomination": "1/2 dollar"})
+    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 1
+
+    unrelated = client.patch(f"/api/items/{item['id']}", json={"notes": "album 3"})
+    assert unrelated.status_code == 200
+    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 1  # no duplicate
+
+    reweighed = client.patch(f"/api/items/{item['id']}", json={"weight_g": 30.0})
+    assert reweighed.status_code == 200
+    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 2  # inputs changed
+
+
+def test_melt_on_save_is_owned_pieces_only(client, spot):
+    _warm_cache(client, spot)
+    wishlist = _create(client, {**SILVER, "status": "wishlist"})
+    assert client.get(f"/api/items/{wishlist['id']}").json()["estimates"] == []
+
+
+def test_refresh_melt_takes_an_owned_piece_with_no_estimate(client, monkeypatch):
+    monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
+    item = _create(client, SILVER)  # cache empty: no save-time estimate yet
+    assert client.get(f"/api/items/{item['id']}").json()["estimates"] == []
+
+    result = client.post("/api/estimates/refresh?source=melt").json()
+    assert result == {"updated": 1, "skipped": 0, "failed": 0}
+    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    assert len(history) == 1 and history[0]["source"].startswith("melt:silver")
+
+
+def test_refresh_melt_leaves_a_manual_latest_item_alone(client, monkeypatch):
+    monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
+    item = _create(client, SILVER)
+    client.post(f"/api/items/{item['id']}/estimates", json={"estimated_value": 99.0})
+
+    result = client.post("/api/estimates/refresh?source=melt").json()
+    assert result == {"updated": 0, "skipped": 1, "failed": 0}
+    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    assert len(history) == 1 and history[0]["source"] == "manual"

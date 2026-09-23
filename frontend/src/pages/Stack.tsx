@@ -57,6 +57,22 @@ export default function Stack() {
 
   const empty = data.metals.length === 0;
 
+  const leftOut = data.skipped_items.length > 0 && (
+    <div className="card">
+      <h2>Left out</h2>
+      <p className="muted">
+        A precious metal is named, but there's no weight or fineness to work out fine ounces:
+      </p>
+      <ul>
+        {data.skipped_items.map((it) => (
+          <li key={it.item_id}>
+            <Link to={`/items/${it.item_id}`}>{it.label}</Link>: missing {it.missing}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
   return (
     <>
       <div className="detail-header">
@@ -79,11 +95,14 @@ export default function Stack() {
       {backfillNote && <p className="muted">{backfillNote}</p>}
 
       {empty ? (
-        <div className="empty">
-          No precious-metal pieces with a weight and fineness yet. Name a precious metal and give a
-          weight and fineness to include a coin or note, or{" "}
-          <Link to="/items/new?type=bullion">Add a bar or round</Link>.
-        </div>
+        <>
+          <div className="empty">
+            No precious-metal pieces with a weight and fineness yet. Name a precious metal and
+            give a weight and fineness to include a coin or note, or{" "}
+            <Link to="/items/new?type=bullion">Add a bar or round</Link>.
+          </div>
+          {leftOut}
+        </>
       ) : (
         <>
           {data.metals.map((m) => (
@@ -203,12 +222,14 @@ export default function Stack() {
             </div>
           </div>
 
+          {leftOut}
+
           <p className="muted">
             The stack is owned, untrashed items with a detected precious metal (gold, silver,
             platinum, palladium), a weight, and a fineness. Melt value is the metal content at
             spot; it ignores any numismatic premium the piece may carry beyond its metal.
             {data.skipped > 0 &&
-              ` ${data.skipped} item(s) have a precious metal but no weight or fineness, so they're left out.`}
+              ` ${data.skipped} item(s) have a precious metal but no weight or fineness, so they're left out (see "Left out" above).`}
             {data.excluded_other_currency > 0 &&
               ` ${data.excluded_other_currency} amount(s) left out of the money figures (no exchange rate); their ounces still count.`}{" "}
             Purchase-day spot is filled in automatically for purchases from {data.history_start};

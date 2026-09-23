@@ -173,7 +173,11 @@ serial numbers/prefix/issuer/charter number/bank city/printer/catalog
 refs/tags),
 `fancy=true` (notes with any fancy-serial trait), `serial_trait` (one trait
 key from `/api/reference/serial-traits`; an unknown one is 422),
-`target_reached=true` (see the wish-list fields below), `limit` (default 50,
+`target_reached=true` (see the wish-list fields below), `metal` (`gold`,
+`silver`, `platinum`, `palladium`, or `none`; P11, v0.31.0, evaluated in
+Python with the same detector the metal breakdown uses, not a column, since
+a few hundred pieces need no index for it; an unknown value is 422),
+`limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`,
 `value`, `pcgs_pop_higher`, or `grade`; `-` prefix for descending; default
@@ -433,8 +437,18 @@ it was already there. See [monitoring.md](monitoring.md).
 `melt` is accepted for now: any other value is 422 ("Only melt can be
 refreshed by hand for now."). An in-process scheduler re-runs stale melt
 estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7; `0`
-disables); a melt refresh never supersedes an item whose latest estimate is
-manual. The same 12h loop also refreshes Numista and/or PCGS when their own
+disables) and, since P11 (v0.31.0), also takes owned pieces that qualify for
+melt and have no estimate at all yet (a new bullion piece gets a value
+without waiting on the 12h loop or a button press); a melt refresh never
+supersedes an item whose latest estimate is manual, or from another source.
+**Saving an item** (create, update, "Add a run", and an import) also adds a
+melt estimate itself, from the cached spot price only, when the piece
+qualifies (metal, weight, fineness) and the cache for that metal is not
+stale: no network call ever happens on the save path (an absent or stale
+cache means nothing is added; the scheduled refresh above catches it later).
+It's skipped, too, when the piece already has a melt estimate with the same
+inputs (metal, weight, fineness, quantity), so an edit that doesn't touch any
+of those adds no duplicate row. The same 12h loop also refreshes Numista and/or PCGS when their own
 cadence is switched on in Settings (each off by default), independently of
 melt and of whichever source currently wins an item's overall-latest estimate,
 since `value_strategy` may prefer or average a source that isn't "latest"
@@ -710,8 +724,10 @@ whether its other money was converted). It answers:
   `converted`.
 - `missing_spot`: pieces eligible for the purchase-day-spot backfill.
   `skipped`: pieces with a detected metal but no weight or fineness (so
-  they're not in `metals`/`items` at all). `history_start`: the earliest
-  date the purchase-day lookup covers (`2024-03-02`).
+  they're not in `metals`/`items` at all); `skipped_items` (P11, v0.31.0)
+  lists them: `item_id`, `label`, and `missing` (`"weight"`, `"fineness"`, or
+  `"weight and fineness"`). `history_start`: the earliest date the
+  purchase-day lookup covers (`2024-03-02`).
 
 `POST /api/stack/backfill` looks up the purchase-day spot for eligible
 pieces (in the stack, no `spot_at_purchase` yet, an `acquisition_date` on or

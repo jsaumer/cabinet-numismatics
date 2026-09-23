@@ -38,6 +38,15 @@ Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
   and the dashboard's value hero and type breakdown, all know "Bars and
   rounds"; the Numista fill searches its exonumia catalogue for a bullion
   piece and shows what kind of object each hit is.
+- **A value from the start.** A new bullion piece (or any precious-metal
+  item) gets a melt estimate without a button press: saving an item adds one
+  from the cached spot price only (no network call on the save path), and
+  the scheduled melt refresh now also picks up owned pieces with no
+  estimate at all, never one whose latest estimate is manual. `GET
+  /api/stack` gains `skipped_items` (which pieces are left out, and whether
+  it's the weight, the fineness, or both), shown on the Stack page under
+  "Left out". `GET /api/items` gains `metal=` (`gold`, `silver`, `platinum`,
+  `palladium`, `none`), with a Metal filter on the list page.
 
 ### Fixed
 - **Metal detection** no longer counts a named alloy as the metal it is

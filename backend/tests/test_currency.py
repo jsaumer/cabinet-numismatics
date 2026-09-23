@@ -121,13 +121,14 @@ def test_value_history_strategy_aware(client):
 def test_refresh_melt_updates_only_stale_melt_estimates(client, monkeypatch):
     monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
 
+    # Created before any spot price is cached, so P11's melt-on-save (v0.31.0)
+    # adds nothing here: only the explicit calls below add estimates.
     fresh = _create(client, SILVER)
-    client.post(f"/api/items/{fresh['id']}/estimates/auto")  # fresh melt → skipped
-
     stale = _create(client, SILVER)
-    client.post(f"/api/items/{stale['id']}/estimates/auto")
-
     manual = _create(client, SILVER)
+
+    client.post(f"/api/items/{fresh['id']}/estimates/auto")  # fresh melt → skipped
+    client.post(f"/api/items/{stale['id']}/estimates/auto")
     client.post(f"/api/items/{manual['id']}/estimates", json={"estimated_value": 99.0})
 
     # backdate the second item's melt estimate past the refresh window
