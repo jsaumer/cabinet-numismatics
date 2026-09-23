@@ -16,6 +16,7 @@ export interface ChartDatum {
   key: string;
   value: number;
   title?: string; // native tooltip text
+  label?: string; // shown instead of the key, when the key isn't the display text
 }
 
 /** Horizontal bar list: label · bar · value at the tip. */
@@ -24,12 +25,13 @@ export function HBars({ data, format }: { data: ChartDatum[]; format: (v: number
   if (max <= 0) return <p className="muted">Nothing to chart yet.</p>;
   // The label column is as wide as the longest label (capped), so the rows
   // start at the card's left edge instead of floating in a fixed gutter.
-  const labelCh = Math.min(Math.max(...data.map((d) => d.key.length)), 24);
+  const labelCh = Math.min(Math.max(...data.map((d) => (d.label ?? d.key).length)), 24);
   return (
     <div className="hbars" style={{ ["--hbar-label" as string]: `${labelCh}ch` }}>
       {data.map((d) => (
-        <div className="hbar-row" key={d.key} title={d.title ?? `${d.key}: ${format(d.value)}`}>
-          <span className="hbar-label">{d.key}</span>
+        <div className="hbar-row" key={d.key}
+          title={d.title ?? `${d.label ?? d.key}: ${format(d.value)}`}>
+          <span className="hbar-label">{d.label ?? d.key}</span>
           <span className="hbar-track">
             <span
               className="hbar-fill"
@@ -85,7 +87,7 @@ export function Columns({ data, format }: { data: ChartDatum[]; format: (v: numb
         const x = 22 + i * (colW + gap);
         return (
           <g key={d.key}>
-            <title>{d.title ?? `${d.key}: ${format(d.value)}`}</title>
+            <title>{d.title ?? `${d.label ?? d.key}: ${format(d.value)}`}</title>
             {d.value > 0 && <path d={bar(x, H - h, colW, h)} fill={SERIES} />}
             {d === peak && (
               <text x={x + colW / 2} y={H - h - 5} fontSize={10.5} fill={INK}
@@ -94,7 +96,7 @@ export function Columns({ data, format }: { data: ChartDatum[]; format: (v: numb
               </text>
             )}
             <text x={x + colW / 2} y={H + 14} fontSize={10} fill={MUTED} textAnchor="middle">
-              {d.key.length > 5 ? `’${d.key.slice(-2)}` : d.key}
+              {(d.label ?? d.key).length > 5 ? `’${d.key.slice(-2)}` : (d.label ?? d.key)}
             </text>
           </g>
         );

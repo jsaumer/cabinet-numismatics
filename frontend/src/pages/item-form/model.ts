@@ -1,6 +1,17 @@
 // The item form's state, its lookups, and the conversion to and from the API.
 
-import { CacSticker, CatalogRef, ItemDetail, ItemPayload, ItemStatus, ItemType, Metal, Priority, Strike } from "../../api";
+import {
+  CacSticker,
+  CatalogRef,
+  ItemDetail,
+  ItemPayload,
+  ItemStatus,
+  ItemType,
+  Metal,
+  Priority,
+  Strike,
+  TROY_OUNCE_G,
+} from "../../api";
 
 export const EMPTY = {
   type: "coin" as ItemType,
@@ -93,6 +104,7 @@ export const DESIGNATIONS: Record<ItemType, [string, string][]> = {
     ["FT", "Full torch (Roosevelt dime)"],
   ],
   note: [["EPQ", "Exceptional paper quality (PMG)"]],
+  bullion: [], // no designations: the form hides the whole block for bullion
 };
 
 export const PROBLEMS: Record<ItemType, string[]> = {
@@ -101,6 +113,7 @@ export const PROBLEMS: Record<ItemType, string[]> = {
     "Tooled", "Altered surfaces", "Bent",
   ],
   note: ["Restoration", "Tears", "Annotations", "Stains", "Trimmed", "Pinholes"],
+  bullion: ["Scratched", "Corroded", "Tarnished", "Damaged"],
 };
 
 export const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
@@ -110,13 +123,54 @@ export const SHAPES = ["Round", "Square", "Polygonal", "Scalloped", "Holed"];
 // stack.HISTORY_START.
 export const HISTORY_START = "2024-03-02";
 
-// Mirrors the backend's detect_metal: a case-insensitive substring match,
-// gold checked before silver before platinum before palladium.
-const METALS: Metal[] = ["gold", "silver", "platinum", "palladium"];
+// Mirrors the backend's pricing.detect_metal (the authority; keep the two in
+// step): whole words only, the named alloys nickel silver, German silver,
+// and Nordic gold are not precious, a metal followed by plated or washed is
+// a coating and gilt is a gold surface on the metal before it (clad is not
+// stripped), and with two metals left the one with the larger attached
+// percentage wins, else the first named.
+const ALLOYS_NOT_PRECIOUS = ["nickel silver", "german silver", "nordic gold"];
+const SURFACE_RE =
+  /\b(?:gold|silver|platinum|palladium)[\s-]*(?:plated|plate|plating|washed|wash)\b|\b(?:gilt|gilded)\b/g;
+const METAL_RE =
+  /(?:(\d{1,3}(?:\.\d+)?)\s*%\s*(?:of\s+)?)?\b(gold|silver|platinum|palladium)\b(?:\s*\(?\s*(\d{1,3}(?:\.\d+)?)\s*%)?/g;
 
 export function detectMetal(composition: string): Metal | null {
-  const text = composition.toLowerCase();
-  return METALS.find((m) => text.includes(m)) ?? null;
+  let text = composition.toLowerCase();
+  for (const alloy of ALLOYS_NOT_PRECIOUS) text = text.split(alloy).join(" ");
+  text = text.replace(SURFACE_RE, " ");
+  const found: { metal: Metal; share: number | null }[] = [];
+  for (const m of text.matchAll(METAL_RE)) {
+    const percent = m[1] ?? m[3];
+    const share = percent && Number(percent) > 0 && Number(percent) <= 100 ? Number(percent) : null;
+    found.push({ metal: m[2] as Metal, share });
+  }
+  if (found.length === 0) return null;
+  const withShare = found.filter((f) => f.share !== null);
+  if (withShare.length > 0) {
+    return withShare.reduce((best, f) => (f.share! > best.share! ? f : best)).metal;
+  }
+  return found[0].metal;
+}
+
+/** A new bullion piece defaults to .999 fine (four-nines a click away); an
+ * already-filled fineness, from Numista or the owner, is left alone. */
+export function presetBullionFineness(f: FormState): FormState {
+  return f.fineness === "" ? { ...f, fineness: "0.999" } : f;
+}
+
+/** The product name a bullion piece suggests from its weight, metal, and
+ * shape: "1 oz silver bar", "10 g gold bar", "1 oz silver round". Ounces are
+ * shown for a whole or half number of troy ounces, grams otherwise. */
+export function suggestDenomination(weightG: number, metal: Metal, shape: string): string {
+  const oz = weightG / TROY_OUNCE_G;
+  // Grams are stored to four places (31.1035 for an ounce), so a stored
+  // weight is a hair off the exact ounce: allow a couple of thousandths.
+  const wholeOrHalfOz = Math.abs(oz * 2 - Math.round(oz * 2)) < 0.004;
+  const amount = wholeOrHalfOz ? oz : weightG;
+  const rounded = Math.round(amount * 10000) / 10000;
+  const kind = shape === "Round" ? "round" : "bar";
+  return `${rounded} ${wholeOrHalfOz ? "oz" : "g"} ${metal} ${kind}`;
 }
 
 /** Whether a date falls inside the historic-spot lookup's coverage: on or
@@ -138,6 +192,7 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
   }
   const coin = form.type === "coin";
   const note = form.type === "note";
+  const bullion = form.type === "bullion";
   const allowed = new Set(DESIGNATIONS[form.type].map(([code]) => code));
   const designations = form.designations.filter((d) => allowed.has(d));
   const sold = form.status === "sold";
@@ -147,16 +202,17 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     status: form.status,
     country: form.country.trim(),
     denomination: form.denomination.trim(),
-    // With a date as struck and no year, the server converts it.
+    // With a date as struck and no year, the server converts it. A bar with
+    // no year is neither dated nor ND (the year-or-ND rule doesn't apply).
     year: form.year === "" ? null : Number(form.year),
-    year_nd: form.year_nd,
+    year_nd: bullion ? false : form.year_nd,
     struck_calendar: struck ? form.struck_calendar : null,
     struck_year: struck ? Number(form.struck_year) : null,
     struck_era: struck && form.struck_calendar === "japanese" ? opt(form.struck_era) : null,
     die_axis: coin ? optNum(form.die_axis) : null,
-    mint_mark: opt(form.mint_mark),
+    mint_mark: bullion ? null : opt(form.mint_mark),
     series: opt(form.series),
-    variety: opt(form.variety),
+    variety: bullion ? null : opt(form.variety),
     strike: form.strike,
     set_id: form.set_id === "" ? null : Number(form.set_id),
     custom_fields: Object.keys(custom).length ? custom : null,
@@ -164,17 +220,18 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     weight_g: optNum(form.weight_g),
     fineness: optNum(form.fineness),
     diameter_mm: coin ? optNum(form.diameter_mm) : null,
-    thickness_mm: coin ? optNum(form.thickness_mm) : null,
+    thickness_mm: coin || bullion ? optNum(form.thickness_mm) : null,
     // Size, printer, and watermark are edited on a note but kept on anything
-    // that already carries them (an import may give a coin its size).
+    // that already carries them (an import may give a coin its size); a
+    // bar's size (not round) uses the same width/height fields.
     width_mm: optNum(form.width_mm),
     height_mm: optNum(form.height_mm),
     edge: coin ? opt(form.edge) : null,
-    shape: coin ? opt(form.shape) : null,
+    shape: coin || bullion ? opt(form.shape) : null,
     printer: opt(form.printer),
     watermark: opt(form.watermark),
-    demonetized_on: form.demonetized_on || null,
-    mintage: optNum(form.mintage),
+    demonetized_on: bullion ? null : form.demonetized_on || null,
+    mintage: bullion ? null : optNum(form.mintage),
     grade_id: form.grade_id === "" ? null : Number(form.grade_id),
     grade_plus: form.grade_plus,
     grade_star: form.grade_star,
@@ -185,10 +242,10 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     cert_number: opt(form.cert_number),
     pcgs_population: coin ? optNum(form.pcgs_population) : null,
     pcgs_pop_higher: coin ? optNum(form.pcgs_pop_higher) : null,
-    serial_number: note ? opt(form.serial_number) : null,
+    serial_number: note || bullion ? opt(form.serial_number) : null,
     prefix_block: note ? opt(form.prefix_block) : null,
     signatures: note ? opt(form.signatures) : null,
-    issuer: note ? opt(form.issuer) : null,
+    issuer: note || bullion ? opt(form.issuer) : null,
     replacement_note: note && form.replacement_note,
     charter_number: note ? opt(form.charter_number) : null,
     bank_city: note ? opt(form.bank_city) : null,

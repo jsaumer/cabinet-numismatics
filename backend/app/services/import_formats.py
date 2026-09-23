@@ -240,6 +240,8 @@ def _item_type(value, default: str) -> str:
     text = (clean(value) or "").lower()
     if any(word in text for word in ("banknote", "bank note", "paper", "note", "bill")):
         return "note"
+    if any(word in text for word in ("bar", "round", "ingot", "bullion")):
+        return "bullion"
     if "coin" in text:
         return "coin"
     return default
@@ -430,7 +432,18 @@ def numista_file_candidates(rows: list[dict], defaults: dict) -> list[Candidate]
         cand = Candidate(row=index + 1, key=keys[index])
         f = cand.fields
         kind = (clean(get("type")) or "").lower()
-        f["type"] = "note" if "banknote" in kind or "note" in kind else "coin"
+        if "banknote" in kind or "note" in kind:
+            f["type"] = "note"
+        elif any(word in kind for word in ("bar", "round", "ingot", "bullion")):
+            f["type"] = "bullion"
+        elif "exonumia" in kind or "token" in kind or "medal" in kind:
+            f["type"] = "coin"  # placeholder; the row is skipped below
+            cand.error = (
+                "Skipped: exonumia (tokens, medals). Cabinet takes bars and rounds, "
+                "not tokens or medals"
+            )
+        else:
+            f["type"] = "coin"
         f["status"] = "owned"
         f["country"] = clean(get("country", "issuer", "ruling authority"))
         face, unit = clean(get("face value")), clean(get("currency"))
@@ -761,12 +774,20 @@ def numista_account_candidates(
         cand = Candidate(row=index + 1, key=str(item.get("id")) if item.get("id") else None)
         f = cand.fields
         category = str(type_.get("category") or "coin")
-        if category == "exonumia":
-            cand.error = "Skipped: exonumia (tokens, medals). Cabinet holds coins and notes"
         details = dict(types.get(type_id, {})) if isinstance(type_id, int) else {}
         cand.refs.extend(details.pop("catalog_refs", []))
         f.update({k: v for k, v in details.items() if k not in ("year",)})
-        f["type"] = "note" if category == "banknote" else "coin"
+        if category == "exonumia":
+            if details.get("type") == "bullion":
+                f["type"] = "bullion"
+            else:
+                f["type"] = "coin"  # placeholder; the row is skipped below
+                cand.error = (
+                    "Skipped: exonumia (tokens, medals). Cabinet takes bars and rounds, "
+                    "not tokens or medals"
+                )
+        else:
+            f["type"] = "note" if category == "banknote" else "coin"
         f["status"] = "owned"
         issuer = type_.get("issuer") if isinstance(type_.get("issuer"), dict) else {}
         f.setdefault("country", clean(issuer.get("name"), 100))

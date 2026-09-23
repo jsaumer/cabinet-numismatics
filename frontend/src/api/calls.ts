@@ -201,7 +201,7 @@ export const api = {
   getSettings: () => req<AppSettings>("/api/settings"),
   updateSettings: (payload: AppSettingsUpdate) =>
     req<AppSettings>("/api/settings", json("PUT", payload)),
-  numistaSearch: (q: string, category: "coin" | "banknote") =>
+  numistaSearch: (q: string, category: "coin" | "banknote" | "exonumia") =>
     req<{ count: number; results: NumistaSearchResult[] }>(
       `/api/numista/search?${new URLSearchParams({ q, category })}`,
     ),

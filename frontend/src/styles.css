@@ -28,6 +28,8 @@
   --badge-coin-ink: #7a5901;
   --badge-note-bg: #d2e3fc;
   --badge-note-ink: #1a4d8f;
+  --badge-bullion-bg: #dcefe0;
+  --badge-bullion-ink: #1f6b3a;
   --badge-sold-bg: #ffe2dd;
   --badge-sold-ink: #93261b;
   --badge-wish-bg: #e6dcf7;
@@ -65,6 +67,8 @@
   --badge-coin-ink: #eda100;
   --badge-note-bg: #16283f;
   --badge-note-ink: #6da7ec;
+  --badge-bullion-bg: #163821;
+  --badge-bullion-ink: #5fcf85;
   --badge-sold-bg: #3d1a16;
   --badge-sold-ink: #e66767;
   --badge-wish-bg: #2a2140;
@@ -320,6 +324,10 @@ table.items th.num {
 .badge.note {
   background: var(--badge-note-bg);
   color: var(--badge-note-ink);
+}
+.badge.bullion {
+  background: var(--badge-bullion-bg);
+  color: var(--badge-bullion-ink);
 }
 .badge.status-sold {
   background: var(--badge-sold-bg);

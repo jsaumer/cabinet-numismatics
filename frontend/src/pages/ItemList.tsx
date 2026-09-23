@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, CollectionStats, ItemPage, money, photoUrl, PRIORITY_LABELS } from "../api";
+import {
+  api,
+  CollectionStats,
+  ItemPage,
+  METAL_LABELS,
+  money,
+  photoUrl,
+  PRIORITY_LABELS,
+} from "../api";
 import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
@@ -32,7 +40,7 @@ const ADVANCED_KEYS = [
 ];
 
 const FILTER_KEYS = [
-  "type", "status", "strike", "country", "year", "q", "tag", "set_id",
+  "type", "status", "strike", "country", "metal", "year", "q", "tag", "set_id",
   "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
   "fancy", "serial_trait", "target_reached",
 ] as const;
@@ -55,6 +63,7 @@ export default function ItemList() {
   useEffect(() => {
     api.listTrash().then((t) => setTrashCount(t.items.length)).catch(() => setTrashCount(0));
   }, []);
+  const [bulkType, setBulkType] = useState("");
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkStorage, setBulkStorage] = useState("");
   const [bulkPriority, setBulkPriority] = useState("");
@@ -76,6 +85,7 @@ export default function ItemList() {
     setError(null);
     try {
       const set: Record<string, string | number> = {};
+      if (bulkType) set.type = bulkType;
       if (bulkStatus) set.status = bulkStatus;
       if (bulkPriority) set.priority = Number(bulkPriority);
       if (bulkStorage.trim()) set.storage_location = bulkStorage.trim();
@@ -86,6 +96,7 @@ export default function ItemList() {
         remove_tags: bulkRemoveTag.trim() ? [bulkRemoveTag.trim()] : [],
       });
       setSelected(new Set());
+      setBulkType("");
       setBulkStatus("");
       setBulkStorage("");
       setBulkPriority("");
@@ -254,6 +265,17 @@ export default function ItemList() {
             <option value="">All</option>
             <option value="coin">Coins</option>
             <option value="note">Notes</option>
+            <option value="bullion">Bars and rounds</option>
+          </select>
+        </label>
+        <label className="field">
+          Metal
+          <select value={get("metal")} onChange={(e) => set("metal", e.target.value)}>
+            <option value="">All</option>
+            {Object.entries(METAL_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+            <option value="none">None detected</option>
           </select>
         </label>
         <label className="field">
@@ -392,6 +414,15 @@ export default function ItemList() {
         <div className="toolbar advanced">
           <span style={{ alignSelf: "center" }}><b>{selected.size}</b> selected</span>
           <label className="field">
+            Set type
+            <select value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
+              <option value="">unchanged</option>
+              <option value="coin">Coin</option>
+              <option value="note">Note</option>
+              <option value="bullion">Bar or round</option>
+            </select>
+          </label>
+          <label className="field">
             Set status
             <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
               <option value="">unchanged</option>
@@ -490,7 +521,9 @@ export default function ItemList() {
                   {item.primary_thumb_key ? (
                     <img className="thumb" src={photoUrl(item.primary_thumb_key)} alt="" />
                   ) : (
-                    <div className="thumb placeholder">{item.type === "coin" ? "◎" : "▭"}</div>
+                    <div className="thumb placeholder">
+                      {item.type === "coin" ? "◎" : item.type === "bullion" ? "▬" : "▭"}
+                    </div>
                   )}
                 </td>
                 <td>

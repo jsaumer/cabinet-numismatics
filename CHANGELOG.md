@@ -10,6 +10,68 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-23
+
+Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
+
+### Fixed
+- **Metal detection** no longer counts a named alloy as the metal it is
+  named after, or a coating as the metal: nickel silver, German silver, and
+  Nordic gold (the euro 10, 20, and 50 cent alloy) are not precious, "Gold
+  plated brass" is not gold, "Gold plated silver" is silver, "golden" is not
+  gold, and with two metals named the one with the larger share wins. The
+  metal breakdown, the stack's skipped count, melt coverage, and the item
+  form's spot field all follow.
+- **Fineness read from a composition** takes the percentage attached to the
+  metal, so "Copper 10%, Silver 90%" is .900 (it read .100). One parser now
+  serves melt, the stack, and the Numista fill, and also reads ".925", "999.9",
+  sterling, Britannia, coin silver, and gold carats (24K to 9K).
+
+### Added
+- **A third item type, `bullion`** ("Bar or round"), on the API side. No year
+  is required for it (neither `year` nor `year_nd`), its label reads
+  "PAMP Suisse 1 oz silver bar" with no mint mark, and it never gets fancy
+  serial traits. The list's `type=` filter and bulk edit accept it; the type
+  breakdown and `/api/metrics` pick it up automatically. Filling an item in
+  from Numista, and both the account and file imports, now take a bar or
+  round from Numista's exonumia catalogue (still refusing tokens and
+  medals), and a spreadsheet's Type column reads "bar", "round", "ingot",
+  or "bullion" the same way.
+- **The bullion type on the frontend.** The item form's type choice gains
+  "Bar or round" (`/items/new?type=bullion` presets it); a bullion piece
+  gets a Metal select that writes the composition, a fineness that defaults
+  to .999, a g / oz switch beside Weight (coins too), and a suggested
+  product name from its weight, metal, and shape, kept until the owner
+  types their own. A coin's Composition field gains a hint about the
+  bullion stack, and the Stack page's empty state links to
+  `/items/new?type=bullion`. The item page's hero and facts show a bar's
+  own fields (refiner, weight, fineness, size, shape, serial number) and
+  hide the coin- and note-only ones. The list's type filter and bulk edit,
+  and the dashboard's value hero and type breakdown, all know "Bars and
+  rounds"; the Numista fill searches its exonumia catalogue for a bullion
+  piece and shows what kind of object each hit is.
+- **A value from the start.** A new bullion piece (or any precious-metal
+  item) gets a melt estimate without a button press: saving an item adds one
+  from the cached spot price only (no network call on the save path). `GET
+  /api/stack` gains `skipped_items` (which pieces are left out, and whether
+  it's the weight, the fineness, or both), shown on the Stack page under
+  "Left out". `GET /api/items` gains `metal=` (`gold`, `silver`, `platinum`,
+  `palladium`, `none`), with a Metal filter on the list page.
+
+### Changed
+- **Melt estimates reach existing pieces sooner, not only new bullion
+  ones.** The scheduled melt refresh now also picks up any owned,
+  untrashed coin or note with a detected precious metal and no estimate at
+  all, never one whose latest estimate is manual or from another source;
+  saving an item (create, update, a run, or an import) does the same from
+  the cached spot price, skipping a piece that already carries a melt
+  estimate matching its current metal, weight, fineness, and quantity.
+- **Two response shapes grow a field, additively.**
+  `GET /api/stats/collection`'s `counts` gains `bullion` alongside `coins`
+  and `notes`; `Item.year_label` reads `""`, not `"ND"`, for a bullion piece
+  with no year (coins and notes are unchanged, since the year-or-ND rule
+  still applies to them).
+
 ## [0.30.2] - 2026-09-22
 
 The owner's second first-run pass, all on the Settings page.
@@ -91,7 +153,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   on the node's own disk) and the settings above; see
   `deploy/docker-stack.yaml`.
 - An authenticating proxy in front (forward-auth or an SSO gateway) keeps
-  working and is recommended until single sign-on arrives in v0.31.0.
+  working and is recommended until single sign-on arrives in v0.32.0.
 - Any stored secret still in plain text is cleared and named, to be entered
   again. Every secret saved since v0.10 is already encrypted.
 - Revision `a0001` creates the `cabinet_auth` schema; the backend applies it

@@ -316,6 +316,9 @@ NUMISTA_TYPES = {
     7777: {"id": 7777, "title": "1 Dollar \"Morgan Dollar\"", "category": "coin",
            "issuer": {"name": "United States"}, "value": {"text": "1 Dollar"},
            "composition": {"text": "Silver (.900)"}, "weight": 26.73, "size": 38.1},
+    # A token, not a bar or round: still refused (P11, v0.31.0, stage 2).
+    999: {"id": 999, "title": "Token - Casino", "category": "exonumia",
+          "issuer": {"name": "Nevada"}},
 }  # fmt: skip
 
 

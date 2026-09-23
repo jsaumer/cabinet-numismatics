@@ -6,6 +6,9 @@ export interface NumistaSearchResult {
   type_id: number;
   title: string;
   category: string | null;
+  // Exonumia only, v0.31.0: "Bars", "Medals", tokens' own category, so a hit
+  // says what it is before it's opened.
+  object_type?: string | null;
   issuer: string | null;
   min_year: number | null;
   max_year: number | null;

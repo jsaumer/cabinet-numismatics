@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.services import calendars
 
-ItemTypeName = Literal["coin", "note"]
+ItemTypeName = Literal["coin", "note", "bullion"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
 AngleName = Literal["obverse", "reverse", "edge", "other"]
 StrikeName = Literal["business", "proof", "specimen"]
@@ -207,8 +207,9 @@ class ItemBase(BaseModel):
 
     @model_validator(mode="after")
     def _year_or_nd(self):
-        """A year is required unless the piece carries no date."""
-        if self.year is None and not self.year_nd:
+        """A year is required unless the piece carries no date; bullion is
+        exempt (a bar may have neither)."""
+        if self.type != "bullion" and self.year is None and not self.year_nd:
             raise ValueError(YEAR_REQUIRED)
         return self
 
@@ -924,7 +925,7 @@ class CollectionStats(BaseModel):
     are excluded and counted, never silently mixed."""
 
     currency: str
-    counts: dict[str, int]  # owned / sold / wishlist / coins / notes / total
+    counts: dict[str, int]  # owned / sold / wishlist / coins / notes / bullion / total
     cost_basis: float  # owned items: price paid plus fees, in the display currency
     estimated_value: float  # owned items' latest estimates in the display currency
     unrealized_gain: float  # over owned items having BOTH price and estimate
@@ -1109,6 +1110,15 @@ class StackTotals(BaseModel):
     fine_oz_by_metal: dict[str, float]
 
 
+class StackSkippedItem(BaseModel):
+    """A precious-metal piece left out of the stack for want of a weight or a
+    fineness (P11, v0.31.0)."""
+
+    item_id: uuid.UUID
+    label: str
+    missing: str  # "weight", "fineness", or "weight and fineness"
+
+
 class StackReport(BaseModel):
     currency: str
     metals: list[StackMetal]
@@ -1116,6 +1126,7 @@ class StackReport(BaseModel):
     items: list[StackItem]
     missing_spot: int  # pieces whose purchase-day spot could be looked up
     skipped: int  # precious-metal pieces with no weight or fineness
+    skipped_items: list[StackSkippedItem]
     excluded_other_currency: int
     history_start: date
 

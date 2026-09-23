@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, with_lo
 
 from app.db import Base
 
-ItemType = Enum("coin", "note", name="item_type", native_enum=False, length=10)
+ItemType = Enum("coin", "note", "bullion", name="item_type", native_enum=False, length=10)
 ItemStatus = Enum("owned", "sold", "wishlist", name="item_status", native_enum=False, length=10)
 StrikeType = Enum("business", "proof", "specimen", name="strike_type", native_enum=False, length=10)
 PhotoAngle = Enum(
@@ -231,14 +231,20 @@ class Item(Base):
 
     @property
     def year_label(self) -> str:
-        """The year as catalogues write it: "1922", "ND", or "ND (1922)"."""
+        """The year as catalogues write it: "1922", "ND", or "ND (1922)".
+        Empty for a bullion piece with no year: a bar needs no "ND"."""
         if self.year is None:
-            return "ND"
+            return "" if self.type == "bullion" else "ND"
         return f"ND ({self.year})" if self.year_nd else str(self.year)
 
     @property
     def label(self) -> str:
-        """Short display label, e.g. `United States 25 cents 1932 "D"`."""
+        """Short display label, e.g. `United States 25 cents 1932 "D"`, or for
+        bullion `PAMP Suisse 1 oz silver bar` (no mint mark, and no year part
+        when there is none)."""
+        if self.type == "bullion":
+            parts = [self.issuer or self.country, self.denomination, self.year_label]
+            return " ".join(p for p in parts if p)
         parts = [self.country, self.denomination, self.year_label]
         if self.mint_mark:
             parts.append(f'"{self.mint_mark}"')

@@ -2,7 +2,7 @@
 
 import type { SpotAtPurchaseSource } from "./stack";
 
-export type ItemType = "coin" | "note";
+export type ItemType = "coin" | "note" | "bullion";
 export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
 export type Strike = "business" | "proof" | "specimen";

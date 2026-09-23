@@ -276,7 +276,36 @@ import json, sys
 report = json.load(sys.stdin)
 assert isinstance(report["metals"], list), report
 assert report["history_start"] == "2024-03-02", report
+assert isinstance(report["skipped_items"], list), report
 '
+  # metal= is evaluated in Python, not SQL (P11, v0.31.0): a known metal
+  # answers, an unknown one is 422.
+  apif "$BASE/api/items?metal=silver" > /dev/null
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/items?metal=tin")" = 422
+
+  # a bullion item (P11, v0.31.0): no year, still counted, still in the stack
+  bid=$(apif -X POST "$BASE/api/items" \
+    -H 'Content-Type: application/json' \
+    -d '{"type":"bullion","country":"CI Refinery","denomination":"1 oz silver bar","composition":"999 silver","weight_g":31.1035,"fineness":0.999}' \
+    | field id)
+  apif "$BASE/api/items/$bid" | "$PY" -c '
+import json, sys
+item = json.load(sys.stdin)
+assert item["type"] == "bullion", item
+assert item["year_label"] == "", item
+'
+  apif "$BASE/api/stats/collection" | "$PY" -c '
+import json, sys
+stats = json.load(sys.stdin)
+assert stats["counts"]["bullion"] >= 1, stats
+'
+  apif "$BASE/api/stack" | "$PY" -c '
+import json, sys
+report = json.load(sys.stdin)
+assert any(m["metal"] == "silver" and m["fine_oz"] > 0 for m in report["metals"]), report
+'
+  apif -X DELETE "$BASE/api/items/$bid" -o /dev/null
+  apif "$BASE/api/trash" | grep -q "$bid"
 
   # metrics: anonymous 401, a read token 403, a metrics token 404 while off,
   # then 200 once an admin session turns it on. Explicitly turned off first,

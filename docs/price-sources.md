@@ -58,13 +58,19 @@ agreement.**
 ### Melt value (implemented, the first automatic source)
 For precious-metal items, `weight × fineness × spot price × quantity` gives a
 deterministic floor value with no terms-of-service concerns. Implemented in
-`app/services/pricing.py`: the metal is detected from the `composition` text
-(gold/silver/platinum/palladium), fineness falls back to a percentage in the
-composition ("90% silver" → 0.900), and spot prices come from gold-api.com
-(free, keyless, USD/oz) cached in the `spot_prices` table for 12 hours. A
-stale cached price is used if the upstream is down. Estimates record the spot
-price used in their `source` (e.g. `melt:silver @ 1.0562/g`) and carry
-confidence 0.95.
+`app/services/pricing.py`: `detect_metal` and `parse_fineness` (the one
+detector and one parser, fixed in P11, v0.31.0) read the `composition` text.
+Detection is whole-words-only, skips the named alloys `nickel silver`,
+`german silver`, and `nordic gold`, and treats a `plated`/`washed`/`gilt`
+metal as a coating rather than the piece's own metal; with two metals left,
+the one with the larger attached percentage wins. Fineness reads the
+percentage attached to the detected metal ("90% silver" → 0.900), then a
+decimal (`.925`), then millesimal (`925`, `999.9`), then a named standard
+(sterling, Britannia, coin silver) or a gold carat (24K to 9K). Spot prices
+come from gold-api.com (free, keyless, USD/oz) cached in the `spot_prices`
+table for 12 hours. A stale cached price is used if the upstream is down.
+Estimates record the spot price used in their `source` (e.g. `melt:silver @
+1.0562/g`) and carry confidence 0.95.
 
 ### Purchase-day spot for the bullion stack (implemented, v0.28.0, roadmap Phase 7 P7)
 The bullion stack (see [api.md](api.md#bullion-stack)) also wants the metal's

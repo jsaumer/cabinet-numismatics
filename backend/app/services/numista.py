@@ -20,7 +20,6 @@ item's quantity.
 """
 
 import hashlib
-import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -38,6 +37,7 @@ from app.services.pricing import (
     cached_fetch,
     detect_metal,
     freshness,
+    parse_fineness,
 )
 
 API_ROOT = "https://api.numista.com/api/v3"
@@ -387,10 +387,6 @@ SEARCH_RESULTS = 20
 _LIMITS = {"country": 100, "denomination": 100, "series": 200, "composition": 100,
            "edge": 100, "shape": 50, "issuer": 200}  # fmt: skip
 
-_FINENESS_PERCENT = re.compile(r"(\d{1,3}(?:\.\d+)?)\s*%")
-_FINENESS_DECIMAL = re.compile(r"(?<![\d.])0?\.(\d{3,4})(?!\d)")
-_FINENESS_MILLESIMAL = re.compile(r"(?<![\d.,])(\d{3}(?:\.\d+)?)(?![\d%])")
-
 
 class CatalogueNotFound(LookupError):
     """Numista has no such type."""
@@ -418,20 +414,10 @@ def _number(value, maximum: float) -> float | None:
 
 def fineness_from_composition(text: str | None) -> float | None:
     """Fineness written into a composition, for precious metals only: "Silver
-    (.900)", "90% silver", "Gold 916.7", "Silver 999"."""
-    if not text or detect_metal(text) is None:
-        return None
-    candidates = []
-    if match := _FINENESS_PERCENT.search(text):
-        candidates.append(float(match.group(1)) / 100)
-    if match := _FINENESS_DECIMAL.search(text):
-        candidates.append(float(f"0.{match.group(1)}"))
-    if match := _FINENESS_MILLESIMAL.search(text):
-        candidates.append(float(match.group(1)) / 1000)
-    for value in candidates:
-        if 0 < value <= 1:
-            return round(value, 4)
-    return None
+    (.900)", "90% silver", "Gold 916.7", "Silver 999". The one parser,
+    `pricing.parse_fineness`, for the metal `pricing.detect_metal` finds."""
+    value = parse_fineness(text, detect_metal(text))
+    return round(float(value), 4) if value is not None else None
 
 
 def search_types(db: Session, query: str, category: str | None = None) -> dict:
@@ -454,6 +440,9 @@ def search_types(db: Session, query: str, category: str | None = None) -> dict:
                 "type_id": found["id"],
                 "title": _clean(found.get("title")) or f"N#{found['id']}",
                 "category": _clean(found.get("category")),
+                # Exonumia only: "Bars", "Medals", "Restaurant, bar, cafe and
+                # hotel tokens", so a hit says what it is (v0.31.0).
+                "object_type": _clean(object_type_name(found)),
                 "issuer": _clean(issuer.get("name")),
                 "min_year": found.get("min_year")
                 if isinstance(found.get("min_year"), int)
@@ -468,25 +457,79 @@ def search_types(db: Session, query: str, category: str | None = None) -> dict:
     return {"count": int(count) if str(count).isdigit() else len(results), "results": results}
 
 
+# Numista's exonumia object types that are bullion (confirmed against the
+# live API, 22 September 2026: a bar carries `object_type: {"id": 36,
+# "name": "Bars"}` and `type: "Bars"`). The name is matched whole, never by
+# word: a token's object type is "Restaurant, bar, cafe and hotel tokens",
+# and "Collector coins" exists inside exonumia too and is not bullion.
+BULLION_OBJECT_TYPES = {"bars", "bar", "rounds", "round", "ingots", "ingot", "bullion"}
+BULLION_OBJECT_TYPE_IDS = {36}
+
+
+def object_type_name(payload: dict) -> str | None:
+    """The exonumia object type's name ("Bars", "Medals", ...), if any."""
+    object_type = payload.get("object_type")
+    if isinstance(object_type, dict) and isinstance(object_type.get("name"), str):
+        return object_type["name"].strip() or None
+    if isinstance(payload.get("type"), str):
+        return payload["type"].strip() or None
+    return None
+
+
+def _exonumia_is_bullion(payload: dict) -> bool:
+    """Whether an exonumia type is a bar or round rather than a token, a
+    medal, or a collector piece with a face value."""
+    object_type = payload.get("object_type")
+    if isinstance(object_type, dict) and object_type.get("id") in BULLION_OBJECT_TYPE_IDS:
+        return True
+    name = object_type_name(payload)
+    return name is not None and name.lower() in BULLION_OBJECT_TYPES
+
+
 def catalogue_fields(payload: dict, issues: list[dict] | None = None) -> dict:
     """Item fields a catalogue type fills in, keyed like the item schema.
     Only values Numista actually has are included. With the type's issues:
-    when every one of them is undated, the item is too."""
-    note = payload.get("category") == "banknote"
+    when every one of them is undated, the item is too. An exonumia type
+    that doesn't read as a bar or round (a token or medal) is refused:
+    Cabinet takes bullion from Numista's exonumia, nothing else."""
+    category = payload.get("category")
+    note = category == "banknote"
+    bullion = category == "exonumia"
+    if bullion and not _exonumia_is_bullion(payload):
+        raise NotApplicable(
+            "Cabinet takes bars and rounds from Numista's exonumia, not tokens or medals"
+        )
     issuer = payload.get("issuer") if isinstance(payload.get("issuer"), dict) else {}
     value = payload.get("value") if isinstance(payload.get("value"), dict) else {}
     composition = payload.get("composition")
     composition_text = composition.get("text") if isinstance(composition, dict) else None
     min_year, max_year = payload.get("min_year"), payload.get("max_year")
     fields = {
-        "type": "note" if note else "coin",
+        "type": "note" if note else "bullion" if bullion else "coin",
         "country": _clean(issuer.get("name"), _LIMITS["country"]),
-        "denomination": _clean(value.get("text"), _LIMITS["denomination"]),
+        # A bar has no face value to read; the title is the product name.
+        "denomination": _clean(
+            payload.get("title") if bullion else value.get("text"), _LIMITS["denomination"]
+        ),
         "year": min_year if isinstance(min_year, int) and min_year == max_year else None,
         "series": _clean(payload.get("series"), _LIMITS["series"]),
         "composition": _clean(composition_text, _LIMITS["composition"]),
         "fineness": fineness_from_composition(composition_text),
     }
+    if bullion:
+        # The refiner or mint is the first of the type's `mints` (confirmed:
+        # PAMP, then Singapore Mint, on a Singapore Mint bar); the issuer is
+        # the country, as for a coin.
+        mints = payload.get("mints")
+        first = (
+            next((m for m in mints if isinstance(m, dict)), None)
+            if isinstance(mints, list)
+            else None
+        )
+        fields["issuer"] = _clean(first.get("name"), _LIMITS["issuer"]) if first else None
+        # A bar is not round: `size` and `size2` are its width and height.
+        fields["width_mm"] = _number(payload.get("size"), 2000)
+        fields["height_mm"] = _number(payload.get("size2"), 2000)
     if note:
         entity = payload.get("issuing_entity")
         fields["issuer"] = (
@@ -521,7 +564,7 @@ def catalogue_fields(payload: dict, issues: list[dict] | None = None) -> dict:
         edge = payload.get("edge")
         fields.update(
             weight_g=_number(payload.get("weight"), 100_000),
-            diameter_mm=_number(payload.get("size"), 1000),
+            diameter_mm=None if bullion else _number(payload.get("size"), 1000),
             thickness_mm=_number(payload.get("thickness"), 100),
             shape=_clean(payload.get("shape"), _LIMITS["shape"]),
             edge=_clean(edge.get("description"), _LIMITS["edge"])
@@ -797,8 +840,10 @@ def type_fields(db: Session, type_ids: set[int], fetch: bool) -> tuple[dict[int,
         except (_NotFound, SourceUnavailable):
             missed += 1
             continue
-        found[type_id] = {
-            **catalogue_fields(payload),
-            "catalog_refs": catalogue_refs(type_id, payload),
-        }
+        try:
+            fields = catalogue_fields(payload)
+        except NotApplicable:  # exonumia that isn't a bar or round
+            missed += 1
+            continue
+        found[type_id] = {**fields, "catalog_refs": catalogue_refs(type_id, payload)}
     return found, missed

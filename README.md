@@ -6,26 +6,26 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.30.2-informational)
+![Version](https://img.shields.io/badge/version-0.31.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.30.0 released (sign-in and encrypted backups).**
+**Status: v0.31.0 released (bars and rounds; sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
 scoped API tokens for scripts and dashboards. Single sign-on follows in
-v0.31.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
+v0.32.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
 plan drawn from a survey of other collection tools, alongside what entering
 a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has its own sign-in (one admin, claimed with a
 > setup code on first start), but still benefits from an authenticating
-> reverse proxy as a second door until single sign-on ships in v0.31.0. See
+> reverse proxy as a second door until single sign-on ships in v0.32.0. See
 > [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
@@ -52,6 +52,12 @@ Dark is the default; the header toggle switches to light and remembers it.
   mintage, quantity, and free-text notes (banknotes add serial number,
   prefix/block, signatures, issuer, and replacement notes), plus up to 20
   custom fields per item.
+- **Bars and rounds**: a third item type alongside coins and notes, with no
+  year required. A Metal select (gold, silver, platinum, palladium) fills
+  the composition and defaults the fineness to .999; weight can be entered
+  in grams or troy ounces; the product name is suggested from weight,
+  metal, and shape until you type your own. Filled in from Numista's
+  bullion catalogue too.
 - **Dates as struck**: a coin dated in another calendar (Islamic, Persian,
   Thai Buddhist, Hebrew, Japanese eras, Vikram Samvat, Saka, Minguo, Chula
   Sakarat, Rattanakosin, Ethiopian) keeps the year as written, and the
@@ -131,13 +137,15 @@ Dark is the default; the header toggle switches to light and remembers it.
   append-only history, never overwritten (a value typed in by mistake can be
   deleted; what a source said is kept).
 - **Pluggable price sources**: melt value (spot price × weight × fineness ×
-  quantity, keyless), Numista (coins and notes, priced by catalog ref +
-  grade), and PCGS (US coins, by cert number or catalog ref + grade,
-  preferring auction prices realized in the last five years over the price
-  guide; the same answer keeps the coin's population current). One-click
-  and scheduled refresh for all three, with Numista and PCGS off by default,
-  Numista's cadence (7/14/30 days) shown against its 2,000/month quota, and
-  PCGS weekly within its 100 calls a day.
+  quantity, keyless; metal detection skips named alloys like nickel silver
+  and surface coatings like plating, and fineness parsing reads the
+  percentage attached to the detected metal), Numista (coins, notes, and
+  bars/rounds, priced by catalog ref + grade), and PCGS (US coins, by cert
+  number or catalog ref + grade, preferring auction prices realized in the
+  last five years over the price guide; the same answer keeps the coin's
+  population current). One-click and scheduled refresh for all three, with
+  Numista and PCGS off by default, Numista's cadence (7/14/30 days) shown
+  against its 2,000/month quota, and PCGS weekly within its 100 calls a day.
 - **Sold comparables**: log what pieces like yours actually sold for (eBay
   sold listings, auction archives, dealer sales) and get a comps estimate:
   the median of recent sales in your currency, with confidence from how many
@@ -160,10 +168,11 @@ Dark is the default; the header toggle switches to light and remembers it.
   disagree, and how estimates held up against actual sale prices.
 - **Bullion stack**: a Stack page with fine troy ounces, melt value, cost per
   ounce (also the break-even spot price), gain or loss, and the premium paid
-  over spot at purchase, by metal and per item, scopeable by tag. Purchase-day
-  spot is looked up automatically for purchases from 2 March 2024 and can be
-  typed in for older ones; spot-price threshold alerts fire through the
-  existing webhook.
+  over spot at purchase, by metal and per item, scopeable by tag, listing
+  what it leaves out and why (no weight, no fineness). Purchase-day spot is
+  looked up automatically for purchases from 2 March 2024 and can be typed
+  in for older ones; spot-price threshold alerts fire through the existing
+  webhook.
 
 ### Insights & reporting
 - Customisable dashboard (the home page): 31 widgets (value, breakdowns by
@@ -271,7 +280,7 @@ for a signed-in browser. After pulling a new version, run
 whether the schema is current. To run the published images instead of
 building, see [docs/deployment.md](docs/deployment.md).
 
-**Want something to look at first?** Load a small demo collection (14 items
+**Want something to look at first?** Load a small demo collection (16 items
 across several countries, decades, and grades, with value history). Mint a
 write-scoped API token first (Settings → Account → API tokens, or
 `POST /api/auth/tokens`):

@@ -95,12 +95,45 @@ def test_ounces_by_metal_and_quantity(client, spot):
 def test_fineness_from_composition_and_skipped(client, spot):
     _create(client, {**OUNCE, "composition": "90% silver", "fineness": None})
     # A precious metal with no weight is counted as skipped, not as ounces.
-    _create(client, {**OUNCE, "weight_g": None})
+    no_weight = _create(client, {**OUNCE, "weight_g": None})
     # No metal at all is not part of the stack in any way.
     _create(client, COIN)
     body = client.get("/api/stack").json()
     assert body["skipped"] == 1
     assert _metals(body)["silver"]["fine_oz"] == 0.9  # 31.1035 g × 0.90
+    assert body["skipped_items"] == [
+        {
+            "item_id": no_weight["id"],
+            "label": 'United States 1 dollar 1932 "D"',
+            "missing": "weight",
+        }
+    ]
+
+
+def test_skipped_items_say_what_is_missing_and_are_scoped(client, spot):
+    no_weight = _create(client, {**OUNCE, "weight_g": None, "tags": ["a"]})
+    no_fineness = _create(
+        client, {**OUNCE, "fineness": None, "composition": "silver", "tags": ["a"]}
+    )
+    neither = _create(
+        client,
+        {**OUNCE, "weight_g": None, "fineness": None, "composition": "silver", "tags": ["b"]},
+    )
+    _create(client, COIN)  # no metal at all: not skipped, not in the stack
+
+    body = client.get("/api/stack").json()
+    assert body["skipped"] == 3
+    missing_by_id = {row["item_id"]: row["missing"] for row in body["skipped_items"]}
+    assert missing_by_id[no_weight["id"]] == "weight"
+    assert missing_by_id[no_fineness["id"]] == "fineness"
+    assert missing_by_id[neither["id"]] == "weight and fineness"
+
+    scoped = client.get("/api/stack?tag=a").json()
+    assert scoped["skipped"] == 2
+    assert {row["item_id"] for row in scoped["skipped_items"]} == {
+        no_weight["id"],
+        no_fineness["id"],
+    }
 
 
 def test_scope_by_tag_and_set(client, spot):

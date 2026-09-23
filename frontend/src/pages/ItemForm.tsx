@@ -1,7 +1,16 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { api, CalendarReference, CatalogRef, Grade, gradeScaleFor, ItemType, SetInfo } from "../api";
+import {
+  api,
+  CalendarReference,
+  CatalogRef,
+  Grade,
+  gradeScaleFor,
+  ItemType,
+  SetInfo,
+  TROY_OUNCE_G,
+} from "../api";
 import {
   CustomField,
   DESIGNATIONS,
@@ -12,8 +21,10 @@ import {
   FormState,
   fromItem,
   inHistoricCoverage,
+  presetBullionFineness,
   PROBLEMS,
   SHAPES,
+  suggestDenomination,
   TextField,
   toPayload,
 } from "./item-form/model";
@@ -25,10 +36,14 @@ import { DuplicateWarning } from "../components/duplicates";
 const CATALOGS: Record<ItemType, string[]> = {
   coin: ["krause", "numista", "pcgs"],
   note: ["pick", "friedberg", "numista", "krause"],
+  bullion: ["numista"],
 };
+
+const WEIGHT_UNIT_KEY = "cabinet.form.weightUnit";
 
 export default function ItemForm() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [refs, setRefs] = useState<CatalogRef[]>([]);
@@ -46,11 +61,51 @@ export default function ItemForm() {
   const [convertError, setConvertError] = useState<string | null>(null);
   const [spotBusy, setSpotBusy] = useState(false);
   const [spotError, setSpotError] = useState<string | null>(null);
+  const [weightUnit, setWeightUnitState] = useState<"g" | "oz">(() => {
+    try {
+      return window.localStorage.getItem(WEIGHT_UNIT_KEY) === "oz" ? "oz" : "g";
+    } catch {
+      return "g";
+    }
+  });
   const autoYear = useRef(""); // the Year this form filled in itself, which it may replace
+  const autoDenomination = useRef(""); // the Product name this form suggested, which it may replace
+
+  function setWeightUnit(unit: "g" | "oz") {
+    setWeightUnitState(unit);
+    try {
+      window.localStorage.setItem(WEIGHT_UNIT_KEY, unit);
+    } catch {
+      // a browser that refuses storage still gets the choice for this visit
+    }
+  }
 
   useEffect(() => {
     api.calendars().then(setCalendars).catch(() => setCalendars(null));
   }, []);
+
+  // /items/new?type=bullion presets the type, for a new item only.
+  useEffect(() => {
+    if (id || searchParams.get("type") !== "bullion") return;
+    setForm((f) => presetBullionFineness({ ...f, type: "bullion", grade_id: "", designations: [] }));
+    // Deliberately depends on `id` only: this is a one-time preset for a new
+    // item, not a live sync with the URL.
+  }, [id]);
+
+  // The product name suggestion (bullion only): filled only while it's empty,
+  // or still holds this form's own earlier suggestion, the way autoYear works.
+  useEffect(() => {
+    if (form.type !== "bullion") return;
+    const metal = detectMetal(form.composition);
+    const weight = Number(form.weight_g);
+    if (!metal || !(weight > 0)) return;
+    const suggestion = suggestDenomination(weight, metal, form.shape);
+    setForm((f) => {
+      if (f.denomination !== "" && f.denomination !== autoDenomination.current) return f;
+      autoDenomination.current = suggestion;
+      return { ...f, denomination: suggestion };
+    });
+  }, [form.type, form.composition, form.weight_g, form.shape]);
 
   // Convert the date as struck (debounced). Year is filled only when empty,
   // or when it still holds an earlier conversion from this form.
@@ -178,7 +233,9 @@ export default function ItemForm() {
       setRefs([]);
       setCustomFields([]);
       setAxisOther(false);
-      setSavedNote(`Added ${saved.country} ${saved.denomination}, ${saved.year_label}.`);
+      setSavedNote(
+        `Added ${saved.country} ${saved.denomination}${saved.year_label ? `, ${saved.year_label}` : ""}.`,
+      );
       window.scrollTo(0, 0);
       setSaving(false);
     } catch (err) {
@@ -225,10 +282,45 @@ export default function ItemForm() {
       : g.code;
 
   const isCoin = form.type === "coin";
+  const isNote = form.type === "note";
+  const isBullion = form.type === "bullion";
   const metal = detectMetal(form.composition);
   const hasStruckDate = isCoin && form.struck_calendar !== "" && form.struck_year !== "";
   const axisChoice =
     axisOther || !["", "0", "180"].includes(form.die_axis) ? "other" : form.die_axis;
+
+  // Weight (coins and bullion): the field's own unit, converted to and from
+  // the grams the payload always carries, stored to four decimal places.
+  const weightDisplay =
+    weightUnit === "oz" && form.weight_g !== ""
+      ? String(Number((Number(form.weight_g) / TROY_OUNCE_G).toFixed(4)))
+      : form.weight_g;
+  function setWeightDisplay(value: string) {
+    if (value === "") {
+      set("weight_g")("");
+      return;
+    }
+    const n = Number(value);
+    if (Number.isNaN(n)) return;
+    const grams = weightUnit === "oz" ? n * TROY_OUNCE_G : n;
+    set("weight_g")(String(Math.round(grams * 10000) / 10000));
+  }
+  const weightField = () => (
+    <label className="field">
+      {`Weight (${weightUnit})`}
+      <span style={{ display: "flex", gap: "0.3rem" }}>
+        <input
+          type="number" step="0.0001" min={0} style={{ flex: 1 }}
+          value={weightDisplay}
+          onChange={(e) => setWeightDisplay(e.target.value)}
+        />
+        <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value as "g" | "oz")}>
+          <option value="g">g</option>
+          <option value="oz">oz</option>
+        </select>
+      </span>
+    </label>
+  );
 
   return (
     <>
@@ -262,42 +354,53 @@ export default function ItemForm() {
                   const type = e.target.value as ItemType;
                   // Switching type switches grading scale and designations; nothing
                   // from the other scale may survive the switch.
-                  setForm((f) => ({
-                    ...f,
-                    type,
-                    grade_id: "",
-                    designations: [],
-                    strike: type === "note" && f.strike === "proof" ? "business" : f.strike,
-                  }));
+                  setForm((f) => {
+                    let next: FormState = {
+                      ...f,
+                      type,
+                      grade_id: "",
+                      designations: [],
+                      strike: type !== "coin" && f.strike === "proof" ? "business" : f.strike,
+                    };
+                    if (type === "bullion") next = presetBullionFineness(next);
+                    return next;
+                  });
                 }}
               >
                 <option value="coin">Coin</option>
                 <option value="note">Note</option>
+                <option value="bullion">Bar or round</option>
               </select>
             </label>
-            {text("country", "Country *", { required: true, list: "country-options" })}
+            {text("country", isBullion ? "Country of refiner *" : "Country *", {
+              required: true, list: "country-options",
+            })}
             <datalist id="country-options">
               {countries.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
-            {text("denomination", "Denomination *", { required: true, placeholder: 'e.g. "25 cents"' })}
-            {/* The ND box sits under the year it changes the meaning of. */}
+            {text("denomination", isBullion ? "Product name *" : "Denomination *", {
+              required: true,
+              placeholder: isBullion ? "suggested from weight and metal" : 'e.g. "25 cents"',
+            })}
+            {/* The ND box sits under the year it changes the meaning of; bullion
+                has neither (the year-or-ND rule doesn't apply to a bar). */}
             <div className="field">
               <label className="field">
-                {form.year_nd ? "Attributed year" : hasStruckDate ? "Year" : "Year *"}
+                {isBullion ? "Year" : form.year_nd ? "Attributed year" : hasStruckDate ? "Year" : "Year *"}
                 <input
                   type="number"
-                  required={!hasStruckDate && !form.year_nd}
+                  required={!isBullion && !hasStruckDate && !form.year_nd}
                   value={form.year}
-                  placeholder={form.year_nd ? "optional" : undefined}
+                  placeholder={isBullion || form.year_nd ? "optional" : undefined}
                   title={
                     form.year_nd ? "The year it is known or believed to be from" : undefined
                   }
                   onChange={(e) => set("year")(e.target.value)}
                 />
               </label>
-              {flag("year_nd", "ND (no date on the piece)", "The piece carries no date")}
+              {!isBullion && flag("year_nd", "ND (no date on the piece)", "The piece carries no date")}
             </div>
             {isCoin && (
               <>
@@ -344,17 +447,20 @@ export default function ItemForm() {
                 )}
               </>
             )}
-            {text("mint_mark", "Mint mark")}
+            {!isBullion && text("mint_mark", "Mint mark")}
             {text("series", "Series")}
-            {text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
-            <label className="field">
-              Strike
-              <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
-                <option value="business">{isCoin ? "Business strike" : "Regular issue"}</option>
-                {isCoin && <option value="proof">Proof</option>}
-                <option value="specimen">Specimen</option>
-              </select>
-            </label>
+            {!isBullion &&
+              text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
+            {!isBullion && (
+              <label className="field">
+                Strike
+                <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
+                  <option value="business">{isCoin ? "Business strike" : "Regular issue"}</option>
+                  {isCoin && <option value="proof">Proof</option>}
+                  <option value="specimen">Specimen</option>
+                </select>
+              </label>
+            )}
             {text("quantity", "Quantity", { type: "number", min: 1 })}
             <label className="field">
               Set / lot
@@ -424,34 +530,59 @@ export default function ItemForm() {
                 {flag("grade_star", "Star (★)", "NGC or PMG star designation")}
               </div>
             </div>
-            <div className="field full">
-              Designations
-              <div className="chip-row">
-                {DESIGNATIONS[form.type].map(([code, meaning]) => (
-                  <button
-                    type="button"
-                    key={code}
-                    title={meaning}
-                    className={form.designations.includes(code) ? "chip active" : "chip"}
-                    onClick={() => toggleDesignation(code)}
-                  >
-                    {code}
-                  </button>
-                ))}
+            {!isBullion && (
+              <div className="field full">
+                Designations
+                <div className="chip-row">
+                  {DESIGNATIONS[form.type].map(([code, meaning]) => (
+                    <button
+                      type="button"
+                      key={code}
+                      title={meaning}
+                      className={form.designations.includes(code) ? "chip active" : "chip"}
+                      onClick={() => toggleDesignation(code)}
+                    >
+                      {code}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         <div className="card">
-          <h2>{isCoin ? "Composition & physical" : "Note details"}</h2>
+          <h2>{isNote ? "Note details" : "Composition & physical"}</h2>
           <div className="item-form">
             {text("composition", "Composition", {
-              placeholder: isCoin ? "e.g. 90% silver" : "e.g. paper, polymer",
+              placeholder: isCoin ? "e.g. 90% silver" : isBullion ? "e.g. .999 fine silver" : "e.g. paper, polymer",
             })}
+            {isBullion && (
+              <label className="field">
+                Metal
+                <select
+                  value={metal ?? ""}
+                  onChange={(e) => {
+                    const m = e.target.value;
+                    set("composition")(m ? m.charAt(0).toUpperCase() + m.slice(1) : "");
+                  }}
+                >
+                  <option value="">blank</option>
+                  <option value="gold">Gold</option>
+                  <option value="silver">Silver</option>
+                  <option value="platinum">Platinum</option>
+                  <option value="palladium">Palladium</option>
+                </select>
+              </label>
+            )}
+            {isCoin && (
+              <p className="muted full" style={{ margin: 0 }}>
+                Name a precious metal and give a weight and fineness to include it in the bullion stack.
+              </p>
+            )}
             {isCoin && (
               <>
-                {text("weight_g", "Weight (g)", { type: "number", step: "0.0001", min: 0 })}
+                {weightField()}
                 {text("fineness", "Fineness", {
                   type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.900",
                 })}
@@ -487,7 +618,38 @@ export default function ItemForm() {
                   })}
               </>
             )}
-            {!isCoin && (
+            {isBullion && (
+              <>
+                {weightField()}
+                {text("fineness", "Fineness", {
+                  type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.999",
+                  title: ".9999 for four-nines",
+                })}
+                {text("shape", "Shape", { list: "shape-options" })}
+                <datalist id="shape-options">
+                  {SHAPES.map((v) => <option key={v} value={v} />)}
+                </datalist>
+                {/* Not round: width and height, the same as a note's size. */}
+                <div className="field">
+                  Size (mm)
+                  <span className="size-pair">
+                    <input
+                      type="number" step="0.01" min={0} aria-label="Width (mm)" placeholder="width"
+                      value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
+                    />
+                    <span className="muted">×</span>
+                    <input
+                      type="number" step="0.01" min={0} aria-label="Height (mm)" placeholder="height"
+                      value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
+                    />
+                  </span>
+                </div>
+                {text("thickness_mm", "Thickness (mm)", { type: "number", step: "0.01", min: 0 })}
+                {text("serial_number", "Serial number")}
+                {text("issuer", "Refiner or mint")}
+              </>
+            )}
+            {isNote && (
               <>
                 {/* Width and height together: a note is measured both ways. */}
                 <div className="field">
@@ -520,11 +682,13 @@ export default function ItemForm() {
                 })}
               </>
             )}
-            {text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
-            {text("demonetized_on", "Demonetised on", {
-              type: "date", title: "The date it stopped being legal tender",
-            })}
-            {!isCoin && (
+            {!isBullion &&
+              text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
+            {!isBullion &&
+              text("demonetized_on", "Demonetised on", {
+                type: "date", title: "The date it stopped being legal tender",
+              })}
+            {isNote && (
               <div className="field">
                 &nbsp;
                 {flag("replacement_note", "Replacement / star note")}
@@ -612,7 +776,13 @@ export default function ItemForm() {
               {refs.map((ref, i) => (
                 <div className="ref-row" key={i}>
                   <input value={ref.catalog} list="catalog-options"
-                    placeholder={isCoin ? "catalog (krause, numista…)" : "catalog (pick, friedberg…)"}
+                    placeholder={
+                      isCoin
+                        ? "catalog (krause, numista…)"
+                        : isBullion
+                          ? "catalog (numista…)"
+                          : "catalog (pick, friedberg…)"
+                    }
                     onChange={(e) => setRef(i, "catalog", e.target.value)} />
                   <input value={ref.ref_code} placeholder="reference code"
                     onChange={(e) => setRef(i, "ref_code", e.target.value)} />
