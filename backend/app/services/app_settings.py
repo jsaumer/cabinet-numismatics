@@ -32,7 +32,8 @@ DEFAULTS: dict = {
     "numista_refresh_days": None,  # None = off; else 7 | 14 | 30
     "pcgs_auto_refresh": False,
     "backup_schedule": None,  # None = off; else "daily" | "weekly"
-    "backup_keep": 7,
+    # Days scheduled and on-demand archives are kept (v0.30.1; 0 = forever).
+    "backup_retention_days": 90,
     # Days an item stays in the trash before it's deleted for good; 0 = never.
     "trash_retention_days": 30,
     "backup_include_photos": True,

@@ -86,7 +86,7 @@ in the last 5 minutes by this session (`POST /api/auth/confirm`); a token
 can never have that. Without it they answer `403`
 `{"detail": "Confirm your password to continue.", "reauth_required": true}`.
 They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
-`DELETE /api/backups/unencrypted`, `POST /api/restore/inspect`, `POST
+`DELETE /api/backups/{name}`, `POST /api/restore/inspect`, `POST
 /api/restore/{id}/run`, every `PUT /api/settings`, `POST /api/trash/purge`,
 `DELETE /api/trash`, `DELETE /api/items/{id}` when it deletes for good
 (`?permanent=true`, or an item already in the trash), `DELETE
@@ -970,7 +970,8 @@ off, else `7`/`14`/`30`) and `pcgs_auto_refresh` (bool, fixed weekly when on).
 The response also reports `numista_priceable_items`/`pcgs_priceable_items`
 (owned items eligible for each source) so the UI can show the real projected
 monthly call count before you turn Numista's cadence on. `backup_schedule`
-(`null` / `daily` / `weekly`), `backup_keep` (1–365, default 7), and
+(`null` / `daily` / `weekly`), `backup_retention_days` (7, 14, 30, 90, 365,
+or 0 for forever; default 90; anything else is `422`), and
 `backup_include_photos` configure scheduled backups (see Backups below).
 `comps_enabled` switches the comps source (on by default), and
 `numista_sales_enabled` (off by default) allows fetching Numista's auction
@@ -1013,7 +1014,7 @@ the alert fires.
 | `POST` | `/api/backups`          | Write an archive into the backup directory now, then apply retention; `?photos=` overrides the setting |
 | `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
 | `POST` | `/api/backups/key/saved` | Record that the owner saved the backup key (v0.30.0) |
-| `DELETE` | `/api/backups/unencrypted` | Delete every plain `.zip` archive from before v0.30.0 (v0.30.0) |
+| `DELETE` | `/api/backups/{name}` | Delete a stored archive (v0.30.1); `409` while a backup or restore runs |
 
 An archive (v0.30.0) is an [age](https://age-encryption.org) file, encrypted
 with the backup key, around a zip of `db.dump` (pg_dump custom format, never
@@ -1033,17 +1034,19 @@ key, `age1…`; the key itself never crosses the API), `saved`, `supplied`
 `secret` for a supplied file, or `environment` for a supplied variable), and
 `location_message`. `POST /api/backups/key/saved` records
 the current public key as saved (a rotated key asks again) and answers the
-`key` object. `DELETE /api/backups/unencrypted` deletes every plain
-`cabinet-backup-*.zip` in the backup directory, nothing else, sends an
-alert event, and answers `{"deleted": [names]}`. A second `POST
-/api/backups` while one is running returns `409`. Stored archive names must
-match `cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age` (or `.zip`
-for an old one); anything else is `404`. `backup_keep` applies to full and data-only
-archives separately. Pre-restore archives sit outside `backup_keep`: the newest three are
-kept. Every backup route is admin-only; both downloads and deleting old
-archives also need a recent password, and each download, the saved-key
-tick, and the deletion is written to the audit log (downloads and the
-deletion also alert).
+`key` object. `DELETE /api/backups/{name}` (v0.30.1) deletes one stored
+archive and answers `{"deleted": name}`; it is `409` while a backup or a
+restore holds the directory. A second `POST /api/backups` while one is
+running returns `409`. Stored archive names must match
+`cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age`; anything else,
+a plain `.zip` from before v0.30.0 included, is `404`. Retention
+(`backup_retention_days`) deletes archives older than that many days after
+each run, keeping the newest full and the newest data-only archive whatever
+their age; `0` keeps everything. Pre-restore archives sit outside it: the
+newest three are kept. Every backup route is admin-only; both downloads and
+deleting an archive also need a recent password, and each download, the
+saved-key tick, and each deletion is written to the audit log (downloads and
+deletions also alert).
 
 ## Restore
 

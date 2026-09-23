@@ -3,7 +3,7 @@ key (v0.30.0; see services/archive_keys.py), and the key itself never
 crosses the API: only its public fingerprint does."""
 
 import shutil
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -26,9 +26,6 @@ class StoredBackup(BaseModel):
     created_at: datetime
     # The safety archive an in-app restore took first.
     prerestore: bool = False
-    # False for a plain .zip from before v0.30.0: readable by anyone who can
-    # read the backup directory, and never restorable.
-    encrypted: bool = True
 
 
 class BackupKey(BaseModel):
@@ -48,8 +45,8 @@ class BackupList(BaseModel):
     key: BackupKey
 
 
-class DeletedArchives(BaseModel):
-    deleted: list[str]
+class DeletedArchive(BaseModel):
+    deleted: str
 
 
 def _unavailable(exc: backup.BackupError) -> HTTPException:
@@ -108,11 +105,8 @@ def list_backups(db: Session = Depends(get_db)):
             StoredBackup(
                 name=p.name,
                 size=p.stat().st_size,
-                created_at=datetime.strptime(p.name[15:30], "%Y%m%d-%H%M%S").replace(
-                    tzinfo=timezone.utc
-                ),
+                created_at=backup.archive_time(p),
                 prerestore=backup.is_prerestore(p),
-                encrypted=backup.is_encrypted(p),
             )
             for p in backup.stored_backups(dest)
         ],
@@ -135,33 +129,6 @@ def backup_key_saved(request: Request, db: Session = Depends(get_db)):
     return _key_status(db)
 
 
-@router.delete("/backups/unencrypted", response_model=DeletedArchives)
-@permission("admin", fresh=True)
-def delete_unencrypted(request: Request, db: Session = Depends(get_db)):
-    """Delete every plain `.zip` archive from before v0.30.0 in the backup
-    directory: each is a readable copy of the whole collection, and none can
-    be restored. Encrypted archives and a restore's working folders are
-    never touched."""
-    try:
-        dest = backup.backup_dir()
-    except backup.BackupError as exc:
-        raise _unavailable(exc) from exc
-    deleted = []
-    for path in backup.stored_backups(dest):
-        if not backup.is_encrypted(path):
-            path.unlink(missing_ok=True)
-            deleted.append(path.name)
-    if deleted:
-        events.record(
-            db,
-            request,
-            "unencrypted_deleted",
-            detail={"archives": deleted},
-            alert=f"{len(deleted)} unencrypted archive(s) from before v0.30.0 were deleted.",
-        )
-    return DeletedArchives(deleted=deleted)
-
-
 @router.post("/backups")
 @permission("admin")
 def run_backup_now(photos: bool | None = None, db: Session = Depends(get_db)) -> dict:
@@ -182,5 +149,28 @@ def download_stored_backup(name: str, request: Request, db: Session = Depends(ge
     events.record(
         db, request, "backup_downloaded", target=name, alert=f"The backup {name} was downloaded."
     )
-    media = "application/octet-stream" if backup.is_encrypted(path) else "application/zip"
-    return FileResponse(path, media_type=media, filename=name)
+    return FileResponse(path, media_type="application/octet-stream", filename=name)
+
+
+@router.delete("/backups/{name}", response_model=DeletedArchive)
+@permission("admin", fresh=True)
+def delete_stored_backup(name: str, request: Request, db: Session = Depends(get_db)):
+    """Delete one stored archive (v0.30.1). Refused while a backup or a
+    restore holds the backup directory, so an archive being written or
+    restored can't go out from under it. Audited and alerted."""
+    try:
+        path = backup.backup_dir() / name
+    except backup.BackupError as exc:
+        raise _unavailable(exc) from exc
+    if not backup.NAME_RE.match(name) or not path.is_file():
+        raise HTTPException(404, "No such backup")
+    if not backup._run_lock.acquire(blocking=False):
+        raise HTTPException(409, "A backup or restore is running; try again when it has finished.")
+    try:
+        path.unlink()
+    finally:
+        backup._run_lock.release()
+    events.record(
+        db, request, "backup_deleted", target=name, alert=f"The backup {name} was deleted."
+    )
+    return DeletedArchive(deleted=name)

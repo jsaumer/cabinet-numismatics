@@ -17,7 +17,8 @@ settings (display currency, source toggles, API credentials, melt cadence;
 later grew `value_strategy`/`preferred_source` for the blended-value display,
 `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh,
 `comps_enabled`/`numista_sales_enabled` for the sales log,
-`backup_schedule`/`backup_keep`/`backup_include_photos`/`backup_last_run`
+`backup_schedule`/`backup_retention_days` (v0.30.1; `backup_keep` before
+it)/`backup_include_photos`/`backup_last_run`
 for in-app backups, `trash_retention_days` for the trash, and
 `alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
 plus the service-written `refresh_last_run`/`alert_state` for alerts and

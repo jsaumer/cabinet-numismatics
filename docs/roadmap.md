@@ -531,7 +531,8 @@ stay the documented recovery path.
   rather than merely present, and it is what B3 validates against.
   `?photos=false` gives a small data-only archive for moving between machines.
 - ✔ **B2: Scheduled backups + retention.** Settings gains cadence (off /
-  daily / weekly) and how many to keep. The destination is the `BACKUP_DIR`
+  daily / weekly) and how many to keep (how long to keep them, from
+  v0.30.1). The destination is the `BACKUP_DIR`
   mount (`/data/backups`), set by the deployment rather than in Settings: an
   unauthenticated page choosing where the backend writes and prunes files
   was a worse idea than a fixed mount point. The same in-process scheduler that refreshes melt estimates runs
