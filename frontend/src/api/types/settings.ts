@@ -41,6 +41,9 @@ export interface AppSettings {
   alert_webhook_format: AlertFormat;
   heartbeat_hint: string | null;
   metrics_enabled: boolean;
+  // Secrets cleared because they weren't encrypted with this deployment's
+  // key, by name, until each is entered again.
+  secrets_cleared: string[];
   alerts: AlertStatus[];
   alert_delivery: MonitorOutcome | null;
   heartbeat: MonitorOutcome | null;
@@ -210,6 +213,15 @@ export interface BackupList {
   free_bytes: number | null;
   last_run: BackupRun | null;
   backups: BackupFile[];
+  key: BackupKey;
+}
+
+export interface BackupKey {
+  fingerprint: string; // the public key (age1...); the key itself never leaves the container
+  saved: boolean;
+  supplied: boolean; // BACKUP_KEY_FILE or BACKUP_KEY rather than generated
+  location: "separate" | "shared" | "not_verified" | "secret" | "environment";
+  location_message: string | null;
 }
 
 export interface BackupFile {
@@ -217,6 +229,7 @@ export interface BackupFile {
   size: number;
   created_at: string;
   prerestore?: boolean; // the safety backup taken before a restore
+  encrypted?: boolean; // false: a plain .zip from before v0.30.0, never restorable
 }
 
 export type RestoreStep =
@@ -237,6 +250,8 @@ export interface RestoreOutcome {
   items: number | null;
   photos: number | null;
   documents: number | null;
+  // By name only: stored secrets cleared because this deployment can't use them.
+  secrets_cleared?: string[];
 }
 
 export interface RestoreStatus {
@@ -270,16 +285,33 @@ export interface RestoreInspection {
   will_migrate: boolean;
   replaces_files: boolean;
   secrets_note: string | null;
+  credentials_note: string;
+  provenance: {
+    made_here: boolean;
+    made_at: string | null;
+    newer: number;
+    older: boolean;
+    record_empty: boolean;
+    message: string;
+  };
+  confirm_phrase: string; // RESTORE, or RESTORE OLDER
+  // By name only: stored secrets the archive would set, and those it holds
+  // that would be cleared (not encrypted with this deployment's key).
+  secrets: string[];
+  secrets_cleared: string[];
+}
+
+export interface SchemaState {
+  current: string | null;
+  expected: string | null;
+  status: "ok" | "pending" | "ahead" | "unknown";
 }
 
 export interface Health {
   status: string;
   db: string;
   version: string;
-  schema: {
-    current: string | null;
-    expected: string | null;
-    status: "ok" | "pending" | "ahead" | "unknown";
-  };
+  schema: SchemaState;
+  auth_schema?: SchemaState; // the sign-in chain (cabinet_auth), v0.30.0
   documents: "ok" | "not_mounted" | "unwritable" | "inside_photos";
 }

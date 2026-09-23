@@ -7,7 +7,7 @@ import io
 import pytest
 
 from app.config import get_settings
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 from tests.test_imports import _items, _preview, _run, _upload
 from tests.test_parity import NOTE, create, listed, patch
 
@@ -139,7 +139,7 @@ def test_old_csv_import_without_the_new_columns_still_works(client):
 
     for item in listed(client):
         client.delete(f"/api/items/{item['id']}?permanent=true")
-    resp = client.post("/api/items/import", files={"file": ("old.csv", old_csv, "text/csv")})
-    assert resp.json()["created"] == 1, resp.text
+    result = import_cabinet_csv(client, old_csv, "old.csv")
+    assert result["created"] == 1, result
     [copy] = listed(client)
     assert copy["width_mm"] is None and copy["printer"] is None

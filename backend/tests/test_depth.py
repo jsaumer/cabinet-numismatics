@@ -3,7 +3,7 @@
 import csv
 import io
 
-from tests.conftest import COIN
+from tests.conftest import COIN, import_cabinet_csv
 
 
 def _create(client, payload):
@@ -119,12 +119,10 @@ def test_csv_round_trip_with_depth_fields(client):
 
     items = client.get("/api/items").json()["items"]
     for item in items:
-        client.delete(f"/api/items/{item['id']}")
+        client.delete(f"/api/items/{item['id']}?permanent=true")
 
-    resp = client.post(
-        "/api/items/import", files={"file": ("items.csv", exported.encode(), "text/csv")}
-    )
-    assert resp.json() == {"created": 1, "skipped": 0, "errors": []}
+    result = import_cabinet_csv(client, exported)
+    assert (result["created"], result["skipped"], result["errors"]) == (1, 0, [])
     restored = client.get("/api/items").json()["items"][0]
     assert restored["variety"] == "1932-D"
     assert restored["set"]["name"] == "Type set"

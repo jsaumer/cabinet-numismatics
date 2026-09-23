@@ -25,18 +25,22 @@ COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
 COPY --from=pgclient /pgclient/ /usr/local/lib/pgclient/
 # `upgrade` first: the base image trails Debian's security updates between
 # its own rebuilds (the image scan in security.yml is what notices).
+# `age` encrypts every backup archive (v0.30.0): Debian's package, so its
+# version is the one this image was built with, and Trivy scans it.
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1 libxxhash0 \
+    && apt-get install -y --no-install-recommends libpq5 liblz4-1 libzstd1 libxxhash0 age \
     && rm -rf /var/lib/apt/lists/* \
-    && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done
+    && for tool in /usr/local/lib/pgclient/*/pg_*; do "$tool" --version || exit 1; done \
+    && age --version && age-keygen --version
 
 # The unprivileged user the entrypoint drops to, and data directories it
 # owns. A new named volume inherits that ownership from the image.
 RUN groupadd --gid 1000 cabinet \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin cabinet \
-    && mkdir -p /data/photos /data/state /data/backups /data/documents \
-    && chown -R cabinet:cabinet /data
+    && mkdir -p /data/photos /data/state /data/backups /data/documents /data/staging /run/cabinet \
+    && chown -R cabinet:cabinet /data /run/cabinet \
+    && chmod 700 /data/staging /run/cabinet
 ENV PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
@@ -48,8 +52,9 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 COPY pyproject.toml ./
 COPY app ./app
-COPY alembic.ini ./
+COPY alembic.ini alembic_auth.ini ./
 COPY alembic ./alembic
+COPY alembic_auth ./alembic_auth
 COPY scripts ./scripts
 # pip goes last: nothing installs at runtime, and the libraries it bundles
 # (msgpack, setuptools) would otherwise sit in the image unpatched.
@@ -61,4 +66,6 @@ RUN chmod 755 /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --no-proxy-headers: uvicorn never takes the client address or scheme from
+# a forwarded header, whatever the environment says. nginx sets X-Real-IP.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

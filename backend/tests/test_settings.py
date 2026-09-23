@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from tests.conftest import COIN
 
 SILVER = {**COIN, "composition": "90% silver", "weight_g": 26.73, "fineness": 0.9}
@@ -136,12 +138,28 @@ def test_melt_toggle_gates_estimation(client, monkeypatch):
     item = client.post("/api/items", json=SILVER).json()
 
     client.put("/api/settings", json={"melt_enabled": False})
-    resp = client.post(f"/api/items/{item['id']}/estimate")
+    resp = client.post(f"/api/items/{item['id']}/estimates/auto")
     assert resp.status_code == 422 and "disabled" in resp.json()["detail"]
-    assert client.post("/api/estimates/refresh-melt").status_code == 422
+    assert client.post("/api/estimates/refresh?source=melt").status_code == 422
 
     client.put("/api/settings", json={"melt_enabled": True})
-    assert client.post(f"/api/items/{item['id']}/estimate").status_code == 201
+    assert client.post(f"/api/items/{item['id']}/estimates/auto").status_code == 201
+
+
+@pytest.mark.parametrize("source", ["numista", "pcgs", "comps", "moon"])
+def test_refresh_takes_only_melt_for_now(client, source):
+    resp = client.post("/api/estimates/refresh", params={"source": source})
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Only melt can be refreshed by hand for now."
+    # the source is required, and the old path is gone
+    assert client.post("/api/estimates/refresh").status_code == 422
+    assert client.post("/api/estimates/refresh-melt").status_code in (404, 405)
+
+
+def test_refresh_melt_runs(client):
+    resp = client.post("/api/estimates/refresh", params={"source": "melt"})
+    assert resp.status_code == 200, resp.text
+    assert set(resp.json()) == {"updated", "skipped", "failed"}
 
 
 def test_cached_data_listed(client, monkeypatch):
@@ -151,7 +169,7 @@ def test_cached_data_listed(client, monkeypatch):
 
     monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("2.0"))
     item = client.post("/api/items", json=SILVER).json()
-    client.post(f"/api/items/{item['id']}/estimate")
+    client.post(f"/api/items/{item['id']}/estimates/auto")
 
     cached = client.get("/api/settings").json()["cached"]
     silver = next(c for c in cached if c["label"] == "silver spot")

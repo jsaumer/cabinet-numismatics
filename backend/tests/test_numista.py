@@ -64,7 +64,7 @@ def make_item(client, grade="VF-20", ref="N#1234", **overrides):
 
 
 def estimate(client, item):
-    return client.post(f"/api/items/{item['id']}/estimate", params={"source": "numista"})
+    return client.post(f"/api/items/{item['id']}/estimates/auto", params={"source": "numista"})
 
 
 def test_estimate_by_ref_and_grade(client, upstream):
@@ -195,7 +195,7 @@ def test_toggle_and_key_are_required(client, upstream):
 
 
 def test_unknown_source_rejected(client, coin):
-    resp = client.post(f"/api/items/{coin['id']}/estimate", params={"source": "moon"})
+    resp = client.post(f"/api/items/{coin['id']}/estimates/auto", params={"source": "moon"})
     assert resp.status_code == 422
 
 

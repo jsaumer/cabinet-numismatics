@@ -26,8 +26,16 @@ the saved widget layout, written only by `/api/dashboard/layout`, never by
 `PUT /api/settings`, and `spot_alerts` (v0.28.0, bullion stack figures: a
 list of spot-price thresholds, at most 12) with the service-written
 `spot_alert_state` (per threshold, whether it is currently met), neither of
-which needed a migration, since it's a generic key/value table), read
-through `app/services/app_settings.py` with defaults and env fallbacks.
+which needed a migration, since it's a generic key/value table), and from
+v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets
+cleared because they weren't encrypted with this deployment's key, until
+each is saved again) and `backup_key_saved` (the public key of the backup
+key the owner said they saved), read through `app/services/app_settings.py` with
+defaults and env fallbacks. One more key is not a setting at all:
+`restore_marker`, written and deleted by direct ORM during an in-app
+restore and never read through `get_setting` (see
+[backup-restore.md](backup-restore.md#when-it-fails)); a finished restore
+leaves none.
 The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
 `heartbeat_url`) are stored encrypted; see [security.md](security.md).
 Revision `0009` (M2) added `source_cache`; `0010` (M4) added
@@ -80,6 +88,34 @@ key→value, max 20).
 `estimated_value` are all **per row** (the whole lot as entered), never
 per-piece. Automatic estimates multiply per-piece value by `quantity` to
 match.
+
+## Sign-in data: the cabinet_auth schema (v0.30.0)
+
+Credentials live in a Postgres schema of their own, `cabinet_auth`, with
+their own Alembic chain (`backend/alembic_auth/`, revision `a0001`, version
+table `cabinet_auth.alembic_version`) and their own declarative base
+(`AuthBase` in `app/models/auth.py`). **No foreign key crosses between it
+and the collection in either direction**, and the collection never stores a
+user id. Backups dump every schema but this one and restores replace
+`public` only, so an archive never carries a credential and a restore never
+changes one (see [backup-restore.md](backup-restore.md)). The backend
+migrates it on startup right after the collection chain, in the same
+transaction; by hand, `alembic -c alembic_auth.ini upgrade head`.
+
+| Table | Holds |
+|-------|-------|
+| `users` | The admin (`username` unique, lowercased; `password_hash` Argon2id, null for a provider-only account later; `role` `admin` / `editor` / `viewer`; `is_active`; `external_issuer` + `external_subject`, unique together, for single sign-on in v0.31.0; `created_at`, `last_login_at`, `password_changed_at`) |
+| `claim` | One row (`id` is always 1) once the admin exists: its insert is the atomic claim of the instance (`claimed_at`, `user_id`) |
+| `sessions` | Signed-in browsers: the secret's SHA-256 (never the secret), `user_id`, `auth_method`, `created_at`, `last_seen_at`, `expires_at` (7 days at most), `confirmed_until` (the recent-password window), `user_agent`, `address`, `revoked_at` |
+| `api_tokens` | `public_id` (unique), the secret's SHA-256, `user_id`, `name`, `scope` (`read` / `write` / `metrics`, one each), `created_at`, `last_used_at`, `expires_at`, `revoked_at` |
+| `known_devices` | Browsers that signed in successfully: the cookie's SHA-256, `user_id`, `created_at`, `expires_at`, `failures` |
+| `audit_log` | One row per event: `at`, the actor (`actor_user_id`, set null if the user goes; `actor_label`; `actor_kind` `session` / `token` / `anonymous` / `cli` / `system`), `action`, `target`, `detail` (JSON), `address`, `user_agent`. Never anything from the collection |
+| `backup_ledger` | Every archive this Cabinet writes: `name`, `kind`, `created_at`, `mac_recipient`, `mac_digest`, `size`. Here, not in `public`, so no restore can rewrite the record of what came before it |
+
+The tables exist from v0.30.0's first start; the code that fills them
+(sign-in, tokens, the audit log, the archive record) arrives in the same
+release. SQLite tests map `cabinet_auth` away (`schema_translate_map`) and
+create both metadatas.
 
 ## Entity relationships
 

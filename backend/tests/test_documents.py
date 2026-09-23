@@ -202,3 +202,35 @@ def test_documents_never_live_inside_the_photo_volume(client, monkeypatch):
 def test_stored_keys_cannot_escape_the_document_folder():
     with pytest.raises(FileNotFoundError):
         store.path_of("../secret.key")
+
+
+# --- deleting for good needs the admin and a recent password (stage 12) --------------------
+
+
+def test_deleting_a_document_asks_for_the_password(client, stale_client, token_client):
+    item = _item(client)
+    doc = _upload(client, item, pdf_bytes()).json()
+    stale = stale_client.delete(f"/api/documents/{doc['id']}")
+    assert stale.status_code == 403 and stale.json()["reauth_required"] is True
+    assert token_client("write").delete(f"/api/documents/{doc['id']}").status_code == 403
+    assert client.delete(f"/api/documents/{doc['id']}").status_code == 204
+
+
+def test_unlinking_the_last_holder_asks_for_the_password(client, stale_client, token_client):
+    """Unlinking stays an ordinary write while another item still holds the
+    document; from its last item it deletes the file, which is for good."""
+    first, second = _item(client), _item(client, denomination="2 test")
+    doc = _upload(client, first, pdf_bytes()).json()
+    assert (
+        client.post(
+            f"/api/documents/{doc['id']}/items", json={"item_ids": [second["id"]]}
+        ).status_code
+        == 200
+    )
+    writer = token_client("write")
+    assert writer.delete(f"/api/items/{first['id']}/documents/{doc['id']}").status_code == 204
+    stale = stale_client.delete(f"/api/items/{second['id']}/documents/{doc['id']}")
+    assert stale.status_code == 403 and stale.json()["reauth_required"] is True
+    assert writer.delete(f"/api/items/{second['id']}/documents/{doc['id']}").status_code == 403
+    assert client.get(f"/api/items/{second['id']}/documents").json()  # still held
+    assert client.delete(f"/api/items/{second['id']}/documents/{doc['id']}").status_code == 204

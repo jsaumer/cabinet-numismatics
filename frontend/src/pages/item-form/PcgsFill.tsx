@@ -51,9 +51,14 @@ export function PcgsFill({
   async function fill() {
     const number = cert.replace(/\D/g, "");
     if (!number) return;
-    setBusy(true);
     setError(null);
     setNote(null);
+    // The server takes at most 20 letters, digits, and dashes.
+    if (number.length > 20) {
+      setError("A PCGS cert number has at most 20 digits.");
+      return;
+    }
+    setBusy(true);
     try {
       const [found, sheldon] = await Promise.all([
         api.pcgsCert(number),

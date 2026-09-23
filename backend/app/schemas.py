@@ -884,17 +884,6 @@ class ItemList(BaseModel):
     offset: int
 
 
-class ImportError_(BaseModel):
-    row: int
-    error: str
-
-
-class ImportResult(BaseModel):
-    created: int
-    skipped: int  # rows whose id already exists (re-importing an export is safe)
-    errors: list[ImportError_]
-
-
 class BreakdownEntry(BaseModel):
     key: str
     count: int

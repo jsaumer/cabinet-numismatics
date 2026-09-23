@@ -61,7 +61,7 @@ def _enable_numista(client):
 
 
 def _estimate(client, item, source="melt"):
-    return client.post(f"/api/items/{item['id']}/estimate", params={"source": source})
+    return client.post(f"/api/items/{item['id']}/estimates/auto", params={"source": source})
 
 
 def _manual(client, item, value, source="dealer quote", currency="USD"):

@@ -52,14 +52,28 @@ DEFAULTS: dict = {
     # The dashboard layout (services/dashboard.py). Written by its own
     # endpoints (routers/dashboard.py), never by PUT /api/settings.
     "dashboard_layout": None,
+    # Secrets cleared because they were not encrypted with this deployment's
+    # key (clear_unusable_secrets), until each is entered again.
+    "secrets_cleared": [],
+    # The public key of the backup key the owner said they saved ("I have
+    # saved it" in Settings); a rotated key asks again.
+    "backup_key_saved": None,
 }
 
-SECRET_KEYS = {"numista_api_key", "pcgs_api_token", "alert_webhook_url", "heartbeat_url"}
+# Their names in messages, logs, and alerts; never their values.
+SECRET_LABELS = {
+    "numista_api_key": "Numista API key",
+    "pcgs_api_token": "PCGS API token",
+    "alert_webhook_url": "alert webhook",
+    "heartbeat_url": "heartbeat URL",
+}
+SECRET_KEYS = set(SECRET_LABELS)
 
 
 def get_setting(db: Session, key: str):
-    """Read a setting. Secrets are decrypted transparently; a value stored
-    before encryption existed is re-encrypted in place on first read."""
+    """Read a setting. Secrets are decrypted transparently; one that isn't
+    encrypted with this deployment's key reads as unset, never as its value
+    (see clear_unusable_secrets)."""
     if key not in DEFAULTS:
         raise KeyError(key)
     row = db.get(AppSetting, key)
@@ -67,14 +81,37 @@ def get_setting(db: Session, key: str):
         return DEFAULTS[key]
     if key not in SECRET_KEYS:
         return row.value
+    return crypto.decrypt(str(row.value))
 
-    stored = str(row.value)
-    if stored and not crypto.is_encrypted(stored):
-        row.value = crypto.encrypt(stored)  # self-heal legacy plaintext
-        db.flush()
-        logger.info("Re-encrypted legacy plaintext secret %r at rest.", key)
-        return stored
-    return crypto.decrypt(stored)
+
+def clear_unusable_secrets(db: Session, undecryptable: bool = False) -> list[str]:
+    """Clear every stored secret this deployment would refuse to use, and
+    return their keys. Plain text is always cleared: Cabinet only ever writes
+    encrypted values, so plain text came from somewhere else (an edited
+    archive could plant a webhook address), and it is never encrypted in
+    place. With `undecryptable` (after a restore), values encrypted under
+    another key are cleared too. The keys are added to `secrets_cleared` for
+    Settings to name until each is entered again. The caller commits."""
+    cleared = []
+    for key in sorted(SECRET_KEYS):
+        row = db.get(AppSetting, key)
+        stored = str(row.value or "") if row is not None else ""
+        if not stored:
+            continue
+        usable = crypto.is_encrypted(stored) and (not undecryptable or crypto.decrypt(stored))
+        if usable:
+            continue
+        row.value = ""
+        cleared.append(key)
+    if cleared:
+        pending = [k for k in get_setting(db, "secrets_cleared") or [] if k in SECRET_KEYS]
+        set_setting(db, "secrets_cleared", sorted(set(pending) | set(cleared)))
+        logger.warning(
+            "Cleared stored secrets not encrypted with this deployment's key: %s. "
+            "Enter them again in Settings.",
+            ", ".join(SECRET_LABELS[k] for k in cleared),
+        )
+    return cleared
 
 
 def set_setting(db: Session, key: str, value) -> None:
@@ -85,6 +122,10 @@ def set_setting(db: Session, key: str, value) -> None:
     if key in SECRET_KEYS:
         value = crypto.encrypt(str(value or ""))
         logger.info("Secret %r %s.", key, "cleared" if not value else "updated")
+        # Entered again (or deliberately cleared): no longer worth a banner.
+        pending = get_setting(db, "secrets_cleared") or []
+        if key in pending:
+            set_setting(db, "secrets_cleared", [k for k in pending if k != key])
     row = db.get(AppSetting, key)
     if row is None:
         db.add(AppSetting(key=key, value=value))

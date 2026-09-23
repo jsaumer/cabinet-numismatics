@@ -1,3 +1,10 @@
+# Every service keeps its log to three 10 MB files.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   backend:
     build:
@@ -14,6 +21,14 @@ services:
       - SECRET_KEY_FILE=/data/state/secret.key
       - BACKUP_DIR=/data/backups
       - DOCUMENT_DIR=/data/documents
+      # Sign-in (v0.30.0); see .env.example. PUBLIC_ORIGINS is required.
+      - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:-}
+      - AUTH_INSECURE_HTTP=${AUTH_INSECURE_HTTP:-false}
+      - SETUP_CODE=${SETUP_CODE:-}
+      - SETUP_CODE_FILE=${SETUP_CODE_FILE:-}
+      # The backup key; unset, one is generated on the state volume.
+      - BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-}
+      - BACKUP_KEY=${BACKUP_KEY:-}
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the
@@ -26,6 +41,10 @@ services:
       # through the API, never by nginx. Uploads are refused if this isn't
       # mounted, so they can't end up inside the container.
       - document_data:/data/documents
+      # Private working space (0700): an archive's database is unpacked here
+      # to be checked and restored, never in the backup directory. Keep it on
+      # this host's own disk.
+      - staging_data:/data/staging
     depends_on:
       db:
         condition: service_healthy
@@ -35,6 +54,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    # Password hashing (Argon2id, two at a time) needs 128 MB at most; this
+    # matches the Swarm stack file.
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    logging: *logging
     restart: unless-stopped
 
   proxy:
@@ -43,11 +69,17 @@ services:
       dockerfile: frontend/Dockerfile
     image: ghcr.io/jsaumer/cabinet-numismatics-proxy:${TAG:-latest}
     ports:
-      - "80:80"
+      - "${CABINET_PORT:-80}:80"
+    environment:
+      # The Host names nginx answers: those of PUBLIC_ORIGINS, plus any
+      # internal names in ALLOWED_HOSTS. Anything else gets no response.
+      - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:-}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
     volumes:
       - photo_data:/usr/share/nginx/photos:ro
     depends_on:
       - backend
+    logging: *logging
     restart: unless-stopped
 
   db:
@@ -65,6 +97,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging: *logging
     restart: unless-stopped
 
 volumes:
@@ -73,3 +106,4 @@ volumes:
   backend_state:
   backup_data:
   document_data:
+  staging_data:

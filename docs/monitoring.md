@@ -117,10 +117,12 @@ replaced. **Push now** sends one immediately.
 
 ## Homepage (gethomepage.dev)
 
-Cabinet needs nothing special for a [Homepage](https://gethomepage.dev)
-tile: `GET /api/stats/collection` already returns the owned coins and notes
-and the estimated value, in your display currency, and Homepage's
-`customapi` widget reads it. In `services.yaml`:
+A [Homepage](https://gethomepage.dev) tile needs one thing from Cabinet: an
+API token with the `metrics` scope (Settings, Account, API tokens; it sees
+only totals and may be set never to expire). `GET /api/stats/collection`
+returns the owned coins and notes and the estimated value, in your display
+currency, and Homepage's `customapi` widget reads it with the token as a
+header. In `services.yaml`:
 
 ```yaml
 - Collections:
@@ -132,6 +134,8 @@ and the estimated value, in your display currency, and Homepage's
         widget:
           type: customapi
           url: https://cabinet.example.com/api/stats/collection
+          headers:
+            Authorization: Bearer cabinet_xxxxxxxxxx_... # the metrics token
           refreshInterval: 300000 # 5 minutes; the numbers move slowly
           mappings:
             - field: counts.coins
@@ -152,11 +156,14 @@ has no currency format, so `prefix` is the symbol of your display currency.
 Other fields the same response carries: `counts.owned`, `counts.wishlist`,
 `cost_basis`, `unrealized_gain`, `estimated_items`.
 
+`siteMonitor` needs no token: anonymous health answers `{"status":"ok"}`.
 Homepage fetches from its own server, not your browser. If Cabinet sits
 behind forward-auth, point `url`, `siteMonitor`, and `icon` at the proxy
 service over a Docker network both share (`http://cabinet_proxy/...` on a
 Swarm, `http://proxy/...` in one compose project) so the requests skip the
-login; keep `href` as the public address. The logo is served at
+login; keep `href` as the public address. From v0.30.0, nginx answers only
+the Host names it is told, so add that internal name to `ALLOWED_HOSTS`
+(`ALLOWED_HOSTS=cabinet_proxy`), or the request gets no response. The logo is served at
 `/logo.svg`, `/logo-512.png`, and `/favicon.ico`.
 
 ## Metrics (Prometheus)
@@ -208,25 +215,31 @@ scrape_configs:
   - job_name: cabinet
     scrape_interval: 60s
     metrics_path: /api/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/cabinet_token # a metrics-scope token
     static_configs:
       - targets: ["cabinet_proxy:80"]
 ```
 
-Scraping through the public hostname works too, but an authenticating proxy
+List `cabinet_proxy` in `ALLOWED_HOSTS` (v0.30.0) so nginx answers that
+name. Scraping through the public hostname works too, but an authenticating proxy
 (Traefik + Authentik forward-auth) in front will turn Prometheus away unless
 `/api/metrics` is exempted. Scraping over the internal network avoids that.
 
-**Like the rest of the API, `/api/metrics` has no login**, and it includes the
-collection's value. That's the reason it's off by default. See
-[security.md](security.md). When login ships in v0.30.0 the endpoint moves
-behind an API token with the `metrics` scope, and the scrape config here
-gains an `Authorization` header.
+**`/api/metrics` needs a `metrics` token** (v0.30.0), or the admin's
+session: without one it answers 401, and a `read` or `write` token gets 403.
+It includes the collection's value, which is also why it's off by default.
+A `metrics` token sees only totals (this endpoint and
+`/api/stats/collection`), so it is the one to leave in a scraper's
+configuration. See [api.md](api.md#sign-in-and-permissions).
 
 ## During a restore
 
 While a restore from Settings → Backups runs (usually a minute or two),
-`/api/health` keeps answering 200, with `db: "restoring"`, so an uptime
-monitor or a container healthcheck on it stays green. Everything else
+`/api/health` keeps answering 200 (`{"status":"ok"}`, whoever asks, since
+it looks nobody up then), so an uptime monitor or a container healthcheck
+on it stays green. Everything else
 answers 503: a scrape of `/api/metrics` fails, the Homepage tile shows an
 error, and an hourly tick that falls inside the restore is skipped, the
 heartbeat push with it (the next tick sends it). Afterwards the alert state

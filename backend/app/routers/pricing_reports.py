@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.schemas import AccuracyReport, PricingCoverage, SourcesReport, StaleReport
 from app.services import pricing_reports as reports
@@ -14,12 +15,14 @@ def _currency(db: Session, currency: str | None) -> str:
 
 
 @router.get("/coverage", response_model=PricingCoverage)
+@permission("read")
 def coverage(db: Session = Depends(get_db)):
     """Owned items lacking estimates, and per source why."""
     return reports.coverage(db)
 
 
 @router.get("/stale", response_model=StaleReport)
+@permission("read")
 def stale(days: int = Query(default=30, ge=1, le=3650), db: Session = Depends(get_db)):
     """Latest estimates per item and source that are `days` old or older, or
     were built from expired upstream data."""
@@ -27,6 +30,7 @@ def stale(days: int = Query(default=30, ge=1, le=3650), db: Session = Depends(ge
 
 
 @router.get("/sources", response_model=SourcesReport)
+@permission("read")
 def sources(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),
@@ -37,6 +41,7 @@ def sources(
 
 
 @router.get("/accuracy", response_model=AccuracyReport)
+@permission("read")
 def accuracy(
     currency: str | None = Query(default=None, min_length=3, max_length=3),
     db: Session = Depends(get_db),

@@ -28,7 +28,8 @@ data). Display currency and melt cadence are DB-backed with env fallback.
 M2 and M3: `services/numista.py` prices coins and notes by `numista` catalog
 ref + grade, `services/pcgs.py` prices US coins by PCGS cert (or `pcgs` ref
 + Sheldon grade), preferring realized auction prices over the price guide.
-Both are selected with `POST /api/items/{id}/estimate?source=`, resolved
+Both are selected with `POST /api/items/{id}/estimates/auto?source=` (it was
+`.../estimate` until v0.30.0), resolved
 through `pricing.get_adapter`, and share `NotApplicable` (422) /
 `SourceUnavailable` (502) plus `pricing.cached_response` over the
 `source_cache` table (migration `0009`).
@@ -280,9 +281,9 @@ owner. The image installs `requirements.txt` with `--require-hashes`, then
 the project with `--no-deps`, then uninstalls pip (Trivy flags the msgpack
 and setuptools pip bundles), so there is no pip in the running container.
 `proxy/nginx.conf`: an `add_header` inside a `location` replaces the
-server-level ones, so `location /` repeats them alongside its CSP; `/api/`
-gets no CSP from nginx (documents set their own, and `/api/docs` loads its
-viewer from a CDN). New inline scripts, external fonts, or iframes will trip
+server-level ones, so `location /` repeats them alongside its CSP (from
+v0.30.0 by including `cabinet-headers.conf`); `/api/` gets no CSP from nginx
+(documents set their own). New inline scripts, external fonts, or iframes will trip
 the CSP, and the e2e header test visits the main pages to catch that.
 
 ## Interface polish (v0.24.0)
@@ -346,7 +347,7 @@ National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
   recomputed the next time their serial is saved; a rule change that must
   reach existing rows needs a new data migration).
 - **`pricing.add_estimate(db, item, row)` is the one way a `price_estimates`
-  row is added** (the manual endpoint, `POST .../estimate`, and both
+  row is added** (the manual endpoint, `POST .../estimates/auto`, and both
   scheduled refreshes), because it is where a wish-list target is noticed.
   Don't `db.add` an estimate anywhere else. It looks up the previous newest
   estimate before adding the row, and the caller commits.
@@ -457,6 +458,11 @@ docs/backup-restore.md. What a change here has to respect:
   done) or clears `.restore-new`. A non-empty `.restore-old` only survives
   a failed put-back, may hold the only copy, and makes the next restore
   refuse; never delete it automatically.
+- **Retention counts full and data-only archives separately** (v0.30.0,
+  `backup.prune`): each kind keeps the newest `backup_keep`, so a run of
+  quick data-only backups (`POST /api/backups?photos=false` is admin but
+  not fresh) can never push out the last archives holding the photos and
+  documents.
 - **Pre-restore archives** (`backup.write_prerestore`): verified after
   writing, not recorded as `backup_last_run` (that database is about to go),
   outside `backup_keep` in `prune`, newest `PRERESTORE_KEEP` (3) kept, and
@@ -770,6 +776,509 @@ removes a typed-in value only: `pricing.source_key(source) in
 pricing.ADAPTER_NAMES` is a source's estimate and answers 409, because
 coverage, accuracy, and provenance read that history. Don't widen it to
 sources without deciding what those reports should then say.
+
+## Authentication and encrypted backups (v0.30.0)
+
+Roadmap Phase 7, P8 A1, built to [SPEC_0300](specs/SPEC_0300.md) on the
+`p8-auth-a1` branch: one admin, sessions, scoped API tokens, a
+deny-by-default gate, and every backup archive encrypted. Rules a later
+change must respect:
+
+- **The renames are done**: `POST .../estimates/auto?source=`,
+  `POST /api/estimates/refresh?source=melt` (only melt; anything else 422),
+  and no `POST /api/items/import`. Tests import a Cabinet CSV with
+  `tests.conftest.import_cabinet_csv`, which goes through `/api/imports`
+  and forces `format: cabinet` (a hand-written CSV with a few export columns
+  detects as `spreadsheet`). Its errors number data rows from 1, not file
+  lines, and an exported id is a duplicate even when that item is in the
+  trash, so a round-trip test purges (`?permanent=true`) before re-importing.
+- **`age` is a program, not a library**: Debian's package in the backend
+  image, called as a subprocess, so archives stream through it however large
+  they are. The Dockerfile's `age --version` step fails the build if it is
+  missing. The dev machine has no `age`, so tests go through monkeypatch
+  points (`backup.encrypt_stream`/`decrypt_stream`).
+- `argon2-cffi` is in the lockfile (with `argon2-cffi-bindings`; `cffi` and
+  `pycparser` were already there for `cryptography`). The hashing parameters
+  live in the password service (`app/auth/passwords.py`);
+  `tests/test_dependencies.py` only proves it installs and round-trips.
+- **Deployment settings are checked before anything starts.**
+  `config.check_startup` runs first in the lifespan and raises `ConfigError`
+  naming the variable (`PUBLIC_ORIGINS` required and made of exact origins,
+  `AUTH_INSECURE_HTTP` only beside http origins, a supplied setup code at
+  least 32 characters with no character over a quarter of it, a readable
+  `SETUP_CODE_FILE`); uvicorn then exits 3. `config.normalize_origin` is the
+  one origin parser (lowercase, default port dropped, no path); CSRF uses
+  it. Tests get `PUBLIC_ORIGINS=https://testserver` from conftest. Once the
+  claimed marker exists, the setup code is ignored, so its check moves
+  behind that.
+- **Every proxied nginx location includes `cabinet-proxy.conf`**, and a
+  location with its own `add_header` includes `cabinet-headers.conf`: nginx
+  drops the server-level `proxy_set_header` and `add_header` lines in any
+  location that sets one of its own, so a new location without the include
+  would pass a client's `X-Forwarded-For` or identity headers straight
+  through. Forwarded headers are overwritten, never appended; identity
+  headers are set to `""` (not passed). The backend runs uvicorn with
+  `--no-proxy-headers`, so it never rewrites the client from a header either.
+- **Host names.** `proxy/40-cabinet-hosts.sh` writes `server_name` from the
+  hosts of `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (a union, so listing an
+  internal name can't drop the public one); underscores are allowed
+  (`cabinet_proxy`), `_` alone, ports, schemes, and wildcards are not. The
+  nginx image's entrypoint stops the container when the script fails
+  (confirmed). Anything else hits the `default_server` and gets 444.
+- **Plain-text secrets are never used or healed.** `crypto.decrypt` returns
+  `""` for unprefixed input and `get_setting` no longer encrypts it in place.
+  `app_settings.clear_unusable_secrets` clears it and records the key in
+  `secrets_cleared` (a setting written only by the service, shown in
+  Settings, removed per key when that secret is saved again);
+  `scheduled.clear_secrets` wraps it with a commit and an `alerts.event` that
+  names, never shows. It runs at startup after migrations (only when
+  `AUTO_MIGRATE` is on, since tests have no database there) and first in
+  every hourly tick, which also covers a database put back by `restore.sh`.
+  The in-app restore calls it with `undecryptable=True`; the audit event
+  `secrets_cleared` joins it too.
+- **The PCGS cert route takes `^[0-9A-Za-z-]{1,20}$`** (`CERT_PATTERN`), so
+  no real cert needs a percent-encoded path. An encoded digit (`%31`)
+  decodes before routing, so only the gate's refusal of any `%` catches that
+  form.
+- **No `/api/docs`**: `docs_url`, `redoc_url`, and
+  `swagger_ui_oauth2_redirect_url` are all `None`; `/api/openapi.json` stays.
+- **Two schemas, two chains, no crossing.** `AuthBase` (`app/models/auth.py`,
+  `MetaData(schema="cabinet_auth")`) is never on `Base.metadata`, so neither
+  chain's autogenerate sees the other; `alembic_auth/env.py` creates the
+  schema, keeps its version table inside it, and `include_name` limits it to
+  it. `schema.upgrade_to_head(engine, auth=True)` runs the collection chain
+  then the sign-in chain in one transaction under the one advisory lock; a
+  restore calls it with `auth=False`. `tests/test_auth_schema.py` fails on a
+  foreign key across the schemas and greps each `versions/` folder for the
+  other schema's name, so an auth migration must never mention `public`,
+  even in a comment. On SQLite, conftest maps `cabinet_auth` to no schema
+  with `schema_translate_map` on the engine (the FK pragma listener stays on
+  the raw engine) and creates both metadatas.
+- **Dumps and restores never touch `cabinet_auth`.** `backup.dump_command`
+  adds `--exclude-schema=cabinet_auth`, `restore.restore_command` has
+  `--schema=public`, the leftover-table drop reads `schemaname = 'public'`
+  only, and `backup.sh` / `restore.sh` match (tested by text). Refusal reads
+  the dump's table of contents: `backup.list_dump` (a monkeypatch point) and
+  `restore.refuse_auth`, which rejects any non-comment line naming
+  `cabinet_auth`, at inspect and again just before the database step.
+  `backup.dump_settings` (also a monkeypatch point) reads `app_settings` out
+  of a dump through `pg_restore --data-only` to name the secrets it carries.
+- **The private staging folder** (`backup.staging_dir`, `STAGING_DIR`,
+  `/data/staging`, not an operator setting) is the only place a dump is
+  unpacked: 0700, files 0600 (`backup.private_file`), refused inside the
+  backup, photo, or document directories, emptied (`backup.empty_staging`,
+  never the folder itself: it is a mount) at the start and end of every
+  inspect and run and by `recover()` on every start. `ensure_room` checks
+  free space first. `restore.upload_dir` (was `staging_dir`) in
+  `BACKUP_DIR/.restore-staging` holds uploads only. Inspect takes the
+  restore lock (409 while a restore runs) so two can't share staging.
+- **The marker.** `_write_marker` (direct ORM on `AppSetting`, key
+  `restore_marker`, never through `get_setting`) is committed just before
+  the journal's `database` phase, which records the same value and, via
+  `restore_database(on_drop=...)`, the leftover tables before they are
+  dropped. `recover()` compares the row with the journal: equal means
+  nothing committed (or partial, if tables were dropped); absent or
+  different means replaced (clear marker rows and unusable secrets, roll
+  the swap forward, let startup migrate); unreachable, or a journal with no
+  marker, means stay in maintenance with the journal kept. `recover(engine)`
+  takes the engine so tests can pass theirs. Don't move the marker out of
+  `public`: it works because a restore replaces that table.
+- **After the database step**, `_after_database` deletes marker rows and
+  runs `scheduled.clear_secrets(undecryptable=True)`, skipping both when
+  the restored database has no `app_settings` (an archive from before
+  `0008`); the cleared names go into the outcome's `secrets_cleared`.
+- **Every archive is encrypted, and nothing plain touches `BACKUP_DIR`.**
+  `backup.write_archive(out, ...)` writes the zip into a stream (unseekable:
+  zipfile uses data descriptors) that `backup.encrypt_stream` pipes into
+  `age`, which writes `<name>.zip.age.partial`, renamed when complete and
+  removed on any failure (`_write_encrypted`). The download is the same,
+  into `.download-*.zip.age`. Decrypting happens only in
+  `backup.decrypt_to_staging` (a 0600 file in `/data/staging`, after a
+  free-space check against the archive's size); the pre-restore archive is
+  verified by decrypting it there and deleting the copy (`verify_stored`).
+  A new path that reads an archive must go through `restore.open_archive`,
+  which also refuses plain `.zip` (`LEGACY_REFUSED`) before decrypting.
+  `encrypt_stream` and `decrypt_stream` are the monkeypatch points;
+  conftest's autouse `fake_age` stands in (authenticated, bound to the
+  recipient, unseekable like a pipe), with `open_archive` and `seal` helpers
+  for tests that read or build archives. Real `age` is only in the image.
+- **Exactly the covered members.** After the MAC, `verify_archive` requires
+  the zip's names to be unique and equal to the manifest's members plus
+  `manifest.json` and `SHA256SUMS`, and `SHA256SUMS` to be exactly the one
+  the manifest implies. `zipfile` reads the last of two same-named entries
+  and `unzip` the first, so without this a doubled or extra member could
+  reach `restore.sh` unverified. Both small members are size-capped
+  (`MAX_SMALL_MEMBER`) before the MAC, since anyone can encrypt to the
+  public key.
+- **The MAC is checked first.** `backup.verify_archive` reads
+  `manifest.json` and `SHA256SUMS`, verifies `mac` with the one configured
+  identity its `mac_recipient` names (`archive_keys.verify`,
+  `hmac.compare_digest`), and only then checks the members. The canonical
+  form is `json.dumps(manifest without mac, sort_keys=True,
+  separators=(",", ":"), ensure_ascii=False)` in UTF-8, then `SHA256SUMS`;
+  `test_mac_is_exactly_the_specified_bytes` pins it. Don't change it
+  without a new `info` string, or every stored archive stops verifying.
+- **Keys** (`services/archive_keys.py`): bech32 and X25519 by hand over
+  `cryptography` (checked against the real `age-keygen` both ways during
+  the build), so no Python dependency. **A key is generated only by
+  `ensure_key`, at startup, and only by `os.link` from a synced partial**,
+  which fails if the name exists, so an existing key is never overwritten,
+  even when a stat of it failed (ESTALE on NFS). At runtime
+  `identities()` only reads; a key that can't be read raises
+  `KeyUnavailable`, which `backup.signing_key` turns into a failed backup,
+  never a new key. Writes are fsynced, file and folder. Identities must
+  start `AGE-SECRET-KEY-1` in capitals, as `age` requires. A bad
+  `BACKUP_KEY_FILE` is a `ConfigError`. The key file is also what `age
+  --identity` reads, so the secret never goes on a command line. `rotate`
+  only ever rewrites a generated file. **`BACKUP_KEY`** (stage 13, the
+  owner's decision) supplies the same key as a variable: `ensure_key` parses
+  it (commas or newlines between identities) and writes it at every start
+  to `/run/cabinet/backup.key` (0600; created by the Dockerfile and handed
+  over by the entrypoint; a private temp folder outside the image), never a
+  data volume, since the state volume may be the backups' own share. Both
+  forms set is a `ConfigError`; `archive_keys.source()` says which is in
+  use (`file`, `environment`, `generated`), `location()` reports
+  `environment`, and `backup-key rotate` prints the steps for either.
+  `backup-key new` prints a fresh identity in `age-keygen`'s format with no
+  database and no claim check: the documented way to make a key for either
+  form. Startup also runs `backup.self_test`
+  (a real age round trip in staging; failure is logged as critical) and,
+  after migrations, `backup.record_key_mismatch`, which alerts when the
+  newest recorded archive was made with a key no longer configured.
+- **The archive record** (`backup.record_archive`, `cabinet_auth.backup_ledger`)
+  is written for every archive (`scheduled`, `manual`, `download`,
+  `prerestore`, and `backup.sh` through `cli write-archive`), matched by
+  `archive_keys.mac_digest` (SHA-256 of the MAC), pruned on write (180
+  days, never below 50). Names are to the second, so a row with the same
+  name is taken over rather than duplicated. `restore.provenance` compares
+  the archive's verified `created_at` with the newest recorded (naive
+  datetimes from SQLite are read as UTC); older means `RESTORE OLDER`, set
+  in `_pending` at inspect, rechecked from the archive in `_confirm_age` at
+  the start of the run, and recomputed after a failed run
+  (`_refresh_phrase`), since that run's safety backup is now the newest.
+- **Key location** (`archive_keys.compare_locations`) is pure over a
+  mountinfo text, so tests pass fixtures. `separate` only for two
+  `LOCAL_FS` filesystems on different devices; one mount or overlapping
+  folders on one device are `shared`; everything else, sibling folders on
+  one device included, is `not_verified`. False reassurance is the failure
+  to avoid. Mount paths are unescaped as octal only. It compares POSIX
+  paths as given; `location()` resolves the real ones first.
+- **Staging is apart from every other data folder in both directions**
+  (backup, photo, document, state), since it is emptied on every start.
+  `empty_staging()` leaves `.cli-` files (a container command in another
+  process); `recover()` empties everything and also deletes staged uploads
+  a restart has orphaned. An upload is refused on its first bytes unless it
+  is an age file, so a plain archive never lands on the share. The
+  entrypoint puts back the owner and mode of `BACKUP_KEY_FILE` and
+  `SETUP_CODE_FILE` if a folder hand-over touched them.
+- **The CLI** (`app/cli.py`) drops to `PUID:PGID` when started as root.
+  `write-archive` stages its ciphertext in `/data/staging` (a `mkstemp`
+  name with the `.cli-` prefix) to learn the size for the record, then
+  streams it to stdout; `verify-archive -` spools stdin there the same way
+  and deletes it. A killed command leaves its spool (a decrypted archive)
+  behind, so `empty_staging` removes a `.cli-` file older than `CLI_STALE`
+  (ten minutes) even while it leaves fresh ones to the command that owns
+  them.
+- **The credential services live in `app/auth/`**, one module per kind
+  (`passwords`, `sessions`, `tokens`, `devices`, `throttle`, `audit`,
+  `notify`), put together by `accounts`, which the routes and the container
+  commands both call. Each `accounts` function is one unit of
+  work and commits itself, so a failed sign-in's audit row, device failure,
+  and counters persist although the caller answers with an error. **A
+  password is only ever checked through `accounts._check_password`**: the
+  attempt counted first (`throttle.attempt`, or `devices.reserve` for a
+  known device, which falls back to the throttles once its five attempts
+  are used), then the slot (the reserved one for a known device), then
+  Argon2, then on failure the audit row and the burst alert, and on success
+  the attempt given back. A new path that takes a password goes through it,
+  never `passwords.verify` directly. **Counting before Argon2 is the rule
+  the final review added**: counted afterwards, a burst queued for the check
+  slot all read the count as it was and passed, leaving only the global
+  limit (about 86,000 guesses a day). The device count is one atomic
+  `UPDATE ... WHERE failures < 5`, committed at once, for the same reason.
+- **Time comes from `common.now()` and `common.monotonic()`**, called
+  through the module (never imported by name), so tests freeze it by
+  patching `common`. SQLite hands times back naive: compare through
+  `common.aware`, and give bulk deletes with a time condition
+  `synchronize_session: "fetch"`, or SQLAlchemy's in-Python evaluation
+  compares naive with aware and raises.
+- **Throttles and the reserved slot are per process**, in memory, as the
+  spec says. `reset-password` runs in another process, so it touches
+  `throttle_reset` on the state volume and every throttle check clears the
+  map when that file's time changes (the first look only notes it). The
+  spec says the gate checks the flag; every throttle check reads it
+  instead, which covers the same requests, since only sign-in, confirm, and
+  setup consult the throttles.
+- **Tokens**: a live token's name is unique (the CLI revokes by name), at
+  most 50 live, `read` and `write` 1 or 7 days, `metrics` also never. The
+  secret is only in the creation answer; a pytest scans every tracked file
+  for the token pattern, so never commit a real one, and build test tokens
+  at run time. Revoked and expired tokens are kept 30 days for the list,
+  then pruned hourly (`accounts.prune`, with ended sessions, expired
+  devices, and old audit rows).
+- **The audit log** refuses an unknown event name and a detail key naming a
+  password, secret, or code. Failed sign-ins are labelled with the account's
+  name only when the typed name is the account's, otherwise `unknown`. The
+  JSON lines go to logger `cabinet.audit`, which `main._configure_logging`
+  now includes; a container command writes its row but prints no line (its
+  stdout is the operator's terminal). `secrets_cleared` is audited as
+  `system` in `scheduled.clear_secrets`.
+- **The container commands** (`status`, `reset-password`,
+  `sign-out-everywhere`, `revoke-tokens`, and `backup-key show|rotate`)
+  refuse until the instance is claimed, and when the database can't be
+  reached, since neither can then be told apart. The archive commands
+  (`decrypt-archive`, `verify-archive`, `write-archive`) don't: `backup.sh`
+  and `restore.sh` must work on a fresh machine before setup (spec section
+  6). `reset-password` reads the password only through `getpass`, twice.
+  Tests reach a command through conftest's `cli_admin` (the admin exists,
+  `app.db.SessionLocal` points at the test database).
+- **Tests never touch `/data`.** conftest's autouse `_private_paths` points
+  every data folder at a temporary one, also for tests that start the app
+  without the `client` fixture (key generation once wrote a real key under
+  `C:/data/state` on the dev machine and failed on CI, where `/data` isn't
+  writable). Tests that hash use a cheap `PasswordHasher`;
+  `test_hashing_parameters_are_pinned` checks the real one.
+- **The gate is two layers.** Layer 1, `app/auth/gate.py`, is
+  plain ASGI after the maintenance middleware (Starlette runs the
+  last-added first, and `test_middleware_order` pins it): any `%` in the raw
+  path is 400; during maintenance only health (no lookup) and the restore
+  status for the grant holder pass; a Cabinet Bearer token is looked up
+  (invalid is 401, never a fall back to the cookie), any other
+  `Authorization` is ignored, otherwise the session cookie; anonymous
+  callers reach only `gate.ANONYMOUS`, and the two anonymous posts also
+  refuse `Sec-Fetch-Site: cross-site`/`same-site`; `/api/openapi.json` is
+  session only; CSRF for session requests is decided before the lookup
+  touches `last_seen_at`, so a refused request never keeps a session alive.
+  Every comparison uses `scope["raw_path"]` bytes. Layer 2,
+  `app/auth/permissions.py`, is the app-level dependency reading
+  `@permission` from the matched endpoint. It runs before body validation
+  but after FastAPI has read a multipart body, which is why layer 1 refuses
+  a `read` or `metrics` token on any unsafe method (every such route is
+  write or admin; the public setup and sign-in excepted) before a body is
+  read. A `write` token can still make an admin multipart route (replacing
+  a photo's image, 25 MB) parse its body before the 403; a restore upload
+  is streamed after the check.
+- **Declaring a route**: `@permission(cls, metrics_ok=, fresh=)` directly
+  above `def`. `test_every_operation_declares_what_the_spec_says` parses
+  the appendix of SPEC_0300 and compares every OpenAPI operation with it, so
+  a new route, or a changed class, needs the spec table changed in the same
+  commit. The one deliberate difference: `POST /api/auth/password` and
+  `/username` aren't `fresh`, because the current password in the body is
+  the confirmation (the spec lists them as fresh). A handler whose
+  permission depends on its arguments calls `permissions.require` (deleting
+  an item for good; unlinking a document from its last item, which deletes
+  the file). **Deleting a photo or a document, or replacing a photo's
+  image, is admin and fresh** (the owner's decision after the build
+  reviews, SPEC_0300 section 16): there is no trash for either, so they are
+  "delete for good" like purging an item. The frontend needs nothing for
+  it: those calls go through `req()`, which opens the password dialog. `ReauthRequired` is rendered with `reauth_required` at
+  the top level by a handler in `main.py`; a validation error under
+  `/api/auth/` lists the bad fields without echoing their values.
+- **`location /api/` stays buffered** (`proxy_request_buffering` on, the
+  default). Switching it off was tried in stage 12 and measured: when the
+  backend refuses a request before the body arrives (the gate's 401 or
+  403), nginx keeps sending the body to an upstream that has already
+  answered and blocks until `proxy_send_timeout`, so a refused 5 MB POST
+  took 60 s unbuffered against 14 ms buffered (uvicorn itself drains and
+  answers at once). Bodies on `/api/` are at most 25 MB, so the temporary
+  file is the cheaper cost. `/api/imports` and `/api/restore` must stay
+  unbuffered (1 GB and 20 GB bodies), so a refused large body there waits
+  out their send timeout (60 s on imports, 60 minutes on restore): a
+  nuisance, not a bypass, and one to remember before adding a third.
+- **nginx forwards the raw request URI** (`proxy_pass http://backend:8000;`,
+  no path), so the gate sees what the client sent. A `proxy_pass` with a
+  path forwards nginx's decoded, normalised URI instead, and `/api/%68ealth`
+  arrived as `/api/health` (found through real nginx). A new location must
+  keep `proxy_pass` without a path.
+- **Setup** (`app/auth/setup.py`): `prepare` runs at startup after
+  migrations (lazily from the first `/api/auth/state` or setup when
+  migrations are off, re-checked inside its lock so two first requests log
+  one code). A generated code is logged once, a supplied one never. The
+  route compares the code first, so a right code is never throttled; a wrong
+  one counts against `setup:<address>` and is audited (`setup_failed`,
+  actor `anonymous`; a throttled attempt answers 429 and isn't). The claimed marker `auth_claimed`
+  (beside `SECRET_KEY_FILE`) makes `SETUP_CODE` inert, and
+  `config.check_startup` skips the setup-code check once it exists; a marker
+  that can't be written is logged, not a failed setup, and the next start
+  writes it for a claimed database. Setting `SETUP_CODE` in the shell needs
+  `docker compose up` (a `restart` keeps the old environment), and a stack
+  reset to unclaimed also needs the marker removed.
+- **The restore grant** (`restore.issue_grant`/`granted`) is issued inside
+  `restore.start` once the run holds the restore lock, so a refused second
+  run can't replace or drop it, and the gate consults it only during
+  maintenance, without the database. The start and end of a restore are
+  audited under the caller's name and alerted; the alert of a failed one
+  never carries the error (pg_restore's output can quote rows), only where
+  to read it.
+- **What routes record** goes through `app/auth/events.record` (audit row
+  under the caller, commit, optional alert): both downloads, both exports
+  (recorded before streaming, since the commit would expire the rows), the
+  saved-key tick, and deleting unencrypted archives. Exports, documents, and
+  thumbnails are `private, no-store`; the gate gives every other API answer
+  without its own `Cache-Control` `private, no-store`.
+- **Health** is public: the full body for any principal, `{"status": ...}`
+  otherwise, and during a restore for everyone (the gate does no lookup
+  then).
+- **Tests**: conftest's `client` is the admin signed in over
+  `https://testserver` with `Sec-Fetch-Site: same-origin`, inside the
+  recent-password window (`client.admin` is the `Started` sign-in);
+  `unclaimed_client` is the bare app, and `anon_client`, `stale_client`, and
+  `token_client(scope)` sit beside `client`. Cookies set by hand use the
+  jar's own domain for a dotless host (`testserver.local`) so a Set-Cookie
+  replaces them. `test_gate.py`'s `dry_run` swaps layer 2's check for one
+  answering 418 wherever the real one would allow the call, so the matrices
+  call every operation without running a handler. The HTTP client
+  normalises `.` and `..` segments before sending, so those cases belong to
+  the real-nginx checks.
+- **Photos go through nginx's `auth_request`.** It is set at
+  server level in `proxy/nginx.conf`, and every other location turns it off
+  (`location /`, each `/api` location, the named 503 location): **a new
+  location is checked unless it says `auth_request off`**, which is the safe
+  way round. `location = /_auth/photo` is `internal` and proxies to `GET
+  /api/auth/photo` without the body; it includes `cabinet-proxy.conf`, so the
+  cookie, `Authorization`, and `Sec-Fetch-Site` reach the gate like any
+  request and the photo rule (only `cross-site` refused) applies. nginx
+  passes the check's 401 and 403 through and turns anything else into 500,
+  which `/photos/` maps to `@photos_unavailable` (503, `Retry-After: 5`).
+  The check runs before nginx looks for the file, so a missing photo is 401
+  to a stranger and 404 only when signed in. The dot-name 404 is a `return`
+  in the rewrite phase, before the check, which is fine: it serves nothing.
+  `/photos/` sends `private, no-store` and repeats the security headers
+  (its own `add_header` replaces the server's). The real-nginx cases are
+  `stack-smoke.sh photos`, a CI step; pytest covers the route itself.
+- **The photo check is not cached**, by measurement (the spec asked for one
+  before considering it): on the local stack, 50 thumbnails cost about 162
+  ms with the check against 14 ms without (the backend is one process, so
+  checks queue at ~3.3 ms each), and a 50-photo collection page loads in a
+  median 1,125 ms against 1,050 ms without. 75 to 100 ms on a full page, for
+  one user, doesn't justify a cache. Measuring it found two real fixes:
+  anonymous health used to build and discard the full body (database and
+  schema reads) before answering `{"status": "ok"}` (6.4 ms → 1.6 ms, and it
+  matters since anyone can call it), and `require_permission` and the photo
+  route are `async` now, since a plain function costs a hop to a worker
+  thread for no reason (182 ms → 162 ms for the 50).
+- **The frontend**: `/setup` and `/login` (no header, just the brand),
+  `App.tsx`'s `Gate` doing the boot check (`GET /api/auth/state` then
+  `GET /api/auth/me`) before anything else renders, the confirm-password
+  dialog, Settings → Account (password, username, sessions, tokens, the
+  audit log) and the backup key block in Settings → Backups. Rules a later
+  change here has to respect:
+  - **`api/client.ts`'s `req()` is the one place that reacts to a dying
+    session or a lapsed confirmation.** A `401` calls a handler
+    `auth/AuthContext.tsx`'s `AuthProvider` registers (a full page load to
+    `/login?next=...`); a `403` with `reauth_required` calls a handler the
+    confirm dialog registers, awaits it, and retries the original request
+    once. Both are `null`-able module-level refs set at runtime, not
+    imports, so `client.ts` never imports from `auth/` (which imports `api`)
+    and the two can't form a cycle. A call that must answer 401/403 itself
+    (setup, sign-in, the auth boot check) passes `{ raw: true }`.
+  - **One confirm dialog, two callers.** `auth/ConfirmDialog.tsx`'s
+    `requestConfirm()` is a promise-based service; `req()`'s automatic retry
+    and `auth/FreshLink.tsx` (plain download links to a fresh route: both
+    exports, `backup.zip`, a stored archive) both open it through that same
+    function, never their own. A plain `<a>` can't be retried the way a
+    JSON call is, which is why `FreshLink` checks `GET /api/auth/me`'s
+    `confirmed_until` itself before deciding whether to ask.
+  - **The theme effect lives above the signed-in app**, in `App.tsx`'s
+    `Gate`, not inside the authenticated shell, so a remembered light theme
+    still applies to `/setup` and `/login`, which render without the header
+    that used to own it.
+  - **Widening `WIDGET_OPTIONS`/`REGISTRY`-style pairing applies here too**:
+    `components/setup.tsx`'s `setupChecks` takes the same `BackupList` the
+    Backups card already fetches, so a new setup-checklist condition reads
+    fields already on that type rather than a new request.
+  - **Playwright's `workers: 1`** (`playwright.config.ts`): the suite shares
+    one backend and one database, and a password or username change
+    (`e2e/smoke.spec.ts`'s last two tests, deliberately last, after the
+    restore test) revokes every *other* session, including the one baked
+    into `storageState` that every other spec's fresh page starts from. A
+    second worker mid-request when that happens would see an inexplicable
+    401. Those two tests also sign themselves in through the form rather
+    than trusting `storageState`, since the first one's own change kills it
+    for the second. `e2e/auth.spec.ts` covers the rest of sign-in (the
+    sign-in page, sign-out, the confirm dialog, tokens, ending another
+    session) without touching the shared session, so it can run alongside
+    `smoke.spec.ts` safely, which is what actually needs the single worker.
+- **The CI stack job, the seed script, and Playwright's global setup all
+  authenticate through tokens and sign-in**, alongside the gate and the auth
+  routes. `scripts/ci/stack-smoke.sh` replaces the stack job's
+  inline curl: it waits for health, claims with `SETUP_CODE` if the stack is
+  unclaimed (else signs in), mints write, read, and metrics tokens, and
+  wraps every write and read call in `api()` (Bearer, write-scoped) and
+  every admin call in `admin()` (the cookie jar plus an `Origin` header,
+  since curl sends no `Sec-Fetch-Site` for the CSRF check to pass on). A
+  `fresh()` helper calls `POST /api/auth/confirm` first for the routes that
+  need a recent password (permanent delete, settings, backup download,
+  restore inspect and run); confirming again is cheap, so it just always
+  does. It runs as one call (`bash scripts/ci/stack-smoke.sh`, or `all`) or
+  as separate phases (`bootstrap`, `smoke`, `backup-restore`,
+  `restore-drill`) sharing a cookie jar and minted tokens through a fixed
+  state folder (`STACK_SMOKE_STATE`, a temp directory by default), which is
+  how the CI job keeps its four named steps readable while still sharing one
+  session. Token names carry a timestamp and PID so a second run against an
+  already-claimed stack doesn't collide, and the metrics check turns
+  `metrics_enabled` off before proving it is 404, since a previous run may
+  have left it on. One behaviour worth knowing: an anonymous request to a
+  path that doesn't exist at all (like the removed `/api/docs`) now gets 401
+  from the gate, which refuses an unlisted path before FastAPI's own routing
+  ever runs; a session or token gets past the gate and sees the real 404. The
+  smoke phase checks both.
+  `scripts/seed_demo.py` takes `--token`, or reads `CABINET_TOKEN` (a write
+  token), sent as `Authorization: Bearer`, and fails with a clear message on
+  401. `frontend/e2e/global-setup.ts` claims (with `SETUP_CODE`) or signs in
+  (with `CABINET_USER`/`CABINET_PASSWORD`) once before the suite through
+  Playwright's request API, and saves `storageState`
+  (`playwright.config.ts`'s `use.storageState`), so every spec starts signed
+  in. A spec that reaches a "fresh" route now goes through the app's own
+  confirm-password dialog rather than confirming out of band:
+  `smoke.spec.ts`'s `withPasswordConfirm` helper performs the action and
+  answers the dialog only if it appears (it doesn't, inside the window an
+  earlier action already opened), used before deleting an item for good and
+  the in-app restore's inspect and run.
+- **The outside-in suite and the upgrade test.**
+  `scripts/ci/stack-smoke.sh` gained two phases. `race` fires two concurrent
+  `POST /api/auth/setup` calls at a fresh stack and requires exactly one
+  `201` and one `409`; it only means anything before a stack is claimed, so
+  it checks `GET /api/auth/state` itself and skips with a message otherwise,
+  which is what lets `all` still pass against an already-claimed stack (CI's,
+  or the owner's own). `outside-in` (after `bootstrap`) checks every class
+  of caller against the same four routes (`GET /api/health` public,
+  `GET /api/items` read, `POST /api/items` write, `GET /api/settings`
+  admin), that anonymous callers are refused on `/api/openapi.json`,
+  `/api/settings`, `/api/backups`, a document file, `/api/metrics`, and
+  `/api/items/{id}`, that a revoked token is `401` and not `403`, and that a
+  spoofed `X-Forwarded-For`/`X-Real-IP` never reaches the audit log (nginx
+  overwrites them before the backend ever sees them). `backup_restore` and
+  `restore_drill` both end with `password_and_token_still_work`, a fresh
+  `POST /api/auth/login` plus a `GET /api/items` on the bootstrap write
+  token, proving `cabinet_auth` really did survive the restore rather than
+  merely reporting success. All three archive-touching steps write their
+  scratch files under `STATE_DIR`, never the repository root, and `sync`
+  the just-downloaded archive before decrypting it: on this project's
+  Windows dev machine, a file `curl -o` just wrote isn't always visible yet
+  to `docker compose exec` a moment later, which reads it as wrongly keyed
+  rather than as truncated (a `sync` closes that window; CI's Linux runner
+  never needed it, but it's harmless there too). `scripts/ci/upgrade-test.sh`
+  is new and separate: it starts v0.29.1 (pulled from GHCR; the last release
+  with no sign-in) against a fresh database, adds an item anonymously,
+  switches to the images built from the commit under test with
+  `docker compose up --build -d`, claims the upgraded stack, and checks
+  `GET /api/health`'s `schema.status` and `auth_schema.status` both read
+  `ok` with the item intact. Both scripts take their settings from
+  exported shell variables, never a `.env` file (`docker compose` prefers
+  shell values over one anyway), and both take `-p`-equivalent isolation
+  through `COMPOSE_PROJECT_NAME` and a `CABINET_PORT`, so they run against a
+  disposable project without touching one already in use; CONTRIBUTING.md
+  has the exact commands. CI wires `race` in right after the stack comes up
+  (a fresh stack there always answers `setup_required`), then `bootstrap`,
+  `smoke`, `outside-in`, `backup-restore`, `restore-drill`, `photos`, in
+  that order, and adds `upgrade` as its own job, independent of `stack`.
+  `docs/screenshots/capture.cjs` signs in through the sign-in form before
+  capturing (`CABINET_USER`/`CABINET_PASSWORD`) and gained a `signin` mode
+  for the sign-in page itself, captured signed out; `docs/screenshots/README.md`
+  now walks through a throwaway compose project end to end (claim, seed,
+  configure settings through a signed-in session, capture, tear down)
+  rather than the anonymous curl calls it documented before sign-in existed.
 
 ## Releases
 

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.permissions import permission
 from app.db import get_db
 from app.models import Comparable
 from app.routers.items import get_item_or_404
@@ -35,6 +36,7 @@ def _money(fields: dict) -> dict:
 
 
 @router.get("/api/items/{item_id}/comparables", response_model=list[ComparableOut])
+@permission("read")
 def list_comparables(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """The item's sales log, newest sale first."""
     get_item_or_404(db, item_id)
@@ -50,6 +52,7 @@ def list_comparables(item_id: uuid.UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/api/items/{item_id}/comparables", response_model=ComparableOut, status_code=201)
+@permission("write")
 def create_comparable(item_id: uuid.UUID, payload: ComparableCreate, db: Session = Depends(get_db)):
     """Log a sale you found: an eBay sold listing, an auction result, a dealer sale."""
     get_item_or_404(db, item_id)
@@ -61,6 +64,7 @@ def create_comparable(item_id: uuid.UUID, payload: ComparableCreate, db: Session
 
 
 @router.patch("/api/comparables/{comparable_id}", response_model=ComparableOut)
+@permission("write")
 def update_comparable(comparable_id: int, payload: ComparableUpdate, db: Session = Depends(get_db)):
     row = _get_or_404(db, comparable_id)
     fields = payload.model_dump(exclude_unset=True)
@@ -77,12 +81,14 @@ def update_comparable(comparable_id: int, payload: ComparableUpdate, db: Session
 
 
 @router.delete("/api/comparables/{comparable_id}", status_code=204)
+@permission("write")
 def delete_comparable(comparable_id: int, db: Session = Depends(get_db)):
     db.delete(_get_or_404(db, comparable_id))
     db.commit()
 
 
 @router.post("/api/items/{item_id}/comparables/numista", response_model=SalesFetchResult)
+@permission("write")
 def fetch_numista_sales(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """Add the auction sales Numista records for the item's issue to its sales
     log, skipping ones already there. Needs Numista's paid API plan and the

@@ -10,9 +10,11 @@ import {
   SourceStatus,
   ValueStrategy,
 } from "../api";
+import AccountCard from "../components/account";
 import { AlertsCard } from "../components/alerts";
 import { LockIcon } from "../components/icons";
 import { RestoreBlock, useRestore } from "../components/restore";
+import { FreshLink } from "../auth/FreshLink";
 
 function schemaLabel({ current, expected, status }: Health["schema"]): string {
   if (status === "ok") return `${current} (up to date)`;
@@ -49,6 +51,7 @@ export default function Settings() {
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
   const [backingUp, setBackingUp] = useState(false);
+  const [keyBusy, setKeyBusy] = useState(false);
 
   function loadBackups() {
     api
@@ -77,6 +80,38 @@ export default function Settings() {
     } finally {
       setBackingUp(false);
       loadBackups();
+    }
+  }
+
+  async function markKeySaved() {
+    setKeyBusy(true);
+    setBackupError(null);
+    try {
+      await api.markBackupKeySaved();
+      loadBackups();
+    } catch (e) {
+      setBackupError((e as Error).message);
+    } finally {
+      setKeyBusy(false);
+    }
+  }
+
+  async function deleteUnencrypted() {
+    if (!window.confirm("Delete every unencrypted archive? This can't be undone.")) return;
+    setKeyBusy(true);
+    setBackupError(null);
+    try {
+      const result = await api.deleteUnencryptedBackups();
+      setBackupNote(
+        result.deleted.length
+          ? `Deleted ${result.deleted.length} unencrypted archive(s).`
+          : "No unencrypted archives to delete.",
+      );
+      loadBackups();
+    } catch (e) {
+      setBackupError((e as Error).message);
+    } finally {
+      setKeyBusy(false);
     }
   }
 
@@ -311,6 +346,14 @@ export default function Settings() {
       </div>
       {error && <p className="error">{error}</p>}
       {note && <p className="muted">{note}</p>}
+      {settings.secrets_cleared.length > 0 && (
+        <p className="error">
+          Re-enter: {settings.secrets_cleared.join(", ")}. Each was stored without this
+          deployment's encryption, so Cabinet cleared it rather than use it.
+        </p>
+      )}
+
+      <AccountCard />
 
       <div className="card">
         <h2>General</h2>
@@ -439,22 +482,66 @@ export default function Settings() {
       <div className="card">
         <h2>Backups</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          An archive holds the database, the photos, and a manifest with checksums. Restore
-          it below, or with <code>scripts/restore.sh</code> (see docs/backup-restore.md). Stored API
-          keys stay encrypted, and the encryption key is not in the archive.
+          Every archive is encrypted with the backup key below and signed, so it can be neither
+          read nor altered without it. It holds the collection's database, the photos, and the
+          documents, never your sign-in or API tokens. Restore it below, or with{" "}
+          <code>scripts/restore.sh</code> (see docs/backup-restore.md).
         </p>
         <div className="estimate-form" style={{ marginTop: 0 }}>
-          <a className="button primary" href="/api/backup.zip" download>
+          <FreshLink className="button primary" href="/api/backup.zip" download>
             Download backup
-          </a>
-          <a className="button" href="/api/backup.zip?photos=false" download>
+          </FreshLink>
+          <FreshLink className="button" href="/api/backup.zip?photos=false" download>
             Data only (no photos)
-          </a>
+          </FreshLink>
         </div>
         <p className="muted">
           The download starts once the archive is built; allow a minute for a large photo
-          collection.
+          collection. Confirms your password first if it's been more than a few minutes.
         </p>
+
+        {backups && (
+          <>
+            <h3>Backup key</h3>
+            <p className="muted" style={{ marginTop: 0 }}>
+              <LockIcon /> Every archive is encrypted with this key (
+              <code>{backups.key.fingerprint}</code>). Losing it means losing every backup: there
+              is no recovery.
+            </p>
+            {!backups.key.saved && !backups.key.supplied && (
+              <div className="estimate-form" style={{ marginTop: 0 }}>
+                <p className="error" style={{ margin: 0, flexBasis: "100%" }}>
+                  Save your backup key. From the host:{" "}
+                  <code>docker compose exec backend python -m app.cli backup-key show</code>, then
+                  keep it in a password manager. It is never shown in the browser.
+                </p>
+                <button disabled={keyBusy} onClick={markKeySaved}>
+                  I have saved it
+                </button>
+              </div>
+            )}
+            {backups.key.supplied && (
+              <p className="muted" style={{ margin: 0 }}>
+                Supplied by{" "}
+                <code>{backups.key.location === "environment" ? "BACKUP_KEY" : "BACKUP_KEY_FILE"}</code>
+                ; keep your own copy of that secret safe.
+              </p>
+            )}
+            {backups.key.location_message && (
+              <p className="error">{backups.key.location_message}</p>
+            )}
+            {backups.backups.some((b) => b.encrypted === false) && (
+              <div className="estimate-form" style={{ marginTop: 0 }}>
+                <p className="muted" style={{ margin: 0, flexBasis: "100%" }}>
+                  Unencrypted archives from before v0.30.0 can no longer be restored.
+                </p>
+                <button className="danger" disabled={keyBusy} onClick={deleteUnencrypted}>
+                  Delete unencrypted archives
+                </button>
+              </div>
+            )}
+          </>
+        )}
 
         <h3>Scheduled backups</h3>
         <div className="estimate-form" style={{ marginTop: 0 }}>
@@ -539,9 +626,12 @@ export default function Settings() {
                   {backups.backups.map((b) => (
                     <tr key={b.name}>
                       <td>
-                        <a href={`/api/backups/${b.name}`} download>{b.name}</a>
+                        <FreshLink href={`/api/backups/${b.name}`} download>{b.name}</FreshLink>
                         {b.prerestore && (
                           <span className="badge status-wishlist">before restore</span>
+                        )}
+                        {b.encrypted === false && (
+                          <span className="badge status-sold">unencrypted</span>
                         )}
                       </td>
                       <td>{formatBytes(b.size)}</td>
@@ -600,6 +690,22 @@ export default function Settings() {
                 {schemaLabel(health.schema)}
               </dd>
             </div>
+            {health.auth_schema && (
+              <div>
+                <dt>Sign-in schema</dt>
+                <dd
+                  className={
+                    health.auth_schema.status === "ok"
+                      ? undefined
+                      : health.auth_schema.status === "unknown"
+                        ? "muted"
+                        : "error"
+                  }
+                >
+                  {schemaLabel(health.auth_schema)}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Document storage</dt>
               <dd className={health.documents === "ok" ? undefined : "error"}>

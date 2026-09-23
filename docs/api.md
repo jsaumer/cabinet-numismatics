@@ -6,20 +6,143 @@ The backend exposes a REST API under `/api/`. This document is a
 human-readable summary; the authoritative, always-current spec is the
 auto-generated OpenAPI documentation served at:
 
-- Swagger UI: `http://localhost/api/docs`
 - OpenAPI JSON: `http://localhost/api/openapi.json`
+
+There is no interactive docs page (`/api/docs` is gone since v0.30.0): it
+would run a third-party script in the signed-in page. Load the schema into a
+viewer of your own instead.
 
 All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
-document files, and metrics answer files or text). The app has no login yet,
-so endpoints are described without an auth layer; put an authenticating proxy
-in front before exposing it beyond a trusted network. Login is the next thing
-built (roadmap Phase 7, P8: v0.30.0 brings one admin, sessions, and scoped API
-tokens, with every endpoint denied by default; v0.31.0 adds single sign-on).
-When it lands, every endpoint below needs a session or a token, three of them
-change shape, and this document gains a stability policy.
-[security.md](security.md#next-accounts-and-permissions) has the settled
-design and the table of who will be able to call what.
+document files, and metrics answer files or text).
+
+**Every endpoint needs a credential** (v0.30.0) except four: `GET
+/api/health` (just `{"status": ...}` for anonymous callers), `GET
+/api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`. A
+browser signs in and carries a session cookie; scripts send an API token
+(`Authorization: Bearer cabinet_...`). What each route allows is in
+[Sign-in and permissions](#sign-in-and-permissions) below. The three
+endpoint renames of that release are in the stability policy.
+
+## Stability policy
+
+Until v1.0.0, an endpoint's path, parameters, or response may change in a
+minor release when it has to; every such change is announced in
+[CHANGELOG.md](../CHANGELOG.md) under the release that makes it, with the
+old and new forms. From v1.0.0 on, paths under `/api/` and the fields of
+their responses are stable within a major version: nothing is renamed,
+removed, or given a new meaning without a new major version. Additions are
+not breaking changes: a new endpoint, a new optional parameter, a new field
+in a response, or a new value where a field already lists several (a source
+name, a status) may arrive in any release, so clients should ignore fields
+they don't know. Error messages (`detail`) are for people, not for matching.
+
+Renamed for v0.30.0, the one pass made before 1.0:
+
+| Before | Now |
+|--------|-----|
+| `POST /api/items/import` | removed; `POST /api/imports` then `.../{upload_id}/run` (the `cabinet` format) is the one import path |
+| `POST /api/estimates/refresh-melt` | `POST /api/estimates/refresh?source=melt` |
+| `POST /api/items/{id}/estimate?source=` | `POST /api/items/{id}/estimates/auto?source=` |
+
+## Sign-in and permissions
+
+**Credentials.** A session cookie from `POST /api/auth/login` (or from
+setup): `__Host-cabinet_session` (`Secure; HttpOnly; SameSite=Lax; Path=/`,
+no expiry of its own), or `cabinet_session` without `Secure` when the
+deployment sets `AUTH_INSECURE_HTTP`. It ends a day after its last use and
+seven days after sign-in. A known-device cookie
+(`__Host-cabinet_device`, `SameSite=Strict`, 7 days) lets a browser that
+signed in before past the sign-in delays; it authenticates nothing. An API
+token is `cabinet_<10 characters>_<43 characters>`, sent only as
+`Authorization: Bearer ...`, never in a query string or a cookie. A Cabinet
+token that isn't valid is `401` with no fall back to the cookie; any other
+`Authorization` value (another proxy's) is ignored.
+
+**Scopes and classes.** Every route has a class:
+
+| Caller | public | read | write | admin |
+|---|---|---|---|---|
+| Nobody signed in | yes | 401 | 401 | 401 |
+| The admin's session | yes | yes | yes | yes |
+| `write` token | yes | yes | yes | 403 |
+| `read` token | yes | yes | 403 | 403 |
+| `metrics` token | yes | 403 | 403 | 403 |
+
+`GET /api/stats/collection` (read) and `GET /api/metrics` (admin) also
+accept a `metrics` token; a `read` or `write` token gets `403` on the
+metrics. `read` covers every listing and report (items, their values and
+where they are kept, photos' metadata, stats, the dashboard layout, the
+trash). `write` adds creating, editing, and moving to the trash, and the
+lookups that spend Numista or PCGS quota. Admin, session only: settings,
+backups and restore, the exports, document files and thumbnails, the alerts
+test, saving the dashboard layout, deleting for good, `/api/openapi.json`,
+and everything under `/api/auth` that changes the account. The full table,
+route by route, is the appendix of
+[SPEC_0300](specs/SPEC_0300.md#appendix-route-permissions-v0300).
+
+**Recent password.** A few admin routes also need the password confirmed
+in the last 5 minutes by this session (`POST /api/auth/confirm`); a token
+can never have that. Without it they answer `403`
+`{"detail": "Confirm your password to continue.", "reauth_required": true}`.
+They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
+`DELETE /api/backups/unencrypted`, `POST /api/restore/inspect`, `POST
+/api/restore/{id}/run`, every `PUT /api/settings`, `POST /api/trash/purge`,
+`DELETE /api/trash`, `DELETE /api/items/{id}` when it deletes for good
+(`?permanent=true`, or an item already in the trash), `DELETE
+/api/photos/{id}`, `PUT /api/photos/{id}/image` (the old files are
+deleted), `DELETE /api/documents/{id}`, `DELETE
+/api/items/{id}/documents/{id}` when this item is the document's last
+holder (the file goes with it), creating or revoking a token, ending
+another session, and signing out everywhere. Changing the password or the
+username takes the current password in the body instead.
+
+A `read` or `metrics` token is refused on any `POST`, `PUT`, `PATCH`, or
+`DELETE` before the request body is read (every such route is `write` or
+`admin`), except the public setup and sign-in.
+
+**Cross-site requests.** A request carrying the session cookie, whatever
+its method, passes only with `Sec-Fetch-Site: same-origin`, or with no such
+header and an `Origin` (or a `Referer`) exactly matching an entry of
+`PUBLIC_ORIGINS`; otherwise `403 "Cross-site request refused."`.
+`Sec-Fetch-Site: none` (an address typed or bookmarked) is accepted only on
+`/api/openapi.json` and a document's file. Token requests aren't checked.
+Scripts that use the cookie send `Origin`.
+
+**Paths.** A path containing `%` is `400` before anything else, and
+anonymous callers get `401` for every path but the four above (unknown ones
+included); signed in, an unknown path is `404`. Responses without their
+own `Cache-Control` get `private, no-store`.
+
+| Method | Path | Class | Purpose |
+|--------|------|-------|---------|
+| `GET` | `/api/auth/state` | public | `{"setup_required": bool}` |
+| `POST` | `/api/auth/setup` | public | `{code, username, password}`: create the admin; `201` and both cookies, `403` wrong code, `409` already set up, `413` over 8 KiB, `422` a rule broken, `429` too many wrong codes |
+| `POST` | `/api/auth/login` | public | `{username, password}`: `200 {username, previous_sign_in_at, failed_since_previous}` and both cookies; `401`, `413`, `429` and `503` with `Retry-After` |
+| `POST` | `/api/auth/logout` | admin | End this session; `204`, cookies cleared, `Clear-Site-Data: "cache"` |
+| `GET` | `/api/auth/me` | read | `username`, `role`, `via` (`session` or `token`), `scope`, `confirmed_until` |
+| `POST` | `/api/auth/confirm` | admin | `{password}`: open the 5-minute window (`204`); a wrong password is `403` |
+| `POST` | `/api/auth/password` | admin | `{current_password, new_password}`: ends every other session, every known device, and every token; `200 {revoked_tokens}` and a new cookie |
+| `POST` | `/api/auth/username` | admin | `{current_password, username}`; `204` |
+| `GET` | `/api/auth/sessions` | admin | Live sessions: `id`, `created_at`, `last_seen_at`, `address`, `user_agent`, `current` |
+| `DELETE` | `/api/auth/sessions/{id}` | admin | End one (recent password unless it is this one, which signs out) |
+| `DELETE` | `/api/auth/sessions` | admin, recent password | Sign out everywhere, this session and every known device included |
+| `GET` | `/api/auth/tokens` | admin | Live tokens, never their secrets |
+| `POST` | `/api/auth/tokens` | admin, recent password | `{name, scope, days}`: `201`, the `token` shown this once. `read` and `write` last `1` or `7` days; a `metrics` token may take `null`, never expiring. Names are unique among live tokens, at most 50 |
+| `DELETE` | `/api/auth/tokens/{id}` | admin, recent password | Revoke |
+| `GET` | `/api/auth/audit` | admin | The audit log, newest first: `?before=<id>&limit=` (at most 200) |
+| `GET` | `/api/auth/photo` | read | `204`: nginx asks this before serving a photo (a `metrics` token and `Sec-Fetch-Site: cross-site` get `403`) |
+
+Photos themselves (`/photos/{file_key}`, `/photos/{thumb_key}`) are files
+nginx serves after that check: the same credentials as a `read` route, the
+check's `401` or `403` otherwise (before nginx looks for the file, so a
+missing photo tells a stranger nothing), `503` with `Retry-After: 5` while
+the backend can't answer, and `Cache-Control: private, no-store`.
+
+Codes: `401` for a missing, invalid, expired, or revoked credential; `403`
+for a valid one that isn't allowed; `429` with `Retry-After` when sign-in
+is being slowed down. Sign-in delays grow per username (after 5 failures)
+and per address (after 20), up to a minute, and never lock the account.
 
 ## Items
 
@@ -27,7 +150,6 @@ design and the table of who will be able to call what.
 |----------|---------------------------|-------------------------------------|
 | `GET`    | `/api/items`              | List items (filter/paginate)        |
 | `POST`   | `/api/items`              | Create an item                      |
-| `POST`   | `/api/items/import`       | Import items from CSV in the export format (multipart); other formats: see Imports |
 | `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
 | `GET`    | `/api/items/export.xlsx`  | Export the collection as Excel      |
 | `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
@@ -229,8 +351,8 @@ aren't shown, and deletes the old files.
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
 | `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
 | `DELETE` | `/api/items/{id}/estimates/{estimate_id}` | Delete a value that was typed in |
-| `POST` | `/api/items/{id}/estimate`    | Produce an automatic estimate            |
-| `POST` | `/api/estimates/refresh-melt` | Re-run stale melt estimates now          |
+| `POST` | `/api/items/{id}/estimates/auto` | Produce an automatic estimate (`?source=`) |
+| `POST` | `/api/estimates/refresh`      | Re-run one source's stale estimates now (`?source=melt`) |
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1, optional
@@ -242,8 +364,8 @@ belongs to another item is `404`. Every estimate in a
 response carries `id`, `item_id`, `source`, `estimated_value`, `currency`,
 `confidence`, `sample_size`, `fetched_at`, and `details`: the provenance an
 automatic source recorded (see [price-sources.md](price-sources.md)),
-`{"note": …}` for a manual entry given a note, or `null`. `POST .../estimate`
-runs one automatic adapter, chosen with `?source=`: `melt` (the default: spot
+`{"note": …}` for a manual entry given a note, or `null`.
+`POST .../estimates/auto` runs one automatic adapter, chosen with `?source=`: `melt` (the default: spot
 × weight × fineness × quantity, metal detected from `composition`), `numista`
 (by the item's `numista` catalog ref and grade), `pcgs` (US coins by PCGS cert
 number, or `pcgs` catalog ref + grade; see below), or `comps` (the median of
@@ -285,8 +407,10 @@ checked against a wish-list target: for an item with status `wishlist` and a
 target sends one event through the alert webhook, unless the estimate before
 it was already there. See [monitoring.md](monitoring.md).
 
-`POST /api/estimates/refresh-melt` answers `updated`, `skipped`, and `failed`,
-or 422 when melt is switched off. An in-process scheduler re-runs stale melt
+`POST /api/estimates/refresh?source=melt` answers `updated`, `skipped`, and
+`failed`, or 422 when melt is switched off. `source` is required, and only
+`melt` is accepted for now: any other value is 422 ("Only melt can be
+refreshed by hand for now."). An in-process scheduler re-runs stale melt
 estimates every 12h (estimates older than `REESTIMATE_DAYS`, default 7; `0`
 disables); a melt refresh never supersedes an item whose latest estimate is
 manual. The same 12h loop also refreshes Numista and/or PCGS when their own
@@ -615,8 +739,9 @@ longest Numista's API licence allows), issues shared with Numista pricing.
 
 Needs a PCGS API token, whether or not the PCGS price source is on (`422`
 without one, or when PCGS has no such cert; `502` when PCGS can't be
-reached). `cert` is up to 20 characters, and anything but its digits is
-dropped. Answers `cert`, `pcgs_number`, `name`,
+reached). `cert` is 1 to 20 letters, digits, and dashes (anything else is
+`422`, so no cert ever needs encoding in the path), and anything but its
+digits is dropped. Answers `cert`, `pcgs_number`, `name`,
 `fields` (keyed like the item payload: `type`, `country`, `denomination`,
 `year`, `mint_mark`, `series`, `variety`, `composition`, `weight_g`,
 `diameter_mm`, `edge`, `mintage`, `cert_service`, `cert_number`,
@@ -655,7 +780,7 @@ any hand-entered source text.
   when it has no estimate, a source failed or was never tried, or a source's
   last attempt came after its last estimate and didn't succeed. Reasons come
   from each adapter's local prerequisites, or from the latest recorded
-  attempt; every `POST /api/items/{id}/estimate` and scheduled refresh
+  attempt; every `POST /api/items/{id}/estimates/auto` and scheduled refresh
   records one per item and source.
 - **stale**: `days`, `checked` (latest estimates examined, one per item and
   source), and `stale` entries oldest first: value, `age_days`,
@@ -708,7 +833,7 @@ document no other item, trashed or not, holds. Items older than
 | `POST`   | `/api/items/{id}/documents`              | Attach a file (multipart: `file`, optional `kind`, `title`, `doc_date`, `note`) |
 | `PATCH`  | `/api/documents/{doc_id}`                | Change `kind`, `title`, `doc_date`, `note` |
 | `POST`   | `/api/documents/{doc_id}/items`          | Attach it to more items (`{"item_ids": [...]}`) |
-| `DELETE` | `/api/items/{id}/documents/{doc_id}`     | Remove it from one item; the file goes with its last item |
+| `DELETE` | `/api/items/{id}/documents/{doc_id}`     | Remove it from one item; from its last item the file goes too, which needs the admin and a recent password |
 | `DELETE` | `/api/documents/{doc_id}`                | Delete it from every item                |
 | `GET`    | `/api/documents/{doc_id}/file`           | The file, inline; `?download=true` to save it |
 | `GET`    | `/api/documents/{doc_id}/thumb`          | A JPEG thumbnail (404 when there's none) |
@@ -728,7 +853,7 @@ attached to), and `created_at`; `GET /api/items/{id}` includes them as
 `documents` in Health.
 
 Files are served with `X-Content-Type-Options: nosniff`, `Cache-Control:
-private, max-age=3600`, a `Content-Disposition` carrying the filename (RFC
+private, no-store`, a `Content-Disposition` carrying the filename (RFC
 5987 for non-ASCII names), and a content security policy: `default-src 'none';
 sandbox` for images, `default-src 'none'; frame-ancestors 'self'` for PDFs,
 because `sandbox` stops Chrome's built-in PDF viewer rendering at all.
@@ -751,7 +876,7 @@ described it), `premium_included` (true / false / null for unknown), `fees`
 (`manual` or `numista`), `grade_bucket` (Numista's g…unc, on fetched sales),
 and `created_at`; `GET /api/items/{id}` includes them as `comparables`.
 
-`POST /api/items/{id}/estimate?source=comps` takes the median of the included
+`POST /api/items/{id}/estimates/auto?source=comps` takes the median of the included
 sales that match (a sale with a `grade_bucket` counts only when it matches
 the item's grade) from the last three years, or all of them when fewer than
 three are that recent, at most twenty, converted into the display currency.
@@ -778,8 +903,9 @@ explanation; an unreachable Numista is 502. One request, cached for a day.
 | `POST`   | `/api/imports/numista/run`        | Import it                                        |
 
 File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
-read by the same row reader as `POST /api/items/import`, keyed by the
-exported `id`, and a duplicate when that id is still here), `spreadsheet` (any
+keyed by the exported `id`, and a duplicate when that id is still here,
+trash included; this is the one way to import a Cabinet export, since
+v0.30.0 removed `POST /api/items/import`), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
 (numista.com's collection export, by column name), and `opennumismat` (an
 OpenNumismat `.db`). Preview and run take the same JSON
@@ -859,8 +985,11 @@ the API keys (`""` clears; reads return only `alert_webhook_hint` /
 serves `/api/metrics`. Read-only: `alerts` (each check that has ever failed:
 `key`, `label`, `failing`, `since`, `message`), `alert_delivery` and
 `heartbeat` (the last attempt since the backend started: `at`, `ok`,
-`detail`), and `refresh_last_run` (per source: `at`, `updated`, `skipped`,
-`failed`, and `error` or `stopped` when set).
+`detail`), `refresh_last_run` (per source: `at`, `updated`, `skipped`,
+`failed`, and `error` or `stopped` when set), and `secrets_cleared` (v0.30.0:
+the names, such as `"alert webhook"`, of stored secrets Cabinet cleared
+because they weren't encrypted with this deployment's key; each leaves the
+list when it is saved again).
 
 `spot_alerts` (v0.28.0): a list of at most 12 spot-price thresholds,
 `{"metal": "gold"|"silver"|"platinum"|"palladium", "direction":
@@ -879,25 +1008,42 @@ the alert fires.
 
 | Method | Path                    | Purpose                                              |
 |--------|-------------------------|------------------------------------------------------|
-| `GET`  | `/api/backup.zip`       | Build and download a fresh archive; `?photos=false` for data only |
-| `GET`  | `/api/backups`          | Backup directory, free space, last run, stored archives (newest first) |
+| `GET`  | `/api/backup.zip`       | Build and download a fresh encrypted archive (`….zip.age`); `?photos=false` for data only |
+| `GET`  | `/api/backups`          | Backup directory, free space, last run, stored archives (newest first), the backup key's status |
 | `POST` | `/api/backups`          | Write an archive into the backup directory now, then apply retention; `?photos=` overrides the setting |
 | `GET`  | `/api/backups/{name}`   | Download a stored archive                            |
+| `POST` | `/api/backups/key/saved` | Record that the owner saved the backup key (v0.30.0) |
+| `DELETE` | `/api/backups/unencrypted` | Delete every plain `.zip` archive from before v0.30.0 (v0.30.0) |
 
-An archive is a zip of `db.dump` (pg_dump custom format), `photos.tar.gz` and
-`documents.tar.gz` (unless data-only), `manifest.json`, and `SHA256SUMS`; see
-[backup-restore.md](backup-restore.md). A failed backup returns `500` with the
+An archive (v0.30.0) is an [age](https://age-encryption.org) file, encrypted
+with the backup key, around a zip of `db.dump` (pg_dump custom format, never
+the `cabinet_auth` schema), `photos.tar.gz` and `documents.tar.gz` (unless
+data-only), `manifest.json` (with a MAC keyed by the backup key), and
+`SHA256SUMS`; see [backup-restore.md](backup-restore.md). The download is
+`application/octet-stream` and built as ciphertext before it is sent. A failed backup returns `500` with the
 reason (for example, `pg_dump failed: …`) and is recorded as the last run
 (`at`, `ok: false`, `error`); a successful `POST` answers, and records, `at`,
 `ok`, `file`, `size`, `includes_photos`, and `pruned`. `GET /api/backups`
-answers `directory`, `free_bytes`, `last_run`, and `backups` (`name`, `size`,
-`created_at`, and `prerestore`: true for the safety archive an in-app
-restore took first); a second `POST` while one is running returns `409`.
-Stored archive names must match
-`cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip`; anything else is
-`404`. Pre-restore archives sit outside `backup_keep`: the newest three are
-kept. **These endpoints hand over the whole collection and are
-unauthenticated**; see [security.md](security.md).
+answers `directory`, `free_bytes`, `last_run`, `backups` (`name`, `size`,
+`created_at`, `prerestore`: true for the safety archive an in-app restore
+took first, and `encrypted`: false for a plain `.zip` from before v0.30.0,
+which can't be restored), and `key`: `fingerprint` (the backup key's public
+key, `age1…`; the key itself never crosses the API), `saved`, `supplied`
+(from `BACKUP_KEY_FILE` or `BACKUP_KEY`), `location` (`separate`, `shared`, `not_verified`,
+`secret` for a supplied file, or `environment` for a supplied variable), and
+`location_message`. `POST /api/backups/key/saved` records
+the current public key as saved (a rotated key asks again) and answers the
+`key` object. `DELETE /api/backups/unencrypted` deletes every plain
+`cabinet-backup-*.zip` in the backup directory, nothing else, sends an
+alert event, and answers `{"deleted": [names]}`. A second `POST
+/api/backups` while one is running returns `409`. Stored archive names must
+match `cabinet-backup-YYYYMMDD-HHMMSS[-data|-prerestore].zip.age` (or `.zip`
+for an old one); anything else is `404`. `backup_keep` applies to full and data-only
+archives separately. Pre-restore archives sit outside `backup_keep`: the newest three are
+kept. Every backup route is admin-only; both downloads and deleting old
+archives also need a recent password, and each download, the saved-key
+tick, and the deletion is written to the audit log (downloads and the
+deletion also alert).
 
 ## Restore
 
@@ -914,8 +1060,11 @@ safeguards, and what a failure leaves behind are in
 
 With `RESTORE_ENABLED=false` every endpoint but the status answers `404`.
 
-`GET /api/restore/status` always answers, during a restore and when the
-feature is off:
+`GET /api/restore/status` (admin) answers during a restore and when the
+feature is off. While a restore runs it answers only the session that
+started it (an in-memory grant, looked up without the database, ending 10
+minutes after the restore does and 2 hours after it began at the latest);
+anyone else gets `401`:
 
 ```json
 {
@@ -925,10 +1074,11 @@ feature is off:
   "started_at": null,
   "last": {
     "at": "2026-09-20T18:04:11+00:00", "ok": true,
-    "archive": "cabinet-backup-20260920-180301.zip",
+    "archive": "cabinet-backup-20260920-180301.zip.age",
     "archive_created_at": "2026-09-20T18:03:01+00:00",
-    "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip",
-    "error": null, "items": 212, "photos": 388, "documents": 9
+    "safety_backup": "cabinet-backup-20260920-180402-prerestore.zip.age",
+    "error": null, "items": 212, "photos": 388, "documents": 9,
+    "secrets_cleared": []
   },
   "confirm_phrase": "RESTORE"
 }
@@ -940,7 +1090,11 @@ again after a backend restart); `step`, while running, is one of
 `finishing`, in that order (`photos` and `documents` are the unpacking; the
 files are swapped in during `finishing`). `last` is read from a file on the
 state volume and is `null` until a restore has run; `items`, `photos`, and
-`documents` are the archive's counts. Switched off, it answers `enabled:
+`documents` are the archive's counts; `secrets_cleared` (v0.30.0) names the
+stored secrets the restore cleared because this deployment couldn't use
+them (plain text, or encrypted with another key), and
+`finished_after_restart` is `true` when the backend stopped after the
+database step and finished the restore on its next start. Switched off, it answers `enabled:
 false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
 
 `POST /api/restore/inspect` takes either a multipart upload (field `file`),
@@ -951,7 +1105,7 @@ archive with no body. It answers:
 {
   "restore_id": "3f0c…",
   "archive": {
-    "name": "cabinet-backup-20260920-180301.zip", "size": 48211934,
+    "name": "cabinet-backup-20260920-180301.zip.age", "size": 48211934,
     "created_at": "2026-09-20T18:03:01+00:00", "app_version": "0.26.0",
     "revision": "0018", "includes_photos": true, "includes_documents": true,
     "items": 212, "photos": 388, "documents": 9, "trashed": 3
@@ -960,22 +1114,55 @@ archive with no body. It answers:
               "documents": 9, "trashed": 0},
   "will_migrate": false,
   "replaces_files": true,
-  "secrets_note": "Saved API keys and webhook addresses in the archive…"
+  "secrets_note": "Saved API keys and webhook addresses in the archive…",
+  "credentials_note": "Your sign-in, sessions, API tokens, and audit log are kept.",
+  "secrets": ["Numista API key"],
+  "secrets_cleared": ["alert webhook"],
+  "provenance": {
+    "made_here": true, "made_at": "2026-09-20T18:03:01+00:00", "newer": 3,
+    "older": true, "record_empty": false,
+    "message": "Made by this Cabinet on 20 September 2026. 3 newer backups exist."
+  },
+  "confirm_phrase": "RESTORE OLDER"
 }
 ```
 
-It answers `422` with a plain reason for a file that isn't a Cabinet archive,
+`provenance` (v0.30.0) says whether this Cabinet made the archive (matched
+in its record of archives by the verified MAC, never the name), how many
+newer ones it recorded, and whether the archive is older than the newest;
+`confirm_phrase` is then `RESTORE OLDER` instead of `RESTORE`. With no
+record at all, `record_empty` is true and the message says Cabinet can't
+tell whether this is the newest.
+
+`secrets` and `secrets_cleared` (v0.30.0) name, never show, the stored
+secrets the archive would set and those it holds that would be cleared.
+The archive's dump is unpacked for this only into the private staging
+folder, checked, and removed again.
+
+It answers `422` with a plain reason for an unencrypted archive from before
+v0.30.0, one that can't be opened with the backup key (another key made it,
+or it was altered), one whose MAC doesn't verify ("This archive was not made
+with your backup key."), a file that isn't a Cabinet archive,
 a checksum that doesn't match, an unexpected member, a schema revision newer
 than this build knows, a tar member that is a link, a device, an absolute
 path, or holds `..`, an unreadable upload, or a request with neither `file`
-nor `name`; `404` for a `name` that isn't a stored archive; `413` for an
-upload over `RESTORE_MAX_GB`. A rejected upload is deleted at once; others
+nor `name`, a dump holding anything in the `cabinet_auth` schema ("This
+archive contains sign-in data, which Cabinet never restores. It was not made
+by Cabinet's own backup."), or too little room to unpack its dump ("Not
+enough space to open this archive…"); `404` for a `name` that isn't a stored
+archive; `409` while a restore runs; `413` for an upload over
+`RESTORE_MAX_GB`. A rejected upload is deleted at once; others
 are cleared after a day. The `restore_id` lives in memory: after a backend
 restart, inspect again.
 
-`POST /api/restore/{restore_id}/run` takes `{"confirm": "RESTORE"}` and
-answers `202` `{"state": "running"}`; poll the status. `404` for an unknown
-id, `422` for a wrong phrase, `409` while a restore, a backup, or a
+`POST /api/restore/{restore_id}/run` takes `{"confirm": "RESTORE"}` (or the
+inspection's `confirm_phrase`, `RESTORE OLDER` for an older archive) and
+answers `202` `{"state": "running"}`; poll the status. The run decrypts and
+verifies the archive again and checks its age again from the archive
+itself, failing with "type RESTORE OLDER" if it has become older since the
+inspection. After a failed run the id stays for another try, with the phrase
+rechecked (the safety backup it took is now the newest). `404` for an
+unknown id, `422` for a wrong phrase, `409` while a restore, a backup, or a
 scheduled task is running. The outcome, including a failure's `error`
 (ending "Nothing was changed." when that is true), arrives in the status's
 `last`.
@@ -985,7 +1172,8 @@ and only forgets the id of a stored archive, which is never deleted here;
 `404` for an unknown id.
 
 **While a restore runs**, every request except `GET /api/health` and
-`GET /api/restore/status` answers `503` with `Retry-After: 5` and
+`GET /api/restore/status` (for the session that started it) answers `503`
+with `Retry-After: 5` and
 `{"detail": "Cabinet is restoring a backup; try again in a moment"}`.
 
 ## Alerts & metrics
@@ -1045,13 +1233,15 @@ also carry `match_catalog`/`match_ref` or `match_country`/
 |--------|----------------|-------------------------------------|
 | `GET`  | `/api/health`  | Liveness/readiness probe            |
 
-Returns `status`, `db` (`ok` / `unreachable`, or `restoring` while an in-app
-restore runs: the database isn't touched then, and `schema` is `unknown`
-with a `null` `current`), the app `version`, and
+Anonymous callers (a container health check, Uptime Kuma) get only
+`{"status": "ok"}`, and so does everyone while an in-app restore runs (the
+check then looks nothing up). Any signed-in session or token gets the full
+body: `status`, `db` (`ok` / `unreachable`), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status`, one of `ok`, `pending` (migrations not yet
 applied), `ahead` (the database was migrated by a newer build), or `unknown`
-(database unreachable). `documents` says whether attached documents can be
+(database unreachable). `auth_schema` (v0.30.0) is the same for the sign-in
+chain (`cabinet_auth`, revision `a0001` onward). `documents` says whether attached documents can be
 stored: `ok`, `not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so
 uploads are refused), `unwritable`, or `inside_photos`. Settings → About
 displays both.
@@ -1063,4 +1253,5 @@ displays both.
 - **IDs** are UUIDs for items/photos/estimates/documents; sales, checklists,
   edit-history events, and reference tables use integers.
 - **Errors** follow a consistent JSON shape: `{ "detail": "..." }`, matching
-  FastAPI defaults, with appropriate HTTP status codes.
+  FastAPI defaults, with appropriate HTTP status codes. The one addition is
+  `reauth_required: true` on a `403` that wants the password again.
