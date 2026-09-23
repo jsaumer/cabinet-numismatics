@@ -1441,6 +1441,64 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   sterling/Britannia/coin silver or a gold carat; nothing found is `None`.
   The case table is `tests/test_metal.py`; add a row there before changing
   either function, and change `detectMetal` in the same commit.
+- **The `bullion` type, backend** (stage 2): `schemas.ItemTypeName` and
+  `models.item.ItemType` gain `bullion`; no migration (`items.type` has no
+  database constraint). The year-or-ND rule is exempt for it, in the same
+  two places it already lives (`ItemBase._year_or_nd`,
+  `routers/items._apply_struck_date`): both now check `type != "bullion"`
+  before requiring `year` or `year_nd`. `RunIssue`'s own copy of the rule
+  (schemas.py, for "Add a run") is deliberately untouched: nothing in
+  SPEC_0310 extends runs to bullion, and the run endpoint only ever builds
+  coin/note items from a catalogue date/mint range, so the rule there still
+  applies to every run unconditionally. `Item.year_label` returns `""` for a
+  bullion item with no year (coins and notes keep `"ND"`), and `Item.label`
+  for bullion is `issuer or country`, then `denomination`, then the year if
+  there is one, no mint mark, with empty parts filtered out so there's never
+  a double space. Fancy serial traits are never computed for bullion:
+  `_build_item` and `_sync_derived` (`routers/items.py`) skip
+  `serials.stored_traits` whenever `item.type == "bullion"`, and
+  `_sync_derived` recomputes them (or clears them) on a `type` change either
+  way, in create, update, and bulk edit alike. `counts.bullion` on
+  `GET /api/stats/collection` follows the same owned-items split as `coins`/
+  `notes`; the type breakdown and `cabinet_items{type=...}` needed no code
+  change, since both already group by `Item.type` directly. The list's
+  `type=` filter and bulk edit's `set.type` accept `bullion` for free (the
+  filter's pattern and `ItemUpdate.type` both use the shared enum).
+  **Numista**: `catalogue_fields` maps `category == "exonumia"` to
+  `type: "bullion"` by the type's object type (`_exonumia_is_bullion`:
+  `object_type.name` in `BULLION_OBJECT_TYPES`, matched as a whole name,
+  or `object_type.id` in `BULLION_OBJECT_TYPE_IDS`, today 36, with the
+  top-level `type` string as the fallback name). **The shape is confirmed**
+  (the owner's probe of `types/430821` on 22 September 2026): a bar carries
+  `object_type: {"id": 36, "name": "Bars"}`, a cafe token
+  `"Restaurant, bar, cafe and hotel tokens"`, and an Andorra silver bar
+  with a face value `"Collector coins"`, which is why the name is matched
+  whole and never by the word "bar". On a bullion type, `denomination` is
+  the title (no face value to read), `issuer` (the "Refiner or mint" field)
+  is the first of `mints` (PAMP before Singapore Mint on that bar), `country`
+  stays Numista's issuer, `size`/`size2` fill `width_mm`/`height_mm` and
+  never a diameter, and weight, thickness, shape, and edge read as for a
+  coin; any other exonumia raises `NotApplicable`, which the fill route
+  (`GET /api/numista/types/{id}`) turns into a 422 naming the refusal, and
+  search hits carry `object_type` so a client can say what a hit is. `type_fields` (the account import's
+  bulk lookup) catches that `NotApplicable` per type and treats it as
+  "missed", the same as a fetch failure, so a batch of mixed types never
+  fails as a whole. `GET /api/numista/search` accepts `category=exonumia`.
+  **Imports**: `routers/imports.py` no longer excludes exonumia types from
+  the account import's catalogue lookup (it used to skip them outright,
+  since Cabinet had nowhere to put them); `numista_account_candidates` now
+  decides bullion vs. refused from the fetched type's own `details`, not the
+  collected item's bare `category`, so an exonumia item whose type isn't
+  cached yet reads as refused in a preview and resolves correctly on the run
+  that follows (which always fetches uncached types). `numista_file_candidates`
+  (the export file) and the spreadsheet mapping's `_item_type` both read a
+  `bar`/`round`/`ingot`/`bullion` type cell by word (an export file and a
+  spreadsheet carry no object type, so a word is all there is). The Cabinet CSV round trip needed no
+  code change: `type` is written and read as plain text on both sides.
+  **Not yet built** (stages 3-5): the frontend (Add form, item form, item
+  page, list, bulk edit, dashboard), `GET /api/stack`'s `skipped_items`,
+  `GET /api/items?metal=`, and melt on save for a bullion piece with no
+  estimate.
 
 ## Releases
 

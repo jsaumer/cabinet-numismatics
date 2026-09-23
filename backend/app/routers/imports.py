@@ -66,7 +66,7 @@ def _numista_candidates(db: Session, options: NumistaImportOptions, fetch_types:
         if isinstance(item, dict)
         and isinstance(item.get("type"), dict)
         and isinstance(item["type"].get("id"), int)
-        and item["type"].get("category") != "exonumia"  # not imported, so not looked up
+        # exonumia is looked up too now: it might be a bar or round.
     }
     types: dict[int, dict] = {}
     to_fetch = 0

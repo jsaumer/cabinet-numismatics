@@ -120,9 +120,9 @@ replaced. **Push now** sends one immediately.
 A [Homepage](https://gethomepage.dev) tile needs one thing from Cabinet: an
 API token with the `metrics` scope (Settings, Account, API tokens; it sees
 only totals and may be set never to expire). `GET /api/stats/collection`
-returns the owned coins and notes and the estimated value, in your display
-currency, and Homepage's `customapi` widget reads it with the token as a
-header. In `services.yaml`:
+returns the owned coins, notes, and bars/rounds, and the estimated value, in
+your display currency, and Homepage's `customapi` widget reads it with the
+token as a header. In `services.yaml`:
 
 ```yaml
 - Collections:
@@ -144,6 +144,9 @@ header. In `services.yaml`:
             - field: counts.notes
               label: Notes
               format: number
+            # - field: counts.bullion      # optional: bars and rounds (v0.31.0)
+            #   label: Bars & rounds
+            #   format: number
             - field: estimated_value
               label: Est. value
               format: float
@@ -154,7 +157,7 @@ The counts are owned pieces (sold and wish-list items are left out, as on
 the dashboard), and the value follows Settings → value strategy. Homepage
 has no currency format, so `prefix` is the symbol of your display currency.
 Other fields the same response carries: `counts.owned`, `counts.wishlist`,
-`cost_basis`, `unrealized_gain`, `estimated_items`.
+`counts.bullion`, `cost_basis`, `unrealized_gain`, `estimated_items`.
 
 `siteMonitor` needs no token: anonymous health answers `{"status":"ok"}`.
 Homepage fetches from its own server, not your browser. If Cabinet sits
