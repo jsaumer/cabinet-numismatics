@@ -123,7 +123,7 @@ export function PcgsFill({
       <h2>Fill from a PCGS cert</h2>
       {configured === false ? (
         <p className="muted" style={{ margin: 0 }}>
-          Add a PCGS API token in <Link to="/settings">Settings</Link> to fill a slabbed coin in
+          Add a PCGS API token in <Link to="/settings/pricing">Settings</Link> to fill a slabbed coin in
           from its cert number.
         </p>
       ) : (

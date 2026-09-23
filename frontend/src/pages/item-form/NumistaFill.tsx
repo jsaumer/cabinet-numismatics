@@ -170,7 +170,7 @@ export function NumistaFill({
       <h2>Fill from Numista</h2>
       {configured === false ? (
         <p className="muted" style={{ margin: 0 }}>
-          Add a Numista API key in <Link to="/settings">Settings</Link> to fill items in from
+          Add a Numista API key in <Link to="/settings/pricing">Settings</Link> to fill items in from
           the Numista catalogue.
         </p>
       ) : (

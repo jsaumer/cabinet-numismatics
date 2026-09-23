@@ -45,7 +45,7 @@ export function BackupStatusWidget() {
         </p>
       ) : (
         <p className="muted" style={{ marginBottom: 0 }}>
-          No backup has run yet. <Link to="/settings">Back up now</Link>.
+          No backup has run yet. <Link to="/settings/backups">Back up now</Link>.
         </p>
       )}
     </>
@@ -77,7 +77,7 @@ export function AlertsStatusWidget() {
       )}
       {!data.alert_webhook_hint && !data.heartbeat_hint && (
         <p className="muted">
-          Failures only reach the log. <Link to="/settings">Add a webhook</Link>.
+          Failures only reach the log. <Link to="/settings/alerts">Add a webhook</Link>.
         </p>
       )}
       {refreshes.length > 0 && (

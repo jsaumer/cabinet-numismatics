@@ -970,9 +970,16 @@ off, else `7`/`14`/`30`) and `pcgs_auto_refresh` (bool, fixed weekly when on).
 The response also reports `numista_priceable_items`/`pcgs_priceable_items`
 (owned items eligible for each source) so the UI can show the real projected
 monthly call count before you turn Numista's cadence on. `backup_schedule`
-(`null` / `daily` / `weekly`), `backup_retention_days` (7, 14, 30, 90, 365,
-or 0 for forever; default 90; anything else is `422`), and
+(`null` / `daily` / `weekly`), `backup_retention_days`, and
 `backup_include_photos` configure scheduled backups (see Backups below).
+`backup_retention_days` (v0.30.2) accepts a day count from either schedule's
+set (7, 14, 30, 90, or 365 for a daily schedule or none; 28, 56, 91, 182, or
+365, i.e. 4/8/13/26/52 weeks, for a weekly one), or 0 for forever; default
+90; anything else is `422`. A value from the other schedule's set is still
+accepted (only the frontend snaps to the current schedule's set), since a
+sensible number of days doesn't stop being one when the schedule changes.
+The response's read-only `backup_retention_choices` (`{"daily": [...],
+"weekly": [...]}`) gives both sets so a client never has to hard-code them.
 `comps_enabled` switches the comps source (on by default), and
 `numista_sales_enabled` (off by default) allows fetching Numista's auction
 sales, which needs Numista's paid API plan. `preferred_source` accepts

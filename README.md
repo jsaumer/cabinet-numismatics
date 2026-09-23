@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.30.1-informational)
+![Version](https://img.shields.io/badge/version-0.30.2-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
@@ -40,7 +40,7 @@ Dark is the default; the header toggle switches to light and remembers it.
 | [![Dashboard, dark](docs/screenshots/dashboard-dark.png)](docs/screenshots/dashboard-dark.png) | [![Dashboard, light](docs/screenshots/dashboard-light.png)](docs/screenshots/dashboard-light.png) |
 | [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
 | [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
-| [![Settings, dark](docs/screenshots/settings-dark.png)](docs/screenshots/settings-dark.png) | [![Settings, light](docs/screenshots/settings-light.png)](docs/screenshots/settings-light.png) |
+| [![Settings, Backups, dark](docs/screenshots/settings-backups-dark.png)](docs/screenshots/settings-backups-dark.png) | [![Settings, Backups, light](docs/screenshots/settings-backups-light.png)](docs/screenshots/settings-backups-light.png) |
 
 ## Features
 

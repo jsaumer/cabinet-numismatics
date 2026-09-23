@@ -260,6 +260,10 @@ def test_backup_settings(client):
     assert body["backup_schedule"] is None
     assert body["backup_retention_days"] == 90
     assert body["backup_include_photos"] is True
+    assert body["backup_retention_choices"] == {
+        "daily": [7, 14, 30, 90, 365],
+        "weekly": [28, 56, 91, 182, 365],
+    }
 
     resp = client.put(
         "/api/settings",
@@ -276,12 +280,27 @@ def test_backup_settings(client):
     assert body["backup_retention_days"] == 0
     assert client.get("/api/settings").json()["backup_retention_days"] == 0
 
+    # Values from either schedule's set are accepted, whatever the current
+    # schedule is: the frontend snaps to the new set when the schedule
+    # changes, so the backend only enforces "a sensible number of days."
+    for good in (28, 91, 365):
+        assert client.put("/api/settings", json={"backup_retention_days": good}).status_code == 200
+
     assert client.put("/api/settings", json={"backup_schedule": "hourly"}).status_code == 422
-    for bad in (-1, 5, 366):
+    for bad in (-1, 5, 29, 366):
         assert client.put("/api/settings", json={"backup_retention_days": bad}).status_code == 422
     # the outcome record is the service's to write, not the API's
     client.put("/api/settings", json={"backup_last_run": {"ok": True}})
     assert client.get("/api/backups").json()["last_run"] is None
+
+
+def test_retention_choices_follow_the_schedule():
+    assert backup.retention_choices(None) == backup.DAILY_RETENTION_CHOICES
+    assert backup.retention_choices("daily") == backup.DAILY_RETENTION_CHOICES
+    assert backup.retention_choices("weekly") == backup.WEEKLY_RETENTION_CHOICES
+    assert backup.RETENTION_CHOICES == tuple(
+        sorted(set(backup.DAILY_RETENTION_CHOICES) | set(backup.WEEKLY_RETENTION_CHOICES))
+    )
 
 
 def test_retention_is_by_age_and_keeps_the_newest_of_each_kind(tmp_path, clock):

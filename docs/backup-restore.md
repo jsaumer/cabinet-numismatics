@@ -53,12 +53,15 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
 - A failed run is retried within the hour. The outcome of the last run
   (file and size, or the error) shows in Settings, and a failure raises the
   backup alert if a webhook is set ([monitoring.md](monitoring.md)).
-- After each successful run, archives older than **Keep archives for** (7,
-  14, 30, or 90 days, 1 year, or forever; v0.30.1) are deleted. The newest
-  full archive and the newest data-only archive are never deleted by
-  retention, whatever their age, so a schedule that stopped can't leave
-  nothing. **Forever** shows a warning: the directory then grows without
-  limit. Only files named `cabinet-backup-*.zip.age` are ever touched.
+- After each successful run, archives older than **Keep archives for** are
+  deleted (v0.30.1). The choices follow the schedule (v0.30.2): 7, 14, 30, or
+  90 days, 1 year, or forever for **Daily** (or no schedule); 4, 8, 13, or 26
+  weeks, 52 weeks, or forever for **Weekly**. Changing the schedule snaps a
+  now-invalid choice to the nearest one in the new set. The newest full
+  archive and the newest data-only archive are never deleted by retention,
+  whatever their age, so a schedule that stopped can't leave nothing.
+  **Forever** shows a warning: the directory then grows without limit. Only
+  files named `cabinet-backup-*.zip.age` are ever touched.
 - **Back up now** writes one immediately and counts toward the same
   retention. **Include photos** applies to scheduled and on-demand archives,
   and covers the documents too.
