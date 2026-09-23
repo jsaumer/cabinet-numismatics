@@ -13,13 +13,13 @@ money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.31.0 released (bars and rounds; sign-in and encrypted backups since v0.30.0).**
+**Status: v0.32.0 released (the share view; sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
-scoped API tokens for scripts and dashboards. A share view (a read-only
-link, off by default) shipped in v0.32.0; single sign-on follows in
-v0.33.0, before 1.0. What's next is the roadmap's Phase 7, a parity
+scoped API tokens for scripts and dashboards. The share view (a read-only
+link, off by default) is in v0.32.0; single sign-on follows in v0.33.0,
+before 1.0. What's next is the roadmap's Phase 7, a parity
 plan drawn from a survey of other collection tools, alongside what entering
 a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
