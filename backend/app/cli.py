@@ -308,7 +308,7 @@ def write_archive(args) -> int:
     from app.db import SessionLocal
     from app.services import backup
 
-    if not backup.NAME_RE.match(args.name) or not backup.is_encrypted(Path(args.name)):
+    if not backup.NAME_RE.match(args.name):
         return _fail("--name must be a cabinet-backup-YYYYMMDD-HHMMSS.zip.age name")
     db = SessionLocal()
     # Ciphertext only, even here: written into private staging under a name of

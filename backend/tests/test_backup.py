@@ -8,10 +8,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import get_db
 from app.main import app
+from app.models.auth import AuditEntry
 from app.services import backup
 from tests.conftest import FAKE_AGE_HEADER, image_bytes, open_archive
 
@@ -133,14 +135,14 @@ def test_backup_dir_inside_photo_dir_is_refused(client, monkeypatch, fake_dump, 
 
 
 def test_back_up_now_lists_downloads_and_prunes(client, coin, fake_dump, clock):
-    assert client.put("/api/settings", json={"backup_keep": 2}).status_code == 200
+    assert client.put("/api/settings", json={"backup_retention_days": 7}).status_code == 200
     dest = Path(get_settings().backup_dir)
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "notes.txt").write_text("not ours")
 
     names = []
-    for minute in range(3):
-        clock[0] = datetime(2026, 9, 14, 3, 15 + minute, tzinfo=UTC)
+    for step in range(3):  # five days apart: the first is past 7 days at the third
+        clock[0] = datetime(2026, 9, 4 + 5 * step, 3, 15 + step, tzinfo=UTC)
         resp = client.post("/api/backups")
         assert resp.status_code == 200, resp.text
         names.append(resp.json()["file"])
@@ -256,34 +258,75 @@ def test_scheduled_backup_runs_when_due(client, fake_dump, clock):
 def test_backup_settings(client):
     body = client.get("/api/settings").json()
     assert body["backup_schedule"] is None
-    assert body["backup_keep"] == 7
+    assert body["backup_retention_days"] == 90
     assert body["backup_include_photos"] is True
 
     resp = client.put(
         "/api/settings",
-        json={"backup_schedule": "weekly", "backup_keep": 30, "backup_include_photos": False},
+        json={
+            "backup_schedule": "weekly",
+            "backup_retention_days": 30,
+            "backup_include_photos": False,
+        },
     )
     body = resp.json()
-    assert (body["backup_schedule"], body["backup_keep"]) == ("weekly", 30)
+    assert (body["backup_schedule"], body["backup_retention_days"]) == ("weekly", 30)
     assert body["backup_include_photos"] is False
+    body = client.put("/api/settings", json={"backup_retention_days": 0}).json()  # forever
+    assert body["backup_retention_days"] == 0
+    assert client.get("/api/settings").json()["backup_retention_days"] == 0
 
     assert client.put("/api/settings", json={"backup_schedule": "hourly"}).status_code == 422
-    assert client.put("/api/settings", json={"backup_keep": 0}).status_code == 422
+    for bad in (-1, 5, 366):
+        assert client.put("/api/settings", json={"backup_retention_days": bad}).status_code == 422
     # the outcome record is the service's to write, not the API's
     client.put("/api/settings", json={"backup_last_run": {"ok": True}})
     assert client.get("/api/backups").json()["last_run"] is None
 
 
-def test_data_only_archives_never_push_out_full_ones(tmp_path):
-    """A run of quick data-only backups (from a session with no recent
-    password, say) can't prune the last archives holding photos and
-    documents: the two kinds are kept to `backup_keep` each (stage 11 review)."""
+def test_retention_is_by_age_and_keeps_the_newest_of_each_kind(tmp_path, clock):
+    """Archives older than the retention go (dated by name, never mtime),
+    but the newest full and the newest data-only archive stay whatever
+    their age, so a schedule that stopped can't leave nothing; `0`
+    keeps everything (v0.30.1)."""
     full = [f"cabinet-backup-2026090{d}-010000.zip.age" for d in range(1, 8)]
     data = [f"cabinet-backup-2026091{d}-010000-data.zip.age" for d in range(1, 8)]
     for name in full + data:
         (tmp_path / name).write_bytes(b"x")
-    removed = backup.prune(tmp_path, keep=3)
+    clock[0] = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)  # cutoff for 7 days: 13 Sept
+
+    assert backup.prune(tmp_path, 0) == []
+    removed = backup.prune(tmp_path, 7)
     left = sorted(p.name for p in tmp_path.iterdir())
-    assert [n for n in left if "-data" not in n] == full[-3:]
-    assert [n for n in left if "-data" in n] == data[-3:]
-    assert len(removed) == 8
+    assert [n for n in left if "-data" not in n] == full[-1:]  # all old: the newest stays
+    assert [n for n in left if "-data" in n] == data[3:]  # 11 to 13 Sept expired
+    assert len(removed) == 9
+
+    clock[0] = datetime(2030, 1, 1, tzinfo=UTC)  # everything is old now
+    assert len(backup.prune(tmp_path, 7)) == 3
+    assert sorted(p.name for p in tmp_path.iterdir()) == [full[-1], data[-1]]
+
+
+def test_delete_a_stored_backup(client, coin, fake_dump, clock):
+    """`DELETE /api/backups/{name}` (v0.30.1, admin and fresh: the gate
+    matrix covers that) removes one archive, is audited, and is refused
+    while a backup or restore holds the directory."""
+    first = client.post("/api/backups").json()["file"]
+    clock[0] += timedelta(minutes=1)
+    second = client.post("/api/backups").json()["file"]
+
+    assert client.delete("/api/backups/notes.txt").status_code == 404
+    assert client.delete("/api/backups/cabinet-backup-20260101-000000.zip.age").status_code == 404
+    backup._run_lock.acquire()
+    try:
+        assert client.delete(f"/api/backups/{first}").status_code == 409
+    finally:
+        backup._run_lock.release()
+
+    resp = client.delete(f"/api/backups/{first}")
+    assert resp.status_code == 200 and resp.json() == {"deleted": first}
+    assert [b["name"] for b in client.get("/api/backups").json()["backups"]] == [second]
+    assert client.get(f"/api/backups/{first}").status_code == 404
+    assert client.delete(f"/api/backups/{first}").status_code == 404
+    rows = _session().scalars(select(AuditEntry).where(AuditEntry.action == "backup_deleted"))
+    assert [r.target for r in rows] == [first]

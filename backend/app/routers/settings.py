@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -10,7 +10,7 @@ from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
 from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
-from app.services import alerts, numista, pcgs, stack
+from app.services import alerts, backup, numista, pcgs, stack
 from app.services import app_settings as store
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -77,7 +77,7 @@ class SettingsOut(BaseModel):
     numista_priceable_items: int
     pcgs_priceable_items: int
     backup_schedule: Literal["daily", "weekly"] | None
-    backup_keep: int
+    backup_retention_days: int  # 0 = kept forever
     backup_include_photos: bool
     trash_retention_days: Literal[0, 7, 30, 90, 365]
     # Alerts & metrics. Saved URLs are secrets: only scheme://host/… comes back.
@@ -112,7 +112,7 @@ class SettingsUpdate(BaseModel):
     numista_refresh_days: Literal[7, 14, 30] | None = None
     pcgs_auto_refresh: bool | None = None
     backup_schedule: Literal["daily", "weekly"] | None = None
-    backup_keep: int | None = Field(default=None, ge=1, le=365)
+    backup_retention_days: int | None = None  # one of backup.RETENTION_CHOICES, or 0
     backup_include_photos: bool | None = None
     trash_retention_days: Literal[0, 7, 30, 90, 365] | None = None
     alert_webhook_url: str | None = Field(default=None, max_length=2000)  # "" clears
@@ -235,7 +235,7 @@ def _build(db: Session) -> SettingsOut:
         numista_priceable_items=numista_priceable,
         pcgs_priceable_items=pcgs_priceable,
         backup_schedule=store.get_setting(db, "backup_schedule"),
-        backup_keep=int(store.get_setting(db, "backup_keep")),
+        backup_retention_days=int(store.get_setting(db, "backup_retention_days")),
         backup_include_photos=bool(store.get_setting(db, "backup_include_photos")),
         trash_retention_days=int(store.get_setting(db, "trash_retention_days") or 0),
         alert_webhook_hint=alerts.url_hint(str(store.get_setting(db, "alert_webhook_url"))),
@@ -269,6 +269,10 @@ def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
     fields = payload.model_dump(exclude_unset=True)
     if "display_currency" in fields:
         fields["display_currency"] = fields["display_currency"].upper()
+    days = fields.get("backup_retention_days")
+    if days is not None and days != 0 and days not in backup.RETENTION_CHOICES:
+        choices = ", ".join(str(d) for d in backup.RETENTION_CHOICES)
+        raise HTTPException(422, f"backup_retention_days must be one of {choices}, or 0 (forever).")
     for key, value in fields.items():
         store.set_setting(db, key, value)
     if "spot_alerts" in fields:

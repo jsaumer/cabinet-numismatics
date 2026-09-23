@@ -33,7 +33,7 @@ export interface AppSettings {
   numista_priceable_items: number;
   pcgs_priceable_items: number;
   backup_schedule: BackupSchedule | null;
-  backup_keep: number;
+  backup_retention_days: number; // 7, 14, 30, 90, 365, or 0 = kept forever
   backup_include_photos: boolean;
   trash_retention_days: number; // 0 = never emptied automatically
   // Saved URLs are secrets: only scheme://host/… comes back.
@@ -68,7 +68,7 @@ export interface AppSettingsUpdate {
   numista_refresh_days?: number | null;
   pcgs_auto_refresh?: boolean;
   backup_schedule?: BackupSchedule | null;
-  backup_keep?: number;
+  backup_retention_days?: number;
   backup_include_photos?: boolean;
   trash_retention_days?: number;
   alert_webhook_url?: string; // "" clears
@@ -229,7 +229,6 @@ export interface BackupFile {
   size: number;
   created_at: string;
   prerestore?: boolean; // the safety backup taken before a restore
-  encrypted?: boolean; // false: a plain .zip from before v0.30.0, never restorable
 }
 
 export type RestoreStep =

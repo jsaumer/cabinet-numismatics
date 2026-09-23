@@ -35,6 +35,17 @@ const DOCUMENT_STORAGE: Record<string, string> = {
   inside_photos: "inside the public photo folder, so uploads are refused",
 };
 
+// Mirrors backup.RETENTION_CHOICES on the backend; 0 keeps every archive.
+const RETENTION_CHOICES = [7, 14, 30, 90, 365, 0] as const;
+const RETENTION_LABELS: Record<number, string> = {
+  7: "7 days",
+  14: "14 days",
+  30: "30 days",
+  90: "90 days",
+  365: "1 year",
+  0: "Forever",
+};
+
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +57,6 @@ export default function Settings() {
   const [preferredSource, setPreferredSource] = useState("");
   const [keys, setKeys] = useState<Record<string, string>>({});
   const [health, setHealth] = useState<Health | null>(null);
-  const [keep, setKeep] = useState("");
   const [backups, setBackups] = useState<BackupList | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [backupNote, setBackupNote] = useState<string | null>(null);
@@ -96,17 +106,13 @@ export default function Settings() {
     }
   }
 
-  async function deleteUnencrypted() {
-    if (!window.confirm("Delete every unencrypted archive? This can't be undone.")) return;
+  async function deleteBackup(name: string) {
+    if (!window.confirm(`Delete ${name}? This can't be undone.`)) return;
     setKeyBusy(true);
     setBackupError(null);
     try {
-      const result = await api.deleteUnencryptedBackups();
-      setBackupNote(
-        result.deleted.length
-          ? `Deleted ${result.deleted.length} unencrypted archive(s).`
-          : "No unencrypted archives to delete.",
-      );
+      await api.deleteBackup(name); // a fresh route: the password dialog opens if needed
+      setBackupNote(`Deleted ${name}.`);
       loadBackups();
     } catch (e) {
       setBackupError((e as Error).message);
@@ -125,7 +131,6 @@ export default function Settings() {
         setCadence(String(s.reestimate_days));
         setValueStrategy(s.value_strategy);
         setPreferredSource(s.preferred_source ?? "");
-        setKeep(String(s.backup_keep));
       })
       .catch((e: Error) => setError(e.message));
   }
@@ -151,7 +156,6 @@ export default function Settings() {
       setCadence(String(updated.reestimate_days));
       setValueStrategy(updated.value_strategy);
       setPreferredSource(updated.preferred_source ?? "");
-      setKeep(String(updated.backup_keep));
       setNote(message);
       return true;
     } catch (e) {
@@ -530,16 +534,6 @@ export default function Settings() {
             {backups.key.location_message && (
               <p className="error">{backups.key.location_message}</p>
             )}
-            {backups.backups.some((b) => b.encrypted === false) && (
-              <div className="estimate-form" style={{ marginTop: 0 }}>
-                <p className="muted" style={{ margin: 0, flexBasis: "100%" }}>
-                  Unencrypted archives from before v0.30.0 can no longer be restored.
-                </p>
-                <button className="danger" disabled={keyBusy} onClick={deleteUnencrypted}>
-                  Delete unencrypted archives
-                </button>
-              </div>
-            )}
           </>
         )}
 
@@ -564,18 +558,27 @@ export default function Settings() {
             </select>
           </label>
           <label className="field">
-            Keep newest
-            <input type="number" min={1} max={365} value={keep} style={{ width: "5rem" }}
-              onChange={(e) => setKeep(e.target.value)} />
+            Keep archives for
+            <select
+              value={String(settings.backup_retention_days)}
+              disabled={saving}
+              onChange={(e) => {
+                const days = Number(e.target.value);
+                apply(
+                  { backup_retention_days: days },
+                  days
+                    ? `Keeping archives for ${RETENTION_LABELS[days]}.`
+                    : "Keeping every archive forever.",
+                );
+              }}
+            >
+              {RETENTION_CHOICES.map((days) => (
+                <option key={days} value={days}>
+                  {RETENTION_LABELS[days]}
+                </option>
+              ))}
+            </select>
           </label>
-          <button
-            disabled={saving || !keep || Number(keep) === settings.backup_keep}
-            onClick={() =>
-              apply({ backup_keep: Number(keep) }, `Keeping the newest ${keep} backups.`)
-            }
-          >
-            Save
-          </button>
           <label className="slot">
             <input
               type="checkbox"
@@ -604,8 +607,15 @@ export default function Settings() {
               Stored in <code>{backups.directory}</code>
               {backups.free_bytes != null && ` (${formatBytes(backups.free_bytes)} free)`}.
               Mount a volume or NAS path there to keep archives off this host. A schedule
-              counts from the last run; older archives beyond the keep count are removed.
+              counts from the last run; after each run, archives older than the retention
+              are removed, but the newest full and the newest data-only archive always stay.
             </p>
+            {settings.backup_retention_days === 0 && (
+              <p className="error">
+                Retention is off: nothing is ever deleted, and this directory will grow without
+                limit. Delete archives below by hand, or choose a retention.
+              </p>
+            )}
             {backups.last_run && (
               <p className={backups.last_run.ok ? "muted" : "error"}>
                 Last run {new Date(backups.last_run.at).toLocaleString()}:{" "}
@@ -618,8 +628,7 @@ export default function Settings() {
               <table className="estimates">
                 <thead>
                   <tr>
-                    <th>Archive</th><th>Size</th><th>Created</th>
-                    {restore.enabled && <th></th>}
+                    <th>Archive</th><th>Size</th><th>Created</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -630,22 +639,26 @@ export default function Settings() {
                         {b.prerestore && (
                           <span className="badge status-wishlist">before restore</span>
                         )}
-                        {b.encrypted === false && (
-                          <span className="badge status-sold">unencrypted</span>
-                        )}
                       </td>
                       <td>{formatBytes(b.size)}</td>
                       <td className="muted">{new Date(b.created_at).toLocaleString()}</td>
-                      {restore.enabled && (
-                        <td className="provenance-toggle">
+                      <td className="provenance-toggle">
+                        {restore.enabled && (
                           <button
-                            disabled={restore.busy || backingUp}
+                            disabled={restore.busy || backingUp || keyBusy}
                             onClick={() => restore.inspectArchive(b.name)}
                           >
                             Restore…
                           </button>
-                        </td>
-                      )}
+                        )}{" "}
+                        <button
+                          className="danger"
+                          disabled={restore.busy || backingUp || keyBusy}
+                          onClick={() => deleteBackup(b.name)}
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
