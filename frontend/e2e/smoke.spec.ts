@@ -300,6 +300,13 @@ test("a silver piece counts toward the stack", async ({ page }) => {
   await page.getByLabel("Country *").fill(country);
   await page.getByLabel("Denomination *").fill("1 dollar");
   await page.getByLabel("Year *").fill("1986");
+  // Metal detection (v0.31.0): a named alloy is not the metal it is named
+  // after, so the spot field stays hidden until a precious metal is named.
+  const spot = page.getByLabel("Spot at purchase (per oz)");
+  await page.getByLabel("Composition", { exact: true }).fill("Nickel silver");
+  await expect(spot).toHaveCount(0);
+  await page.getByLabel("Composition", { exact: true }).fill("90% silver");
+  await expect(spot).toBeVisible();
   await page.getByLabel("Composition", { exact: true }).fill("Silver");
   await page.getByLabel("Weight (g)").fill("31.1035");
   await page.getByLabel("Fineness", { exact: true }).fill("0.999");

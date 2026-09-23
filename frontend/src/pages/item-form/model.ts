@@ -110,13 +110,34 @@ export const SHAPES = ["Round", "Square", "Polygonal", "Scalloped", "Holed"];
 // stack.HISTORY_START.
 export const HISTORY_START = "2024-03-02";
 
-// Mirrors the backend's detect_metal: a case-insensitive substring match,
-// gold checked before silver before platinum before palladium.
-const METALS: Metal[] = ["gold", "silver", "platinum", "palladium"];
+// Mirrors the backend's pricing.detect_metal (the authority; keep the two in
+// step): whole words only, the named alloys nickel silver, German silver,
+// and Nordic gold are not precious, a metal followed by plated or washed is
+// a coating and gilt is a gold surface on the metal before it (clad is not
+// stripped), and with two metals left the one with the larger attached
+// percentage wins, else the first named.
+const ALLOYS_NOT_PRECIOUS = ["nickel silver", "german silver", "nordic gold"];
+const SURFACE_RE =
+  /\b(?:gold|silver|platinum|palladium)[\s-]*(?:plated|plate|plating|washed|wash)\b|\b(?:gilt|gilded)\b/g;
+const METAL_RE =
+  /(?:(\d{1,3}(?:\.\d+)?)\s*%\s*(?:of\s+)?)?\b(gold|silver|platinum|palladium)\b(?:\s*\(?\s*(\d{1,3}(?:\.\d+)?)\s*%)?/g;
 
 export function detectMetal(composition: string): Metal | null {
-  const text = composition.toLowerCase();
-  return METALS.find((m) => text.includes(m)) ?? null;
+  let text = composition.toLowerCase();
+  for (const alloy of ALLOYS_NOT_PRECIOUS) text = text.split(alloy).join(" ");
+  text = text.replace(SURFACE_RE, " ");
+  const found: { metal: Metal; share: number | null }[] = [];
+  for (const m of text.matchAll(METAL_RE)) {
+    const percent = m[1] ?? m[3];
+    const share = percent && Number(percent) > 0 && Number(percent) <= 100 ? Number(percent) : null;
+    found.push({ metal: m[2] as Metal, share });
+  }
+  if (found.length === 0) return null;
+  const withShare = found.filter((f) => f.share !== null);
+  if (withShare.length > 0) {
+    return withShare.reduce((best, f) => (f.share! > best.share! ? f : best)).metal;
+  }
+  return found[0].metal;
 }
 
 /** Whether a date falls inside the historic-spot lookup's coverage: on or
