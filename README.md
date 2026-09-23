@@ -295,6 +295,7 @@ from `.env.example`).
 | `AUTH_INSECURE_HTTP` | Optional, default `false`: sign-in cookies without `Secure`, for a plain-http local stack. Refused beside an `https` origin |
 | `SETUP_CODE` / `SETUP_CODE_FILE` | Optional: the one-time code for creating the admin, at least 32 characters. `SETUP_CODE_FILE` names a file holding it (a Docker secret) and wins. Unset, one is generated and logged. Ignored once the admin exists |
 | `BACKUP_KEY_FILE` | Optional: a file of [age](https://age-encryption.org) identities that encrypt every backup archive, typically a Docker secret. Unset, one is generated onto the state volume. Save a copy outside Cabinet either way: see [docs/backup-restore.md](docs/backup-restore.md#the-backup-key) |
+| `BACKUP_KEY`      | Optional, not with `BACKUP_KEY_FILE`: the same key as a variable (the line `python -m app.cli backup-key new` prints), for a secret manager that sets variables |
 | `CABINET_PORT`    | Optional, default `80`: the port the proxy publishes |
 | `DB_USER`         | Postgres username                                    |
 | `DB_PASSWORD`     | Postgres password                                    |

@@ -262,7 +262,8 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
 
 - ✔ **[MVP]** Containerized deployment via Docker Compose (backend, proxy, db).
 - ✔ **[MVP]** Persistent storage for data and photos; config via `.env`.
-- ✔ **[MVP]** Auto-generated API docs (OpenAPI / Swagger).
+- ✔ **[MVP]** An auto-generated OpenAPI schema (`/api/openapi.json`; the
+  interactive Swagger page was turned off in v0.30.0, see Phase 7, P8).
 - ✔ **[Core]** Data import from CSV, round-tripping the export format with
   per-row error reporting.
 - ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive

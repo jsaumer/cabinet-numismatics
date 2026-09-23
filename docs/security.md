@@ -253,7 +253,7 @@ Decided on 21 September 2026, the details that shape the code:
 | Passwords | Argon2id through `argon2-cffi`, at least 12 characters. Per-username limits are a delay that grows to a cap, never a lock. A known-device cookie from a successful sign-in (a random value stored hashed, 7 days, dropped after 5 failed sign-ins with it, revoked with the password or "sign out everywhere") lifts the per-username, per-address, and global limits and has a password-check slot reserved for it, so a flood can't keep the owner out; it never lifts the setup throttle or skips the password |
 | Recent password | Downloading a backup, exporting, restoring, deleting old unencrypted archives, any settings change, creating or revoking a token, ending another session or signing out everywhere, deleting for good, and changing the password or username ask for the password again; a correct answer opens a 5-minute window for that session only, never for a token. Signing out of the current session never asks |
 | Password change | Revokes every other session, every known device, and every API token of every scope, naming each. The reset command in the container does the same |
-| Backups | Every archive is encrypted ([age](https://age-encryption.org), X25519) with a backup key from a Docker secret or generated on the state volume, and carries a MAC keyed by that key, so an archive on the backup share can be neither read nor forged without it. The key is shown only by a command in the container, never in the browser; losing it makes the archives unreadable, by design. Old unencrypted archives are flagged and can be deleted |
+| Backups | Every archive is encrypted ([age](https://age-encryption.org), X25519) with a backup key from a Docker secret, from a variable, or generated on the state volume, and carries a MAC keyed by that key, so an archive on the backup share can be neither read nor forged without it. The key is shown only by a command in the container, never in the browser; losing it makes the archives unreadable, by design. Old unencrypted archives are flagged and can be deleted |
 | Anonymous requests | The only two routes that read a body without a login (sign-in and setup) accept at most 8 KiB, in nginx and in the gate |
 | Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos, documents, and exports are sent `Cache-Control: private, no-store`, and signing out clears the browser's cache of Cabinet. Caching the check only if measurement asks for it, and only with a reviewed cache key |
 | Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
@@ -413,13 +413,12 @@ Rules that go with the table:
   archives it wrote, in the sign-in schema a restore never touches, so
   restoring an older one than the newest needs a separate typed
   confirmation. Plain archives from before v0.30.0 cannot be restored.
-  (Until v0.30.0 ships, the restore staging described under "Input
-  handling" still sits in `BACKUP_DIR`.) Cabinet does
-  not encrypt the database's own files or the photo and document volumes:
+  Cabinet does not encrypt the database's own files or the photo and
+  document volumes:
   protecting that storage is the operator's responsibility, as for any
   service. A generated backup key is only as private as the state volume it
   sits on, so a deployment whose backups leave the host should supply the
-  key as a secret (`BACKUP_KEY_FILE`); Cabinet says whether the key and the
+  key (`BACKUP_KEY_FILE`, or `BACKUP_KEY`); Cabinet says whether the key and the
   backups are separate, shared, or impossible to tell apart, and never
   treats silence as safe.
 

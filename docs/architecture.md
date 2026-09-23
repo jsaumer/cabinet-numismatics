@@ -100,7 +100,8 @@ volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
 `backup_data` (`/data/backups`), `backend_state` (`/data/state`: the
 generated encryption key when `SECRET_KEY` is unset, plus the last restore's
 outcome, `restore_last.json`, and `restore_journal.json` while one runs,
-and the generated backup key `backup.key` when `BACKUP_KEY_FILE` is unset),
+and the generated backup key `backup.key` when neither `BACKUP_KEY_FILE` nor
+`BACKUP_KEY` is set),
 and `staging_data` (`/data/staging`, 0700: where an archive's database dump
 is unpacked to be checked and restored, never the backup directory; keep it
 on the host's own disk).
