@@ -4,6 +4,7 @@ routes."""
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -358,6 +359,35 @@ def test_sharing_off_costs_the_gate_nothing(client, anon_client, monkeypatch):
     assert throttle.share_size() == 0
 
 
+def test_a_stale_read_never_overwrites_a_newer_switch(client, monkeypatch):
+    """The second review's N7: a load that read "on" before the owner
+    switched sharing off must not put "on" back into memory."""
+    from app.services import app_settings
+
+    enable(client)
+    real = app_settings.get_setting
+
+    def read_then_switched_off(db, key):
+        value = real(db, key)
+        if key == "share_enabled":
+            share.set_enabled(False)  # the PUT's commit and set land here
+        return value
+
+    monkeypatch.setattr(app_settings, "get_setting", read_then_switched_off)
+    db = db_session()
+    try:
+        assert share.load(db) is False
+    finally:
+        db.close()
+    assert share.cached() is False
+    monkeypatch.setattr(app_settings, "get_setting", real)
+    db = db_session()
+    try:
+        assert share.load(db) is True  # with nothing in between, the read stands
+    finally:
+        db.close()
+
+
 def test_the_switch_is_loaded_once_then_held(client, anon_client, monkeypatch):
     enable(client)
     token, _ = make_link(client)
@@ -453,7 +483,12 @@ def test_a_checklist_share_shows_filled_slots_only(client, anon_client):
     assert [i["id"] for i in items] == [piece["id"]]
 
 
-def test_photos_through_the_share(client, anon_client):
+@pytest.mark.parametrize("marked", [False, True], ids=["cleaned on the fly", "from disk"])
+def test_photos_through_the_share(client, anon_client, marked):
+    from app.services import photos
+
+    if marked:
+        photos._write_marker()
     enable(client)
     item = full_item(client)
     other = make_item(client, status="sold")
@@ -474,6 +509,70 @@ def test_photos_through_the_share(client, anon_client):
     assert_not_found(anon_client.get(f"/api/share/{token}/photos/{other_photo}/thumb"))
     client.patch(f"/api/share-links/{link['id']}", json={"show_photos": False})
     assert_not_found(anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/thumb"))
+
+
+def _plant_over(client, item: dict, variant: str, data: bytes):
+    """Replace a stored file behind the app's back, as a photo stored
+    before v0.32.0 (or restored from an archive) would sit on disk."""
+    from app.config import get_settings
+
+    photo = client.get(f"/api/items/{item['id']}").json()["photos"][0]
+    key = photo["file_key"] if variant == "full" else photo["thumb_key"]
+    path = Path(get_settings().photo_dir) / key
+    path.write_bytes(data)
+    return path
+
+
+def test_a_photo_is_cleaned_on_the_fly_until_the_pass_has_run(client, anon_client):
+    """The second review's N2: while the marker is missing, a stored file
+    is never served as it is, whatever it carries."""
+    from app.services import photos
+    from tests.test_photo_metadata import assert_clean, dirty, old_thumbnail
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    full = _plant_over(client, item, "full", dirty("JPEG"))
+    thumb = _plant_over(client, item, "thumb", old_thumbnail())
+    url = f"/api/share/{token}/photos/{item['photo_id']}"
+    assert not photos.marker_exists()
+
+    resp = anon_client.get(f"{url}/full")
+    assert resp.status_code == 200 and resp.headers["content-type"] == "image/jpeg"
+    assert_clean(resp.content, "JPEG")
+    assert "last-modified" not in resp.headers and "etag" not in resp.headers
+    assert resp.headers["content-security-policy"] == "default-src 'none'; sandbox"
+    resp = anon_client.get(f"{url}/thumb")
+    assert resp.status_code == 200 and b"owner Jayson" not in resp.content
+    assert_clean(resp.content, "JPEG", icc=False)
+    assert full.read_bytes() == dirty("JPEG")  # the disk is the pass's to change
+
+    full.write_bytes(b"not an image at all")
+    assert_not_found(anon_client.get(f"{url}/full"))
+
+    photos._write_marker()
+    full.write_bytes(dirty("JPEG"))
+    assert anon_client.get(f"{url}/full").content == full.read_bytes()  # trusted once marked
+    assert anon_client.get(f"{url}/thumb").content == thumb.read_bytes()
+
+
+def test_a_range_with_if_range_gets_the_whole_photo(client, anon_client):
+    """With no Last-Modified or ETag, an If-Range can't match: the whole
+    body, never Starlette's KeyError (the second review's N4)."""
+    from app.services import photos
+
+    photos._write_marker()
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    url = f"/api/share/{token}/photos/{item['photo_id']}/full"
+    whole = anon_client.get(url).content
+    resp = anon_client.get(url, headers={"Range": "bytes=0-9", "If-Range": '"x"'})
+    assert resp.status_code == 200 and resp.content == whole
+    resp = anon_client.get(
+        url, headers={"Range": "bytes=0-9", "If-Range": "Wed, 01 Jan 2020 00:00:00 GMT"}
+    )
+    assert resp.status_code == 200 and resp.content == whole
 
 
 def test_a_credential_changes_nothing(client, anon_client, token_client):

@@ -13,11 +13,11 @@
 # backend's, or a key file on this host: AGE_IDENTITY=key.txt (needs `age`).
 # Unencrypted archives from before v0.30.0 can't be restored by any path.
 #
-# Two things the in-app restore does that this script can't (v0.32.0; see
-# docs/backup-restore.md): it keeps the live share links and sharing switch,
-# where this script restores the archive's (check Settings, Sharing after),
-# and it removes any metadata from the archive's photos, which here takes
-#   docker compose exec backend python -m app.cli strip-photo-metadata
+# Unlike the in-app restore, this script puts back the archive's share links
+# and sharing switch, not the live ones (v0.32.0; see docs/backup-restore.md),
+# so it ends by saying to check Settings, Sharing. The archive's photos may
+# carry metadata (EXIF, GPS) from before v0.32.0; the script has the backend
+# remove it once they are back.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SRC="${1:?usage: restore.sh <archive.zip.age>}"
@@ -82,10 +82,20 @@ docker compose exec -T db pg_restore -U "${DB_USER:?set in .env}" -d "${DB_NAME:
   --schema=public --clean --if-exists < "$DIR/db.dump"
 
 if [ -f "$DIR/photos.tar.gz" ]; then
+  # Without the photo marker, the share view cleans each photo as it serves
+  # it, so the archive's photos are never sent as they are, even before the
+  # pass below has rewritten them.
+  docker compose exec -T backend python -c 'from app.services import photos; photos.remove_marker()'
   docker compose exec -T backend sh -c 'find /data/photos -mindepth 1 -delete'
   docker compose exec -T backend sh -c 'tar xzf - -C /data/photos' < "$DIR/photos.tar.gz"
   # exec runs as root, but the backend doesn't: give the files to whoever owns the volume
   docker compose exec -T backend sh -c 'chown -R "$(stat -c %u:%g /data/photos)" /data/photos'
+  # Re-encode every photo, thumbnails included, without its metadata (as the
+  # backend's user); it writes the marker again when every one is done.
+  echo "Removing metadata from the restored photos"
+  docker compose exec -T backend python -m app.cli strip-photo-metadata \
+    || echo "Some photos kept their metadata; run this again:" \
+      "docker compose exec backend python -m app.cli strip-photo-metadata" >&2
 else
   echo "Data-only archive: photos left unchanged"
 fi
@@ -100,3 +110,5 @@ else
 fi
 
 echo "Restored from $SRC"
+echo "The archive's share links and sharing switch are now live, not the ones this" \
+  "Cabinet had before: check Settings, Sharing."

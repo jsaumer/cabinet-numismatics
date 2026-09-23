@@ -26,9 +26,10 @@ Roadmap Phase 7, P9: the share and showcase view
   cert numbers and values off by default): never a cost, gain, storage
   location, document, serial number, or custom field. A wrong, unknown, or
   revoked token is the same `404`. The link is looked up first, so a live
-  link is never throttled; failed lookups are slowed per address past 20
-  (an IPv6 address by its /64) and capped at 300 a minute overall, in a
-  throttle kept apart from sign-in's. Every answer carries
+  link is never throttled; failed lookups answer `429` rather than `404`
+  per address past 20 (an IPv6 address by its /64) and past 300 a minute
+  overall, in a throttle kept apart from sign-in's (it doesn't slow
+  guessing: the 256-bit token is the defence). Every answer carries
   `X-Robots-Tag: noindex, nofollow`, a shared photo carries no file time
   (`Last-Modified`, `ETag`), and no public route makes a network call.
 - **Managing links**: `GET`/`POST /api/share-links`, `PATCH` and `DELETE
@@ -37,7 +38,8 @@ Roadmap Phase 7, P9: the share and showcase view
   `PUBLIC_ORIGINS` (else the first https one), and only its hash is kept;
   making, changing, regenerating, and revoking a link ask for the password
   again, and at most 20 links exist. Deleting a set or checklist deletes
-  its links.
+  its links. Changing and revoking work while sharing is off; making and
+  regenerating answer `409` then.
 - **The switch**: `share_enabled` in Settings, off by default. Off, a
   stranger gets the same `401` under `/api/share/` as on any other path
   (answered from memory, no database read) and no link can be made; the
@@ -50,8 +52,12 @@ Roadmap Phase 7, P9: the share and showcase view
   whatever the archive held: a revoked link can't return with an older
   archive, and an archive can't switch sharing on. The outcome says what
   the archive held, it is audited (`restore_sharing`), and the restore's
-  alert says so when they differed. After `restore.sh`, check Settings,
-  Sharing.
+  alert says so when they differed. If they can't be put back, every link
+  is removed and sharing switched off, and the links from before wait in
+  `pending_sharing.json` on the state volume to be tried again. A backend
+  restarted mid-restore puts them back after its startup migrations, so an
+  archive from before share links existed keeps them too. `restore.sh`
+  can't keep them: it ends by saying to check Settings, Sharing.
 - Metrics `cabinet_share_links` and `cabinet_share_opens_total`, and a
   sharing line in `python -m app.cli status`.
 - Migration `0022`: the `share_links` table.
@@ -78,11 +84,16 @@ Roadmap Phase 7, P9: the share and showcase view
   URL import, and edited image is re-encoded before it is stored: turned
   upright, with every EXIF block, XMP, IPTC, comment, and PNG text chunk
   dropped and the colour profile kept (JPEG at quality 95; an animated
-  image keeps its first frame). Photos already stored are cleaned once, in
-  the background, on the first start after upgrading, and again after an
-  in-app restore brings photos; after `restore.sh`, run
-  `python -m app.cli strip-photo-metadata`. Found, with the throttle,
-  restore, and cert-number fixes above, by a security review before release
+  image keeps its first frame). Thumbnails are written the same way.
+  Photos already stored, thumbnails included (an older thumbnail could
+  carry the photo's JPEG comment), are all re-encoded once, in the
+  background, on the first start after upgrading, whether or not
+  `AUTO_MIGRATE` is on, and again after an in-app restore brings photos;
+  `restore.sh` runs the same pass (`python -m app.cli strip-photo-metadata`)
+  itself. Until that pass has finished, the share view re-encodes each
+  photo without its metadata as it serves it, rather than trusting the
+  file on disk. Found, with the throttle, restore, and cert-number fixes
+  above, by two security reviews before release
   ([SPEC_0320](docs/specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)).
 
 **Deploying:** if you keep an authenticating reverse proxy in front of

@@ -11,7 +11,7 @@ from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
 from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
-from app.services import alerts, backup, numista, pcgs, share, stack
+from app.services import alerts, backup, numista, pcgs, restore, share, stack
 from app.services import app_settings as store
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -270,8 +270,11 @@ def _build(db: Session) -> SettingsOut:
 @permission("admin")
 def get_app_settings(db: Session = Depends(get_db)):
     # Opening Settings also brings the gate's copy of the switch in line with
-    # the database (after restore.sh, say), without waiting for the hourly tick.
-    share.set_enabled(bool(store.get_setting(db, "share_enabled")))
+    # the database (after restore.sh, say), without waiting for the hourly
+    # tick, once any share links a restore left to put back are back. A load,
+    # not a set: a PUT that lands meanwhile wins over this read.
+    restore.apply_pending_sharing(db.get_bind())
+    share.load(db)
     return _build(db)
 
 

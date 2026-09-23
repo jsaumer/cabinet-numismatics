@@ -372,8 +372,9 @@ original. **The original is stored re-encoded, without its metadata**
 dates), XMP, IPTC, comment, and PNG text chunk is dropped; only the colour
 profile (and a palette's transparency) is kept. A JPEG is written at
 quality 95, so the stored file is not byte for byte the upload, and an
-animated WebP or PNG keeps its first frame only. Photos stored before
-v0.32.0 are cleaned once, in the background, on the first start (see
+animated WebP or PNG keeps its first frame only. The thumbnail is written
+the same way. Photos stored before v0.32.0, thumbnails included, are
+re-encoded once, in the background, on the first start (see
 [backup-restore.md](backup-restore.md#photo-metadata)). The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
@@ -1042,7 +1043,7 @@ Every answer carries `X-Robots-Tag: noindex, nofollow`; the JSON ones
 | `GET` | `/api/share/{token}/items` | `?offset=&limit=` (`offset` 0 to 1,000,000, `limit` 1 to 100, default 50; `422` outside them): `{"items": [...], "total": n}`, newest first |
 | `GET` | `/api/share/{token}/items/{item_id}` | One piece, if it is in the share |
 | `GET` | `/api/share/{token}/checklist` | A checklist link's **filled** slots only, `{"slots": [{position, label, year, mint_mark, item_id}]}` (`item_id` is `null` for a slot ticked by hand with no piece); other kinds `404` |
-| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The file carries no metadata (see [Photos](#photos)) |
+| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The photo carries no metadata (see [Photos](#photos)): until the one-time pass over stored photos has run (its marker is written), the route doesn't send the file as it is but re-encodes it without metadata on every request (`200`, the whole body, no ranges); a file that can't be decoded is the same `404`. After that the file is served from disk; a `Range` with `If-Range` gets the whole photo (`200`), since there is no validator for it to match |
 
 **One 404.** A malformed token, an unknown one, a revoked one, a set or
 checklist that is gone, and a piece or photo outside the share all answer
@@ -1089,9 +1090,9 @@ even with `show_values` off.
 |--------|------|---------|
 | `GET` | `/api/share-links` | Every link: `id`, `kind`, `set_id`, `checklist_id`, `target_name`, `name`, the six `show_*`, `created_at`, `created_by`, `last_opened_at`, `opens`. Never the token or its hash |
 | `POST` | `/api/share-links` | Recent password. `{kind, set_id?, checklist_id?, name, show_*?}` (`show_photos`, `show_grades`, `show_tags` default on; `show_notes`, `show_values`, `show_certs` off): `201`, the row plus `url` (`{origin}/s/{token}`, below), shown this once. `422` when the target is missing or the wrong one is given; `409` `"Switch sharing on in Settings first."` while sharing is off, and `409` with 20 links already |
-| `PATCH` | `/api/share-links/{id}` | Recent password. `{name?, show_*?}`: rename or change what it shows; the link stays the same. Audited as `share_link_changed` with the options that changed (and the old name on a rename); alerted when `show_notes`, `show_values`, or `show_certs` is switched on, since that shows every holder of the link more than before |
+| `PATCH` | `/api/share-links/{id}` | Recent password. `{name?, show_*?}`: rename or change what it shows; the link stays the same. Works while sharing is off. Audited as `share_link_changed` with the options that changed (and the old name on a rename); alerted when `show_notes`, `show_values`, or `show_certs` is switched on, since that shows every holder of the link more than before |
 | `POST` | `/api/share-links/{id}/regenerate` | Recent password. A new `url`, shown once; the old one stops working at once; `409` while sharing is off |
-| `DELETE` | `/api/share-links/{id}` | Recent password. Revoke for good (the row is deleted); `204` |
+| `DELETE` | `/api/share-links/{id}` | Recent password. Revoke for good (the row is deleted); `204`. Works while sharing is off |
 
 The token is `share_` and 43 base64url characters (32 random bytes), stored
 only as its SHA-256. A lost link is replaced with regenerate. Deleting a set
@@ -1288,9 +1289,13 @@ like sign-in data: `links_kept` (put back), `links_dropped` (a set or
 checklist link whose target, by id and name, the archive doesn't hold),
 `archive_links` and `archive_enabled` (what the archive held, now
 replaced), `enabled` (the switch, as it was before), and `differed`; an
-`error` there means the links couldn't be put back and sharing was switched
-off. It is audited as `restore_sharing`, and the restore's alert says so
-when the archive differed. Switched off, it answers `enabled:
+`error` there means the links couldn't be put back, so every link was
+removed and sharing switched off, and the links from before wait in
+`pending_sharing.json` on the state volume to be tried again (at the next
+start, every hour, and when Settings is opened). After a restart during a
+restore, `sharing` is added once the links have gone back, right after the
+startup migrations. It is audited as `restore_sharing`, and the restore's
+alert says so when the archive differed. Switched off, it answers `enabled:
 false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
 
 `POST /api/restore/inspect` takes either a multipart upload (field `file`),

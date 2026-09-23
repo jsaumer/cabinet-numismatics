@@ -283,9 +283,11 @@ with the link resolved before the throttle is consulted, so a live link is
 never 429'd and failed lookups live in a throttle map of their own; a public
 route never makes a network call (values convert at cached rates only);
 every stored photo is re-encoded without metadata (`photos.clean_bytes`,
-the one-time `strip_existing` pass, marker `photos_clean`); an in-app
-restore keeps the live `share_links` and `share_enabled` over the
-archive's; and the token is hashed (never stored plain) and redacted from
+the one-time `strip_existing` pass over originals and thumbnails, marker
+`photos_clean`, and until that marker exists the share photo route cleans
+each file on the fly); an in-app restore keeps the live `share_links` and
+`share_enabled` over the archive's (a restore stopped mid-way leaves
+`pending_sharing.json` on the state volume, applied after migrations); and the token is hashed (never stored plain) and redacted from
 both logs (the backend's `uvicorn.access` filter and nginx's own
 `access_log` rewrite the path to `[token]`). The security review that set
 those rules is `docs/specs/SPEC_0320-review-opus.md`. An authenticating

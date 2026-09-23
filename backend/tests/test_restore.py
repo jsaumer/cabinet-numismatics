@@ -1320,40 +1320,205 @@ def test_a_set_link_is_dropped_when_the_archive_has_another_set(
     assert [link["name"] for link in client.get("/api/share-links").json()] == ["Everything"]
 
 
-def test_a_failed_put_back_switches_sharing_off(client, coin, fake_dump, calls, clock, monkeypatch):
-    client.put("/api/settings", json={"share_enabled": True})
-    _share_link(client)
-    name = _stored(client)
-    clock[0] += timedelta(minutes=1)
-
+def _broken_rows(monkeypatch):
     def broken(link):
         raise ValueError("unreadable snapshot")
 
     monkeypatch.setattr(restore, "_as_row", broken)
+
+
+def _link_names() -> list[str]:
+    from app.models import ShareLink
+
+    db = _session()
+    try:
+        return sorted(row.name for row in db.query(ShareLink))
+    finally:
+        db.close()
+
+
+def test_a_failed_put_back_switches_sharing_off(client, coin, fake_dump, calls, clock, monkeypatch):
+    from app.services import share
+
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="Live")
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+    calls["during"] = lambda: _archive_sharing(True, [(share.new_token(), "Leaked")])
+    _broken_rows(monkeypatch)
     assert _restore(client, name).status_code == 202
     last = client.get("/api/restore/status").json()["last"]
     assert last["sharing"]["enabled"] is False and "switched off" in last["sharing"]["error"]
     assert client.get("/api/settings").json()["share_enabled"] is False
+    # The archive's rows never stay behind the switch (the second review's N6),
+    # and the snapshot waits to be tried again.
+    assert _link_names() == []
+    assert share.cached() is False
+    assert restore._pending_snapshot()["links"][0]["name"] == "Live"
 
 
-def test_recover_puts_the_links_back_from_the_journal(client):
-    """A restart after the database step: the snapshot is in the journal."""
+def test_a_failed_put_back_removes_the_archives_links_whatever_memory_says(client, monkeypatch):
+    """N6: in a transaction of its own every row goes and the switch is off,
+    in the database and in memory."""
     from app.services import share
 
     client.put("/api/settings", json={"share_enabled": True})
     _share_link(client, name="Live")
     snapshot = restore._snapshot_sharing(_engine())
     _archive_sharing(True, [(share.new_token(), "Leaked")])
+    share.set_enabled(True)
+    _broken_rows(monkeypatch)
+    result = restore._put_back_sharing(_engine(), snapshot, None)
+    assert result["error"] and result["enabled"] is False and result["links_kept"] == 0
+    assert _link_names() == []
+    assert _setting_row("share_enabled") is False
+    assert share.cached() is False
+
+
+def test_a_failed_swapping_journal_write_still_puts_the_links_back(
+    client, anon_client, coin, fake_dump, calls, clock, monkeypatch
+):
+    """N5: once the database is the archive's, nothing that fails after it
+    can skip the put-back."""
+    from app.services import share
+
+    client.put("/api/settings", json={"share_enabled": True})
+    kept, _ = _share_link(client, name="Live")
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+    leaked = share.new_token()
+    calls["during"] = lambda: _archive_sharing(True, [(leaked, "Leaked")])
+    real = restore._write_json
+
+    def full_volume(path, data):
+        if data.get("phase") == "swapping":
+            raise OSError("No space left on device")
+        real(path, data)
+
+    monkeypatch.setattr(restore, "_write_json", full_volume)
+    assert _restore(client, name).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["ok"] is False and "No space left" in last["error"]
+    assert last["sharing"]["links_kept"] == 1 and last["sharing"]["enabled"] is True
+    assert _link_names() == ["Live"]
+    assert anon_client.get(f"/api/share/{leaked}").status_code == 404
+    assert anon_client.get(f"/api/share/{kept}").status_code == 200
+
+
+def _swapping_journal(snapshot: dict) -> Path:
     path = restore._journal_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"phase": "swapping", "archive": "x.zip", "sharing_snapshot": snapshot})
     )
+    return path
+
+
+def test_recover_leaves_the_links_for_after_the_migrations(client):
+    """A restart after the database step: the journal's snapshot goes to
+    pending_sharing.json, put back once startup has migrated (N8)."""
+    from app.services import share
+
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="Live")
+    snapshot = restore._snapshot_sharing(_engine())
+    _archive_sharing(True, [(share.new_token(), "Leaked")])
+    journal = _swapping_journal(snapshot)
     restore.recover(_engine())
     last = restore.last_outcome()
-    assert last["ok"] is True and last["sharing"]["links_kept"] == 1
-    assert "sharing_snapshot" not in last
-    assert [link["name"] for link in client.get("/api/share-links").json()] == ["Live"]
+    assert last["ok"] is True and "sharing" not in last and "sharing_snapshot" not in last
+    assert not journal.exists() and restore._pending_path().exists()
+    assert _link_names() == ["Leaked"]  # untouched before the migrations
+
+    result = restore.apply_pending_sharing(_engine())
+    assert result["links_kept"] == 1 and result["differed"] is True
+    assert restore.last_outcome()["sharing"] == result
+    assert not restore._pending_path().exists()
+    assert _link_names() == ["Live"]
+    assert _setting_row("share_enabled") is True and share.cached() is True
+    assert restore.apply_pending_sharing(_engine()) is None  # nothing left to do
+
+
+def test_recover_keeps_the_links_of_an_archive_older_than_share_links(client):
+    """N8: an archive from before 0022 has no share_links table until the
+    startup migrations run; the owner's links are kept all the same."""
+    from app.models import ShareLink
+
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="One")
+    _share_link(client, name="Two")
+    snapshot = restore._snapshot_sharing(_engine())
+    ShareLink.__table__.drop(_engine())  # the archive's database
+    _swapping_journal(snapshot)
+    restore.recover(_engine())
+    assert restore.last_outcome()["ok"] is True
+    ShareLink.__table__.create(_engine())  # what the migrations do
+    result = restore.apply_pending_sharing(_engine())
+    assert (result["links_kept"], result["links_dropped"]) == (2, 0)
+    assert _link_names() == ["One", "Two"]
+
+
+def test_recover_stays_in_maintenance_when_the_snapshot_cant_be_kept(client, monkeypatch):
+    """N5: without somewhere to keep the snapshot, the journal stays and the
+    backend waits for a restart rather than serve the archive's links."""
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="Live")
+    photos = _unpacked_photos()
+    journal = _swapping_journal(restore._snapshot_sharing(_engine()))
+
+    def full(snapshot, archive):
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(restore, "_write_pending", full)
+    restore.recover(_engine())
+    assert journal.exists() and maintenance.active()
+    assert "sharing_snapshot" in json.loads(journal.read_text())
+    assert (photos / ".restore-new" / "new.txt").exists()  # nothing rolled forward
+    assert restore.last_outcome() is None
+
+
+def test_a_pending_put_back_that_fails_keeps_the_file_and_sharing_off(client, monkeypatch):
+    from app.services import share
+
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="Live")
+    snapshot = restore._snapshot_sharing(_engine())
+    _archive_sharing(True, [(share.new_token(), "Leaked")])
+    _swapping_journal(snapshot)
+    restore.recover(_engine())
+    with monkeypatch.context() as patched:
+        _broken_rows(patched)
+        result = restore.apply_pending_sharing(_engine())
+    assert "switched off" in result["error"]
+    assert restore._pending_path().exists()
+    assert _link_names() == [] and _setting_row("share_enabled") is False
+    assert share.cached() is False
+    assert restore.last_outcome()["sharing"]["error"]
+    # The next try (the next start, or the hourly tick) puts them back.
+    from app.services import scheduled
+
+    db = _session()
+    try:
+        scheduled.hourly(db)
+    finally:
+        db.close()
+    assert not restore._pending_path().exists()
+    assert _link_names() == ["Live"] and share.cached() is True
+
+
+def test_startup_puts_pending_links_back_with_migrations_off(client, monkeypatch):
+    """With AUTO_MIGRATE off the operator migrated by hand: the file is
+    applied where the migrations would have run."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    seen = []
+    monkeypatch.setattr(restore, "apply_pending_sharing", lambda engine=None: seen.append(1))
+    assert get_settings().auto_migrate is False
+    with TestClient(app):
+        pass
+    assert seen == [1]
 
 
 def test_a_restore_with_photos_cleans_them_afterwards(client, coin, fake_dump, calls, clock):
