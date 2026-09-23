@@ -458,14 +458,16 @@ docs/backup-restore.md. What a change here has to respect:
   done) or clears `.restore-new`. A non-empty `.restore-old` only survives
   a failed put-back, may hold the only copy, and makes the next restore
   refuse; never delete it automatically.
-- **Retention counts full and data-only archives separately** (v0.30.0,
-  `backup.prune`): each kind keeps the newest `backup_keep`, so a run of
-  quick data-only backups (`POST /api/backups?photos=false` is admin but
-  not fresh) can never push out the last archives holding the photos and
-  documents.
+- **Retention is by age and keeps the newest of each kind** (v0.30.1,
+  `backup.prune`; a count, `backup_keep`, until then): archives older than
+  `backup_retention_days` go after each run, but the newest full and the
+  newest data-only archive never do, so a run of quick data-only backups
+  (`POST /api/backups?photos=false` is admin but not fresh) can never push
+  out the last archive holding the photos and documents, and a schedule that
+  stopped can never leave nothing.
 - **Pre-restore archives** (`backup.write_prerestore`): verified after
   writing, not recorded as `backup_last_run` (that database is about to go),
-  outside `backup_keep` in `prune`, newest `PRERESTORE_KEEP` (3) kept, and
+  outside the retention in `prune`, newest `PRERESTORE_KEEP` (3) kept, and
   the archive being restored is never pruned (`protect`). They match
   `NAME_RE`, so they are listed (`prerestore: true`), downloadable,
   restorable, and counted by the backup metrics.
@@ -1279,6 +1281,36 @@ change must respect:
   now walks through a throwaway compose project end to end (claim, seed,
   configure settings through a signed-in session, capture, tear down)
   rather than the anonymous curl calls it documented before sign-in existed.
+
+## v0.30.1
+
+The day after v0.30.0 went live, the owner's first-run pass. Retention
+by age, a delete button, and the pre-v0.30.0 archive mechanism removed.
+Rules a later change has to respect:
+
+- **`backup_retention_days` is one of `backup.RETENTION_CHOICES` (7, 14,
+  30, 90, 365) or 0 (forever), checked in `routers/settings.py` (422
+  otherwise); the frontend's `RETENTION_CHOICES`/`RETENTION_LABELS` in
+  `pages/Settings.tsx` mirror it.** 0 means forever the way
+  `trash_retention_days` does (a stored `null` reads as the default, so
+  "forever" can't be `None`). Age comes from the archive's name
+  (`backup.archive_time`), never its mtime: a copy or an NFS share can give
+  a file any mtime. `prune` always keeps the newest full and the newest
+  data-only archive; the pre-restore rule (`PRERESTORE_KEEP`) is unchanged.
+- **`NAME_RE` matches `.zip.age` only.** A plain `cabinet-backup-*.zip` is
+  not a Cabinet archive anywhere: not listed, downloaded, deleted, pruned,
+  inspected (404, not the `LEGACY_REFUSED` 422, which still guards an
+  uploaded plain zip by its first bytes), or restored. `is_encrypted` and
+  the listing's `encrypted` flag are gone with `DELETE
+  /api/backups/unencrypted`; the audit event is `backup_deleted`.
+- **`DELETE /api/backups/{name}` takes `backup._run_lock` non-blocking**
+  (409 when a backup or restore holds it) so an archive can't be unlinked
+  while it is being written or restored; it is admin and fresh (the spec
+  appendix row, so `test_gate` checks the matrices), audited with the name
+  as target, and alerted. The frontend's Delete goes through `req()`, which
+  opens the password dialog when the window has lapsed; Playwright's
+  `withPasswordConfirm` covers it, and `stack-smoke.sh backup-restore`
+  proves the anonymous 401, the fresh 200, and the 404 after.
 
 ## Releases
 

@@ -320,6 +320,24 @@ test("a silver piece counts toward the stack", async ({ page }) => {
   await deleteForGood(page, url, country);
 });
 
+test("delete a stored backup through the password dialog", async ({ page }) => {
+  test.setTimeout(120_000);
+  acceptDialogs(page);
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Back up now" }).click();
+  const written = page.getByText(/^Backup written: cabinet-backup-/);
+  await expect(written).toBeVisible({ timeout: 60_000 });
+  const name = (await written.innerText()).match(/cabinet-backup-[\w-]+\.zip\.age/)![0];
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name, exact: true }) });
+  await expect(row).toBeVisible();
+
+  // DELETE /api/backups/{name} is a fresh route (v0.30.1): the dialog answers it
+  // the first time it's needed, and the row is gone once the list reloads.
+  await withPasswordConfirm(page, () => row.getByRole("button", { name: "Delete" }).click());
+  await expect(page.getByText(`Deleted ${name}.`)).toBeVisible({ timeout: 30_000 });
+  await expect(row).toHaveCount(0);
+});
+
 // Last on purpose: a restore replaces the whole collection, so a failure here
 // can't disturb the tests above. Restoring a backup taken a moment earlier
 // leaves everything as it was.

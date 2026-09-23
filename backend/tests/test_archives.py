@@ -368,8 +368,8 @@ def test_a_plain_archive_is_never_restored(client, coin, fake_dump, tmp_path):
     genuine = io.BytesIO()
     backup.write_archive(genuine, _session(), include_photos=False)
     _put("cabinet-backup-20260101-000000.zip", genuine.getvalue())
-    resp = _inspect(client, "cabinet-backup-20260101-000000.zip")
-    assert resp.status_code == 422 and resp.json()["detail"] == restore.LEGACY_REFUSED
+    # a stored plain name isn't one of Cabinet's archives at all (v0.30.1)
+    assert _inspect(client, "cabinet-backup-20260101-000000.zip").status_code == 404
     upload = tmp_path / "old.zip"
     upload.write_bytes(genuine.getvalue())
     with upload.open("rb") as fh:
@@ -380,24 +380,27 @@ def test_a_plain_archive_is_never_restored(client, coin, fake_dump, tmp_path):
     assert list((_backups() / ".restore-staging").iterdir()) == []
 
 
-def test_unencrypted_archives_are_listed_and_deleted_alone(client, coin, fake_dump):
-    kept = _stored(client)
-    _put("cabinet-backup-20260101-000000.zip", b"PK plain")
+def test_plain_archives_are_not_cabinets(client, coin, fake_dump):
+    """A plain `.zip` from before v0.30.0 is ignored (v0.30.1): never listed,
+    downloaded, deleted, pruned, or restored. The operator removes it."""
+    plain = "cabinet-backup-20260101-000000.zip"
+    _put(plain, b"PK plain")
     _put("cabinet-backup-20260102-000000-data.zip", b"PK plain")
     _put("notes.txt", b"not ours")
     (_backups() / ".restore-staging").mkdir(exist_ok=True)
-    listing = {b["name"]: b["encrypted"] for b in client.get("/api/backups").json()["backups"]}
-    assert listing == {
-        kept: True,
-        "cabinet-backup-20260101-000000.zip": False,
-        "cabinet-backup-20260102-000000-data.zip": False,
-    }
-    resp = client.delete("/api/backups/unencrypted")
-    assert sorted(resp.json()["deleted"]) == [
-        "cabinet-backup-20260101-000000.zip",
+    kept = _stored(client)  # runs retention over the directory
+    listing = [b["name"] for b in client.get("/api/backups").json()["backups"]]
+    assert listing == [kept]
+    assert client.get(f"/api/backups/{plain}").status_code == 404
+    assert client.delete(f"/api/backups/{plain}").status_code == 404
+    assert _inspect(client, plain).status_code == 404
+    assert sorted(p.name for p in _backups().iterdir()) == [
+        ".restore-staging",
+        plain,
         "cabinet-backup-20260102-000000-data.zip",
+        kept,
+        "notes.txt",
     ]
-    assert sorted(p.name for p in _backups().iterdir()) == [".restore-staging", kept, "notes.txt"]
 
 
 # --- the archive record and RESTORE OLDER -----------------------------------------

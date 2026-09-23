@@ -715,7 +715,7 @@ def test_disabled_by_the_deployment(client, coin, fake_dump, monkeypatch):
 
 def test_prerestore_archives_have_their_own_retention(client, coin, fake_dump, calls, clock):
     _, _, backups = _dirs()
-    client.put("/api/settings", json={"backup_keep": 2})
+    client.put("/api/settings", json={"backup_retention_days": 7})
     name = _stored(client)
     safeties = []
     for _ in range(5):
@@ -732,7 +732,7 @@ def test_prerestore_archives_have_their_own_retention(client, coin, fake_dump, c
         _stored(client)
     listing = client.get("/api/backups").json()["backups"]
     assert sorted(b["name"] for b in listing if b["prerestore"]) == kept
-    assert len([b for b in listing if not b["prerestore"]]) == 2
+    assert len([b for b in listing if not b["prerestore"]]) == 4  # minutes old: none expired
     assert all(b["created_at"] for b in listing)
     # and one of them restores like any other, without pruning itself away
     oldest = kept[0]
