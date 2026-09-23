@@ -77,10 +77,20 @@ src/
                         (the section list, Section, SettingRow, the
                         useSettings load/apply hook), and one file per
                         section (General.tsx, Pricing.tsx, Backups.tsx,
-                        Alerts.tsx, Account.tsx, About.tsx); Alerts.tsx and
-                        Account.tsx are thin wrappers around
+                        Alerts.tsx, Sharing.tsx, Account.tsx, About.tsx);
+                        Alerts.tsx and Account.tsx are thin wrappers around
                         components/alerts.tsx and components/account.tsx,
                         which already render their own single-h2 card
+    share/              the share view (v0.32.0), rendered outside the
+                        sign-in gate: SharePage.tsx (the manifest, the
+                        header/footer chrome, the "This link isn't active"
+                        page, and which of the three below to show),
+                        ShareGrid.tsx (the pieces as cards, with search and
+                        "Load more"; also shareItemLabel, reused by
+                        SharePiece), SharePiece.tsx (one piece: its own
+                        read-only lightbox, and its allowed facts grouped
+                        the way item-facts.tsx groups a signed-in item's),
+                        ShareChecklist.tsx (a checklist link's filled slots)
   components/         shared pieces
     item-hero.tsx       the item page's top: photo, title, grade, value
     item-facts.tsx      the rest of an item's fields, grouped, empty ones
@@ -131,12 +141,14 @@ page live in the URL, a Metal select beside Type among them since v0.31.0),
 `/stack` (fine ounces by metal, and, since v0.31.0, a "Left out" card
 listing owned precious-metal pieces missing a weight or fineness), `/report`,
 `/checklists`, `/import`, `/trash`, and `/settings/:section` (`general`,
-`pricing`, `backups`, `alerts`, `account`, `about`; `/settings` redirects to
-`/settings/general`, and an unknown section falls back to it too).
-`/dashboard` redirects to `/`.
+`pricing`, `backups`, `alerts`, `sharing`, `account`, `about`; `/settings`
+redirects to `/settings/general`, and an unknown section falls back to it
+too). `/dashboard` redirects to `/`.
 `/setup` and
 `/login` render outside the app shell (brand only, no nav); everything else
-is gated on being signed in, see "Sign-in" below.
+is gated on being signed in, see "Sign-in" below. `/s/:token` and
+`/s/:token/items/:itemId` (the share view, v0.32.0) render outside the gate
+entirely, see "Sharing" below.
 
 ## Sign-in (v0.30.0)
 
@@ -188,7 +200,48 @@ frontend's job is to make that unsurprising rather than working around it.
   `FailedSignInsNotice` reads and clears it once, right after the
   navigation that follows sign-in, and is dismissible.
 
-## Styling conventions
+## Sharing (v0.32.0)
+
+A share link opens a read-only page for the collection, a set, or a
+checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
+
+- **The share routes sit outside the gate, entirely.** `App.tsx`'s `App`
+  checks `location.pathname` before rendering `AuthProvider` at all: a path
+  under `/s/` renders `pages/share/SharePage.tsx`'s routes directly, so the
+  boot check (`GET /api/auth/state`, `GET /api/auth/me`) never runs and a
+  dying session elsewhere in the app can never redirect a share visitor to
+  `/login`.
+- **Every call the share page makes is `raw`** (`api.shareManifest`,
+  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`): a 404
+  there means "not a valid link," and must never reach `req()`'s global
+  401 handler (which isn't even registered here, `AuthProvider` not being
+  mounted, but `raw` keeps the calls correct regardless of that).
+  `sharePhotoUrl(token, photoId, variant)` builds the photo URL directly;
+  it isn't a `req()` call at all, the same as `photoUrl`.
+- **The page never links into the signed-in app.** No `/items/...`,
+  `/settings/...`, or sign-in link appears anywhere on a share page; the
+  footer's "Shared from Cabinet" names the app without linking anywhere.
+- **`<meta name="robots" content="noindex">`** is added to `document.head`
+  while `SharePage` is mounted and removed on unmount; nginx repeats the
+  intent server-side with `X-Robots-Tag` on `/s/` and a `robots.txt`
+  disallowing `/s/` and `/api/` (`proxy/nginx.conf`). A share link's token
+  is also kept out of nginx's own access log: a `map`/`log_format` at the
+  top of that file rewrites `/api/share/<token>...` and `/s/<token>...` to
+  `.../[token]...` before logging, the same redaction the backend already
+  does for its own `uvicorn.access` log.
+- **A `ShareItem`'s toggle-gated keys are absent, not null, when the
+  link's own `show_*` is off** (`api/types/share.ts`): `SharePiece.tsx`
+  reads `item.grade_label === undefined` (and the same for `tags` and
+  `notes`) to tell "not shown by this link" apart from "shown, but empty,"
+  which is why a share never displays an empty grade or tags section on a
+  piece with none.
+- **Settings → Sharing** (`pages/settings/Sharing.tsx`) is a seventh
+  routed section, after Alerts & metrics: the `share_enabled` switch,
+  the links table (Rename, Options, Regenerate, Revoke, each an admin
+  call through `req()`, so the fresh ones open the confirm-password
+  dialog by themselves), and a create form. A link's URL is shown once,
+  the same show-once-with-Copy pattern as a new API token in
+  `components/account.tsx`.
 
 - **Design tokens.** Colours and the typeface are CSS variables on `:root`
   at the top of `styles.css`, with the dark values under

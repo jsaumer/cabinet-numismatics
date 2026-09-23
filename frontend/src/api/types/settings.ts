@@ -42,6 +42,7 @@ export interface AppSettings {
   alert_webhook_format: AlertFormat;
   heartbeat_hint: string | null;
   metrics_enabled: boolean;
+  share_enabled: boolean;
   // Secrets cleared because they weren't encrypted with this deployment's
   // key, by name, until each is entered again.
   secrets_cleared: string[];
@@ -76,6 +77,7 @@ export interface AppSettingsUpdate {
   alert_webhook_format?: AlertFormat;
   heartbeat_url?: string; // "" clears
   metrics_enabled?: boolean;
+  share_enabled?: boolean;
   spot_alerts?: Omit<SpotAlert, "met">[];
 }
 

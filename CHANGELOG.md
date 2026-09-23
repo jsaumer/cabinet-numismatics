@@ -41,6 +41,16 @@ Roadmap Phase 7, P9: the share and showcase view
 - Metrics `cabinet_share_links` and `cabinet_share_opens_total`, and a
   sharing line in `python -m app.cli status`.
 - Migration `0022`: the `share_links` table.
+- **The share page**: `/s/{token}` and `/s/{token}/items/{id}`, rendered
+  outside the sign-in gate entirely (no sign-in boot check ever runs for a
+  visitor). A grid of the shared pieces with a search box, a piece's own
+  page with its photos in a lightbox and its allowed facts, and a
+  checklist link's filled slots; a dead link shows one page, "This link
+  isn't active." Settings gains a Sharing section: the switch, the links
+  table (Rename, Options, Regenerate, Revoke), and a form to create one,
+  with the new URL shown once and a Copy button, the same as a new API
+  token. nginx marks `/s/` non-indexable (`X-Robots-Tag`, `robots.txt`)
+  and keeps a share token out of its own access log too.
 
 ## [0.31.0] - 2026-09-23
 

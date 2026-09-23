@@ -1773,3 +1773,102 @@ main {
   font-family: monospace;
   font-size: 0.85rem;
 }
+
+/* The share view (v0.32.0): a read-only page outside the sign-in gate, at
+   /s/{token}. Its header reuses .site-header but with a plain brand mark
+   (a span, not a link into the app) instead of navigation. */
+.site-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--header-ink);
+}
+.share-footer {
+  text-align: center;
+  padding: 2rem 0 1rem;
+}
+.share-search {
+  width: 100%;
+  max-width: 24rem;
+  margin-bottom: 1rem;
+}
+.share-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 1rem;
+}
+.share-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: inherit;
+}
+.share-card:hover {
+  text-decoration: none;
+  border-color: var(--accent);
+}
+.share-thumb img,
+.share-thumb-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-alt);
+}
+.share-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--ink-3);
+  font-size: 2.4rem;
+}
+.share-thumb-empty.large {
+  aspect-ratio: 1;
+  width: 12rem;
+  font-size: 4rem;
+}
+.share-card-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.share-card-value {
+  font-weight: 600;
+}
+.share-back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+.share-piece {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.share-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.share-photos img {
+  width: 8rem;
+  height: 8rem;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+.share-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.share-checklist li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
