@@ -1,6 +1,7 @@
 """The work the background loops in main.py run: the 12-hourly price refresh,
-and the hourly tick (stored secrets checked, scheduled backup, trash
-clear-out, purchase-day spot backfill, spot-price alerts, heartbeat). Kept
+and the hourly tick (stored secrets checked, the sharing switch reread,
+scheduled backup, trash clear-out, purchase-day spot backfill, spot-price
+alerts, heartbeat). Kept
 here so it can be tested without the loops."""
 
 import logging
@@ -107,6 +108,23 @@ def _hourly(db: Session) -> None:
     except Exception:
         db.rollback()
         logger.exception("Checking stored secrets failed")
+    try:
+        # Share links a restore left to put back (a failed try at startup)
+        # go back first, so the load below never reads the archive's switch.
+        from app.services import restore
+
+        restore.apply_pending_sharing(db.get_bind())
+    except Exception:
+        logger.exception("Putting the pending share links back failed")
+    try:
+        # The gate holds the sharing switch in memory; a database put back by
+        # restore.sh (or edited by hand) is picked up here.
+        from app.services import share
+
+        share.load(db)
+    except Exception:
+        db.rollback()
+        logger.exception("Reading whether sharing is on failed")
     try:
         if outcome := backups.run_scheduled(db):
             logger.info("Scheduled backup: %s", outcome)

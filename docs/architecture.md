@@ -99,7 +99,8 @@ that user with `setpriv`; see [security.md](security.md). It mounts five
 volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
 `backup_data` (`/data/backups`), `backend_state` (`/data/state`: the
 generated encryption key when `SECRET_KEY` is unset, plus the last restore's
-outcome, `restore_last.json`, and `restore_journal.json` while one runs,
+outcome, `restore_last.json`, `restore_journal.json` while one runs, and
+`pending_sharing.json` while share links wait to be put back after one,
 and the generated backup key `backup.key` when neither `BACKUP_KEY_FILE` nor
 `BACKUP_KEY` is set),
 and `staging_data` (`/data/staging`, 0700: where an archive's database dump
@@ -181,7 +182,7 @@ app's Settings page and stored in the database.
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 | `RESTORE_ENABLED` | In-app restore (default `true`); `false` makes every restore endpoint answer 404 and hides it in Settings |
 | `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
-| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.31.0`) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.32.0`) |
 | `PUBLIC_ORIGINS`  | Required. The exact origins browsers use (`https://cabinet.example.com`), comma-separated; read by the backend (checked at start) and the proxy (its Host names) |
 | `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets no response |
 | `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |
@@ -226,7 +227,7 @@ rotation.
 - Sign-in is always on (v0.30.0): one admin, claimed on the first visit
   with a setup code from the backend's log (or `SETUP_CODE_FILE`), and API
   tokens for scripts. It works both directly exposed and behind an
-  authenticating reverse proxy; until single sign-on (v0.32.0) the
+  authenticating reverse proxy; until single sign-on (v0.33.0) the
   recommended deployment keeps such a proxy in front. Nothing but nginx
   should reach the backend: the audit log's addresses and the address-based
   sign-in delay come from the `X-Real-IP` nginx writes. See

@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import __version__
-from app.models import Document, EstimateAttempt, Item, ItemPhoto
+from app.models import Document, EstimateAttempt, Item, ItemPhoto, ShareLink
 from app.services import alerts, schema, stack
 from app.services import app_settings as store
 from app.services import backup as backups
@@ -132,6 +132,21 @@ def collect(db: Session) -> list:
     for metal, fine_oz in stack.fine_ounces_by_metal(db).items():
         ounces.add_metric([metal], fine_oz)
     families.append(ounces)
+
+    families.append(
+        _gauge(
+            "cabinet_share_links",
+            "Share links that exist (each works only while sharing is on)",
+            db.execute(select(func.count()).select_from(ShareLink)).scalar_one(),
+        )
+    )
+    families.append(
+        _gauge(
+            "cabinet_share_opens_total",
+            "Times the share links that exist have been opened",
+            db.execute(select(func.coalesce(func.sum(ShareLink.opens), 0))).scalar_one(),
+        )
+    )
 
     families.extend(_backup_families(db))
     families.extend(_refresh_families(db))

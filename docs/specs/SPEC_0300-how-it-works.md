@@ -271,7 +271,7 @@ nobody without the key can forge or alter one that restores.
 
 ## 7. Until single sign-on: a door in front
 
-**Until v0.32.0 brings single sign-on and two-factor sign-in, keep an
+**Until v0.33.0 brings single sign-on and two-factor sign-in, keep an
 authenticating proxy in front of Cabinet as well.** Any forward-auth or SSO
 gateway works (Authentik, Authelia, oauth2-proxy, Pomerium, Cloudflare
 Access), and it brings its own second factor today. Cabinet's login is then
@@ -285,7 +285,7 @@ a second door, not a replacement:
 - Homepage and Prometheus skip the proxy on the internal name with a
   `metrics` token.
 
-In v0.32.0 the two doors can become one: signing in through the provider
+In v0.33.0 the two doors can become one: signing in through the provider
 signs you in to Cabinet, with the local password kept for when the provider
 is down.
 

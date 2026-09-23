@@ -74,7 +74,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.31.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.32.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -173,7 +173,7 @@ things still call for one:
   front (the nginx config is baked into the proxy image, so terminating TLS
   there instead means building your own image with a certificate and a
   `443` server block).
-- **A second door, until single sign-on.** Until v0.32.0 adds OpenID Connect
+- **A second door, until single sign-on.** Until v0.33.0 adds OpenID Connect
   and a trusted-header mode, keep an authenticating reverse proxy (any
   forward-auth or SSO gateway: Traefik + Authentik, Authelia, oauth2-proxy,
   Pomerium, Cloudflare Access) in front as well. It brings its own second
@@ -259,6 +259,73 @@ it from the list in Settings, which sends no body at all. While a restore
 runs
 the app answers 503 to everything but `/api/health` and
 `/api/restore/status`; that is expected, not an outage.
+
+### Sharing, and the forward-auth exemption
+
+Turning sharing on (Settings → Sharing, off by default) means a share link
+(`/s/<token>`) and its API (`/api/share/...`) are meant to open for anyone
+holding the link, without signing in and without going through Cabinet's
+own gate. An authenticating reverse proxy in front doesn't know that: it
+guards everything behind it by default, so it blocks your own share links
+too unless you exempt those paths from its authentication middleware. The
+share routes carry their own throttle (after 20 failed lookups from one
+address, or 300 a minute from all of them, a failed lookup answers 429
+rather than 404; it doesn't slow guessing, since every request is still
+looked up and a live link always opens: the 256-bit token is what makes a
+link unguessable) and mark themselves non-indexable (`X-Robots-Tag` and
+a `noindex` meta tag on the page itself; `/robots.txt` no longer disallows
+`/s/`, since a crawler has to fetch the page to see that tag), so there is
+nothing else the edge proxy needs to add.
+
+With the Traefik + Authentik example above, give the share paths their own
+router with no `middlewares`:
+
+```yaml
+http:
+  routers:
+    cabinet-share:
+      rule: "Host(`cabinet.example.com`) && (PathPrefix(`/s/`) || PathPrefix(`/api/share/`) || Path(`/robots.txt`))"
+      entryPoints: [websecure]
+      service: cabinet
+      tls:
+        certResolver: letsencrypt
+    cabinet:
+      rule: "Host(`cabinet.example.com`)"
+      entryPoints: [websecure]
+      service: cabinet
+      middlewares: [authentik@file]
+      tls:
+        certResolver: letsencrypt
+```
+
+No `priority` is set: Traefik ranks routers by rule length when priorities
+tie, and the share rule is the longer one, so it already wins over the
+general host rule without one; an explicit low number here would do the
+opposite of what it looks like and lose to the general rule instead.
+
+Any other forward-auth gateway needs the equivalent: whatever it offers for
+excluding a path prefix from its own authentication check. Skipping this
+doesn't fail loudly: a share link just shows the gateway's own sign-in page
+instead of Cabinet's share page, since the request never reaches Cabinet.
+The gateway also has to normalise the request path (collapse `..`
+segments, decode encoded dots) before it matches its own rules, or a path
+that only looks like it starts under `/s/` or `/api/share/` after
+normalisation could ride the exemption to a route it was never meant to
+cover. Traefik does this itself unless `sanitizePath` is turned off on the
+entry point; check that a custom gateway does the equivalent before
+trusting a prefix match on unnormalised input.
+
+A share token is redacted from nginx's access log (and the backend's), but
+not from its error log: an upstream error on a share request, such as a 502
+while the backend restarts during a deploy, can quote the full request line,
+token included. Treat that log as sensitive wherever it is shipped or kept,
+the same as you would the access log before it was redacted.
+
+Sharing on, and the instance reachable from outside your network, means
+exactly what a share link says: anyone holding the link can see what it
+shares, without signing in. Keep the switch off unless you mean to hand a
+link to someone; see [security.md](security.md#accounts-and-permissions)
+for what a link can and can't show.
 
 ### Other proxies
 
@@ -351,6 +418,9 @@ docker compose build --pull && docker compose up -d
 
 - **Run one backend replica.** The price-refresh and backup schedulers run
   in-process; additional replicas would duplicate refreshes and backups.
+  The sharing switch is held in each process's memory too (v0.32.0), so a
+  second replica could keep opening share links after the first was
+  switched off.
 - **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices),
   `api.frankfurter.dev` (ECB exchange rates), and `cdn.jsdelivr.net` with its
   fallback `*.currency-api.pages.dev` (purchase-day spot for the bullion
@@ -391,8 +461,12 @@ docker compose build --pull && docker compose up -d
   and names them, and clears the running backend's sign-in delays.
   `sign-out-everywhere` ends every session and known device (a lost laptop),
   and `revoke-tokens [--name NAME]` revokes every token or one. There is
-  deliberately no command that undoes the setup or deletes the admin. On a
-  Swarm, `docker exec -it` into the backend task instead.
+  deliberately no command that undoes the setup or deletes the admin.
+  `strip-photo-metadata` (v0.32.0) re-encodes every stored photo and
+  thumbnail without EXIF, GPS, and the rest, the pass the backend runs once
+  by itself; `restore.sh` runs it after putting back an archive's photos,
+  and the Swarm steps in backup-restore.md include it.
+  On a Swarm, `docker exec -it` into the backend task instead.
 
 ## 7. Swarm / multi-host deployment
 
@@ -405,7 +479,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.31.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.32.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy
@@ -437,7 +511,8 @@ What that file does differently from `docker-compose.yaml`, and why:
 - **Logs rotate**: every service keeps three 10 MB `json-file` logs, here
   and in `docker-compose.yaml`.
 - **One replica each.** The refresh, backup, and alert schedulers run inside
-  the backend process; a second replica would run them twice.
+  the backend process; a second replica would run them twice, and would
+  hold its own copy of the sharing switch.
 - **Storage is named volumes so the file works as is.** On a real Swarm,
   point every volume at shared storage (NFS binds or a volume driver) so a
   task can follow its service to another node. Two mounts matter more than

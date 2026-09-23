@@ -5,7 +5,7 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0021`. `0001` is an empty baseline;
+**Migration status:** revisions `0001`–`0022`. `0001` is an empty baseline;
 `0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
 Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
 photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
@@ -31,7 +31,8 @@ which needed a migration, since it's a generic key/value table), and from
 v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets
 cleared because they weren't encrypted with this deployment's key, until
 each is saved again) and `backup_key_saved` (the public key of the backup
-key the owner said they saved), read through `app/services/app_settings.py` with
+key the owner said they saved), and from v0.32.0 `share_enabled` (the
+share view's switch, off by default), read through `app/services/app_settings.py` with
 defaults and env fallbacks. One more key is not a setting at all:
 `restore_marker`, written and deleted by direct ORM during an in-app
 restore and never read through `get_setting` (see
@@ -74,6 +75,9 @@ decimal places could not hold as a round one-ounce weight.
 `diameter_mm`), `items.printer` and `items.watermark` (String(200)), and
 `items.demonetized_on` (Date, coins and notes alike). No data step: all
 five are nullable and start empty.
+`0022` (v0.32.0, the share view) adds `share_links`: one row per read-only
+public link, with only the SHA-256 of its token (see
+[share_links](#share_links) below).
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -136,6 +140,8 @@ items ──1:N── item_photos
   └──N:1── sets
 
 checklists ──1:N── checklist_slots ──N:1── items (optional link)
+
+share_links ──N:1── sets or checklists (cascade; a collection link has neither)
 ```
 
 ## Tables
@@ -361,6 +367,39 @@ Associates an item with one or more catalog references.
 
 A catalog reference is a shared row: two items with the same Krause number
 point at the same `catalog_refs` row.
+
+### share_links
+A read-only public link to the collection, a set, or a checklist (v0.32.0,
+migration `0022`; the share view, see [api.md](api.md#sharing)). In
+`public`, so backups carry it; it has no key into `cabinet_auth`. An in-app
+restore puts the live rows (and `share_enabled`) back after the archive's
+database is in place, since a link is an access grant: a revoked or
+replaced token never comes back with an older archive. `restore.sh` can't
+do that; after a script restore the archive's links are the ones in force.
+
+| Column           | Type                | Notes                                          |
+|------------------|---------------------|------------------------------------------------|
+| `id`             | uuid PK             |                                                |
+| `token_hash`     | text(64)            | unique; SHA-256 hex of the token, never the token |
+| `kind`           | text(10)            | `collection` \| `set` \| `checklist`           |
+| `set_id`         | fk → sets null      | a set link's target; cascade delete, indexed   |
+| `checklist_id`   | fk → checklists null | a checklist link's target; cascade delete, indexed |
+| `name`           | text(100)           | the shared page's title                        |
+| `show_photos`    | bool                | default true                                   |
+| `show_grades`    | bool                | grade, designations, grading service; default true |
+| `show_tags`      | bool                | default true                                   |
+| `show_notes`     | bool                | default false                                  |
+| `show_values`    | bool                | the shown estimate only; default false         |
+| `show_certs`     | bool                | the cert number; default false (added to `0022` before release) |
+| `created_at`     | timestamptz         |                                                |
+| `created_by`     | text(100)           | the admin's username as text                   |
+| `last_opened_at` | timestamptz null    | stamped by each manifest request               |
+| `opens`          | int                 | manifest requests, default 0                   |
+
+Revoking a link deletes its row (there is no `revoked_at`), and deleting its
+set or checklist deletes it too. The spec's single `target_id` became two
+columns so each can carry its own foreign key and cascade. Whether any link
+works at all is the `share_enabled` setting.
 
 ## Notes on design choices
 

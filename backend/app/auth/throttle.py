@@ -6,10 +6,15 @@
 | `addr:<ip>`   | 20 failures           | the same curve from the 20th                     |
 | global        | 60 checks a minute    | 429                                              |
 | `setup:<ip>`  | 5 wrong codes         | 429 until 15 minutes after the last              |
+| `share:<ip>`  | 20 failed lookups     | the same curve as `addr`                         |
+| share, global | 300 failed lookups a minute, all addresses | 429                     |
 
 Never a lock-out. A bucket forgets its failures 15 minutes after the last
 one, and on a success. One bounded map of at most MAX_KEYS entries, oldest
-dropped first; a restart clears everything. A sign-in attempt is counted
+dropped first; a restart clears everything. Failed share lookups (v0.32.0)
+have a bounded map of their own, so a flood of them from many addresses can
+never push a sign-in, address, or setup bucket out; an IPv6 address is
+counted by its /64, which is what one client usually holds. A sign-in attempt is counted
 by `attempt` before its password is checked, so parallel requests can't all
 pass on the count as it was. A known-device cookie lifts the user, address,
 and global limits (the caller skips `attempt` and `check_global`), never the
@@ -20,6 +25,7 @@ touches a flag file on the state volume, and every check clears the map when
 that file's time has changed.
 """
 
+import ipaddress
 import math
 import threading
 from collections import OrderedDict, deque
@@ -31,9 +37,10 @@ from app.auth import common
 WINDOW = 15 * 60
 MAX_KEYS = 10_000
 CAP = 60
-FREE = {"user": 5, "addr": 20}
+FREE = {"user": 5, "addr": 20, "share": 20}
 SETUP_FREE = 5
 GLOBAL_PER_MINUTE = 60
+SHARE_GLOBAL_PER_MINUTE = 300
 RESET_FLAG = "throttle_reset"
 
 
@@ -53,16 +60,42 @@ _lock = threading.Lock()
 _entries: OrderedDict[str, _Entry] = OrderedDict()
 _checks: deque[float] = deque()
 _flag_seen: tuple[bool, float | None] | None = None
+# Failed share lookups: their own map and their own global count.
+_shares: OrderedDict[str, _Entry] = OrderedDict()
+_share_failures: deque[float] = deque()
 
 
 def _key(kind: str, value: str) -> str:
     return f"{kind}:{value}"
 
 
+def _map(key: str) -> OrderedDict[str, _Entry]:
+    return _shares if key.startswith("share:") else _entries
+
+
+def share_address(address: str) -> str:
+    """The bucket for a share lookup: an IPv6 address by its /64 (a single
+    client usually holds the whole prefix), anything else as given."""
+    try:
+        found = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if found.version == 6:
+        if found.ipv4_mapped is not None:
+            return str(found.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{found}/64", strict=False))
+    return str(found)
+
+
+def _value(kind: str, value: str) -> str:
+    return share_address(value) if kind == "share" else value
+
+
 def _live(key: str, t: float) -> _Entry | None:
-    entry = _entries.get(key)
+    entries = _map(key)
+    entry = entries.get(key)
     if entry is not None and t - entry.last >= WINDOW:
-        del _entries[key]
+        del entries[key]
         return None
     return entry
 
@@ -81,7 +114,7 @@ def wait(kind: str, value: str) -> float:
     _apply_reset_flag()
     t = common.monotonic()
     with _lock:
-        entry = _live(_key(kind, value), t)
+        entry = _live(_key(kind, _value(kind, value)), t)
         return max(0.0, _wait(kind, entry, t)) if entry else 0.0
 
 
@@ -130,22 +163,52 @@ def check_global() -> None:
         _checks.append(t)
 
 
+def _count(key: str, t: float) -> None:
+    """One more failure in this bucket, in its own map; the map's oldest
+    entries go past MAX_KEYS. Under the lock."""
+    entries = _map(key)
+    entry = _live(key, t) or _Entry()
+    entry.failures += 1
+    entry.last = t
+    entries[key] = entry
+    entries.move_to_end(key)
+    while len(entries) > MAX_KEYS:
+        entries.popitem(last=False)
+
+
 def fail(kind: str, value: str) -> None:
     t = common.monotonic()
-    key = _key(kind, value)
     with _lock:
-        entry = _live(key, t) or _Entry()
-        entry.failures += 1
-        entry.last = t
-        _entries[key] = entry
-        _entries.move_to_end(key)
-        while len(_entries) > MAX_KEYS:
-            _entries.popitem(last=False)
+        _count(_key(kind, _value(kind, value)), t)
+
+
+def share_failure(address: str) -> float:
+    """A failed share lookup from this address. Inside the address's wait,
+    or past SHARE_GLOBAL_PER_MINUTE failures across every address, nothing is
+    counted and the seconds to wait come back (the caller answers 429);
+    otherwise the failure is counted and 0 comes back (the caller answers
+    404). A lookup that succeeds never comes here, so a live link is never
+    throttled."""
+    t = common.monotonic()
+    key = _key("share", share_address(address))
+    with _lock:
+        entry = _live(key, t)
+        waiting = max(0.0, _wait("share", entry, t)) if entry else 0.0
+        while _share_failures and t - _share_failures[0] >= 60:
+            _share_failures.popleft()
+        if len(_share_failures) >= SHARE_GLOBAL_PER_MINUTE:
+            waiting = max(waiting, _share_failures[0] + 60 - t)
+        if waiting > 0:
+            return waiting
+        _count(key, t)
+        _share_failures.append(t)
+        return 0.0
 
 
 def succeed(kind: str, value: str) -> None:
+    key = _key(kind, _value(kind, value))
     with _lock:
-        _entries.pop(_key(kind, value), None)
+        _map(key).pop(key, None)
 
 
 def clear() -> None:
@@ -153,11 +216,18 @@ def clear() -> None:
     with _lock:
         _entries.clear()
         _checks.clear()
+        _shares.clear()
+        _share_failures.clear()
         _flag_seen = None
 
 
 def size() -> int:
+    """Sign-in, address, and setup buckets; share buckets are `share_size`."""
     return len(_entries)
+
+
+def share_size() -> int:
+    return len(_shares)
 
 
 def _flag_path() -> Path:

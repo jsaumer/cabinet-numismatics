@@ -43,6 +43,8 @@ DEFAULTS: dict = {
     # Uptime Kuma push URL, pinged hourly.
     "heartbeat_url": "",
     "metrics_enabled": False,
+    # The share view (v0.32.0): off means every share link answers 404.
+    "share_enabled": False,
     # Spot-price thresholds: [{metal, direction, price, currency}], at most 12.
     "spot_alerts": [],
     # Written by the services, not through PUT /api/settings.

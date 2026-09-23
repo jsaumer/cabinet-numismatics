@@ -54,7 +54,7 @@ def test_the_auth_migration_creates_every_table_the_model_has():
 
 
 def test_two_chains_with_their_own_heads():
-    assert schema.script_revisions()[0] == "0021"
+    assert schema.script_revisions()[0] == "0022"
     head, known = schema.auth_script_revisions()
     assert head == "a0001" and known == frozenset({"a0001"})
 
@@ -129,7 +129,7 @@ def test_new_archives_say_auth_is_excluded(client, coin, monkeypatch):
     monkeypatch.setattr(
         backup, "dump_database", lambda out, major: out.write(FAKE_DUMP) and "pg_dump (fake)"
     )
-    monkeypatch.setattr(schema, "current_revision", lambda conn: "0021")
+    monkeypatch.setattr(schema, "current_revision", lambda conn: "0022")
     name = client.post("/api/backups").json()["file"]
     with zipfile.ZipFile(io.BytesIO(open_archive(backup.backup_dir() / name))) as zf:
         manifest = json.loads(zf.read("manifest.json"))

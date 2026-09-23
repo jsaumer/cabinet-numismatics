@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): v0.31.0 (bars and rounds) is the
+**Status (September 2026): v0.32.0 (the share and showcase view) is the
 latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
@@ -26,8 +26,12 @@ v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
 regrouped item page from the data-entry pass; authentication's first part
 (P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0; bars
 and rounds as a third item type (P11, [SPEC_0310](specs/SPEC_0310.md))
-shipped in v0.31.0.
-**What's next**: A2, single sign-on, as v0.32.0, then the share view (P9).
+shipped in v0.31.0; the share and showcase view (P9,
+[SPEC_0320](specs/SPEC_0320.md): a read-only link, tokens hashed and shown
+once, values a toggle off by default, a checklist link showing filled slots
+only) shipped in v0.32.0.
+**What's next**: A2, single sign-on (OpenID Connect and a trusted-header
+mode), as v0.33.0.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -295,7 +299,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   database-backed sessions, and scoped API tokens, then single sign-on
   (OpenID Connect and a trusted-header mode). **Phase 7, P8, A1 shipped for
   v0.30.0**: one admin, sessions, and scoped API tokens, with every route
-  denied by default. A2, single sign-on, follows as v0.32.0, both before
+  denied by default. A2, single sign-on, follows as v0.33.0, both before
   v1.0.0. Until A2 ships, an authenticating reverse proxy (e.g. Traefik +
   Authentik forward-auth) in front is recommended as a second door. A
   decision on 20 September 2026 to ship v1.0.0 without login was reversed
@@ -303,10 +307,15 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   needs the rest of the app closed first; the design was settled on 20 and
   21 September 2026 and is in
   [security.md](security.md#accounts-and-permissions).
-- **[Nice]** Share and showcase view: a read-only public link to a set, a
+- ✔ **[Nice]** Share and showcase view: a read-only public link to a set, a
   checklist, or the collection; the whole feature switched on or off in the
-  admin's Settings, off by default. **Planned: Phase 7, P9**, blocked on
-  authentication.
+  admin's Settings, off by default. Phase 7, P9. **Shipped in v0.32.0**, see
+  [SPEC_0320](specs/SPEC_0320.md). As built: the token is stored only as its
+  hash and shown once, with regenerate for a lost link; the estimated value
+  is a fifth toggle, off by default, and costs and gains are never shown; a
+  checklist link shows its filled slots only; and a forward-auth proxy kept
+  in front must exempt `/s/`, `/api/share/`, and `/robots.txt` or it blocks
+  the app's own share links.
 - ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
   frontend typecheck, and a compose build/migrate/smoke test on every push and
   PR; a `v*` tag push additionally publishes the backend and proxy images to
@@ -813,7 +822,7 @@ checklist:
 
 - ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
   a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single
-  sign-on (A2) follows as v0.32.0.
+  sign-on (A2) follows as v0.33.0.
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -850,7 +859,7 @@ checklist:
 
 In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
 the rest of the app until P8 A1 made it admin-only in v0.30.0. The share
-view is Phase 7, P9, next after A2.
+view is Phase 7, P9, shipped as v0.32.0 ([SPEC_0320](specs/SPEC_0320.md)).
 
 Deliberately not planned, and why: image-based identification (paid or
 hosted ML; Numista's image search is a paid tier), swap matching, a
@@ -983,7 +992,7 @@ v0.26.0.
 - ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
   decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
   v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 follows as
-  v0.32.0**, after P11. A session lasts one
+  v0.33.0**, after P11 and P9. A session lasts one
   day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
   Origin check, not a token; photos go through nginx `auth_request` rather
   than signed URLs; passwords use Argon2id (`argon2-cffi`, a new
@@ -1031,13 +1040,13 @@ v0.26.0.
     repeated failures, new tokens, downloads, and restores; and **every
     backup archive is encrypted** with a backup key the owner keeps,
     because an archive on a backup share was a readable copy of the whole
-    collection outside the login. Until v0.32.0, the recommended
+    collection outside the login. Until v0.33.0, the recommended
     deployment also keeps an authenticating proxy (any forward-auth or
     SSO gateway) in front, as a second door rather than a replacement for
     Cabinet's own sign-in. The contract, with a walkthrough of setup,
     password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
-    - **A2: Single sign-on. As v0.32.0, after P11.** OpenID Connect against any
+    - **A2: Single sign-on. As v0.33.0, after P11 and P9.** OpenID Connect against any
     provider (Authentik, Keycloak, Authelia, Google), signing in as the
     admin through an identity linked to that account, and a trusted-header
     mode for a forward-auth proxy that already authenticates, with a
@@ -1065,7 +1074,8 @@ v0.26.0.
   is worked out from ordinary items, so a bar had to be a Coin with a
   required denomination, and then counted as a coin everywhere. The owner
   chose a third item type, fully featured, as **v0.31.0**, moving single
-  sign-on to v0.32.0. `bullion` ("Bar or round") needs no migration: a
+  sign-on back a release (to v0.33.0 once P9 took v0.32.0 as well).
+  `bullion` ("Bar or round") needs no migration: a
   Metal select, fineness defaulting to .999, weight in grams or troy
   ounces, refiner and serial, a suggested product name, its own count and
   list filter, and Numista's "Bullion › Bar" exonumia in the fill and the
@@ -1079,7 +1089,7 @@ v0.26.0.
   spot price only), and the Numista exonumia shape was confirmed live
   (`object_type`, see the build log). The contract is
   [SPEC_0310](specs/SPEC_0310.md).
-- **P9: Share and showcase view** (M). A read-only public page for a set, a
+- ✔ **P9: Share and showcase view** (M). A read-only public page for a set, a
   checklist, or the whole collection, behind an unguessable link that can be
   revoked, with a choice of what it shows (never costs, never storage
   locations). **The whole feature is a switch in the admin's Settings, off
@@ -1087,9 +1097,19 @@ v0.26.0.
   off, no link can be made, the public routes answer "not found" as if they
   didn't exist, and links made earlier stop working without being deleted,
   so switching it back on restores them. Settings lists every live link
-  with when it was last opened. **Next, after A2 (v0.32.0)**: it is the first
-  deliberately public page, and everything else had to be closed before
-  one door is opened.
+  with when it was last opened. **Shipped in v0.32.0** (planned 23 September
+  2026, [SPEC_0320](specs/SPEC_0320.md); A2 moves to v0.33.0): it is the
+  first deliberately public page, and everything else had to be closed
+  before one door is opened. As built: the token is stored only as its
+  SHA-256 and shown once, with regenerate replacing a lost link; the
+  estimated value is a fifth toggle (`show_values`), off by default, and
+  costs and gains are never shown under any toggle; a checklist link shows
+  its filled slots only, never a want list; a wrong, unknown, revoked, or
+  sharing-off token all answer the same `404`, slowed per address past 20;
+  and a forward-auth proxy kept in front (see
+  [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption))
+  must exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or
+  it blocks the app's own share links.
 
 - ✔ **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
   September 2026: next, now that in-app restore has shipped**, ahead of P7
@@ -1139,8 +1159,8 @@ v0.26.0.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
 P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
-P8 A1 for v0.30.0, and P11 bars and rounds for v0.31.0): P8 A2 single
-sign-on as v0.32.0, then P9 the share view.
+P8 A1 for v0.30.0, P11 bars and rounds for v0.31.0, and P9 the share view
+for v0.32.0): P8 A2, single sign-on, as v0.33.0, next.
 
 Optional, after the above and only if still wanted:
 

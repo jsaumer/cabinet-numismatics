@@ -63,18 +63,29 @@ def _private_paths(tmp_path_factory, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _fresh_monitoring_state():
-    """Alert outcomes, the metrics cache, and the sign-in throttles live in
-    memory, per process."""
+    """Alert outcomes, the metrics cache, the sign-in throttles, and the
+    sharing switch live in memory, per process."""
     from app.auth import audit, notify, throttle
-    from app.services import alerts, metrics, restore
+    from app.services import alerts, metrics, restore, share
 
     alerts.reset_memory()
     metrics.reset_cache()
     restore.reset_memory()
+    share.reset_memory()
     throttle.clear()
     audit.reset_memory()
     notify.reset_memory()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _no_background_photo_pass(monkeypatch):
+    """Every app start runs the photo-metadata pass on a thread (v0.32.0,
+    whatever AUTO_MIGRATE says); in tests it would race the files a test
+    plants. Tests that want it patch `photos._spawn` themselves."""
+    from app.services import photos
+
+    monkeypatch.setattr(photos, "_spawn", lambda fn: None)
 
 
 BASE_URL = "https://testserver"  # PUBLIC_ORIGINS, so CSRF's Origin rule matches

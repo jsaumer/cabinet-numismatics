@@ -77,10 +77,20 @@ src/
                         (the section list, Section, SettingRow, the
                         useSettings load/apply hook), and one file per
                         section (General.tsx, Pricing.tsx, Backups.tsx,
-                        Alerts.tsx, Account.tsx, About.tsx); Alerts.tsx and
-                        Account.tsx are thin wrappers around
+                        Alerts.tsx, Sharing.tsx, Account.tsx, About.tsx);
+                        Alerts.tsx and Account.tsx are thin wrappers around
                         components/alerts.tsx and components/account.tsx,
                         which already render their own single-h2 card
+    share/              the share view (v0.32.0), rendered outside the
+                        sign-in gate: SharePage.tsx (the manifest, the
+                        header/footer chrome, the "This link isn't active"
+                        page, and which of the three below to show),
+                        ShareGrid.tsx (the pieces as cards, with search and
+                        "Load more"; also shareItemLabel, reused by
+                        SharePiece), SharePiece.tsx (one piece: its own
+                        read-only lightbox, and its allowed facts grouped
+                        the way item-facts.tsx groups a signed-in item's),
+                        ShareChecklist.tsx (a checklist link's filled slots)
   components/         shared pieces
     item-hero.tsx       the item page's top: photo, title, grade, value
     item-facts.tsx      the rest of an item's fields, grouped, empty ones
@@ -118,10 +128,14 @@ src/
                         switches restore off
 e2e/                  Playwright tests: auth.spec.ts (sign-in, sign-out, the
                        confirm dialog, the Account section, none of it
-                       touching the shared session) and smoke.spec.ts (the
-                       rest, its last two tests changing and reverting the
-                       admin's password and username); the sign-in global
-                       setup (global-setup.ts)
+                       touching the shared session), share.spec.ts (a
+                       collection link end to end: create it, open it in a
+                       fresh, storage-state-free browser context, see a
+                       piece and no price, revoke it, see the inactive
+                       page), and smoke.spec.ts (the rest, its last two
+                       tests changing and reverting the admin's password
+                       and username); the sign-in global setup
+                       (global-setup.ts)
 playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
@@ -131,12 +145,14 @@ page live in the URL, a Metal select beside Type among them since v0.31.0),
 `/stack` (fine ounces by metal, and, since v0.31.0, a "Left out" card
 listing owned precious-metal pieces missing a weight or fineness), `/report`,
 `/checklists`, `/import`, `/trash`, and `/settings/:section` (`general`,
-`pricing`, `backups`, `alerts`, `account`, `about`; `/settings` redirects to
-`/settings/general`, and an unknown section falls back to it too).
-`/dashboard` redirects to `/`.
+`pricing`, `backups`, `alerts`, `sharing`, `account`, `about`; `/settings`
+redirects to `/settings/general`, and an unknown section falls back to it
+too). `/dashboard` redirects to `/`.
 `/setup` and
 `/login` render outside the app shell (brand only, no nav); everything else
-is gated on being signed in, see "Sign-in" below.
+is gated on being signed in, see "Sign-in" below. `/s/:token` and
+`/s/:token/items/:itemId` (the share view, v0.32.0) render outside the gate
+entirely, see "Sharing" below.
 
 ## Sign-in (v0.30.0)
 
@@ -188,7 +204,72 @@ frontend's job is to make that unsurprising rather than working around it.
   `FailedSignInsNotice` reads and clears it once, right after the
   navigation that follows sign-in, and is dismissible.
 
-## Styling conventions
+## Sharing (v0.32.0)
+
+A share link opens a read-only page for the collection, a set, or a
+checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
+
+- **The share routes sit outside the gate, entirely.** `App.tsx`'s `App`
+  checks `location.pathname` before rendering `AuthProvider` at all: a path
+  under `/s/` renders `pages/share/SharePage.tsx`'s routes directly, so the
+  boot check (`GET /api/auth/state`, `GET /api/auth/me`) never runs and a
+  dying session elsewhere in the app can never redirect a share visitor to
+  `/login`.
+- **Every call the share page makes is `raw`** (`api.shareManifest`,
+  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`), and
+  `SharePage` treats any failed `shareManifest` call the same way: a bad
+  or revoked token is `404`, but sharing switched off answers `401`
+  instead (stage 4, finding 3, so an anonymous scan of `/api/share/`
+  while it's off costs the gate no lookup); the page's `.catch()` doesn't
+  read the status, so both, and a `429` from the per-address throttle,
+  land on the same "This link isn't active" page. None of this must ever
+  reach `req()`'s global 401 handler (which isn't even registered here,
+  `AuthProvider` not being mounted, but `raw` keeps the calls correct
+  regardless of that). `sharePhotoUrl(token, photoId, variant)` builds the
+  photo URL directly; it isn't a `req()` call at all, the same as
+  `photoUrl`.
+- **The page never links into the signed-in app.** No `/items/...`,
+  `/settings/...`, or sign-in link appears anywhere on a share page; the
+  footer's "Shared from Cabinet" names the app without linking anywhere.
+- **`<meta name="robots" content="noindex">`** is added to `document.head`
+  while `SharePage` is mounted and removed on unmount; nginx repeats the
+  intent server-side with `X-Robots-Tag` on `/s/` (`proxy/nginx.conf`).
+  `robots.txt` disallows `/api/` but not `/s/` (stage 4, finding 7): a
+  crawler has to fetch a share page to see its `noindex` tag, so blocking
+  the path outright would have hidden the tag from the crawler that's
+  supposed to read it. A share link's token is kept out of nginx's own
+  access log regardless: a `map`/`log_format` at the top of that file
+  rewrites `/api/share/<token>...` and `/s/<token>...` to `.../[token]...`
+  before logging, the same redaction the backend already does for its own
+  `uvicorn.access` log. nginx's error log isn't redacted (an upstream
+  error can quote the path, token included); see
+  [deployment.md](../docs/deployment.md#sharing-and-the-forward-auth-exemption).
+- **A `ShareItem`'s toggle-gated keys are absent, not null, when the
+  link's own `show_*` is off** (`api/types/share.ts`): `SharePiece.tsx`
+  reads `item.grade_label === undefined` (and the same for `tags` and
+  `notes`) to tell "not shown by this link" apart from "shown, but empty,"
+  which is why a share never displays an empty grade or tags section on a
+  piece with none. `cert_number` is its own toggle (`show_certs`, stage 4,
+  finding 10) and is checked the same way, independently of
+  `grade_label`: a link can show the certification service
+  (`cert_service`, still under `show_grades`) without the cert number, or
+  neither, or both.
+- **Settings → Sharing** (`pages/settings/Sharing.tsx`) is a seventh
+  routed section, after Alerts & metrics: the `share_enabled` switch,
+  the links table (Rename, Options, Regenerate, Revoke, each an admin
+  call through `req()`, so the fresh ones open the confirm-password
+  dialog by themselves; `PATCH /api/share-links/{id}` became fresh in
+  stage 4, finding 9, so Options and Rename both need nothing extra), and
+  a create form. A link's URL is shown once, the same show-once-with-Copy
+  pattern as a new API token in `components/account.tsx`. The six
+  `show_*` toggles live in one `OPTIONS` array in `Sharing.tsx`, shared by
+  the create form and a row's Options panel; `show_values` and
+  `show_certs` each carry a one-line reason beyond their label (composition,
+  weight, and fineness always show regardless, so a melt value already
+  follows without the values toggle; a cert number is a lookup key into
+  public auction records, and a photo of a slab label or a stamped bar
+  shows its number whatever the toggle says), shown as a hover title and
+  as small text under the toggle list.
 
 - **Design tokens.** Colours and the typeface are CSS variables on `:root`
   at the top of `styles.css`, with the dark values under
@@ -242,6 +323,24 @@ username and putting each back (see "Sign-in tests" below for why those two
 are last). The tests run against a running stack (`docker compose up`), not
 the dev server, and they create and delete their own items; the stack test
 asserts on ounces and cost only, never on a live spot price.
+
+`e2e/share.spec.ts` drives Settings → Sharing end to end: switch sharing
+on, create a collection link for an item that carries a cert service and
+number, open its URL in a brand-new browser context that carries none of
+the suite's storage state (`browser.newContext()`, not a signed-out
+`storageState` like `auth.spec.ts`'s, since the point is a context that
+never had a session to begin with), and check the share's name in the
+header, at least one piece card, no link back into the signed-in app, and
+no price anywhere on the page (the link's `show_values` defaults off);
+open a piece's own page and check it shows the cert service but not the
+cert number (`show_certs` defaults off too); then, back in the signed-in
+page, turn `show_certs` on through the row's Options panel (a `PATCH`,
+fresh since stage 4) and check the reload picks up the cert number; revoke
+the link and see the signed-out context's reload show "This link isn't
+active."; and a second test checks the create form's 409 message while
+sharing is off. Its own copies of `withPasswordConfirm` and `deleteForGood`
+match `smoke.spec.ts`'s, the convention every spec here follows rather than
+importing a shared helper module.
 
 `e2e/auth.spec.ts` drives the sign-in side on its own: the sign-in page and
 `?next=`, a wrong password then the right one and the failed-attempts
