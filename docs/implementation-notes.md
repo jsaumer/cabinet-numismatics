@@ -1606,6 +1606,400 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   an adapter-driven estimate. The caller commits; `melt_on_save` itself
   never does, matching every other `pricing` write helper.
 
+## Share and showcase view (v0.32.0)
+
+Roadmap Phase 7, P9, built to [SPEC_0320](specs/SPEC_0320.md) on
+`p9-share` (PR 25), stage by stage. Stage 1 is the backend: migration
+`0022` (`share_links`), `services/share.py`, `routers/share.py` (public),
+`routers/share_links.py` (admin), the `share_enabled` setting, the `share`
+permission class. Rules a later change has to respect:
+
+- **The item view is an allowlist, and a test pins it.** `share.item_view`
+  names every key a shared piece can carry (`FIELDS`, `GRADE_FIELDS`, and
+  the six toggles' keys); `tests/test_share.py` builds a piece with every
+  field filled (a cost, a storage location, custom fields, a serial, a
+  document, an estimate) and checks the view's keys equal the expected set
+  exactly, with everything off, everything on, and each toggle alone. A new
+  item column never reaches a share unless it is added to `FIELDS` and the
+  test in the same change; never add a cost, a fee, a gain, an acquisition
+  or sale field, a location, a document, a serial, custom fields, the
+  population, wish-list fields, spot at purchase, the import origin, or a
+  timestamp. `value` is the one money field, behind `show_values`.
+- **`share` is a permission class, and the gate knows its prefix.**
+  While sharing is on (stage 4: never while it is off, see below),
+  `gate.ANONYMOUS_PREFIXES` (`/api/share/`) passes a `GET` or `HEAD` before
+  any credential is looked up (after the `%` rule and maintenance), so a
+  cookie never moves `last_seen_at`, a Cabinet token is never validated (an
+  invalid one isn't 401 there), and `Sec-Fetch-Site` isn't checked;
+  `permissions.check` returns for `share` without reading `who`. Every
+  route under the prefix must declare `share`, and no other route may live
+  under it: anything else there would be reachable anonymously. Any other
+  method under the prefix is handled as before (anonymous 401).
+  `test_gate.py` knows the class (`shared()`, the appendix parser, the
+  matrices), and `test_share_routes_need_no_credential_and_ignore_one`
+  replaces `gate._lookup` with one that fails.
+- **One 404.** `share.resolve` raises one `NotFound` for sharing off, a
+  token not matching `TOKEN_RE`, no row with its hash, or a target gone;
+  the routes turn it, and anything outside the share (an item, a photo, a
+  checklist route on another kind, a bad variant or id), into
+  `404 {"detail": "Not found"}` with `X-Robots-Tag` and `no-store`. Path
+  ids are read as strings and parsed by hand so a malformed one is the same
+  404, not FastAPI's 422. How a failed lookup is throttled changed in
+  stage 4 (below): the link is resolved first, and only a failed lookup
+  reaches `throttle.share_failure`; a 404 inside a resolved share (a photo
+  file missing, a piece outside it) is never counted.
+- **No fetch on a public route.** Values resolve through
+  `pricing.resolve_display_value` with a `Converter(..., fetch=False)`
+  (`currency.get_rate(fetch=False)` reads the cache however old, never
+  requests or commits); an amount that can't convert is `null`. Anything
+  added to a share route must not call anything that can fetch (spot
+  prices, Numista, PCGS, exchange rates); the tests replace
+  `currency.fetch_rate` with one that fails.
+- **What a link covers** is computed on read, owned and untrashed only,
+  both said outright (`share._OWNED`), not left to the ORM listener: a set's
+  owned pieces; a checklist's filled slots' pieces through
+  `checklists.slot_views` (a match, else the piece linked to a ticked
+  slot); the collection. The checklist route returns filled slots only.
+- **Tokens are hashed.** `share_` plus `secrets.token_urlsafe(32)`; only
+  `token_hash` (SHA-256 hex) is stored; the URL (`{origin}/s/{token}`,
+  `share.link_origin` from stage 4) is in the create and regenerate answers
+  and nowhere else. Nothing logs a token; audit details carry the link's
+  name and kind, the target its id. Regenerate replaces the hash in place.
+  The token is in the path, and uvicorn's access log prints paths, so
+  `main._configure_logging` puts a filter on `uvicorn.access` that turns
+  `/api/share/<anything>` into `/api/share/[token]` (`share.redact`). A
+  new log line that prints a request path must go through it too. nginx's
+  own access log is stage 2's to handle, with the `/s/` location.
+- **Revoking deletes the row, and so does deleting the target.**
+  `share_links.set_id` and `checklist_id` (two columns where the spec had
+  one `target_id`, so each has a real foreign key) cascade from `sets` and
+  `checklists`. The table is in `public`, so backups carry it, with no key
+  into `cabinet_auth`; an in-app restore puts the live rows back (stage 4).
+- **The switch is `share_enabled`** (`app_settings.DEFAULTS`, false). Off:
+  every public route is the gate's 401 to a stranger (stage 4) and a
+  signed-in caller's 404, `POST /api/share-links` and regenerate answer
+  409 (`share.SWITCHED_OFF`), and rows stay. `PUT /api/settings` audits and
+  alerts `sharing_switched` only when the value actually changes; the
+  alert's title says on or off, so it goes through `alerts.event` directly
+  rather than `notify.TITLES`. The three link events are in
+  `notify.TITLES` and recorded through `events.record`.
+- The manifest counts an open (`opens`, `last_opened_at`) on each request
+  and commits; the other routes count nothing. Metrics:
+  `cabinet_share_links` and `cabinet_share_opens_total`; `cli status`
+  prints `Sharing: on|off, N links`.
+
+Stage 2, the frontend (23 September 2026): the share page
+(`frontend/src/pages/share/`: `SharePage.tsx`, `ShareGrid.tsx`,
+`SharePiece.tsx`, `ShareChecklist.tsx`), Settings → Sharing
+(`pages/settings/Sharing.tsx`), and nginx's `/s/` location, `robots.txt`,
+and log redaction. Rules this stage left:
+
+- **The share routes are checked for before `AuthProvider` is even
+  mounted**, not inside it: `App.tsx`'s `App` reads `location.pathname`
+  itself (it already renders inside `main.tsx`'s `BrowserRouter`, so
+  `useLocation()` works there) and, for a path under `/s/`, renders the
+  share routes directly, skipping `<AuthProvider>` entirely. That is what
+  guarantees the boot check never runs for a share visitor, not merely
+  that the share page's own calls are `raw`; a share link and the signed-in
+  app share no in-memory auth state at all.
+- **Every call `pages/share/*.tsx` makes is `raw`** (`api.shareManifest`,
+  `shareItems`, `shareItem`, `shareChecklist`), so a 404 (an inactive link)
+  is caught by `SharePage` itself, the same convention as the setup and
+  sign-in calls. `sharePhotoUrl` builds the photo URL directly, the same
+  shape as `photoUrl` but through `/api/share/{token}/photos/{id}/{variant}`
+  rather than `/photos/{key}`, since a share's photos are served by the API
+  (`routers/share.py`), never nginx's `/photos/` (which stays "session or
+  token").
+- **A `ShareItem`'s toggle-gated fields are absent, not `null`, when the
+  link's own `show_*` is off** (`api/types/share.ts` marks them optional):
+  `SharePiece.tsx` reads `item.grade_label === undefined` (and the same for
+  `tags`, `notes`) to tell "this link doesn't show grades" apart from
+  "shown, but this piece has none," which is why a share page never renders
+  an empty Grade & certification, Tags, or Notes group.
+- **`try_files`'s fallback to `/index.html` is an internal redirect that
+  gets re-matched against `location /`, not served by the location that
+  redirected**, so `location /s/`'s own `add_header`s never reached the
+  response when they were set directly in it: found by testing the built
+  image with real nginx, not by reading the config alone. The fix
+  (`proxy/nginx.conf`) is a named location, `@share_index`, that `/s/`
+  falls back to instead: `auth_request off` and every `add_header` (the
+  headers include, the repeated CSP from `location /`, `X-Robots-Tag`, and
+  `Referrer-Policy: no-referrer`) live there, since that is the location
+  that actually serves the fallback file. `auth_request off` has to be
+  repeated in `@share_index` too, for the same reason: a named location
+  doesn't inherit a directive set only in the location that dispatched to
+  it, only from the enclosing server or http context, where `auth_request
+  /_auth/photo` is still on.
+- **nginx sends both `Referrer-Policy` headers rather than merging or
+  dropping one** (confirmed against real nginx): `@share_index` includes
+  `cabinet-headers.conf` (which sets `strict-origin-when-cross-origin`,
+  among the other three headers every page gets) and then adds its own
+  `Referrer-Policy: no-referrer` afterwards. Both reach the browser; the
+  Referrer Policy spec has a browser keep the last valid one it sees, which
+  is what makes this an override rather than a conflict. A location that
+  wants to change a `cabinet-headers.conf` value some other way should
+  expect the same two-header result, not assume `add_header` replaces one
+  of the same name.
+- **The access log redacts a share token too**, alongside the backend's
+  existing `uvicorn.access` filter: a `map`/`log_format` at the top of
+  `nginx.conf` (outside any `server` block, since the file is included
+  inside the image's `http {}`, see `frontend/Dockerfile`) rewrites
+  `/api/share/<token>...` and `/s/<token>...` to `.../[token]...`, and each
+  `server` block opts in with `access_log ... cabinet;`. Confirmed by
+  reading the container's own access log during testing, not just the
+  config.
+- **`/robots.txt`** is a `location = /robots.txt { auth_request off; ...
+  return 200 "..."; }`, disallowing `/s/` and `/api/`; it needs no backend
+  route and no static file in `frontend/public`.
+- Settings → Sharing follows the section-per-file convention from v0.30.2:
+  `pages/settings/Sharing.tsx`, key `sharing`, after Alerts & metrics in
+  `SETTINGS_SECTIONS` (`pages/settings/shared.tsx`) and
+  `SECTION_COMPONENTS` (`pages/Settings.tsx`). The create form's 409 while
+  sharing is off is left to the backend's message (`share.SWITCHED_OFF`)
+  rather than disabled client-side, so the same "Switch sharing on in
+  Settings first" text the API route documents is what the owner sees.
+
+Stage 3, proof and paperwork (23 September 2026): `frontend/e2e/share.spec.ts`,
+a `share` phase in `scripts/ci/stack-smoke.sh` (and its own CI step, after
+`photos`), a `share` mode in `docs/screenshots/capture.cjs`, and the docs
+pass that closed out this release. Rules this stage left:
+
+- **The two locations that set the app's CSP share one include**
+  (`proxy/cabinet-csp.conf`, copied into the image alongside
+  `cabinet-proxy.conf` and `cabinet-headers.conf`): `location /` and
+  `@share_index` both need it (a sibling location's `add_header` is never
+  inherited), and a hand-copied policy string drifting between the two was
+  a standing risk this removes. A new location that needs the app's CSP
+  (never `/api/`, which documents keep their own stricter policy for)
+  includes this file rather than repeating the string a third time.
+- **A forward-auth proxy kept in front must exempt the share paths.**
+  `/s/`, `/api/share/`, and `/robots.txt` are meant to open for anyone
+  holding a link, without signing in and without reaching Cabinet's own
+  gate; an authenticating reverse proxy in front of Cabinet (recommended
+  as a second door until v0.33.0) guards everything behind it by default,
+  so it blocks a share link too unless those paths are excluded from its
+  own authentication check. This is a deployment note, not application
+  behaviour Cabinet can enforce, but it is the rule a later change to
+  `docs/deployment.md`'s Traefik + Authentik example, or to the set of
+  paths the share view answers on, has to keep true; see
+  [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
+- **The Playwright share test drives a second, storage-state-free browser
+  context** (`browser.newContext()`, not the suite's shared
+  `storageState`) to open the link the way an actual stranger would: no
+  cookies, no session, nothing carried over from the signed-in page that
+  created it. The smoke script's `share` phase covers the same ground at
+  the API layer (the allowlist, the photo route against `/photos/`, the
+  session-is-ignored rule, the throttled wrong-token case) so both layers
+  are checked, not just the UI.
+
+Stage 4, the security review's findings (23 September 2026,
+[SPEC_0320](specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)
+and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
+
+- **No photo is stored with its metadata.** `photos.save_photo` writes
+  `photos.clean_bytes(img, fmt)`, never the bytes that arrived: the image
+  from `open_validated` (already turned upright by `exif_transpose`), its
+  `info` cut down to `KEEP_INFO` (`icc_profile`, `transparency`) so nothing
+  else can reach an encoder by default, saved with `exif=b""` and
+  `xmp=b""` (JPEG and WebP at quality 95, PNG with no `pnginfo`). Upload,
+  URL import, the in-browser editor's `PUT /api/photos/{id}/image`, and an
+  import's photos all go through `save_photo`; a new path that writes to
+  `PHOTO_DIR` must too. Stored width and height are the upright image's,
+  as before. `carries_metadata` is a whitelist (`HARMLESS_INFO`): anything
+  Pillow reports outside it counts as metadata, and everything
+  `clean_bytes` writes is inside it. (Stage 5 found that check missed
+  segments and chunks Pillow keeps out of `info`; see below.) Documents are untouched (they are never shared, and a receipt's bytes are
+  the record).
+- **The one-time pass and its marker.** `photos.strip_existing()` walks
+  `PHOTO_DIR` with `os.walk(followlinks=False)`, skipping dot-folders (a
+  restore's `.restore-*`), dot-files, and symlinks, rewrites a file
+  (stage 5: every original and thumbnail, not only those that seem to
+  carry metadata) to `.strip-<hex>.<ext>` beside it and `os.replace`s it in (skipped if the
+  original was deleted meanwhile), and never raises. It writes the marker
+  `photos_clean` (`archive_keys.state_dir()`, beside `auth_claimed`) only
+  when no rewrite failed, so the next start tries again; a file Pillow
+  can't open is counted as unreadable and doesn't hold the marker back. A
+  leftover `.strip-*` older than ten minutes is deleted. One pass at a time
+  per process (`_pass_lock`). Callers: startup (`main.lifespan`, whatever
+  `AUTO_MIGRATE` says from stage 5, through `clean_in_background`,
+  which skips when the marker exists), an in-app restore that brings
+  `photos.tar.gz` (`photos.remove_marker()` before the database step, so a
+  restart after it runs a pass too; `clean_in_background(force=True)` after
+  the swap; `recover()` removes the marker when it rolls a swap forward),
+  and `python -m app.cli strip-photo-metadata`, which `restore.sh` runs
+  from stage 5. Tests
+  patch `photos._spawn` to run inline (test_restore's `calls` fixture
+  counts the passes).
+- **The sharing switch lives in memory.** `share.enabled()` reads a module
+  flag; `None` means not loaded, and `share.load(db)` reads
+  `share_enabled` (an absent `app_settings` table reads as off) and sets
+  it. Who sets or reloads it: startup after migrations (`main._load_sharing`),
+  the gate lazily when it is `None` (`gate._sharing_on`, in a worker thread
+  through the same `get_db` provider as `_lookup`, a failure read as off
+  and not remembered), `PUT /api/settings` after its commit (every time,
+  not only on a change), `GET /api/settings` (so opening Settings after
+  `restore.sh` corrects it), every hourly tick (`scheduled._hourly`, second,
+  after the secrets), and the restore's `_finish` (`restore._reload_sharing`,
+  falling back to `reset_memory`). conftest calls `share.reset_memory()`
+  before every test. **A new path that writes `share_enabled` has to set
+  the memory too**, or the gate keeps the old answer until the next tick.
+- **Off, the gate has no share rule.** `AuthGate` passes the prefix only
+  when `_sharing_on(scope)` is true; off, the request goes on like any
+  other (an anonymous one is 401, with no database read and no throttle
+  work), and a signed-in caller reaches the route and gets `resolve`'s 404
+  (counted, which only a signed-in caller can reach). `test_gate.py`'s
+  anonymous matrix runs both ways (`sharing` off expects 401 on every share
+  route, on expects anything but).
+- **Resolve first, then the throttle, in its own map.**
+  `routers/share._answer` calls `share.resolve` before anything else; only
+  a `NotFound` there calls `throttle.share_failure(address)`, which returns
+  the wait (answered 429 with `Retry-After`, nothing counted) when the
+  address is inside its wait or the global count is at
+  `SHARE_GLOBAL_PER_MINUTE` (300, failures only, all addresses, a sliding
+  minute), and otherwise counts the failure and returns 0 (answered 404).
+  Share buckets live in `throttle._shares`, bounded by `MAX_KEYS` and
+  evicting only among themselves; `_entries` (the `user:`, `addr:`, and
+  `setup:` buckets) is never touched by a share failure.
+  `throttle.share_address` keys an IPv6 address by its /64 (an IPv4-mapped
+  one by the IPv4 address) and anything unparseable as given; `wait`,
+  `fail`, and `succeed` with kind `share` use the same keying and map. The
+  sign-in functions are unchanged. `test_share_failures_never_push_out_sign_in_buckets`
+  is the review's eviction script turned round.
+- **A restore keeps the live links and switch.** `restore._run` takes
+  `_snapshot_sharing(engine)` right after the safety backup (rows as JSON:
+  hashes, never a token, plus each set or checklist target's name) and
+  carries it in the journal (`sharing_snapshot`, in the `database` and
+  `swapping` phases), then after the migrations `_put_back_sharing` reads
+  what the archive held (for `differed`, `archive_links`,
+  `archive_enabled`), deletes every row, `expunge_all()`s (the snapshot
+  reuses the archive's ids), and inserts the snapshot, keeping a set or
+  checklist link only when a target with the same id **and name** exists
+  (else `links_dropped`: ids are the archive's now, and a link must never
+  open a different set), then writes `share_enabled`. Tables are checked
+  first (`has_table`), so an archive whose migration failed, or one older
+  than `app_settings`, never raises there. Any failure switches sharing off
+  and records `error`. The result is the outcome's `sharing`, is audited as
+  `restore_sharing` (under the restore's actor, every run), and adds a
+  sentence to the `restore_finished` alert only when `differed` or a link
+  was dropped (`_sharing_sentence`). `recover()` pops the snapshot from the
+  journal (never into `restore_last.json`); from stage 5 it leaves it in
+  `pending_sharing.json` for after the migrations rather than putting it
+  back itself (below). Running the put-back twice gives the same rows.
+- **`PATCH /api/share-links/{id}` is `admin, fresh`**, audited as
+  `share_link_changed` only when something changed (`detail.changed`: each
+  option's new value, and `renamed_from` on a rename) and alerted
+  (`notify.TITLES`) only when `show_notes`, `show_values`, or `show_certs`
+  goes from off to on (`share_links.WIDENING`).
+- **`show_certs`** (migration `0022` amended in place, nothing released
+  carried it): `cert_number` left `GRADE_FIELDS` and is added by
+  `item_view` only when it is on; `cert_service` stays with `show_grades`.
+- **The link's origin** is `share.link_origin(request Origin)`: the
+  request's `Origin` when it normalises (`config.normalize_origin`) to one
+  of `PUBLIC_ORIGINS`, else the first `https://` entry, else the first.
+  `share.link_url(token, request)` takes the request for that.
+- **The photo response has no file time.** `routers/share._PhotoFile`
+  overrides `FileResponse.set_stat_headers` to set only `content-length`,
+  so neither `Last-Modified` nor `ETag` is sent (both derive from the
+  file's mtime, the upload time). `offset` on the items route is at most
+  `MAX_OFFSET` (1,000,000; 422 past it), since a value past bigint range
+  was a Postgres error.
+
+Stage 5, the second review's findings (23 September 2026,
+[the review](specs/SPEC_0320-review-opus-2.md), and SPEC_0320's build log).
+Rules it left:
+
+- **The startup pass doesn't wait for migrations.** `main.lifespan` calls
+  `photos.clean_in_background()` outside the `AUTO_MIGRATE` block: the pass
+  touches files only, so an install that migrates by hand is cleaned too.
+  Every app start in the tests would then start it on a thread, so
+  conftest's autouse `_no_background_photo_pass` makes `photos._spawn` a
+  no-op; a test that wants the pass patches `_spawn` itself.
+- **The share view never trusts the disk before the marker.** While
+  `photos.marker_exists()` is false, `routers/share.share_photo` reads the
+  file and answers `photos.cleaned_file(path)` (`open_validated`, then
+  `clean_bytes` at `QUALITY`, or `THUMB_QUALITY` for a `*_thumb.jpg`) from
+  memory as a plain `Response` with `PHOTO_HEADERS` and the image's own
+  media type; no `Last-Modified`, no `ETag`, no ranges, no cache (the
+  window is one pass long). A file that can't be decoded raises
+  `ValueError`, answered as the one 404. With the marker, `_PhotoFile`
+  serves the file as before. Anything that removes the marker
+  (`remove_marker`, and `restore.sh` through it) switches this on, which
+  is the point: remove it before photos of unknown cleanliness arrive.
+- **The pass rewrites everything, once.** `strip_existing` walks originals
+  and thumbnails (`_stored_files`) and re-encodes each whatever it seems to
+  carry, since no check is trusted to find everything; the marker is what
+  stops a repeat, and the container command always runs the whole pass
+  (each run re-encodes JPEGs once more, which is why nothing calls it on a
+  schedule). A file in a format Cabinet doesn't store is counted as
+  unreadable and left alone. A thumbnail is re-encoded at quality 85 and,
+  like a new one from `save_photo`, with its `info` emptied first, since
+  Pillow's JPEG encoder takes `comment` from `im.info` by default; that is
+  how a thumbnail made before v0.32.0 came to carry the source's comment.
+- **`carries_metadata(img, data)` is the tests' oracle, not the pass's.**
+  Besides the `info` whitelist it reads a JPEG's `applist` (anything but
+  APP0 `JFIF`, APP2 `ICC_PROFILE`, APP14 `Adobe` counts, and so does a
+  `COM`), a PNG's text (any keyword, so `timestamp` or `dpi` as a text
+  keyword counts) and private chunks, and a walk of the PNG's own chunks
+  (`_png_chunks`: anything outside `HARMLESS_PNG`, bytes after `IEND`
+  included), because Pillow skips public chunks it can't read, such as
+  `tIME`. Pass the file's bytes for a PNG opened from memory; without them
+  and without a filename it answers true. Keep `clean_bytes`' output inside
+  what it accepts.
+- **A shared photo ignores `If-Range`.** `_PhotoFile._should_use_range`
+  returns false: with no `Last-Modified` or `ETag` there is nothing for it
+  to match, and Starlette's own check reads those headers and raised
+  `KeyError`. A plain `Range` still gets 206 from disk.
+- **Once the database is the archive's, the put-back always runs.** In
+  `restore._run`, everything after `database_restored = True` sits in a
+  `try` whose `finally` calls `put_sharing_back()`, which runs once: after
+  the migrations normally, or on the way out when the swapping journal
+  write, the secrets check, or anything else raised. Keep new steps after
+  the database inside that `try`.
+- **A failed put-back empties the table.** `_put_back_sharing`'s failure
+  path calls `_switch_sharing_off(engine)`: in a transaction of its own it
+  deletes every `share_links` row (they are the archive's; the put-back's
+  transaction rolled back) and writes `share_enabled` false, then
+  `share.set_enabled(False)` whatever happened. `_reload_sharing(engine,
+  sharing)` in `_finish` keeps memory off when `sharing` has an `error`
+  instead of reading the database, which may still hold the archive's
+  switch if the delete failed too.
+- **Links left to put back live in `pending_sharing.json`** beside the
+  journal (`restore._pending_path()`), as `{archive, at, snapshot}`.
+  `recover()` writes it (`_keep_snapshot`) as soon as it knows the
+  database is the archive's (a replaced `database` phase, or `swapping`),
+  before rolling the swap forward, and never puts links back itself: an
+  archive from before `0022` has no `share_links` until the startup
+  migrations run. If the file can't be written it enters maintenance and
+  returns with the journal kept, like an unreachable database. A run
+  whose put-back failed writes it too, and a run that starts while it is
+  there snapshots from it (`_pending_snapshot()`), not from the table.
+  `restore.apply_pending_sharing(engine)` puts it back, under
+  `_pending_lock`: in `main.lifespan` right after `upgrade_to_head` (or at
+  the same point with `AUTO_MIGRATE` off), first in every hourly tick
+  (before `share.load`), and in `GET /api/settings` (before its load). It
+  audits as `restore_sharing` (actor `system`), merges the result into
+  `restore_last.json`'s `sharing`, and deletes the file only on success;
+  on an error the file stays and `_put_back_sharing` has already switched
+  sharing off, so a switch-on by the owner meanwhile lasts until the next
+  retry. An unreadable file switches sharing off and stays until someone
+  removes it. It never raises and is a stat when there is no file.
+- **A load never overwrites a newer switch.** `share._generation` moves
+  on every `set_enabled` and `reset_memory`; `share.load` reads it before
+  its database read and writes memory only if it hasn't moved, otherwise
+  returning what memory holds. `set_enabled` is for a value that is
+  authoritative (the settings `PUT` after its commit, a failed put-back);
+  anything that only rereads the database calls `load`, which is why
+  `GET /api/settings` now does. The switch is per process, so the docs
+  now say to run one backend replica for it as well as for the loops.
+- **`restore.sh` handles photos and says what it can't.** With an
+  archive that brings photos it removes the marker (`python -c` through
+  `photos.remove_marker()`, so the path stays the service's) before
+  deleting and unpacking the files, then runs
+  `python -m app.cli strip-photo-metadata` (a failure is reported, not
+  fatal), and it always ends by printing that the archive's share links
+  and switch are live. The Swarm steps in backup-restore.md carry the same
+  two lines.
+
 ## Releases
 
 

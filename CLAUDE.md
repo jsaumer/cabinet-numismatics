@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.31.0, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.32.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -25,8 +25,9 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 (OIDC single
-  sign-on and a trusted-header mode) is next. Every design decision was
+  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 shipped the share
+  view (P9); v0.33.0 (OIDC single sign-on and a trusted-header mode) is
+  next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -116,8 +117,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.31.0: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0021` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.32.0: roadmap Phases 0–5.8 are complete, migrations
+`0001`–`0022` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
@@ -264,10 +265,40 @@ so a new bullion piece's melt estimate comes from the cached spot price
 only; and Numista's bars and rounds are read by `object_type` (id 36, or
 the name Bars/Rounds/Ingots/Bullion), never by a word in the title. See
 "Bars and rounds" in the implementation notes.
-**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
-trusted-header mode for the same admin, plus two-factor sign-in) as
-v0.32.0; then P9 a share view (the whole feature is an admin setting, off
-by default); labels, a phone app, and more accounts are optional. Research
+P9, the share and showcase view, shipped in v0.32.0 (`docs/specs/SPEC_0320.md`,
+built 23 September 2026 as PR 25 on `p9-share`; migration `0022`,
+`share_links`): a read-only link to the collection, a set, or a checklist,
+opened without signing in, the whole feature an admin setting off by
+default. The rules that bite: `share` is a permission class of its own, and
+the gate lets a `GET`/`HEAD` under its `/api/share/` prefix through before
+any credential is looked up, so a session or a token on the request changes
+nothing; what a piece shows is an allowlist (`services/share.py`'s
+`FIELDS`/`GRADE_FIELDS` plus the six `show_*` toggles) pinned by a test,
+never a cost, gain, storage location, document, serial number, or custom
+field; while sharing is off the gate has no share rule at all (an anonymous
+caller gets 401 like any unlisted path, from the in-memory switch
+`share.enabled()`, no database read), and while on every failure (a
+malformed, unknown, or revoked token, a target gone) is the same one `404`,
+with the link resolved before the throttle is consulted, so a live link is
+never 429'd and failed lookups live in a throttle map of their own; a public
+route never makes a network call (values convert at cached rates only);
+every stored photo is re-encoded without metadata (`photos.clean_bytes`,
+the one-time `strip_existing` pass over originals and thumbnails, marker
+`photos_clean`, and until that marker exists the share photo route cleans
+each file on the fly); an in-app restore keeps the live `share_links` and
+`share_enabled` over the archive's (a restore stopped mid-way leaves
+`pending_sharing.json` on the state volume, applied after migrations); and the token is hashed (never stored plain) and redacted from
+both logs (the backend's `uvicorn.access` filter and nginx's own
+`access_log` rewrite the path to `[token]`). The security review that set
+those rules is `docs/specs/SPEC_0320-review-opus.md`. An authenticating
+reverse proxy kept in front must
+exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
+blocks the app's own share links; see "Share and showcase view" in the
+implementation notes and
+[deployment.md](docs/deployment.md#sharing-and-the-forward-auth-exemption).
+**Next, in order:** P8 A2, single sign-on (OpenID
+Connect and a trusted-header mode for the same admin, plus two-factor
+sign-in) as v0.33.0; labels, a phone app, and more accounts are optional. Research
 and propose each before building, as always. v1.0.0 follows P8 and the
 checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
 was demoted

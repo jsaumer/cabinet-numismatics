@@ -459,6 +459,35 @@ class ChecklistSlot(Base):
     checklist: Mapped[Checklist] = relationship(back_populates="slots")
 
 
+class ShareLink(Base):
+    """A read-only public link to the collection, a set, or a checklist
+    (v0.32.0, services/share.py). Only the token's SHA-256 is stored.
+    Revoking deletes the row, and so does deleting its set or checklist."""
+
+    __tablename__ = "share_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    kind: Mapped[str] = mapped_column(String(10))  # collection | set | checklist
+    set_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sets.id", ondelete="CASCADE"), index=True
+    )
+    checklist_id: Mapped[int | None] = mapped_column(
+        ForeignKey("checklists.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(100))  # the shared page's title
+    show_photos: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_grades: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_tags: Mapped[bool] = mapped_column(Boolean, default=True)
+    show_notes: Mapped[bool] = mapped_column(Boolean, default=False)
+    show_values: Mapped[bool] = mapped_column(Boolean, default=False)
+    show_certs: Mapped[bool] = mapped_column(Boolean, default=False)  # cert_number only
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str] = mapped_column(String(100))  # a username, no key into cabinet_auth
+    last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    opens: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class AppSetting(Base):
     """Key/value application settings (display currency, source keys, toggles).
     Values are JSON so strings, numbers, and booleans store uniformly."""

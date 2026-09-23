@@ -32,13 +32,17 @@ from app.routers import (
     reference,
     restore,
     settings,
+    share,
+    share_links,
     stack,
     stats,
     trash,
 )
 from app.services import archive_keys, scheduled, schema
 from app.services import backup as backups
+from app.services import photos as photo_files
 from app.services import restore as restores
+from app.services import share as share_service
 from app.services.maintenance import MaintenanceMiddleware
 
 logger = logging.getLogger(__name__)
@@ -58,6 +62,18 @@ def _configure_logging() -> None:
             named.addHandler(handler)
             named.setLevel(logging.INFO)
             named.propagate = False
+    # uvicorn's access log prints each path, and a share link's is its token.
+    logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
+
+
+class _RedactShareTokens(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        from app.services.share import redact
+
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
+        record.msg = redact(record.msg) if isinstance(record.msg, str) else record.msg
+        return True
 
 
 _configure_logging()
@@ -94,6 +110,13 @@ async def _hourly_loop() -> None:
         except Exception:
             logger.exception("Hourly task failed")
         await asyncio.sleep(3600)
+
+
+def _load_sharing(db) -> None:
+    try:
+        share_service.load(db)
+    except Exception:  # the gate loads it on first use instead
+        logger.exception("Could not read whether sharing is on")
 
 
 def _check_key_against_record(db) -> None:
@@ -171,6 +194,9 @@ async def lifespan(app: FastAPI):
         # Before serving anything: new code must not run against an old schema.
         # A failure raises here and stops startup rather than limping along.
         await asyncio.to_thread(schema.upgrade_to_head, engine)
+        # The share links a restore stopped mid-way left to put back, now
+        # that an archive from before 0022 has its share_links table.
+        await asyncio.to_thread(restores.apply_pending_sharing)
         # A secret stored as plain text is never used; clear and name it now
         # rather than at the first hourly tick. Tests (AUTO_MIGRATE=false)
         # have no database here; the hourly tick covers that setting too.
@@ -180,6 +206,17 @@ async def lifespan(app: FastAPI):
         # Claimed: the marker that makes SETUP_CODE inert. With migrations
         # off, the first setup-state request decides instead.
         await asyncio.to_thread(_in_session, auth_setup.prepare)
+        # The sharing switch, into memory before the first request asks.
+        await asyncio.to_thread(_in_session, _load_sharing)
+    else:
+        # The operator migrates by hand, so the schema is theirs to have
+        # brought up; with no pending file this reads nothing.
+        await asyncio.to_thread(restores.apply_pending_sharing)
+    # Photos stored before v0.32.0 may carry EXIF and GPS: cleaned once, in
+    # the background, so a large volume never holds up startup. No database
+    # needed, so whether migrations run here makes no difference.
+    if not photo_files.clean_in_background():
+        logger.info("Photo metadata: every stored photo is already clean")
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]
@@ -251,3 +288,5 @@ app.include_router(monitoring.router)
 app.include_router(restore.router)
 app.include_router(dashboard.router)
 app.include_router(stack.router)
+app.include_router(share.router)
+app.include_router(share_links.router)

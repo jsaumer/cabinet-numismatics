@@ -293,6 +293,35 @@ set (price-source keys, the alert webhook, the heartbeat URL), and any it
 holds that this deployment would clear because they aren't encrypted with
 its key.
 
+### Share links are kept too
+
+A share link is an access grant, so from v0.32.0 an in-app restore keeps
+the live ones the way it keeps sign-in data: the links (only their hashes,
+never a token) and the `share_enabled` switch are read after the safety
+backup and put back after the database step and the migrations, replacing
+whatever the archive held. A link you revoked or replaced because it leaked
+can't come back with last night's archive, or with the `-prerestore` safety
+archive when you undo a restore, and an archive from a Cabinet with sharing
+on can't switch it on here. A set or checklist link is put back only when
+the restored database holds a set or checklist with the same id and name;
+otherwise it could open a different one, so it is removed and counted. If
+the links can't be put back at all, every link in the table is removed (they
+are the archive's) and sharing is switched off, and the links from before
+are kept in `pending_sharing.json` on the state volume, to be tried again at
+the next start and every hour until they go back. The outcome's
+`sharing` says what happened (links kept, removed, what the archive held),
+it is audited as `restore_sharing`, and the restore's alert says so when the
+archive held other links or another switch.
+
+A backend stopped after the database step (a crash, a reboot) finishes the
+restore on its next start from the journal, and the links go the same way:
+the journal's copy is written to `pending_sharing.json` and put back right
+after the startup migrations (or where they would run, with `AUTO_MIGRATE`
+off), so an archive from before share links existed keeps them too, and
+the result is added to the outcome's `sharing`. If that file can't be
+written, the backend keeps the journal and stays in maintenance until a
+restart can, as it does when the database can't be reached.
+
 ### The private staging folder
 
 To be checked and restored, an archive is decrypted, and its database dump
@@ -335,10 +364,13 @@ directory (`.restore-staging`), as uploads only.
    webhook").
 4. **Migrations**, when the archive's revision is older than this build's:
    the collection chain only.
-5. **Finishing.** Only now, with the database committed, are the files
+5. **Share links.** The links and the sharing switch read after the
+   safety backup are put back (above).
+6. **Finishing.** Only now, with the database committed, are the files
    swapped in, by renames inside each volume: the current entries move to
    `.restore-old`, the unpacked ones move in, and `.restore-old` is deleted
-   once everything held.
+   once everything held. When the archive brought photos, a background pass
+   then removes any metadata they carry (below).
 
 The outcome (archive, counts, safety backup, or the error) is written to
 `restore_last.json` on the state volume beside the key file, not to the
@@ -388,7 +420,9 @@ for a retry; uploads left staged are cleared after a day.
   minute means the journal is kept and the backend stays in maintenance
   (health answers `restoring`) until a restart can decide, rather than serve
   an old database with new files. After the database step, a swap cut short
-  is finished. If putting files back ever failed, a non-empty `.restore-old` is
+  is finished. Whenever the archive's database is in place, the share links
+  to keep go into `pending_sharing.json` first and are put back after the
+  startup migrations (see "Share links are kept too"). If putting files back ever failed, a non-empty `.restore-old` is
   left in the volume and the next restore refuses until a person has moved
   those files back or removed the folder: it may hold the only copy.
 
@@ -476,6 +510,22 @@ A data-only archive restores the database and
 leaves the photos and documents as they are; an archive from before v0.19.0,
 which has no `documents.tar.gz`, leaves the documents as they are.
 
+Two things differ from the in-app restore (v0.32.0):
+
+- **Check Settings → Sharing afterwards**, as the script's last line says.
+  It restores the archive's `share_links` and `share_enabled` as they were
+  when it was made: a link revoked since is live again if the archive had
+  sharing on. The backend rereads the switch when Settings is opened, and
+  every hour. Revoke or regenerate anything that shouldn't be there.
+- **The photos' metadata** is removed by the script itself. Photos in an
+  archive made before v0.32.0 can carry EXIF, GPS included, so when the
+  archive brings photos the script removes the photo marker first (from
+  then the share view re-encodes each photo as it serves it) and, once the
+  files are back, runs `python -m app.cli strip-photo-metadata` in the
+  backend, which re-encodes every photo and thumbnail and writes the marker
+  again. If that step fails the script says so and carries on; run it again
+  by hand.
+
 Restoring into a *fresh* deployment works the same way: bring the stack up
 with your saved backup key (`BACKUP_KEY_FILE`), wait until `/api/health`
 reports `schema.status: "ok"` (the backend creates the schema on startup),
@@ -505,9 +555,11 @@ db=$(docker ps -q -f name=cabinet_db)
 # must print nothing: a dump holding sign-in data is not Cabinet's own
 docker exec -i "$db" pg_restore --list < restore/db.dump | grep -v '^;' | grep -w cabinet_auth
 docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema=public --clean --if-exists' < restore/db.dump
+docker exec "$backend" python -c 'from app.services import photos; photos.remove_marker()'
 docker exec "$backend" sh -c 'find /data/photos -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/photos' < restore/photos.tar.gz
 docker exec "$backend" sh -c 'chown -R "$(stat -c %u:%g /data/photos)" /data/photos'
+docker exec "$backend" python -m app.cli strip-photo-metadata
 docker exec "$backend" sh -c 'find /data/documents -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/documents' < restore/documents.tar.gz
 docker exec "$backend" sh -c 'chown -R "$(stat -c %u:%g /data/documents)" /data/documents'
@@ -517,7 +569,31 @@ These are the same commands the script runs; they are rehearsed under
 Compose, not on a multi-node Swarm. `docker exec` enters as root, which is
 why the `chown` lines hand the files back to the volume's owner (on NFS
 with root squash they may fail; fix the ownership on the server instead).
-Skip the photo and document steps for a data-only archive.
+Skip the photo and document steps for a data-only archive. Then check
+Settings → Sharing, as above.
+
+## Photo metadata
+
+From v0.32.0 no photo is stored with its metadata: an upload, a URL import,
+and an image saved from the in-browser editor are re-encoded with the
+orientation applied and every EXIF block (GPS, camera, dates), XMP, IPTC,
+comment, and PNG text chunk dropped; the colour profile stays. Thumbnails
+are written the same way. So new archives carry none either. Photos stored
+before that are cleaned once: on the first start after the upgrade (whether
+or not `AUTO_MIGRATE` is on; the pass needs no database) a background pass
+walks `PHOTO_DIR` and re-encodes every original and every thumbnail,
+whatever it seems to carry (to a hidden temporary name beside it, then
+renamed over it). Thumbnails are included because one made before v0.32.0
+could carry the source photo's JPEG comment. It logs how many it rewrote
+and writes the marker `photos_clean` beside `auth_claimed` on the state
+volume, so later starts skip it. It never stops startup: a file that can't
+be read is logged and left alone, and a file that can't be rewritten leaves
+the marker unwritten, so the next start tries again. Until the marker
+exists, the share view doesn't trust the disk: it re-encodes each photo
+without its metadata as it serves it. An in-app restore that brings photos
+removes the marker before the swap and runs the pass again after it;
+`restore.sh` removes the marker and runs the same pass through
+`python -m app.cli strip-photo-metadata` (above).
 
 ## Secrets in backups
 

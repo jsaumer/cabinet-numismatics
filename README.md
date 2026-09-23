@@ -6,27 +6,30 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.31.0-informational)
+![Version](https://img.shields.io/badge/version-0.32.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.31.0 released (bars and rounds; sign-in and encrypted backups since v0.30.0).**
+**Status: v0.32.0 released (the share view; sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
-scoped API tokens for scripts and dashboards. Single sign-on follows in
-v0.32.0, both before 1.0. What's next is the roadmap's Phase 7, a parity
+scoped API tokens for scripts and dashboards. The share view (a read-only
+link, off by default) is in v0.32.0; single sign-on follows in v0.33.0,
+before 1.0. What's next is the roadmap's Phase 7, a parity
 plan drawn from a survey of other collection tools, alongside what entering
 a real collection turns up rather than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
 > **Deploying it?** Cabinet has its own sign-in (one admin, claimed with a
 > setup code on first start), but still benefits from an authenticating
-> reverse proxy as a second door until single sign-on ships in v0.32.0. See
-> [docs/deployment.md](docs/deployment.md).
+> reverse proxy as a second door until single sign-on ships in v0.33.0. If
+> you keep one and turn sharing on, exempt `/s/`, `/api/share/`, and
+> `/robots.txt` from it, or a forward-auth proxy blocks your own share
+> links too. See [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
 
@@ -41,6 +44,7 @@ Dark is the default; the header toggle switches to light and remembers it.
 | [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
 | [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
 | [![Settings, dark](docs/screenshots/settings-general-dark.png)](docs/screenshots/settings-general-dark.png) | [![Settings, light](docs/screenshots/settings-general-light.png)](docs/screenshots/settings-general-light.png) |
+| [![A share link, dark](docs/screenshots/share-dark.png)](docs/screenshots/share-dark.png) | [![A share link, light](docs/screenshots/share-light.png)](docs/screenshots/share-light.png) |
 
 ## Features
 
@@ -121,7 +125,10 @@ Dark is the default; the header toggle switches to light and remembers it.
 - Multiple photos per item with angle designation (obverse/reverse/edge/
   other), a primary image, and reordering.
 - Uploads are validated as real JPEG/PNG/WebP images, EXIF orientation is
-  corrected, and thumbnails are generated automatically. Files live on a
+  corrected, and thumbnails are generated automatically. Every stored photo
+  is re-encoded with its EXIF, XMP, and IPTC metadata stripped (the colour
+  profile is kept), so nothing but the image itself, no camera, location,
+  or timestamp data, ever leaves the app, shared or not. Files live on a
   plain Docker volume served directly by nginx, with no object store.
 - Add photos by file picker, drag and drop, pasting an image, a URL, or a
   webcam or phone camera; view them full size in a zoomable lightbox; and
@@ -238,6 +245,15 @@ Dark is the default; the header toggle switches to light and remembers it.
   interactive API docs page; the OpenAPI schema stays at
   `/api/openapi.json` for a signed-in session. See
   [docs/security.md](docs/security.md).
+- **Share and showcase view**: a read-only link to the collection, a set, or
+  a checklist, opened without signing in. Off by default; while off, no
+  link can be made and every link answers not found. Each link chooses what
+  it shows (photos, grades, tags, notes, the estimated value, and the cert
+  number, each its own toggle); never a cost, gain, storage location,
+  document, serial number, or custom field. Shared photos carry no
+  metadata, the same as every stored photo. The token is shown once and
+  stored only as its hash, with a Regenerate for a lost link and a Revoke
+  that kills it at once. See [docs/security.md](docs/security.md).
 - **Hardened by default**: the backend container drops to an unprivileged
   user (`PUID`/`PGID`), the image installs a hash-pinned lockfile, nginx
   sets a Content-Security-Policy and the usual security headers, and a

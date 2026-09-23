@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { api, RestoreInspection, RestoreOutcome, RestoreStatus } from "../api";
+import { api, RestoreInspection, RestoreOutcome, RestoreSharing, RestoreStatus } from "../api";
 import { FileButton } from "./controls";
 
 // Settings → Backups → Restore: pick an archive, read the summary, type the
@@ -182,6 +182,21 @@ export function useRestore(onFinished: () => void): RestoreControl {
   };
 }
 
+/** What the restore did with the share links and switch (v0.32.0): the live
+ * ones are kept, and only a difference from the archive is worth a word. */
+function sharingSentence(sharing: RestoreSharing | null | undefined): string {
+  if (!sharing) return "";
+  if (sharing.error) return ` ${sharing.error}`;
+  let words = "";
+  if (sharing.differed) {
+    words += " The archive held other share links or another sharing switch; this Cabinet's were kept.";
+  }
+  if (sharing.links_dropped) {
+    words += ` ${sharing.links_dropped} share link(s) whose set or checklist the archive doesn't hold were removed.`;
+  }
+  return words;
+}
+
 const count = (value: number | null | undefined) =>
   value == null ? "–" : value.toLocaleString();
 
@@ -331,6 +346,7 @@ export function RestoreBlock({
           {outcome?.secrets_cleared?.length
             ? ` Cleared: ${outcome.secrets_cleared.join(", ")}. Enter them again in Settings.`
             : ""}
+          {sharingSentence(outcome?.sharing)}
         </p>
       )}
 

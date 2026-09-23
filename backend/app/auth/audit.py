@@ -51,6 +51,12 @@ EVENTS = frozenset(
         "backup_key_rotated",
         "backup_key_saved",
         "backup_deleted",
+        "sharing_switched",
+        "share_link_created",
+        "share_link_regenerated",
+        "share_link_revoked",
+        "share_link_changed",
+        "restore_sharing",
     }
 )
 FAILED = "sign_in_failed"

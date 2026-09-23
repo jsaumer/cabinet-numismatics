@@ -10,6 +10,101 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-23
+
+Roadmap Phase 7, P9: the share and showcase view
+([SPEC_0320](docs/specs/SPEC_0320.md)).
+
+### Added
+- **Share links** (API): a read-only link to the collection, a set, or a
+  checklist, opened without signing in. `GET /api/share/{token}` and its
+  `items`, `items/{id}`, `checklist` (filled slots only), and
+  `photos/{photo_id}/{thumb|full}` routes answer anyone holding the link;
+  a session or token on the request is ignored. What a piece shows is an
+  allowlist (identity, physical facts, and quantity, plus photos, grades,
+  cert numbers, tags, notes, and the estimated value as the link chooses;
+  cert numbers and values off by default): never a cost, gain, storage
+  location, document, serial number, or custom field. A wrong, unknown, or
+  revoked token is the same `404`. The link is looked up first, so a live
+  link is never throttled; failed lookups answer `429` rather than `404`
+  per address past 20 (an IPv6 address by its /64) and past 300 a minute
+  overall, in a throttle kept apart from sign-in's (it doesn't slow
+  guessing: the 256-bit token is the defence). Every answer carries
+  `X-Robots-Tag: noindex, nofollow`, a shared photo carries no file time
+  (`Last-Modified`, `ETag`), and no public route makes a network call.
+- **Managing links**: `GET`/`POST /api/share-links`, `PATCH` and `DELETE
+  /api/share-links/{id}`, and `POST /api/share-links/{id}/regenerate`. The
+  URL is shown once, on the admin's own address when it is one of
+  `PUBLIC_ORIGINS` (else the first https one), and only its hash is kept;
+  making, changing, regenerating, and revoking a link ask for the password
+  again, and at most 20 links exist. Deleting a set or checklist deletes
+  its links. Changing and revoking work while sharing is off; making and
+  regenerating answer `409` then.
+- **The switch**: `share_enabled` in Settings, off by default. Off, a
+  stranger gets the same `401` under `/api/share/` as on any other path
+  (answered from memory, no database read) and no link can be made; the
+  links are kept. Switching it, and each link event, is audited and sent
+  through the alert webhook (`sharing_switched`, `share_link_created`,
+  `share_link_regenerated`, `share_link_revoked`, and `share_link_changed`
+  when a link starts showing notes, values, or cert numbers).
+- **A restore keeps the live share links and switch.** Links are access
+  grants, so an in-app restore puts back the links and switch it found,
+  whatever the archive held: a revoked link can't return with an older
+  archive, and an archive can't switch sharing on. The outcome says what
+  the archive held, it is audited (`restore_sharing`), and the restore's
+  alert says so when they differed. If they can't be put back, every link
+  is removed and sharing switched off, and the links from before wait in
+  `pending_sharing.json` on the state volume to be tried again. A backend
+  restarted mid-restore puts them back after its startup migrations, so an
+  archive from before share links existed keeps them too. `restore.sh`
+  can't keep them: it ends by saying to check Settings, Sharing.
+- Metrics `cabinet_share_links` and `cabinet_share_opens_total`, and a
+  sharing line in `python -m app.cli status`.
+- Migration `0022`: the `share_links` table.
+- **The share page**: `/s/{token}` and `/s/{token}/items/{id}`, rendered
+  outside the sign-in gate entirely (no sign-in boot check ever runs for a
+  visitor). A grid of the shared pieces with a search box, a piece's own
+  page with its photos in a lightbox and its allowed facts, and a
+  checklist link's filled slots; a dead link shows one page, "This link
+  isn't active." Settings gains a Sharing section: the switch, the links
+  table (Rename, Options, Regenerate, Revoke), and a form to create one,
+  with the new URL shown once and a Copy button, the same as a new API
+  token. Each link's six toggles (photos, grades, tags, notes, the
+  estimated value, the cert number) sit in the create form and a row's
+  Options panel, the last two with a line saying why they are off by
+  default. nginx marks `/s/` non-indexable (`X-Robots-Tag` and the page's
+  own `noindex` tag; `robots.txt` disallows `/api/` only, since a crawler
+  has to fetch the page to see the tag) and keeps a share token out of its
+  own access log too.
+
+### Changed
+- **Photos are stored without their metadata.** A phone photo taken at home
+  carries GPS coordinates, the time, and the camera's details, and a share
+  link can now show a full-size photo to anyone holding it. Every upload,
+  URL import, and edited image is re-encoded before it is stored: turned
+  upright, with every EXIF block, XMP, IPTC, comment, and PNG text chunk
+  dropped and the colour profile kept (JPEG at quality 95; an animated
+  image keeps its first frame). Thumbnails are written the same way.
+  Photos already stored, thumbnails included (an older thumbnail could
+  carry the photo's JPEG comment), are all re-encoded once, in the
+  background, on the first start after upgrading, whether or not
+  `AUTO_MIGRATE` is on, and again after an in-app restore brings photos;
+  `restore.sh` runs the same pass (`python -m app.cli strip-photo-metadata`)
+  itself. Until that pass has finished, the share view re-encodes each
+  photo without its metadata as it serves it, rather than trusting the
+  file on disk. Found, with the throttle, restore, and cert-number fixes
+  above, by two security reviews before release
+  ([SPEC_0320](docs/specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)).
+
+**Deploying:** if you keep an authenticating reverse proxy in front of
+Cabinet (recommended as a second door until single sign-on in v0.33.0) and
+turn sharing on, exempt `/s/`, `/api/share/`, and `/robots.txt` from its
+authentication check. Cabinet's own gate already lets those routes through
+without a session or token; a forward-auth proxy that doesn't know that
+will show its own sign-in page instead of the share, blocking a link
+Cabinet itself would answer. See
+[deployment.md](docs/deployment.md#sharing-and-the-forward-auth-exemption).
+
 ## [0.31.0] - 2026-09-23
 
 Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
@@ -153,7 +248,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   on the node's own disk) and the settings above; see
   `deploy/docker-stack.yaml`.
 - An authenticating proxy in front (forward-auth or an SSO gateway) keeps
-  working and is recommended until single sign-on arrives in v0.32.0.
+  working and is recommended until single sign-on arrives in v0.33.0.
 - Any stored secret still in plain text is cleared and named, to be entered
   again. Every secret saved since v0.10 is already encrypted.
 - Revision `a0001` creates the `cabinet_auth` schema; the backend applies it

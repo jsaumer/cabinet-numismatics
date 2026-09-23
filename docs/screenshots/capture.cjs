@@ -2,17 +2,20 @@
 // Run inside the Playwright image; see README.md in this folder.
 //   node capture.cjs signin            the sign-in page only, signed out
 //   node capture.cjs settings          the Settings page only (capture it first)
+//   node capture.cjs share             a share link's grid, signed out (SHARE_TOKEN)
 //   node capture.cjs rest <item-id>    collection, dashboard, and the item page
 //
 // Cabinet needs a sign-in (v0.30.0): "settings" and "rest" sign in through
 // the sign-in form itself, once per theme (a fresh browser context each
 // time, so there's no session to reuse), before navigating anywhere else.
-// CABINET_USER / CABINET_PASSWORD name the admin to sign in as (defaults
-// match the stack the README's regeneration steps set up).
+// "share" is signed out on purpose, like "signin": a share link never needs
+// one. CABINET_USER / CABINET_PASSWORD name the admin to sign in as
+// (defaults match the stack the README's regeneration steps set up).
 const { chromium } = require("/app/node_modules/@playwright/test");
 
 const CABINET_USER = process.env.CABINET_USER ?? "owner";
 const CABINET_PASSWORD = process.env.CABINET_PASSWORD ?? "correct horse battery";
+const SHARE_TOKEN = process.env.SHARE_TOKEN;
 
 const [mode, itemId] = process.argv.slice(2);
 const pages =
@@ -20,11 +23,13 @@ const pages =
     ? [["signin", "/login"]]
     : mode === "settings"
       ? [["settings-general", "/settings/general"]]
-      : [
-          ["collection", "/collection"],
-          ["dashboard", "/"],
-          ["item-detail", `/items/${itemId}`],
-        ];
+      : mode === "share"
+        ? [["share", `/s/${SHARE_TOKEN}`]]
+        : [
+            ["collection", "/collection"],
+            ["dashboard", "/"],
+            ["item-detail", `/items/${itemId}`],
+          ];
 
 // Cabinet runs behind https in real use, where the insecure-connection
 // warning never shows; the capture container only reaches the proxy over
@@ -58,7 +63,7 @@ async function signIn(page) {
     // Cabinet keeps the chosen theme in localStorage; dark is its default.
     await context.addInitScript((t) => localStorage.setItem("theme", t), theme);
     const page = await context.newPage();
-    if (mode !== "signin") {
+    if (mode !== "signin" && mode !== "share") {
       await signIn(page);
     }
     for (const [name, path] of pages) {
