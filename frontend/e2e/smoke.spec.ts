@@ -263,15 +263,15 @@ test("the security headers are set and nothing trips the policy", async ({ page 
 });
 
 test("every Settings section renders, with the version", async ({ page }) => {
-  await page.goto("/settings");
-  for (const name of [
-    "General",
-    "Price sources",
-    "Cached market data",
-    "Backups",
-    "Alerts & metrics",
-    "About",
-  ]) {
+  for (const [path, name] of [
+    ["/settings/general", "General"],
+    ["/settings/pricing", "Pricing"],
+    ["/settings/backups", "Backups"],
+    ["/settings/alerts", "Alerts & metrics"],
+    ["/settings/account", "Account"],
+    ["/settings/about", "About"],
+  ] as const) {
+    await page.goto(path);
     await expect(page.getByRole("heading", { level: 2, name, exact: true })).toBeVisible();
   }
   await expect(page.getByRole("link", { name: /^\d+\.\d+\.\d+$/ })).toBeVisible();
@@ -323,7 +323,7 @@ test("a silver piece counts toward the stack", async ({ page }) => {
 test("delete a stored backup through the password dialog", async ({ page }) => {
   test.setTimeout(120_000);
   acceptDialogs(page);
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   await page.getByRole("button", { name: "Back up now" }).click();
   const written = page.getByText(/^Backup written: cabinet-backup-/);
   await expect(written).toBeVisible({ timeout: 60_000 });
@@ -343,7 +343,7 @@ test("delete a stored backup through the password dialog", async ({ page }) => {
 // leaves everything as it was.
 test("restore the backup just taken", async ({ page }) => {
   test.setTimeout(180_000);
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   await page.getByRole("button", { name: "Back up now" }).click();
   const written = page.getByText(/^Backup written: cabinet-backup-/);
   await expect(written).toBeVisible({ timeout: 60_000 });
@@ -416,7 +416,7 @@ test.describe("account changes (isolated, self-reverting)", () => {
 
   test("changing the password revokes tokens, and can be changed back", async ({ page }) => {
     await signIn(page, CABINET_USER, CABINET_PASSWORD);
-    await page.goto("/settings");
+    await page.goto("/settings/account");
     const tokenName = `e2e-pw-token-${Date.now()}`;
     const tokenForm = page.locator("form").filter({ has: page.getByRole("button", { name: "Create token" }) });
     await tokenForm.getByLabel("Name").fill(tokenName);
@@ -452,7 +452,7 @@ test.describe("account changes (isolated, self-reverting)", () => {
     // used, but that killed the storageState session every fresh page
     // fixture (this one included) would otherwise start from: sign in again.
     await signIn(page, CABINET_USER, CABINET_PASSWORD);
-    await page.goto("/settings");
+    await page.goto("/settings/account");
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Change username" }) });
     async function changeUsername(username: string) {
       await form.getByLabel("Current password").fill(CABINET_PASSWORD);

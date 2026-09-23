@@ -212,7 +212,7 @@ export default function Import() {
           <h2>My Numista collection</h2>
           {numistaKey === false && (
             <p className="error">
-              Add your Numista API key in <Link to="/settings">Settings → Price sources</Link>{" "}
+              Add your Numista API key in <Link to="/settings/pricing">Settings → Price sources</Link>{" "}
               first. The key is tied to your Numista account, so it can read your own collection.
             </p>
           )}

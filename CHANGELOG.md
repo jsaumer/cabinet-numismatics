@@ -10,6 +10,29 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.30.2] - 2026-09-22
+
+The owner's second first-run pass, all on the Settings page.
+
+### Changed
+- **Settings is six sections with their own addresses** (`/settings/general`,
+  `pricing`, `backups`, `alerts`, `account`, `about`; `/settings` opens
+  General), a section list beside the content on a desktop and a strip
+  above it on a phone, and one layout for every setting: what it is on the
+  left, the control on the right, saved as you change it. Price sources and
+  cached market data share the Pricing section; Backups runs key, schedule
+  and retention, archives, then restore. Links to `/settings#account` now
+  open `/settings/account`.
+- **Retention choices follow the schedule.** Weekly backups offer 4, 8, 13,
+  26, or 52 weeks (stored as 28, 56, 91, 182, and 365 days); daily or off
+  keeps 7, 14, 30, 90 days, or 1 year; Forever stays in both, with its
+  warning. Switching schedule snaps a retention that isn't in the new set
+  to the nearest choice and says so. `GET /api/settings` carries the two
+  sets as `backup_retention_choices`.
+- **The backup key is shown as a masked field** with an eye and a copy
+  button, and says what it is: the public half, shown so you can confirm
+  which key is in use; the secret half never leaves the container.
+
 ## [0.30.1] - 2026-09-22
 
 ### Changed

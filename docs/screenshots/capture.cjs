@@ -1,7 +1,7 @@
 // Captures the README screenshots, each page in dark and in light.
 // Run inside the Playwright image; see README.md in this folder.
 //   node capture.cjs signin            the sign-in page only, signed out
-//   node capture.cjs settings          the Settings page only (capture it first)
+//   node capture.cjs settings          the Settings pages only (capture them first)
 //   node capture.cjs rest <item-id>    collection, dashboard, and the item page
 //
 // Cabinet needs a sign-in (v0.30.0): "settings" and "rest" sign in through
@@ -19,7 +19,10 @@ const pages =
   mode === "signin"
     ? [["signin", "/login"]]
     : mode === "settings"
-      ? [["settings", "/settings"]]
+      ? [
+          ["settings-backups", "/settings/backups"],
+          ["settings-general", "/settings/general"],
+        ]
       : [
           ["collection", "/collection"],
           ["dashboard", "/"],
@@ -65,15 +68,6 @@ async function signIn(page) {
       await page.goto(`${ORIGIN}${path}`);
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(1500);
-      if (name === "settings") {
-        // The Account card (v0.30.0) now leads the page, pushing General and
-        // Price sources, what this shot is meant to show (the "not
-        // configured" state), below the fold of a fixed 800px viewport.
-        // Scroll Price sources into view so the frame still shows it.
-        await page
-          .getByRole("heading", { name: "Price sources", level: 2 })
-          .scrollIntoViewIfNeeded();
-      }
       await page.screenshot({ path: `/out/${name}-${theme}.png` });
       console.log(`${name}-${theme}.png`);
     }

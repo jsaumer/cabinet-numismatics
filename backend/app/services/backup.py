@@ -58,7 +58,12 @@ PRERESTORE_KEEP = 3
 # How long scheduled and on-demand archives are kept (v0.30.1), in days;
 # 0 keeps them forever (like `trash_retention_days`). The newest full and the
 # newest data-only archive are never deleted by retention, whatever their age.
-RETENTION_CHOICES = (7, 14, 30, 90, 365)
+# The choices offered follow the backup schedule (v0.30.2): a daily schedule
+# (or none) offers day counts, a weekly one offers week counts stored as the
+# equivalent days, so the number shown always divides evenly into whole runs.
+DAILY_RETENTION_CHOICES = (7, 14, 30, 90, 365)
+WEEKLY_RETENTION_CHOICES = (28, 56, 91, 182, 365)  # 4, 8, 13, 26, 52 weeks
+RETENTION_CHOICES = tuple(sorted(set(DAILY_RETENTION_CHOICES) | set(WEEKLY_RETENTION_CHOICES)))
 # Working directories a restore makes inside the photo and document volumes
 # (`.restore-new`, `.restore-old`) and the backup directory (`.restore-staging`).
 RESTORE_PREFIX = ".restore-"
@@ -96,6 +101,12 @@ class BackupBusy(BackupError):
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def retention_choices(schedule: str | None) -> tuple[int, ...]:
+    """The retention choices offered for a schedule: weekly counts in days
+    for "weekly", day counts otherwise (daily or off)."""
+    return WEEKLY_RETENTION_CHOICES if schedule == "weekly" else DAILY_RETENTION_CHOICES
 
 
 def archive_name(now: datetime, include_photos: bool) -> str:
