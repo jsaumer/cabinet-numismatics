@@ -10,6 +10,42 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.32.2] - 2026-09-23
+
+An adversarial review of v0.32.1 found four edges in the share photo path
+and one availability gap; all closed here. Nothing exploitable existed on a
+volume whose cleaning pass reported no unreadable files.
+
+### Fixed
+- **The per-file check is an allowlist walk of the whole file.** A JPEG
+  is sent from disk only when every segment before and after its first
+  scan is one the encoder writes (no reserved or unknown markers, JFIF and
+  Adobe bodies of their exact lengths, a real ICC segment, one EOI with
+  nothing after it); a PNG only when every chunk is allowed, sized as
+  specified, with a correct CRC and nothing after IEND. A single bit flip
+  at an EXIF marker used to make a file unreadable to the pass yet clean
+  to the check; it is now refused and re-encoded.
+- **The bytes the check read are the bytes sent.** The share route no
+  longer reopens the file to stream it, so a file replaced between the
+  check and the send (a `restore.sh` unpack) cannot be served unchecked.
+  `Range` requests no longer apply to a shared photo.
+- **Files the pass could not rewrite are refused until they are.** The
+  marker now lists them, and the share route answers 404 for a listed
+  file even when it would otherwise pass.
+  One limit stays, by design: bytes hidden inside a file's compressed
+  pixel stream (text before a JPEG's EOI, an extra PNG `IDAT`) are
+  invisible without decoding, so a file crafted that way and copied onto
+  the volume by hand after the pass is served as it is until the pass
+  rewrites it; two tests record this as expected. The pass, and every
+  upload, re-encode from pixels, so Cabinet never writes such a file.
+
+### Changed
+- **A clean WebP is served from disk** (its RIFF chunks are walked like a
+  JPEG's segments), and on-the-fly re-encodes are capped at two at a time
+  (503 with `Retry-After` beyond that), so a link holder can no longer
+  turn a share into a CPU loop by requesting a full-size WebP repeatedly.
+- The README no longer carries the share-link screenshots.
+
 ## [0.32.1] - 2026-09-23
 
 A post-release review of v0.32.0 (a third fresh-context pass, over Codex's

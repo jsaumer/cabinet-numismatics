@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.32.1-informational)
+![Version](https://img.shields.io/badge/version-0.32.2-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.32.1 released (the share view; sign-in and encrypted backups since v0.30.0).**
+**Status: v0.32.2 released (the share view; sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
@@ -44,7 +44,6 @@ Dark is the default; the header toggle switches to light and remembers it.
 | [![Collection list, dark](docs/screenshots/collection-dark.png)](docs/screenshots/collection-dark.png) | [![Collection list, light](docs/screenshots/collection-light.png)](docs/screenshots/collection-light.png) |
 | [![Item detail, dark](docs/screenshots/item-detail-dark.png)](docs/screenshots/item-detail-dark.png) | [![Item detail, light](docs/screenshots/item-detail-light.png)](docs/screenshots/item-detail-light.png) |
 | [![Settings, dark](docs/screenshots/settings-general-dark.png)](docs/screenshots/settings-general-dark.png) | [![Settings, light](docs/screenshots/settings-general-light.png)](docs/screenshots/settings-general-light.png) |
-| [![A share link, dark](docs/screenshots/share-dark.png)](docs/screenshots/share-dark.png) | [![A share link, light](docs/screenshots/share-light.png)](docs/screenshots/share-light.png) |
 
 ## Features
 
