@@ -36,7 +36,8 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 - **Every backup is encrypted from the first start.** Save the backup key
   (`docker compose exec backend python -m app.cli backup-key show`) in your
   password manager, or supply your own as a Docker secret
-  (`BACKUP_KEY_FILE`), before you rely on the archives: without it they
+  (`BACKUP_KEY_FILE`) or a variable (`BACKUP_KEY`), before you rely on the
+  archives: without it they
   can't be opened by anyone. Then take a new backup and delete the old
   unencrypted archives (Settings, Backups, **Delete unencrypted archives**):
   they are readable copies of the collection and can no longer be restored.

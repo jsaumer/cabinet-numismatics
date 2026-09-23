@@ -117,7 +117,7 @@ Data lives in six named Docker volumes:
 |--------|----------|
 | `db_data` | postgres: items, estimates, settings, history |
 | `photo_data` | photo originals and generated thumbnails |
-| `backend_state` | the generated encryption key, when `SECRET_KEY` is unset, and the generated backup key (`backup.key`), when `BACKUP_KEY_FILE` is unset. Keep it off the storage your backups go to: Settings says when it isn't |
+| `backend_state` | the generated encryption key, when `SECRET_KEY` is unset, and the generated backup key (`backup.key`), when neither `BACKUP_KEY_FILE` nor `BACKUP_KEY` is set. Keep it off the storage your backups go to: Settings says when it isn't |
 | `backup_data` | in-app backup archives (`BACKUP_DIR`, Settings → Backups) |
 | `document_data` | attached documents: receipts, certificates, invoices (`DOCUMENT_DIR`); private, served only through the API |
 | `staging_data` | private working space (`/data/staging`, 0700): where an archive's database dump is unpacked to be checked and restored. Empty between restores. Keep it on this host's own disk, never on the share your backups go to |
@@ -331,7 +331,7 @@ anything that called the API without signing in (the Homepage tile,
 Prometheus, scripts) needs an API token from then on. From the first start
 every backup is encrypted.
 Save the backup key (`backup-key show`, above) or supply your own as a
-secret (`BACKUP_KEY_FILE`) before relying on them; take a new backup; then
+secret (`BACKUP_KEY_FILE`) or a variable (`BACKUP_KEY`) before relying on them; take a new backup; then
 delete the old unencrypted archives (Settings → Backups → **Delete
 unencrypted archives**), which can no longer be restored and are readable
 by anyone who can read the backup directory. Old `backup.sh` directories
