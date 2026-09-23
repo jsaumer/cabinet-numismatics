@@ -12,14 +12,18 @@ reaches a share, nginx's `/photos/`, or a backup. Files written before that,
 thumbnails included (an old thumbnail could carry the source's JPEG
 comment), are re-encoded once by `strip_existing`, which leaves the marker
 `photos_clean` beside `auth_claimed` on the state volume when it is done.
-Until the marker exists the share view cleans each photo as it serves it
-(`cleaned_file`), so it never trusts the disk.
+The marker only spares the share view work (v0.32.1): it serves a file from
+disk only when the marker exists and `looks_clean` passes that one file;
+anything else is re-encoded as it is served (`cleaned_file`) or refused, so
+a file the pass couldn't decode, or one copied in since, is never sent as
+it is.
 """
 
 import io
 import ipaddress
 import logging
 import os
+import re
 import shutil
 import socket
 import threading
@@ -187,16 +191,42 @@ def marker_exists() -> bool:
     return _marker_path().exists()
 
 
+# Moves on every `remove_marker`, so a pass that was already walking when
+# photos of unknown cleanliness arrived doesn't write the marker over them.
+# Per process: `restore.sh`'s removal from another process isn't seen, which
+# the per-file check when serving covers.
+_marker_lock = threading.Lock()
+_marker_generation = 0
+
+
+def _generation() -> int:
+    with _marker_lock:
+        return _marker_generation
+
+
 def remove_marker() -> None:
     """Before a restore swaps in an archive's photos, which may carry
     metadata: the pass after it writes the marker again."""
-    _marker_path().unlink(missing_ok=True)
+    global _marker_generation
+    with _marker_lock:
+        _marker_generation += 1
+        _marker_path().unlink(missing_ok=True)
 
 
 def _write_marker() -> None:
     path = _marker_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("Every stored photo has had its metadata removed.\n", "utf-8")
+
+
+def _write_marker_unless_moved(generation: int) -> bool:
+    """Write the marker only if no `remove_marker` ran since `generation`
+    was read; checked and written under the lock so one can't slip between."""
+    with _marker_lock:
+        if _marker_generation != generation:
+            return False
+        _write_marker()
+        return True
 
 
 def _png_chunks(data: bytes):
@@ -220,8 +250,9 @@ def carries_metadata(img: Image.Image, data: bytes | None = None) -> bool:
     application segment other than JFIF, ICC, or Adobe, or a PNG chunk
     other than those that describe the pixels. For a PNG, `data` is the
     file's bytes (read from `img.filename` when not given; unknown counts as
-    carrying something). The one-time pass doesn't ask this: it rewrites
-    every file; this is the tests' check that the result is clean."""
+    carrying something). Header only: nothing here decodes the pixels, so
+    `looks_clean` can ask it on every request. The one-time pass doesn't ask
+    this: it rewrites every file."""
     if any(key not in HARMLESS_INFO for key in img.info):
         return True
     if img.format == "JPEG":
@@ -230,7 +261,9 @@ def carries_metadata(img: Image.Image, data: bytes | None = None) -> bool:
             for name, body in getattr(img, "applist", ())
         )
     if img.format == "PNG":
-        if img.text or getattr(img, "private_chunks", None):
+        # Not `img.text`: it decodes the whole image to find text after the
+        # pixels, and the chunk walk below already counts every text chunk.
+        if getattr(img, "private_chunks", None):
             return True
         if data is None:
             try:
@@ -239,6 +272,62 @@ def carries_metadata(img: Image.Image, data: bytes | None = None) -> bool:
                 return True
         return any(kind not in HARMLESS_PNG for kind in _png_chunks(data))
     return False
+
+
+# Inside a JPEG's scan data a 0xFF byte is followed by 0x00 or a restart
+# marker; one followed by any of these is a segment the header didn't show
+# (an APPn or comment between progressive scans), or an image boundary
+# (another SOI or EOI, as in an appended second image).
+_JPEG_HIDDEN = re.compile(rb"\xff[\xd8\xd9\xe0-\xef\xfe]")
+
+
+def _jpeg_scan_start(data: bytes) -> int | None:
+    """Where the first scan's coded data starts, walking the header's
+    segments from SOI; None when the header isn't well formed."""
+    pos = 2  # past SOI
+    while pos + 4 <= len(data):
+        if data[pos] != 0xFF:
+            return None
+        marker = data[pos + 1]
+        if marker == 0xFF:  # a fill byte
+            pos += 1
+            continue
+        if marker == 0x01 or 0xD0 <= marker <= 0xD9:  # no length; not in a header
+            return None
+        length = int.from_bytes(data[pos + 2 : pos + 4], "big")
+        if length < 2:
+            return None
+        pos += 2 + length
+        if marker == 0xDA:  # SOS
+            return pos
+    return None
+
+
+def looks_clean(path: Path) -> bool:
+    """Whether a stored photo may be sent from disk as it is: its header
+    carries nothing `carries_metadata` counts and the file ends where the
+    image does. Reads headers and segments only, never decodes the pixels,
+    since the share view asks on every request. A JPEG must end at its EOI,
+    with nothing hidden after its first scan; a PNG must end at IEND. Any
+    other format (WebP included: nothing here walks its chunks) and any
+    error answer False, which sends the file through `cleaned_file`."""
+    try:
+        data = path.read_bytes()
+        with Image.open(io.BytesIO(data)) as img:
+            if img.format == "JPEG":
+                start = _jpeg_scan_start(data)
+                return (
+                    start is not None
+                    and data.endswith(b"\xff\xd9")
+                    and not _JPEG_HIDDEN.search(data, start, len(data) - 2)
+                    and not carries_metadata(img, data)
+                )
+            if img.format == "PNG":
+                chunks = list(_png_chunks(data))
+                return bool(chunks) and chunks[-1] == b"IEND" and not carries_metadata(img, data)
+            return False
+    except Exception:  # unreadable in any way: not trusted
+        return False
 
 
 def _stored_files(root: Path):
@@ -326,10 +415,14 @@ def strip_existing() -> dict:
     without its metadata, then write the marker (which is what stops a
     repeat; this function itself always rewrites). Never raises: a file that
     can't be read or rewritten is logged and skipped. The marker is left
-    unwritten when a rewrite failed, so the next start tries again; a file
-    Pillow can't open at all doesn't hold it back."""
+    unwritten when a rewrite failed, so the next start tries again, and when
+    `remove_marker` ran during the pass (photos may have arrived behind the
+    walk). A file Pillow can't open at all doesn't hold it back: that would
+    put every start on the slow path, and the share view checks each file
+    before sending it from disk (`looks_clean`)."""
     found = {"checked": 0, "rewritten": 0, "unreadable": 0, "failed": 0}
     with _pass_lock:
+        generation = _generation()
         root = _root()
         try:
             paths = list(_stored_files(root)) if root.is_dir() else []
@@ -351,9 +444,15 @@ def strip_existing() -> dict:
             except Exception:
                 found["failed"] += 1
                 logger.exception("Photo metadata: could not rewrite %s", path.name)
-        if found["failed"] == 0:
+        if found["failed"]:
+            logger.warning("Photo metadata: marker not written; the next start tries again")
+        else:
             try:
-                _write_marker()
+                if not _write_marker_unless_moved(generation):
+                    logger.info(
+                        "Photo metadata: marker not written; photos were restored during "
+                        "the pass, and the pass after the restore writes it"
+                    )
             except OSError:
                 logger.exception("Photo metadata: could not write the marker")
         logger.info(

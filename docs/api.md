@@ -375,7 +375,9 @@ quality 95, so the stored file is not byte for byte the upload, and an
 animated WebP or PNG keeps its first frame only. The thumbnail is written
 the same way. Photos stored before v0.32.0, thumbnails included, are
 re-encoded once, in the background, on the first start (see
-[backup-restore.md](backup-restore.md#photo-metadata)). The first photo uploaded becomes the primary image. Responses
+[backup-restore.md](backup-restore.md#photo-metadata)); a file that can't
+be decoded is left as it is, which is why the share view checks each file
+before sending it from disk. The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
 
@@ -1043,7 +1045,7 @@ Every answer carries `X-Robots-Tag: noindex, nofollow`; the JSON ones
 | `GET` | `/api/share/{token}/items` | `?offset=&limit=` (`offset` 0 to 1,000,000, `limit` 1 to 100, default 50; `422` outside them): `{"items": [...], "total": n}`, newest first |
 | `GET` | `/api/share/{token}/items/{item_id}` | One piece, if it is in the share |
 | `GET` | `/api/share/{token}/checklist` | A checklist link's **filled** slots only, `{"slots": [{position, label, year, mint_mark, item_id}]}` (`item_id` is `null` for a slot ticked by hand with no piece); other kinds `404` |
-| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The photo carries no metadata (see [Photos](#photos)): until the one-time pass over stored photos has run (its marker is written), the route doesn't send the file as it is but re-encodes it without metadata on every request (`200`, the whole body, no ranges); a file that can't be decoded is the same `404`. After that the file is served from disk; a `Range` with `If-Range` gets the whole photo (`200`), since there is no validator for it to match |
+| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The photo carries no metadata (see [Photos](#photos)): the file is sent from disk only when the one-time pass over stored photos has written its marker and the file's own headers show no metadata and end where the image does (a JPEG or PNG; a WebP never is, v0.32.1); otherwise the route re-encodes it without metadata on the request (`200`, the whole body, no ranges), and a file that can't be decoded is the same `404`. From disk, a `Range` with `If-Range` gets the whole photo (`200`), since there is no validator for it to match |
 
 **One 404.** A malformed token, an unknown one, a revoked one, a set or
 checklist that is gone, and a piece or photo outside the share all answer

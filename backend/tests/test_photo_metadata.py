@@ -4,6 +4,7 @@ colour profile kept, and photos stored before that are cleaned once by
 `photos.strip_existing`."""
 
 import io
+import logging
 import os
 from pathlib import Path
 
@@ -166,7 +167,11 @@ def test_the_pass_rewrites_every_stored_photo_thumbnails_included():
     for path, (data, mtime) in before.items():
         assert path.read_bytes() == data and path.stat().st_mtime_ns == mtime, path
     assert not [p for p in root.rglob(".strip-*")]  # no temporary left behind
+    # A damaged file mustn't put every start on the slow path, so the marker
+    # is written; the share view's per-file check refuses to trust it.
     assert photos.marker_exists()
+    assert not photos.looks_clean(broken)
+    assert photos.looks_clean(jpeg) and photos.looks_clean(png)
     # A second pass (the container command) finds everything still clean.
     assert photos.strip_existing()["failed"] == 0
     assert_clean(jpeg.read_bytes(), "JPEG")
@@ -226,6 +231,119 @@ def test_what_the_first_check_missed_is_seen_and_rewritten(name, make, fmt):
     path = plant(Path(get_settings().photo_dir), f"item-1/{name}", data)
     assert photos.strip_existing()["rewritten"] == 1
     assert_clean(path.read_bytes(), fmt, icc=False)
+
+
+def _clean(fmt: str) -> bytes:
+    return photos.clean_bytes(*photos.open_validated(dirty(fmt)))
+
+
+def _jpeg_with_segment_after_scan() -> bytes:
+    """An APP1 hidden after the first scan, where Pillow's header read
+    never looks (as between a progressive JPEG's scans)."""
+    data = _clean("JPEG")
+    payload = b"Exif\0\0" + SECRET
+    return data[:-2] + b"\xff\xe1" + (len(payload) + 2).to_bytes(2, "big") + payload + data[-2:]
+
+
+@pytest.mark.parametrize(
+    "name, make, want",
+    [
+        ("clean.jpg", lambda: _clean("JPEG"), True),
+        ("clean.png", lambda: _clean("PNG"), True),
+        ("plain.jpg", clean_jpeg, True),
+        ("gps.jpg", lambda: dirty("JPEG"), False),
+        ("gps.png", lambda: dirty("PNG"), False),
+        ("truncated.jpg", lambda: _clean("JPEG")[:-40], False),
+        ("truncated.png", lambda: _clean("PNG")[:-20], False),
+        ("trailer.jpg", lambda: _clean("JPEG") + b"trailing " + SECRET, False),
+        ("appended.jpg", lambda: _clean("JPEG") + dirty("JPEG"), False),
+        ("hidden.jpg", _jpeg_with_segment_after_scan, False),
+        ("trailer.png", lambda: _clean("PNG") + SECRET, False),
+        ("time.png", png_with_time, False),
+        ("app12.jpg", jpeg_with_app12, False),
+        ("comment.jpg", old_thumbnail, False),
+        ("clean.webp", lambda: _clean("WEBP"), False),
+        ("broken.jpg", lambda: b"not an image at all", False),
+        ("empty.jpg", lambda: b"", False),
+    ],
+)
+def test_looks_clean_trusts_only_what_it_can_read(tmp_path, name, make, want):
+    path = plant(tmp_path, name, make())
+    assert photos.looks_clean(path) is want
+
+
+def test_looks_clean_decodes_no_pixels(tmp_path, monkeypatch):
+    """It runs on every shared photo request: headers only. (A load would
+    raise here, which looks_clean reads as not clean.)"""
+    from PIL import ImageFile
+
+    paths = [
+        plant(tmp_path, "clean.png", _clean("PNG")),
+        plant(tmp_path, "clean.jpg", _clean("JPEG")),
+    ]
+
+    def refuse(self, *args, **kwargs):
+        raise AssertionError("looks_clean decoded the image")
+
+    monkeypatch.setattr(ImageFile.ImageFile, "load", refuse)
+    monkeypatch.setattr(PngImagePlugin.PngImageFile, "load", refuse)
+    for path in paths:
+        assert photos.looks_clean(path), path.name
+
+
+def test_a_restore_during_the_pass_leaves_no_marker(monkeypatch):
+    """A pass already walking when a restore removes the marker (and swaps
+    photos in behind the walk) must not write it afterwards."""
+    root = Path(get_settings().photo_dir)
+    plant(root, "item-1/one.jpg", dirty("JPEG"))
+    plant(root, "item-1/two.jpg", dirty("JPEG"))
+    real = photos._strip_one
+    calls = []
+
+    def restore_arrives(path):
+        if not calls:
+            photos.remove_marker()
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(photos, "_strip_one", restore_arrives)
+    found = photos.strip_existing()
+    assert found["failed"] == 0 and found["rewritten"] == 2
+    assert not photos.marker_exists()
+    photos.strip_existing()  # the restore's own pass
+    assert photos.marker_exists()
+
+
+def test_the_summary_reaches_the_backend_log(caplog):
+    """The line saying how many photos were unreadable is logged at INFO on
+    `app.services.photos`, which has no level or handler of its own and
+    reaches the container's log through the `app` logger main.py sets up."""
+    import app.main  # noqa: F401  # configures logging, as the backend does on import
+
+    root = Path(get_settings().photo_dir)
+    plant(root, "item-1/broken.jpg", b"not an image at all")
+    plant(root, "item-1/one.jpg", dirty("JPEG"))
+    named = logging.getLogger("app.services.photos")
+    assert named.level == logging.NOTSET and named.propagate and not named.handlers
+    parent = logging.getLogger("app")
+    assert parent.level == logging.INFO
+    assert any(type(h) is logging.StreamHandler for h in parent.handlers)
+    parent.addHandler(caplog.handler)  # where main.py's handler sits
+    try:
+        with caplog.at_level(logging.INFO, logger="app.services.photos"):
+            photos.strip_existing()
+    finally:
+        parent.removeHandler(caplog.handler)
+    summary = [
+        r
+        for r in caplog.records
+        if r.name == "app.services.photos" and r.getMessage().startswith("Photo metadata: rewrote")
+    ]
+    assert summary and summary[-1].levelno == logging.INFO
+    assert "1 of 2 stored photos (1 unreadable, 0 failed)" in summary[-1].getMessage()
+    assert any(
+        r.levelno == logging.WARNING and "broken.jpg" in r.getMessage() for r in caplog.records
+    )
 
 
 def test_the_pass_never_follows_a_symlink(tmp_path):

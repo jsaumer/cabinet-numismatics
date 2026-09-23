@@ -229,15 +229,33 @@ http:
       rule: "Host(`cabinet.example.com`)"
       entryPoints: [websecure]
       service: cabinet
-      middlewares: [authentik@file]
+      middlewares: [hsts@file, authentik@file]
       tls:
         certResolver: letsencrypt
+  middlewares:
+    hsts:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: false
+        stsPreload: false
   services:
     cabinet:
       loadBalancer:
         servers:
           - url: "http://cabinet-proxy:80"
 ```
+
+The `hsts` middleware is the `Strict-Transport-Security` header, which
+Cabinet's own nginx cannot send: it only ever sees plain HTTP from Traefik
+(it overwrites `X-Forwarded-Proto` by design, [security.md](security.md)),
+and a browser ignores the header over plain HTTP anyway. Put it on every
+router that serves the host (the share router below included), or once on
+the `websecure` entrypoint. Start with a day (`stsSeconds: 86400`) and
+raise it to a year once the certificate renews cleanly; leave
+`stsIncludeSubdomains` off unless every subdomain is HTTPS only, and never
+set `stsPreload`, which commits the whole domain to browser preload lists.
+A self-signed certificate behind HSTS has no click-through in a browser, so
+a LAN name with one should not send it.
 
 Point `authentik@file` at your existing forward-auth middleware, and make
 `cabinet-proxy` the name the proxy service has on the shared network. Make
@@ -278,7 +296,7 @@ a `noindex` meta tag on the page itself; `/robots.txt` no longer disallows
 nothing else the edge proxy needs to add.
 
 With the Traefik + Authentik example above, give the share paths their own
-router with no `middlewares`:
+router without the Authentik middleware (the `hsts` one stays):
 
 ```yaml
 http:
@@ -287,6 +305,7 @@ http:
       rule: "Host(`cabinet.example.com`) && (PathPrefix(`/s/`) || PathPrefix(`/api/share/`) || Path(`/robots.txt`))"
       entryPoints: [websecure]
       service: cabinet
+      middlewares: [hsts@file]
       tls:
         certResolver: letsencrypt
     cabinet:
@@ -316,7 +335,9 @@ entry point; check that a custom gateway does the equivalent before
 trusting a prefix match on unnormalised input.
 
 A share token is redacted from nginx's access log (and the backend's), but
-not from its error log: an upstream error on a share request, such as a 502
+not from the edge proxy's own logs: Traefik's or Authentik's access log
+records `/s/<token>` in clear, so treat those as sensitive too. Nor from
+nginx's error log: an upstream error on a share request, such as a 502
 while the backend restarts during a deploy, can quote the full request line,
 token included. Treat that log as sensitive wherever it is shipped or kept,
 the same as you would the access log before it was redacted.
