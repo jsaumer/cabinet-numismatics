@@ -293,6 +293,32 @@ test("an undated piece takes ND with no year", async ({ page }) => {
   await deleteForGood(page, url, country);
 });
 
+test("a bar or round can be added, with a suggested product name", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `E2E bullion ${Date.now()}`;
+  await page.goto("/items/new?type=bullion");
+  await expect(selectIn(page, /^Type/).locator("option:checked")).toHaveText("Bar or round");
+  await expect(page.getByLabel("Fineness", { exact: true })).toHaveValue("0.999");
+  await selectIn(page, /^Metal/).selectOption("silver");
+  await selectIn(page, /^Weight/).selectOption("oz");
+  await page.getByLabel("Weight (oz)").fill("1");
+  await expect(page.getByLabel("Product name *")).toHaveValue("1 oz silver bar");
+  await page.getByLabel("Country of refiner *").fill(country);
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("1 oz silver bar");
+
+  // No network call: the fine ounces come straight from what was entered.
+  await page.goto("/stack");
+  await expect(page.getByRole("heading", { level: 2, name: "Silver" })).toBeVisible();
+  const row = page.getByRole("row", { name: new RegExp(country) });
+  await expect(row).toContainText("1"); // fine oz, ~1 troy oz of .999 fine silver
+
+  await deleteForGood(page, url, country);
+});
+
 test("a silver piece counts toward the stack", async ({ page }) => {
   acceptDialogs(page);
   const country = `E2E stack ${Date.now()}`;

@@ -15,9 +15,8 @@ applies them itself on startup; for earlier releases, run
 Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
 
 ### Added
-- **A third item type, `bullion`** ("Bar or round"), on the API side (the
-  form and the rest of the frontend follow in a later change). No year is
-  required for it (neither `year` nor `year_nd`), its label reads
+- **A third item type, `bullion`** ("Bar or round"), on the API side. No year
+  is required for it (neither `year` nor `year_nd`), its label reads
   "PAMP Suisse 1 oz silver bar" with no mint mark, and it never gets fancy
   serial traits. `GET /api/stats/collection` gains `counts.bullion`; the
   list's `type=` filter and bulk edit accept it; the type breakdown and
@@ -26,6 +25,19 @@ Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
   Numista's exonumia catalogue (still refusing tokens and medals), and a
   spreadsheet's Type column reads "bar", "round", "ingot", or "bullion" the
   same way.
+- **The bullion type on the frontend.** The item form's type choice gains
+  "Bar or round" (`/items/new?type=bullion` presets it); a bullion piece
+  gets a Metal select that writes the composition, a fineness that defaults
+  to .999, a g / oz switch beside Weight (coins too), and a suggested
+  product name from its weight, metal, and shape, kept until the owner
+  types their own. A coin's Composition field gains a hint about the
+  bullion stack, and the Stack page's empty state links to
+  `/items/new?type=bullion`. The item page's hero and facts show a bar's
+  own fields (refiner, weight, fineness, size, shape, serial number) and
+  hide the coin- and note-only ones. The list's type filter and bulk edit,
+  and the dashboard's value hero and type breakdown, all know "Bars and
+  rounds"; the Numista fill searches its exonumia catalogue for a bullion
+  piece and shows what kind of object each hit is.
 
 ### Fixed
 - **Metal detection** no longer counts a named alloy as the metal it is

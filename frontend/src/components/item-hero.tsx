@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { certLookupUrl, ItemDetail, money, photoUrl, PRIORITY_LABELS } from "../api";
-import { CoinIcon, NoteIcon } from "./icons";
+import { BullionIcon, CoinIcon, NoteIcon } from "./icons";
 import { Lightbox } from "./photos";
 import { latestBySource, timeSince } from "./provenance";
 
@@ -69,15 +69,23 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
           </button>
         ) : (
           <div className="hero-photo-empty" title="No photo yet">
-            {item.type === "coin" ? <CoinIcon /> : <NoteIcon />}
+            {item.type === "coin" ? <CoinIcon /> : item.type === "bullion" ? <BullionIcon /> : <NoteIcon />}
           </div>
         )}
       </div>
       <div className="hero-main">
         <div className="detail-header">
           <h1>
-            {item.country} {item.denomination}, {item.year_label}
-            {item.mint_mark ? ` "${item.mint_mark}"` : ""}
+            {item.type === "bullion"
+              ? [item.issuer || item.country, item.denomination, item.year_label]
+                  .filter(Boolean)
+                  .join(" ")
+              : (
+                <>
+                  {item.country} {item.denomination}, {item.year_label}
+                  {item.mint_mark ? ` "${item.mint_mark}"` : ""}
+                </>
+              )}
           </h1>
           <span className={`badge ${item.type}`}>{item.type}</span>
           {item.status !== "owned" && (

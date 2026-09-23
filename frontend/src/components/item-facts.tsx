@@ -43,8 +43,8 @@ interface Fact {
   value: ReactNode;
   /** A quiet second line under the value. */
   note?: ReactNode;
-  /** Offered as an empty field only for this kind of piece. */
-  forType?: ItemType;
+  /** Offered as an empty field only for this kind (or these kinds) of piece. */
+  forType?: ItemType | ItemType[];
   /** Already in the hero: a group holding nothing else isn't worth a block. */
   inHero?: boolean;
 }
@@ -122,6 +122,7 @@ export function ItemFacts({
         {
           label: item.type === "note" ? "Print run" : "Mintage",
           value: item.mintage != null ? count(item.mintage) : null,
+          forType: ["coin", "note"],
         },
         {
           label: "Date as struck",
@@ -131,7 +132,11 @@ export function ItemFacts({
               : null,
           forType: "coin",
         },
-        { label: "Issuer", value: item.issuer, forType: "note" },
+        {
+          label: item.type === "bullion" ? "Refiner or mint" : "Issuer",
+          value: item.issuer,
+          forType: ["note", "bullion"],
+        },
         { label: "Charter number", value: item.charter_number, forType: "note" },
         {
           label: "Bank location",
@@ -148,7 +153,7 @@ export function ItemFacts({
                 <TraitBadges traits={item.serial_traits} reference={traitReference} />
               </>
             ) : null,
-          forType: "note",
+          forType: ["note", "bullion"],
         },
         { label: "Prefix / block", value: item.prefix_block, forType: "note" },
         { label: "Replacement note", value: item.replacement_note ? "Yes" : null, forType: "note" },
@@ -236,11 +241,11 @@ export function ItemFacts({
         {
           label: "Thickness",
           value: item.thickness_mm != null ? `${item.thickness_mm} mm` : null,
-          forType: "coin",
+          forType: ["coin", "bullion"],
         },
-        { label: "Size", value: size, forType: "note" },
+        { label: "Size", value: size, forType: ["note", "bullion"] },
         { label: "Edge", value: item.edge, forType: "coin" },
-        { label: "Shape", value: item.shape, forType: "coin" },
+        { label: "Shape", value: item.shape, forType: ["coin", "bullion"] },
         {
           label: "Die axis",
           value: item.die_axis != null ? dieAxis(item.die_axis) : null,
@@ -251,6 +256,7 @@ export function ItemFacts({
         {
           label: "Demonetised",
           value: item.demonetized_on ? date(item.demonetized_on) : null,
+          forType: ["coin", "note"],
         },
       ],
     },
@@ -321,8 +327,10 @@ export function ItemFacts({
     },
   ];
 
-  const offered = (fact: Fact) =>
-    filled(fact.value) || (showEmpty && (!fact.forType || fact.forType === item.type));
+  const forTypeMatches = (forType?: ItemType | ItemType[]) =>
+    !forType || (Array.isArray(forType) ? forType.includes(item.type) : forType === item.type);
+
+  const offered = (fact: Fact) => filled(fact.value) || (showEmpty && forTypeMatches(fact.forType));
 
   const blocks = groups
     .map((group) => ({ title: group.title, facts: group.facts.filter(offered) }))

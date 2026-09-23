@@ -39,6 +39,14 @@ export const NoteIcon = () => (
   </Icon>
 );
 
+/** Stands in for a bar or round with no photo. */
+export const BullionIcon = () => (
+  <Icon>
+    <path d="M5 8.5L7 5.5h10l2 3v9l-2 3H7l-2-3z" />
+    <path d="M7.3 8.5h9.4" />
+  </Icon>
+);
+
 /** Settings, as sliders: a drawn gear at this size reads as a sun. */
 export const SettingsIcon = () => (
   <Icon>
