@@ -10,7 +10,6 @@ page is captured twice, dark first because dark is Cabinet's default:
 | `collection-dark.png`, `collection-light.png` | `/collection` |
 | `item-detail-dark.png`, `item-detail-light.png` | `/items/<id>` |
 | `settings-general-dark.png`, `settings-general-light.png` | `/settings/general` |
-| `share-dark.png`, `share-light.png` | `/s/<token>`, a share link's grid, signed out |
 
 Settings is routed into sections (v0.30.2); General is the one shown
 (the Backups section on a default Compose stack carries the red
@@ -126,25 +125,9 @@ shoot settings
 shoot rest "$ITEM"
 ```
 
-A share link needs sharing switched on first, then a link to open; both are
-settings-page writes, so they go through the same confirmed session as
-above, one confirm covering both calls (the same pattern the configuration
-step used):
-
-```bash
-curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
-  -X POST http://localhost:8090/api/auth/confirm -H 'Content-Type: application/json' \
-  -d '{"password":"correct horse battery"}'
-curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
-  -X PUT http://localhost:8090/api/settings -H 'Content-Type: application/json' \
-  -d '{"share_enabled":true}'
-SHARE_URL=$(curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
-  -X POST http://localhost:8090/api/share-links -H 'Content-Type: application/json' \
-  -d '{"kind":"collection","name":"README screenshot"}' \
-  | python -c 'import json,sys; print(json.load(sys.stdin)["url"])')
-export SHARE_TOKEN=${SHARE_URL##*/s/}
-shoot share
-```
+`capture.cjs` also has a `share` mode (a share link's grid, signed out,
+given `SHARE_TOKEN`) for anyone who wants that picture; the README no
+longer carries one, so it isn't part of the set above.
 
 Tear the throwaway project down once you have what you need:
 

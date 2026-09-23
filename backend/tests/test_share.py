@@ -595,32 +595,38 @@ def test_the_marker_spares_work_but_never_vouches_for_a_file(client, anon_client
     assert_not_found(resp)
 
 
-def test_a_webp_is_always_reencoded_when_shared(client, anon_client, monkeypatch):
-    """Nothing walks a WebP's chunks, so the marker never lets one through
-    from disk, however clean it is."""
+def test_a_clean_webp_is_sent_from_disk(client, anon_client, monkeypatch):
+    """v0.32.2: WebP has an allowlist walk of its own, so a clean one is no
+    longer re-encoded on every request; one carrying EXIF still is."""
     from app.services import photos
-    from tests.test_photo_metadata import assert_clean, dirty
+    from tests.test_photo_metadata import CANARY, assert_clean, dirty, webp_with_exif
 
     enable(client)
     item = full_item(client)
     token, _ = make_link(client)
     photos._write_marker()
     webp = photos.clean_bytes(*photos.open_validated(dirty("WEBP")))
-    _plant_over(client, item, "full", webp)
+    full = _plant_over(client, item, "full", webp)
     real_cleaned = photos.cleaned_file
     reencoded = []
     monkeypatch.setattr(
         photos, "cleaned_file", lambda path: reencoded.append(path) or real_cleaned(path)
     )
-    resp = anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/full")
-    assert resp.status_code == 200 and len(reencoded) == 1
+    url = f"/api/share/{token}/photos/{item['photo_id']}/full"
+    resp = anon_client.get(url)
+    assert resp.status_code == 200 and resp.content == webp and reencoded == []
     assert resp.headers["content-type"] == "image/webp"
-    assert_clean(resp.content, "WEBP")
+    full.write_bytes(webp_with_exif())
+    resp = anon_client.get(url)
+    assert resp.status_code == 200 and len(reencoded) == 1
+    assert CANARY not in resp.content
+    assert_clean(resp.content, "WEBP", icc=False)
 
 
-def test_a_range_with_if_range_gets_the_whole_photo(client, anon_client):
-    """With no Last-Modified or ETag, an If-Range can't match: the whole
-    body, never Starlette's KeyError (the second review's N4)."""
+def test_a_range_gets_the_whole_photo(client, anon_client):
+    """The body is built in memory on both paths, so a `Range` (with an
+    `If-Range` or without) is answered with the whole photo, never a 206
+    and never Starlette's KeyError (the second review's N4)."""
     from app.services import photos
 
     photos._write_marker()
@@ -629,12 +635,124 @@ def test_a_range_with_if_range_gets_the_whole_photo(client, anon_client):
     token, _ = make_link(client)
     url = f"/api/share/{token}/photos/{item['photo_id']}/full"
     whole = anon_client.get(url).content
-    resp = anon_client.get(url, headers={"Range": "bytes=0-9", "If-Range": '"x"'})
-    assert resp.status_code == 200 and resp.content == whole
-    resp = anon_client.get(
-        url, headers={"Range": "bytes=0-9", "If-Range": "Wed, 01 Jan 2020 00:00:00 GMT"}
+    for headers in (
+        {"Range": "bytes=0-9"},
+        {"Range": "bytes=0-9", "If-Range": '"x"'},
+        {"Range": "bytes=0-9", "If-Range": "Wed, 01 Jan 2020 00:00:00 GMT"},
+    ):
+        resp = anon_client.get(url, headers=headers)
+        assert resp.status_code == 200 and resp.content == whole, headers
+        assert "content-range" not in resp.headers
+
+
+def test_the_bytes_that_were_checked_are_the_bytes_sent(client, anon_client, monkeypatch):
+    """A file replaced between the check and the answer (a `restore.sh`
+    unpack) is never sent: the route serves what `checked_bytes` read."""
+    from app.services import photos
+    from tests.test_photo_metadata import SECRET, dirty
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    photos._write_marker()
+    clean = photos.clean_bytes(*photos.open_validated(dirty("JPEG")))
+    full = _plant_over(client, item, "full", clean)
+    real = photos.checked_bytes
+
+    def then_replaced(path):
+        found = real(path)
+        path.write_bytes(dirty("JPEG"))  # arrives just after the check
+        return found
+
+    monkeypatch.setattr(photos, "checked_bytes", then_replaced)
+    resp = anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/full")
+    assert resp.status_code == 200 and resp.content == clean
+    assert SECRET not in resp.content and full.read_bytes() == dirty("JPEG")
+
+
+def test_reencodes_are_capped(client, anon_client):
+    """At most two photos are re-encoded at once; a third request is told
+    to come back (503, `Retry-After`), not queued. The fast path needs no
+    slot."""
+    from app.routers import share as share_routes
+    from app.services import photos
+    from tests.test_photo_metadata import dirty
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    url = f"/api/share/{token}/photos/{item['photo_id']}"
+    _plant_over(client, item, "full", dirty("JPEG"))
+    slots = share_routes.REENCODE_SLOTS
+    assert slots.acquire(blocking=False) and slots.acquire(blocking=False)
+    try:
+        resp = anon_client.get(f"{url}/full")
+        assert resp.status_code == 503 and resp.headers["retry-after"] == "5"
+        assert resp.headers["cache-control"] == "no-store"
+        assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+        photos._write_marker()
+        clean = photos.clean_bytes(*photos.open_validated(dirty("JPEG")))
+        _plant_over(client, item, "full", clean)
+        resp = anon_client.get(f"{url}/full")  # from disk: no slot needed
+        assert resp.status_code == 200 and resp.content == clean
+    finally:
+        slots.release()
+        slots.release()
+    _plant_over(client, item, "full", dirty("JPEG"))
+    assert anon_client.get(f"{url}/full").status_code == 200  # the slots came back
+
+
+def test_a_file_the_pass_could_not_read_is_refused(client, anon_client):
+    """The marker lists what the pass couldn't rewrite; such a file is the
+    one 404 even if it looks clean, since nothing but the check vouches for
+    it. A marker from before v0.32.2 lists nothing."""
+    from app.services import photos
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    key = client.get(f"/api/items/{item['id']}").json()["photos"][0]["file_key"]
+    url = f"/api/share/{token}/photos/{item['photo_id']}"
+    photos._write_marker([key])
+    assert_not_found(anon_client.get(f"{url}/full"))
+    assert anon_client.get(f"{url}/thumb").status_code == 200  # not listed
+    photos._marker_path().write_text("Every stored photo has had its metadata removed.\n")
+    resp = anon_client.get(f"{url}/full")
+    assert resp.status_code == 200 and resp.content == photos.path_of(key).read_bytes()
+
+
+def _boundary_cases():
+    from tests.test_photo_metadata import BEYOND_STRUCTURE, REFUSED
+
+    cases = [pytest.param(name, make, id=name) for name, make in sorted(REFUSED.items())]
+    limit = pytest.mark.xfail(
+        strict=True,
+        reason="inside the compressed pixel stream: the check reads structure only",
     )
-    assert resp.status_code == 200 and resp.content == whole
+    cases += [
+        pytest.param(name, make, id=name, marks=limit)
+        for name, make in sorted(BEYOND_STRUCTURE.items())
+    ]
+    return cases
+
+
+@pytest.mark.parametrize("name, make", _boundary_cases())
+def test_no_canary_crosses_the_share_boundary(client, anon_client, name, make):
+    """With the marker present, a file carrying anything past its pixels is
+    never sent as it is: re-encoded without it, or the one 404."""
+    from app.services import photos
+    from tests.test_photo_metadata import CANARY
+
+    enable(client)
+    item = full_item(client)
+    token, _ = make_link(client)
+    photos._write_marker()
+    raw = make()
+    _plant_over(client, item, "full", raw)
+    resp = anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/full")
+    assert resp.status_code in (200, 404), resp.status_code
+    assert resp.content != raw
+    assert CANARY not in resp.content
 
 
 def test_a_credential_changes_nothing(client, anon_client, token_client):
