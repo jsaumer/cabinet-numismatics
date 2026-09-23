@@ -194,6 +194,9 @@ async def lifespan(app: FastAPI):
         # Before serving anything: new code must not run against an old schema.
         # A failure raises here and stops startup rather than limping along.
         await asyncio.to_thread(schema.upgrade_to_head, engine)
+        # The share links a restore stopped mid-way left to put back, now
+        # that an archive from before 0022 has its share_links table.
+        await asyncio.to_thread(restores.apply_pending_sharing)
         # A secret stored as plain text is never used; clear and name it now
         # rather than at the first hourly tick. Tests (AUTO_MIGRATE=false)
         # have no database here; the hourly tick covers that setting too.
@@ -205,10 +208,15 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(_in_session, auth_setup.prepare)
         # The sharing switch, into memory before the first request asks.
         await asyncio.to_thread(_in_session, _load_sharing)
-        # Photos stored before v0.32.0 may carry EXIF and GPS: cleaned once,
-        # in the background, so a large volume never holds up startup.
-        if not photo_files.clean_in_background():
-            logger.info("Photo metadata: every stored photo is already clean")
+    else:
+        # The operator migrates by hand, so the schema is theirs to have
+        # brought up; with no pending file this reads nothing.
+        await asyncio.to_thread(restores.apply_pending_sharing)
+    # Photos stored before v0.32.0 may carry EXIF and GPS: cleaned once, in
+    # the background, so a large volume never holds up startup. No database
+    # needed, so whether migrations run here makes no difference.
+    if not photo_files.clean_in_background():
+        logger.info("Photo metadata: every stored photo is already clean")
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]

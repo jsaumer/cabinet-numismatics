@@ -15,7 +15,7 @@ is never logged. What an item shows is `share.item_view`'s allowlist.
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 
 from app.auth import common, throttle
@@ -41,10 +41,15 @@ MAX_OFFSET = 1_000_000  # past bigint range is a database error, not a 422
 
 class _PhotoFile(FileResponse):
     """No `Last-Modified` or `ETag`: both are built from the file's time,
-    which is when the photo was uploaded, close to when the piece was bought."""
+    which is when the photo was uploaded, close to when the piece was bought.
+    With neither, an `If-Range` can never match, so it gets the whole body
+    (Starlette's own check would read the missing headers and fail)."""
 
     def set_stat_headers(self, stat_result) -> None:
         self.headers.setdefault("content-length", str(stat_result.st_size))
+
+    def _should_use_range(self, http_if_range: str) -> bool:
+        return False
 
 
 def _address(request: Request) -> str:
@@ -148,7 +153,9 @@ def share_photo(
     token: str, photo_id: str, variant: str, request: Request, db: Session = Depends(get_db)
 ):
     """A shared piece's photo (`thumb` or `full`), served here rather than
-    through nginx's `/photos/`, which stays for a session or a token."""
+    through nginx's `/photos/`, which stays for a session or a token. Until
+    the one-time pass has written its marker, the file is re-encoded without
+    metadata on every request rather than trusted as it is on disk."""
 
     def work(link):
         if variant not in VARIANTS:
@@ -158,6 +165,12 @@ def share_photo(
         path = photo_store.path_of(key) if key else None
         if path is None or not path.is_file():
             raise share.NotFound()
-        return _PhotoFile(path, headers=PHOTO_HEADERS)
+        if photo_store.marker_exists():
+            return _PhotoFile(path, headers=PHOTO_HEADERS)
+        try:
+            body, media_type = photo_store.cleaned_file(path)
+        except ValueError:
+            raise share.NotFound() from None
+        return Response(body, media_type=media_type, headers=PHOTO_HEADERS)
 
     return _answer(request, db, token, work)

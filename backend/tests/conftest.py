@@ -78,6 +78,16 @@ def _fresh_monitoring_state():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_background_photo_pass(monkeypatch):
+    """Every app start runs the photo-metadata pass on a thread (v0.32.0,
+    whatever AUTO_MIGRATE says); in tests it would race the files a test
+    plants. Tests that want it patch `photos._spawn` themselves."""
+    from app.services import photos
+
+    monkeypatch.setattr(photos, "_spawn", lambda fn: None)
+
+
 BASE_URL = "https://testserver"  # PUBLIC_ORIGINS, so CSRF's Origin rule matches
 SAME_ORIGIN = {"Sec-Fetch-Site": "same-origin"}
 PASSWORD = "correct horse battery"

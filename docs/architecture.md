@@ -99,7 +99,8 @@ that user with `setpriv`; see [security.md](security.md). It mounts five
 volumes: `photo_data` (`/data/photos`), `document_data` (`/data/documents`),
 `backup_data` (`/data/backups`), `backend_state` (`/data/state`: the
 generated encryption key when `SECRET_KEY` is unset, plus the last restore's
-outcome, `restore_last.json`, and `restore_journal.json` while one runs,
+outcome, `restore_last.json`, `restore_journal.json` while one runs, and
+`pending_sharing.json` while share links wait to be put back after one,
 and the generated backup key `backup.key` when neither `BACKUP_KEY_FILE` nor
 `BACKUP_KEY` is set),
 and `staging_data` (`/data/staging`, 0700: where an archive's database dump

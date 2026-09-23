@@ -32,9 +32,12 @@ Share links are access grants, so they are kept like sign-in data (v0.32.0):
 the live `share_links` rows and the `share_enabled` switch are read after
 the safety backup, and put back after the database step and the migrations,
 replacing whatever the archive held; a revoked link can't come back with an
-older archive, and an archive can't switch sharing on. An archive's photos
-may carry metadata, so the photo marker is removed before they are swapped
-in and a cleaning pass runs after.
+older archive, and an archive can't switch sharing on. A backend restarted
+after the database step leaves the snapshot in `pending_sharing.json`, put
+back by `apply_pending_sharing` once startup has migrated. A put-back that
+fails deletes every link and switches sharing off, and keeps the snapshot
+there to try again. An archive's photos may carry metadata, so the photo
+marker is removed before they are swapped in and a cleaning pass runs after.
 """
 
 import hmac
@@ -177,6 +180,11 @@ def _outcome_path() -> Path:
 
 def _journal_path() -> Path:
     return _state_dir() / "restore_journal.json"
+
+
+def _pending_path() -> Path:
+    """The live share links and switch still to be put back (v0.32.0)."""
+    return _state_dir() / "pending_sharing.json"
 
 
 def upload_dir() -> Path:
@@ -1014,18 +1022,35 @@ def _put_back_sharing(engine: Engine, snapshot: dict | None, actor) -> dict | No
     except Exception:
         logger.exception("Restore: putting the share links back failed; switching sharing off")
         result["error"] = (
-            "The share links could not be put back, so sharing was switched off. "
-            "Check Settings, Sharing."
+            "The share links could not be put back, so they were removed and sharing was "
+            "switched off. Check Settings, Sharing."
         )
         result["enabled"] = False
-        try:
-            with Session(engine) as db:
-                store.set_setting(db, "share_enabled", False)
-                db.commit()
-        except Exception:
-            logger.exception("Restore: could not switch sharing off either")
+        result["links_kept"] = 0
+        _switch_sharing_off(engine)
     _audit_sharing(engine, result, actor)
     return result
+
+
+def _switch_sharing_off(engine: Engine) -> None:
+    """After a failed put-back: the rows in the table are the archive's (the
+    transaction rolled back), so none may stay behind a switch the owner
+    could turn on. In a transaction of its own; memory is set off whatever
+    the database says."""
+    try:
+        with engine.connect() as conn:
+            found = inspect_db(conn)
+            has_links = found.has_table(ShareLink.__tablename__)
+            has_settings = found.has_table(AppSetting.__tablename__)
+        with Session(engine) as db:
+            if has_links:
+                db.execute(ShareLink.__table__.delete())
+            if has_settings:
+                store.set_setting(db, "share_enabled", False)
+            db.commit()
+    except Exception:
+        logger.exception("Restore: could not remove the share links or switch sharing off")
+    share.set_enabled(False)
 
 
 def _audit_sharing(engine: Engine, result: dict, actor) -> None:
@@ -1060,13 +1085,74 @@ def _sharing_sentence(sharing: dict | None) -> str:
     return words
 
 
-def _reload_sharing(engine: Engine) -> None:
+def _reload_sharing(engine: Engine, sharing: dict | None = None) -> None:
+    """Memory from the database, unless the put-back failed: then it stays
+    off, since the database may still hold the archive's switch."""
+    if sharing and sharing.get("error"):
+        share.set_enabled(False)
+        return
     try:
         with Session(engine) as db:
             share.load(db)
     except Exception:
         logger.exception("Restore: could not read whether sharing is on")
         share.reset_memory()  # the gate reads it on first use
+
+
+def _write_pending(snapshot: dict, archive: str | None) -> None:
+    _write_json(_pending_path(), {"archive": archive, "at": _now(), "snapshot": snapshot})
+
+
+def _pending_snapshot() -> dict | None:
+    """A snapshot a restart or a failed put-back left: the owner's links
+    from before, not whatever the table holds now."""
+    data = _read_json(_pending_path())
+    snapshot = data.get("snapshot") if data else None
+    return snapshot if isinstance(snapshot, dict) else None
+
+
+_pending_lock = threading.Lock()
+
+
+def apply_pending_sharing(engine: Engine | None = None) -> dict | None:
+    """Put back the share links and switch a restore left in
+    `pending_sharing.json`: at startup right after the migrations (or where
+    they would run, when the operator migrates by hand), and again every
+    hourly tick and when Settings is opened while the file is there. The
+    result goes into the last outcome's `sharing`. The file goes only on
+    success; on a failure every link is removed and sharing switched off
+    (`_put_back_sharing`), and the next try runs from the same snapshot.
+    Never raises."""
+    with _pending_lock:
+        path = _pending_path()
+        if not path.exists():
+            return None
+        if engine is None:
+            from app.db import engine
+        try:
+            snapshot = _pending_snapshot()
+            if snapshot is None:
+                logger.error(
+                    "Restore: %s can't be read, so the share links it holds can't be put "
+                    "back; sharing is switched off until the file is removed",
+                    path,
+                )
+                _switch_sharing_off(engine)
+                return None
+            result = _put_back_sharing(engine, snapshot, None)
+            last = last_outcome()
+            if last is not None:
+                _record({**last, "sharing": result})
+            if result.get("error"):
+                return result
+            path.unlink(missing_ok=True)
+            _reload_sharing(engine)
+            logger.info("Restore: the share links from before the restore were put back")
+            return result
+        except Exception:
+            logger.exception("Restore: putting the pending share links back failed")
+            share.set_enabled(False)
+            return None
 
 
 # --- running ----------------------------------------------------------------
@@ -1214,8 +1300,9 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
                 db.close()
             outcome["safety_backup"] = safety.name
             # After the safety backup (which carries them too), before the
-            # database step: what to put back.
-            sharing = _snapshot_sharing(engine)
+            # database step: what to put back. A snapshot an earlier restore
+            # left unapplied is the owner's, not what the table holds now.
+            sharing = _pending_snapshot() or _snapshot_sharing(engine)
 
             # Unpack first, swap last: unpacking is what can run out of room
             # or meet a bad member, and it touches nothing live.
@@ -1263,48 +1350,72 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
                 ) from exc
             raise RestoreError(f"{_sentence(exc)} {NOTHING_CHANGED}") from exc
         database_restored = True
-        _write_json(_journal_path(), {"phase": "swapping", "sharing_snapshot": sharing, **outcome})
-        go_back = f"Restore {outcome['safety_backup']} to return to how things were."
-        outcome["secrets_cleared"] = _after_database(engine)
+        put_back = False
 
-        migration_error = None
-        if _will_migrate(manifest):
-            _step("migrations")
+        def put_sharing_back() -> None:
+            nonlocal put_back
+            if put_back:
+                return
+            put_back = True
+            outcome["sharing"] = result = _put_back_sharing(engine, sharing, entry.get("actor"))
             try:
-                dispose_engine(engine)
-                migrate(engine)  # the collection chain only
-            except Exception as exc:
-                logger.exception("Restore: migrating the restored database failed")
-                migration_error = exc
-        # After the migrations: an archive from before 0022 has no share_links
-        # table until they run.
-        outcome["sharing"] = _put_back_sharing(engine, sharing, entry.get("actor"))
+                if result is not None and result.get("error"):
+                    _write_pending(sharing, outcome["archive"])  # tried again later
+                else:
+                    _pending_path().unlink(missing_ok=True)
+            except OSError:
+                logger.exception("Restore: could not update %s", _pending_path())
 
-        _step("finishing")
         try:
-            for swap in swaps:
-                swap.apply()
-        except Exception as exc:
-            logger.exception("Restore: replacing the files failed; putting them back")
-            for swap in swaps:
-                try:
-                    swap.undo()
-                except OSError:
-                    logger.exception("Restore: could not put back %s", swap.folder)
-            raise RestoreError(
-                f"The database was restored, but replacing the files failed "
-                f"({_sentence(exc)[:-1]}), so the previous files were put back. {go_back}"
-            ) from exc
-        for swap in swaps:
-            swap.finish()
-        if _swaps_photos(manifest):
-            photos.clean_in_background(force=True)
-        if migration_error is not None:
-            raise RestoreError(
-                "The archive was restored, but bringing its database up to this version "
-                f"failed: {_sentence(migration_error)} Restart the backend to try the "
-                f"migration again. {go_back}"
+            _write_json(
+                _journal_path(), {"phase": "swapping", "sharing_snapshot": sharing, **outcome}
             )
+            go_back = f"Restore {outcome['safety_backup']} to return to how things were."
+            outcome["secrets_cleared"] = _after_database(engine)
+
+            migration_error = None
+            if _will_migrate(manifest):
+                _step("migrations")
+                try:
+                    dispose_engine(engine)
+                    migrate(engine)  # the collection chain only
+                except Exception as exc:
+                    logger.exception("Restore: migrating the restored database failed")
+                    migration_error = exc
+            # After the migrations: an archive from before 0022 has no
+            # share_links table until they run.
+            put_sharing_back()
+
+            _step("finishing")
+            try:
+                for swap in swaps:
+                    swap.apply()
+            except Exception as exc:
+                logger.exception("Restore: replacing the files failed; putting them back")
+                for swap in swaps:
+                    try:
+                        swap.undo()
+                    except OSError:
+                        logger.exception("Restore: could not put back %s", swap.folder)
+                raise RestoreError(
+                    f"The database was restored, but replacing the files failed "
+                    f"({_sentence(exc)[:-1]}), so the previous files were put back. {go_back}"
+                ) from exc
+            for swap in swaps:
+                swap.finish()
+            if _swaps_photos(manifest):
+                photos.clean_in_background(force=True)
+            if migration_error is not None:
+                raise RestoreError(
+                    "The archive was restored, but bringing its database up to this version "
+                    f"failed: {_sentence(migration_error)} Restart the backend to try the "
+                    f"migration again. {go_back}"
+                )
+        finally:
+            # The database is the archive's: whatever failed after it (the
+            # journal write, the secrets, the migrations), its links and
+            # switch are never left in place.
+            put_sharing_back()
         outcome["ok"] = True
         logger.info("Restore: done (%s)", outcome["archive"])
     except BaseException as exc:
@@ -1334,9 +1445,11 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         dispose_engine(engine)
         metrics.reset_cache()
         alerts.reset_memory()
-        _reload_sharing(engine)
+        _reload_sharing(engine, outcome.get("sharing"))
     except Exception:
         logger.exception("Restore: tidying up failed")
+        if (outcome.get("sharing") or {}).get("error"):
+            share.set_enabled(False)
     _record(outcome)
     maintenance.leave()
     _end_grant(restore_id)
@@ -1399,6 +1512,11 @@ def recover(engine: Engine | None = None) -> None:
     reached, the journal is kept and the backend stays in maintenance until a
     restart can decide, rather than serve an old database with new files.
     `swapping`: the swap is rolled forward (renames `_Swap.apply` can repeat).
+    Whenever the database is the archive's, the journal's share-link
+    snapshot goes to `pending_sharing.json` first, for `apply_pending_sharing`
+    after the migrations (an archive from before 0022 has no share_links
+    table until then); if that file can't be written, the journal is kept
+    and the backend stays in maintenance, as above.
     Staging is emptied entirely, and so are uploads a restart has orphaned."""
     backup.empty_staging(everything=True)
     _clear_uploads()
@@ -1443,8 +1561,9 @@ def recover(engine: Engine | None = None) -> None:
                     outcome["error"] = f"The backend stopped during the restore. {NOTHING_CHANGED}"
                 logger.warning("A restore was interrupted before the database was replaced")
             else:
+                if not _keep_snapshot(snapshot, outcome):
+                    return  # the journal stays
                 outcome["secrets_cleared"] = _after_database(engine)
-                outcome["sharing"] = _put_back_sharing(engine, snapshot, None)
                 photos.remove_marker()  # the startup pass cleans what comes in
                 _roll_forward(folders)
                 outcome["ok"] = True
@@ -1453,7 +1572,8 @@ def recover(engine: Engine | None = None) -> None:
                     "Finished a restore that was interrupted after the database was replaced"
                 )
         elif phase == "swapping":
-            outcome["sharing"] = _recover_sharing(engine, snapshot)
+            if not _keep_snapshot(snapshot, outcome):
+                return  # the journal stays
             photos.remove_marker()
             _roll_forward(folders)
             outcome["ok"] = True
@@ -1473,18 +1593,24 @@ def recover(engine: Engine | None = None) -> None:
     _clear_legacy_dumps()
 
 
-def _recover_sharing(engine: Engine | None, snapshot: dict | None) -> dict | None:
-    """The put-back again for a restore stopped after the database step: it
-    may or may not have run, and running it twice gives the same result."""
+def _keep_snapshot(snapshot: dict | None, outcome: dict) -> bool:
+    """For a restore stopped after the database step: leave the snapshot
+    for `apply_pending_sharing` (the put-back may or may not have run, and
+    running it again gives the same result). False, with the backend in
+    maintenance, when it can't be written: the journal must stay, or the
+    archive's links would be left live."""
     if snapshot is None:
-        return None
-    if engine is None:
-        from app.db import engine
+        return True
     try:
-        schema.wait_for_database(engine)
-    except Exception:
-        logger.exception("Restore: the database can't be reached to put the share links back")
-    return _put_back_sharing(engine, snapshot, None)
+        _write_pending(snapshot, outcome.get("archive"))
+    except OSError:
+        logger.exception(
+            "A restore was interrupted after the database step, and the share links to put "
+            "back can't be saved; staying in maintenance until a restart can"
+        )
+        maintenance.enter()
+        return False
+    return True
 
 
 def _swaps_photos(manifest: dict | None) -> bool:

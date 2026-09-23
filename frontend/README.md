@@ -267,8 +267,9 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   `show_certs` each carry a one-line reason beyond their label (composition,
   weight, and fineness always show regardless, so a melt value already
   follows without the values toggle; a cert number is a lookup key into
-  public auction records), shown as a hover title and as small text under
-  the toggle list.
+  public auction records, and a photo of a slab label or a stamped bar
+  shows its number whatever the toggle says), shown as a hover title and
+  as small text under the toggle list.
 
 - **Design tokens.** Colours and the typeface are CSS variables on `:root`
   at the top of `styles.css`, with the dark values under

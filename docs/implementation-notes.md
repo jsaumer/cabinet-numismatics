@@ -1807,26 +1807,27 @@ and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
   `PHOTO_DIR` must too. Stored width and height are the upright image's,
   as before. `carries_metadata` is a whitelist (`HARMLESS_INFO`): anything
   Pillow reports outside it counts as metadata, and everything
-  `clean_bytes` writes is inside it, so a second pass rewrites nothing.
-  Documents are untouched (they are never shared, and a receipt's bytes are
+  `clean_bytes` writes is inside it. (Stage 5 found that check missed
+  segments and chunks Pillow keeps out of `info`; see below.) Documents are untouched (they are never shared, and a receipt's bytes are
   the record).
 - **The one-time pass and its marker.** `photos.strip_existing()` walks
   `PHOTO_DIR` with `os.walk(followlinks=False)`, skipping dot-folders (a
-  restore's `.restore-*`), dot-files, symlinks, and thumbnails
-  (`*_thumb.jpg`, always clean), rewrites an original that carries metadata
-  to `.strip-<hex>.<ext>` beside it and `os.replace`s it in (skipped if the
+  restore's `.restore-*`), dot-files, and symlinks, rewrites a file
+  (stage 5: every original and thumbnail, not only those that seem to
+  carry metadata) to `.strip-<hex>.<ext>` beside it and `os.replace`s it in (skipped if the
   original was deleted meanwhile), and never raises. It writes the marker
   `photos_clean` (`archive_keys.state_dir()`, beside `auth_claimed`) only
   when no rewrite failed, so the next start tries again; a file Pillow
   can't open is counted as unreadable and doesn't hold the marker back. A
   leftover `.strip-*` older than ten minutes is deleted. One pass at a time
-  per process (`_pass_lock`). Callers: startup (`main.lifespan`, after the
-  migrations, only with `AUTO_MIGRATE`, through `clean_in_background`,
+  per process (`_pass_lock`). Callers: startup (`main.lifespan`, whatever
+  `AUTO_MIGRATE` says from stage 5, through `clean_in_background`,
   which skips when the marker exists), an in-app restore that brings
   `photos.tar.gz` (`photos.remove_marker()` before the database step, so a
   restart after it runs a pass too; `clean_in_background(force=True)` after
   the swap; `recover()` removes the marker when it rolls a swap forward),
-  and `python -m app.cli strip-photo-metadata` after `restore.sh`. Tests
+  and `python -m app.cli strip-photo-metadata`, which `restore.sh` runs
+  from stage 5. Tests
   patch `photos._spawn` to run inline (test_restore's `calls` fixture
   counts the passes).
 - **The sharing switch lives in memory.** `share.enabled()` reads a module
@@ -1881,9 +1882,9 @@ and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
   `restore_sharing` (under the restore's actor, every run), and adds a
   sentence to the `restore_finished` alert only when `differed` or a link
   was dropped (`_sharing_sentence`). `recover()` pops the snapshot from the
-  journal (never into `restore_last.json`) and puts it back the same way
-  after a replaced database or during `swapping` (`_recover_sharing` waits
-  for the database first); running it twice gives the same rows.
+  journal (never into `restore_last.json`); from stage 5 it leaves it in
+  `pending_sharing.json` for after the migrations rather than putting it
+  back itself (below). Running the put-back twice gives the same rows.
 - **`PATCH /api/share-links/{id}` is `admin, fresh`**, audited as
   `share_link_changed` only when something changed (`detail.changed`: each
   option's new value, and `renamed_from` on a rename) and alerted
@@ -1902,6 +1903,102 @@ and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
   file's mtime, the upload time). `offset` on the items route is at most
   `MAX_OFFSET` (1,000,000; 422 past it), since a value past bigint range
   was a Postgres error.
+
+Stage 5, the second review's findings (23 September 2026,
+[the review](specs/SPEC_0320-review-opus-2.md), and SPEC_0320's build log).
+Rules it left:
+
+- **The startup pass doesn't wait for migrations.** `main.lifespan` calls
+  `photos.clean_in_background()` outside the `AUTO_MIGRATE` block: the pass
+  touches files only, so an install that migrates by hand is cleaned too.
+  Every app start in the tests would then start it on a thread, so
+  conftest's autouse `_no_background_photo_pass` makes `photos._spawn` a
+  no-op; a test that wants the pass patches `_spawn` itself.
+- **The share view never trusts the disk before the marker.** While
+  `photos.marker_exists()` is false, `routers/share.share_photo` reads the
+  file and answers `photos.cleaned_file(path)` (`open_validated`, then
+  `clean_bytes` at `QUALITY`, or `THUMB_QUALITY` for a `*_thumb.jpg`) from
+  memory as a plain `Response` with `PHOTO_HEADERS` and the image's own
+  media type; no `Last-Modified`, no `ETag`, no ranges, no cache (the
+  window is one pass long). A file that can't be decoded raises
+  `ValueError`, answered as the one 404. With the marker, `_PhotoFile`
+  serves the file as before. Anything that removes the marker
+  (`remove_marker`, and `restore.sh` through it) switches this on, which
+  is the point: remove it before photos of unknown cleanliness arrive.
+- **The pass rewrites everything, once.** `strip_existing` walks originals
+  and thumbnails (`_stored_files`) and re-encodes each whatever it seems to
+  carry, since no check is trusted to find everything; the marker is what
+  stops a repeat, and the container command always runs the whole pass
+  (each run re-encodes JPEGs once more, which is why nothing calls it on a
+  schedule). A file in a format Cabinet doesn't store is counted as
+  unreadable and left alone. A thumbnail is re-encoded at quality 85 and,
+  like a new one from `save_photo`, with its `info` emptied first, since
+  Pillow's JPEG encoder takes `comment` from `im.info` by default; that is
+  how a thumbnail made before v0.32.0 came to carry the source's comment.
+- **`carries_metadata(img, data)` is the tests' oracle, not the pass's.**
+  Besides the `info` whitelist it reads a JPEG's `applist` (anything but
+  APP0 `JFIF`, APP2 `ICC_PROFILE`, APP14 `Adobe` counts, and so does a
+  `COM`), a PNG's text (any keyword, so `timestamp` or `dpi` as a text
+  keyword counts) and private chunks, and a walk of the PNG's own chunks
+  (`_png_chunks`: anything outside `HARMLESS_PNG`, bytes after `IEND`
+  included), because Pillow skips public chunks it can't read, such as
+  `tIME`. Pass the file's bytes for a PNG opened from memory; without them
+  and without a filename it answers true. Keep `clean_bytes`' output inside
+  what it accepts.
+- **A shared photo ignores `If-Range`.** `_PhotoFile._should_use_range`
+  returns false: with no `Last-Modified` or `ETag` there is nothing for it
+  to match, and Starlette's own check reads those headers and raised
+  `KeyError`. A plain `Range` still gets 206 from disk.
+- **Once the database is the archive's, the put-back always runs.** In
+  `restore._run`, everything after `database_restored = True` sits in a
+  `try` whose `finally` calls `put_sharing_back()`, which runs once: after
+  the migrations normally, or on the way out when the swapping journal
+  write, the secrets check, or anything else raised. Keep new steps after
+  the database inside that `try`.
+- **A failed put-back empties the table.** `_put_back_sharing`'s failure
+  path calls `_switch_sharing_off(engine)`: in a transaction of its own it
+  deletes every `share_links` row (they are the archive's; the put-back's
+  transaction rolled back) and writes `share_enabled` false, then
+  `share.set_enabled(False)` whatever happened. `_reload_sharing(engine,
+  sharing)` in `_finish` keeps memory off when `sharing` has an `error`
+  instead of reading the database, which may still hold the archive's
+  switch if the delete failed too.
+- **Links left to put back live in `pending_sharing.json`** beside the
+  journal (`restore._pending_path()`), as `{archive, at, snapshot}`.
+  `recover()` writes it (`_keep_snapshot`) as soon as it knows the
+  database is the archive's (a replaced `database` phase, or `swapping`),
+  before rolling the swap forward, and never puts links back itself: an
+  archive from before `0022` has no `share_links` until the startup
+  migrations run. If the file can't be written it enters maintenance and
+  returns with the journal kept, like an unreachable database. A run
+  whose put-back failed writes it too, and a run that starts while it is
+  there snapshots from it (`_pending_snapshot()`), not from the table.
+  `restore.apply_pending_sharing(engine)` puts it back, under
+  `_pending_lock`: in `main.lifespan` right after `upgrade_to_head` (or at
+  the same point with `AUTO_MIGRATE` off), first in every hourly tick
+  (before `share.load`), and in `GET /api/settings` (before its load). It
+  audits as `restore_sharing` (actor `system`), merges the result into
+  `restore_last.json`'s `sharing`, and deletes the file only on success;
+  on an error the file stays and `_put_back_sharing` has already switched
+  sharing off, so a switch-on by the owner meanwhile lasts until the next
+  retry. An unreadable file switches sharing off and stays until someone
+  removes it. It never raises and is a stat when there is no file.
+- **A load never overwrites a newer switch.** `share._generation` moves
+  on every `set_enabled` and `reset_memory`; `share.load` reads it before
+  its database read and writes memory only if it hasn't moved, otherwise
+  returning what memory holds. `set_enabled` is for a value that is
+  authoritative (the settings `PUT` after its commit, a failed put-back);
+  anything that only rereads the database calls `load`, which is why
+  `GET /api/settings` now does. The switch is per process, so the docs
+  now say to run one backend replica for it as well as for the loops.
+- **`restore.sh` handles photos and says what it can't.** With an
+  archive that brings photos it removes the marker (`python -c` through
+  `photos.remove_marker()`, so the path stays the service's) before
+  deleting and unpacking the files, then runs
+  `python -m app.cli strip-photo-metadata` (a failure is reported, not
+  fatal), and it always ends by printing that the archive's share links
+  and switch are live. The Swarm steps in backup-restore.md carry the same
+  two lines.
 
 ## Releases
 

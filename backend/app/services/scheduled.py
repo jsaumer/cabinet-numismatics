@@ -109,6 +109,14 @@ def _hourly(db: Session) -> None:
         db.rollback()
         logger.exception("Checking stored secrets failed")
     try:
+        # Share links a restore left to put back (a failed try at startup)
+        # go back first, so the load below never reads the archive's switch.
+        from app.services import restore
+
+        restore.apply_pending_sharing(db.get_bind())
+    except Exception:
+        logger.exception("Putting the pending share links back failed")
+    try:
         # The gate holds the sharing switch in memory; a database put back by
         # restore.sh (or edited by hand) is picked up here.
         from app.services import share

@@ -12,7 +12,10 @@ Nothing here makes a network call: values convert at cached rates only.
 Whether sharing is on is held in memory (`enabled`), because the gate asks
 on every anonymous request under `/api/share/` and must not read the
 database for it: loaded from the database once, set by the settings route,
-reloaded after a restore and every hourly tick.
+reloaded after a restore and every hourly tick. A load never overwrites a
+value set while it was reading (`_generation`), so a stale read can't switch
+sharing back on after the owner switched it off. The switch is per process:
+run one backend replica.
 """
 
 import hashlib
@@ -67,6 +70,7 @@ ITEM_LOAD = (selectinload(Item.photos), selectinload(Item.tags), selectinload(It
 
 _enabled_lock = threading.Lock()
 _enabled: bool | None = None  # None: not known yet, read from the database
+_generation = 0  # moved by every set and reset; a load writes only if unchanged
 
 
 class NotFound(Exception):
@@ -119,16 +123,20 @@ def cached() -> bool | None:
 
 
 def set_enabled(value: bool) -> None:
-    global _enabled
+    global _enabled, _generation
     with _enabled_lock:
         _enabled = bool(value)
+        _generation += 1
 
 
 def load(db: Session | None = None) -> bool:
     """Read the switch from the database into memory. With no session one
     is opened (the gate and the loops have none of their own). An
     `app_settings` table that isn't there yet (an archive from before it,
-    not migrated) reads as off."""
+    not migrated) reads as off. If the switch was set while this read ran
+    (the settings route, a restore), that value stands and is returned: the
+    read may have seen the database before it changed."""
+    global _enabled
     if db is None:
         from app.db import SessionLocal
 
@@ -137,12 +145,17 @@ def load(db: Session | None = None) -> bool:
             return load(own)
         finally:
             own.close()
+    with _enabled_lock:
+        seen = _generation
     if not inspect(db.get_bind()).has_table(AppSetting.__tablename__):
         value = False
     else:
         value = bool(app_settings.get_setting(db, "share_enabled"))
-    set_enabled(value)
-    return value
+    with _enabled_lock:
+        if _generation != seen and _enabled is not None:
+            return _enabled
+        _enabled = value
+        return value
 
 
 def enabled(db: Session | None = None) -> bool:
@@ -153,9 +166,10 @@ def enabled(db: Session | None = None) -> bool:
 def reset_memory() -> None:
     """Forget the switch; the next read loads it (tests, and after a restore
     that couldn't read it back)."""
-    global _enabled
+    global _enabled, _generation
     with _enabled_lock:
         _enabled = None
+        _generation += 1
 
 
 def target(db: Session, link: ShareLink) -> ItemSet | Checklist | None:

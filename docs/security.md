@@ -224,7 +224,7 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 | Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot. Failed share lookups (v0.32.0) are counted in a map of their own, so a flood of them from many addresses can never push the account or address delays out of memory |
 | A stolen password reused later, or a token outliving a compromise | Password change revokes every other session, every known device, and every API token; `read`/`write` tokens expire within a week regardless |
 | An unlocked, signed-in browser | The recent-password window on sensitive actions; `no-store` and `Clear-Site-Data` on sign-out |
-| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. The cert number has a toggle of its own, off by default, since it looks a slab up in auction archives. Photos carry no metadata (below), and the photo response no file time. Wrong, unknown, and revoked tokens all answer the same 404; the link is looked up first, so a live link is never throttled, and only failed lookups are: 20 per address (an IPv6 address by its /64), then the sign-in curve, and 300 a minute from all addresses, answered 429 without counting. Sharing switched off is the gate's plain 401. A restore keeps the live links and switch, whatever the archive held, so a revoked link can't come back with an older archive. Widening a link (notes, values, the cert number) needs the password again and is alerted. Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
+| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. The cert number has a toggle of its own, off by default, since it looks a slab up in auction archives. Photos carry no metadata (below), and the photo response no file time. Wrong, unknown, and revoked tokens all answer the same 404; the link is looked up first, so a live link is never throttled, and only failed lookups are: 20 per address (an IPv6 address by its /64), then the sign-in curve, and 300 a minute from all addresses, answered 429 without counting. That throttle doesn't slow guessing (every request is still looked up; a throttled guess that hits still opens), it only turns failed lookups into 429s: the 256-bit token is the defence. Sharing switched off is the gate's plain 401; the switch is held in each backend process's memory, so run one replica (as the schedulers already require), or a second one could keep answering after the first was switched off. A restore keeps the live links and switch, whatever the archive held, so a revoked link can't come back with an older archive. Widening a link (notes, values, the cert number) needs the password again and is alerted. Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
 | A tampered or planted archive | The backup key's MAC (see "What is *not* encrypted"); a stored secret only used if it decrypts with this deployment's key |
 | **Shared Docker networks.** A container on the same network as the backend could otherwise reach it directly, bypassing nginx and the gate | Not enforced by Cabinet: the docs say nothing but nginx should reach the backend, and the example Swarm stack puts it on a network of its own. A deployment that shares a network with the backend anyway loses this protection |
 | **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |
@@ -319,7 +319,7 @@ Two more kinds of caller are not accounts:
 | Delete for good, empty the trash | yes, with the password again | no | no | no | no |
 | Delete a photo or replace its image, delete a document or unlink it from its last item (the files go for good) | yes, with the password again | no | no | no | no |
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
-| Create, change, and revoke share links (only while sharing is on; with the password again) | yes | own links | no | no | no |
+| Create, change, and revoke share links (with the password again; creating and regenerating need sharing on, changing and revoking work either way) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes, with the password again | view only | no | no | no |
 | Save, reset, or delete the dashboard layout | yes | no | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
@@ -446,12 +446,20 @@ Rules that go with the table:
   anyone holding it. So every original is re-encoded before it is stored
   (upload, URL import, and the in-browser editor alike): orientation
   applied, every EXIF block, XMP, IPTC, comment, and PNG text chunk dropped,
-  only the colour profile kept. Nothing written to the photo volume carries
-  metadata, whatever serves it (a share, nginx's `/photos/`, a backup).
-  Photos stored before that are cleaned once by a background pass at the
-  first start, again after an in-app restore that brings photos, and by
-  `python -m app.cli strip-photo-metadata` after `restore.sh` (see
-  [backup-restore.md](backup-restore.md#photo-metadata)).
+  only the colour profile kept. Thumbnails are written the same way.
+  Nothing written to the photo volume carries metadata, whatever serves it
+  (a share, nginx's `/photos/`, a backup). Photos stored before that,
+  thumbnails included (an older thumbnail could carry the source's JPEG
+  comment), are all re-encoded once by a background pass at the first start
+  (with or without `AUTO_MIGRATE`), again after an in-app restore that
+  brings photos, and by `restore.sh` itself through
+  `python -m app.cli strip-photo-metadata` (see
+  [backup-restore.md](backup-restore.md#photo-metadata)). Until that pass
+  has written its marker the share view trusts nothing on disk: it
+  re-encodes each photo as it serves it. The colour profile that is kept is
+  usually a standard one (sRGB, Display P3), but a profile made by a device
+  can name its model and the date the profile was made; nothing about where
+  or when the photo was taken.
 - **Database access** goes exclusively through SQLAlchemy's parameter binding;
   there is no string-built SQL.
 - **Documents** are stored on their own volume, never the photo volume nginx

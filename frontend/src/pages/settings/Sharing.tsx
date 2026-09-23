@@ -31,7 +31,7 @@ const OPTIONS: {
  * shown under the checkbox list and as its hover title. */
 const OPTION_HELP: Partial<Record<ToggleKey, string>> = {
   show_values: "Composition, weight, and fineness always show, so a melt value already follows without this; this toggle adds the estimated value itself. Costs and gains are never shown.",
-  show_certs: "The certification number. A cert number is a lookup key into public auction records, which often show what the piece last sold for.",
+  show_certs: "The certification number. A cert number is a lookup key into public auction records, which often show what the piece last sold for. A photo of a slab label or a stamped bar shows its number anyway.",
 };
 
 type ToggleKey = (typeof OPTIONS)[number]["key"];

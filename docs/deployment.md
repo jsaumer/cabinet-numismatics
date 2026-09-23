@@ -268,8 +268,11 @@ holding the link, without signing in and without going through Cabinet's
 own gate. An authenticating reverse proxy in front doesn't know that: it
 guards everything behind it by default, so it blocks your own share links
 too unless you exempt those paths from its authentication middleware. The
-share routes carry their own throttle (an unknown or wrong token is slowed,
-not refused outright) and mark themselves non-indexable (`X-Robots-Tag` and
+share routes carry their own throttle (after 20 failed lookups from one
+address, or 300 a minute from all of them, a failed lookup answers 429
+rather than 404; it doesn't slow guessing, since every request is still
+looked up and a live link always opens: the 256-bit token is what makes a
+link unguessable) and mark themselves non-indexable (`X-Robots-Tag` and
 a `noindex` meta tag on the page itself; `/robots.txt` no longer disallows
 `/s/`, since a crawler has to fetch the page to see that tag), so there is
 nothing else the edge proxy needs to add.
@@ -415,6 +418,9 @@ docker compose build --pull && docker compose up -d
 
 - **Run one backend replica.** The price-refresh and backup schedulers run
   in-process; additional replicas would duplicate refreshes and backups.
+  The sharing switch is held in each process's memory too (v0.32.0), so a
+  second replica could keep opening share links after the first was
+  switched off.
 - **Outbound HTTPS** is needed for `api.gold-api.com` (metal spot prices),
   `api.frankfurter.dev` (ECB exchange rates), and `cdn.jsdelivr.net` with its
   fallback `*.currency-api.pages.dev` (purchase-day spot for the bullion
@@ -456,9 +462,10 @@ docker compose build --pull && docker compose up -d
   `sign-out-everywhere` ends every session and known device (a lost laptop),
   and `revoke-tokens [--name NAME]` revokes every token or one. There is
   deliberately no command that undoes the setup or deletes the admin.
-  `strip-photo-metadata` (v0.32.0) removes EXIF, GPS, and the rest from
-  every stored photo, the pass the backend runs once by itself; it is for
-  after `restore.sh`, which puts back whatever the archive's photos carry.
+  `strip-photo-metadata` (v0.32.0) re-encodes every stored photo and
+  thumbnail without EXIF, GPS, and the rest, the pass the backend runs once
+  by itself; `restore.sh` runs it after putting back an archive's photos,
+  and the Swarm steps in backup-restore.md include it.
   On a Swarm, `docker exec -it` into the backend task instead.
 
 ## 7. Swarm / multi-host deployment
@@ -504,7 +511,8 @@ What that file does differently from `docker-compose.yaml`, and why:
 - **Logs rotate**: every service keeps three 10 MB `json-file` logs, here
   and in `docker-compose.yaml`.
 - **One replica each.** The refresh, backup, and alert schedulers run inside
-  the backend process; a second replica would run them twice.
+  the backend process; a second replica would run them twice, and would
+  hold its own copy of the sharing switch.
 - **Storage is named volumes so the file works as is.** On a real Swarm,
   point every volume at shared storage (NFS binds or a volume driver) so a
   task can follow its service to another node. Two mounts matter more than
