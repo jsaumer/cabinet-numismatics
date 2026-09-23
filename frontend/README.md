@@ -128,10 +128,14 @@ src/
                         switches restore off
 e2e/                  Playwright tests: auth.spec.ts (sign-in, sign-out, the
                        confirm dialog, the Account section, none of it
-                       touching the shared session) and smoke.spec.ts (the
-                       rest, its last two tests changing and reverting the
-                       admin's password and username); the sign-in global
-                       setup (global-setup.ts)
+                       touching the shared session), share.spec.ts (a
+                       collection link end to end: create it, open it in a
+                       fresh, storage-state-free browser context, see a
+                       piece and no price, revoke it, see the inactive
+                       page), and smoke.spec.ts (the rest, its last two
+                       tests changing and reverting the admin's password
+                       and username); the sign-in global setup
+                       (global-setup.ts)
 playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
@@ -295,6 +299,20 @@ username and putting each back (see "Sign-in tests" below for why those two
 are last). The tests run against a running stack (`docker compose up`), not
 the dev server, and they create and delete their own items; the stack test
 asserts on ounces and cost only, never on a live spot price.
+
+`e2e/share.spec.ts` drives Settings → Sharing end to end: switch sharing
+on, create a collection link, open its URL in a brand-new browser context
+that carries none of the suite's storage state (`browser.newContext()`, not
+a signed-out `storageState` like `auth.spec.ts`'s, since the point is a
+context that never had a session to begin with), and check the share's name
+in the header, at least one piece card, no link back into the signed-in
+app, and no price anywhere on the page (the link's `show_values` defaults
+off); open a piece's own page; then, back in the signed-in page, revoke the
+link and see the signed-out context's reload show "This link isn't
+active."; and a second test checks the create form's 409 message while
+sharing is off. Its own copies of `withPasswordConfirm` and `deleteForGood`
+match `smoke.spec.ts`'s, the convention every spec here follows rather than
+importing a shared helper module.
 
 `e2e/auth.spec.ts` drives the sign-in side on its own: the sign-in page and
 `?next=`, a wrong password then the right one and the failed-attempts

@@ -121,6 +121,9 @@ jobs:
       - name: Photos only for the signed-in (nginx auth_request)
         run: scripts/ci/stack-smoke.sh photos
 
+      - name: Share links (public, no sign-in)
+        run: scripts/ci/stack-smoke.sh share
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"

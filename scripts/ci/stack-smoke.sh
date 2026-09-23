@@ -5,14 +5,14 @@
 # job; it moved here so it can also run against the local stack before any
 # push (docs/specs/SPEC_0300.md section 9, stage 7 of section 10).
 #
-# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|all]
+# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]
 #   (no argument, or "all", runs every phase in order)
 #
 # race must run before bootstrap, on a fresh, unclaimed stack (it skips
 # itself with a message on one already claimed, so "all" still works
 # against a stack that's already been signed into, such as the owner's main
 # one). outside-in runs after bootstrap; it is independent of smoke,
-# backup-restore, restore-drill, and photos.
+# backup-restore, restore-drill, photos, and share.
 #
 # Run from the repository root, with the stack already up
 # (docker compose up -d) and PUBLIC_ORIGINS/ALLOWED_HOSTS/AUTH_INSECURE_HTTP
@@ -504,6 +504,77 @@ photos() {
   echo "photo checks passed"
 }
 
+share() {
+  load_tokens
+  echo "== share =="
+  local bogus_token="share_$(printf 'a%.0s' $(seq 1 43))"
+
+  # Sharing starts off: every public route is the same 404, and making a
+  # link answers 409 (the message says to switch sharing on first).
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 404
+  test "$(fresh_status -X POST "$BASE/api/share-links" -H 'Content-Type: application/json' \
+    -d '{"kind":"collection","name":"share smoke, off"}')" = 409
+
+  # Switch it on (admin, fresh, like every settings change).
+  fresh -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' \
+    -d '{"share_enabled": true}' -o /dev/null
+
+  # An item carrying one of everything a share must never leak, plus a photo.
+  id=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d '{"type":"coin","country":"Share check","denomination":"1 test","year":2026,"acquisition_price":"12.50","storage_location":"Box 1","serial_number":"A123456","custom_fields":{"note":"x"}}' \
+    | field id)
+  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (120, 90), "gray").save(b, "PNG"); sys.stdout.buffer.write(b.getvalue())' > "$STATE_DIR/share-photo.png"
+  photo=$(apif -X POST "$BASE/api/items/$id/photos" \
+    -F "file=@-;filename=photo.png;type=image/png" < "$STATE_DIR/share-photo.png")
+  photo_id=$(printf '%s' "$photo" | field id)
+  photo_thumb="/photos/$(printf '%s' "$photo" | field thumb_key)"
+
+  # A collection link (fresh); the URL, and so the token, is shown once.
+  created=$(fresh -X POST "$BASE/api/share-links" -H 'Content-Type: application/json' \
+    -d '{"kind":"collection","name":"share smoke"}')
+  link_id=$(printf '%s' "$created" | field id)
+  token=$(printf '%s' "$created" | field url | sed 's#.*/s/##')
+  test -n "$token"
+
+  # Anonymous: the manifest, and the items page's allowlist.
+  test "$(curl -fsS "$BASE/api/share/$token" | field kind)" = collection
+  curl -fsS "$BASE/api/share/$token/items" | "$PY" -c '
+import json, sys
+body = json.load(sys.stdin)
+item = body["items"][0]
+forbidden = {
+    "acquisition_price", "storage_location", "serial_number",
+    "custom_fields", "documents", "cost_basis",
+}
+leaked = forbidden & item.keys()
+assert not leaked, f"share item view leaked: {leaked}"
+'
+
+  # The photo, through the share route (anonymous, with a CSP header), and
+  # refused on nginx's /photos/ (session or token only, never a share).
+  curl -s -D - -o /dev/null "$BASE/api/share/$token/photos/$photo_id/thumb" \
+    | grep -qi '^content-security-policy:'
+  test "$(status_of "$BASE/api/share/$token/photos/$photo_id/thumb")" = 200
+  test "$(status_of "$BASE$photo_thumb")" = 401
+
+  # A session cookie on the manifest route gets exactly the anonymous
+  # answer: a share route ignores whatever credential rides along.
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" "$BASE/api/share/$token")" = 200
+
+  # A token that matches no link is the same 404 as sharing being off.
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 404
+
+  # Revoke (fresh, 204): the manifest is 404 from then on.
+  fresh -X DELETE "$BASE/api/share-links/$link_id" -o /dev/null
+  test "$(status_of "$BASE/api/share/$token")" = 404
+
+  # Off again, and clean up what this phase made.
+  fresh -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' \
+    -d '{"share_enabled": false}' -o /dev/null
+  fresh -X DELETE "$BASE/api/items/$id?permanent=true" -o /dev/null
+  echo "share checks passed"
+}
+
 outside_in() {
   load_tokens
   echo "== outside-in =="
@@ -616,6 +687,7 @@ case "$phase" in
   backup-restore) backup_restore ;;
   restore-drill) restore_drill ;;
   photos) photos ;;
+  share) share ;;
   all)
     race
     bootstrap
@@ -624,9 +696,10 @@ case "$phase" in
     backup_restore
     restore_drill
     photos
+    share
     ;;
   *)
-    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|all]" >&2
+    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]" >&2
     exit 2
     ;;
 esac

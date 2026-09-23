@@ -168,7 +168,11 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
   refused rather than silently allowed. A path containing `%` is refused
   before routing. From v0.32.0 the share view's `GET /api/share/...` routes
   are open too, to anyone holding a share link, and only while the admin
-  has switched sharing on (see [api.md](api.md#sharing)).
+  has switched sharing on (see [api.md](api.md#sharing)). An authenticating
+  reverse proxy kept in front (below) guards everything by default too, so
+  it needs `/s/`, `/api/share/`, and `/robots.txt` exempted from its own
+  check, or it blocks share links Cabinet itself would answer; see
+  [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
 - **Sessions.** A signed-in browser gets an HttpOnly, Secure,
   `SameSite=Lax` cookie, valid a day after its last use and seven days at
   the most.

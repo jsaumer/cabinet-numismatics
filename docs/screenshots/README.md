@@ -10,6 +10,7 @@ page is captured twice, dark first because dark is Cabinet's default:
 | `collection-dark.png`, `collection-light.png` | `/collection` |
 | `item-detail-dark.png`, `item-detail-light.png` | `/items/<id>` |
 | `settings-general-dark.png`, `settings-general-light.png` | `/settings/general` |
+| `share-dark.png`, `share-light.png` | `/s/<token>`, a share link's grid, signed out |
 
 Settings is routed into sections (v0.30.2); General is the one shown
 (the Backups section on a default Compose stack carries the red
@@ -83,6 +84,7 @@ shoot() {
   MSYS_NO_PATHCONV=1 docker run --rm --network cabinet-shots_default \
     -v "$PWD/frontend:/app" -v "$PWD/docs/screenshots:/out" \
     -e CABINET_USER=owner -e CABINET_PASSWORD='correct horse battery' \
+    -e SHARE_TOKEN="$SHARE_TOKEN" \
     mcr.microsoft.com/playwright:v1.63.0-noble sh -c \
     "apt-get update -qq && apt-get install -y -qq fonts-crosextra-carlito >/dev/null && node /out/capture.cjs $*"
 }
@@ -122,6 +124,26 @@ ITEM=$(curl -fsS -b "$COOKIES" -H "Origin: http://localhost:8090" \
   | python -c 'import json,sys; print(next(i["id"] for i in json.load(sys.stdin)["items"] if i["grade"] and i["latest_value"]))')
 shoot settings
 shoot rest "$ITEM"
+```
+
+A share link needs sharing switched on first, then a link to open; both are
+settings-page writes, so they go through the same confirmed session as
+above, one confirm covering both calls (the same pattern the configuration
+step used):
+
+```bash
+curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
+  -X POST http://localhost:8090/api/auth/confirm -H 'Content-Type: application/json' \
+  -d '{"password":"correct horse battery"}'
+curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
+  -X PUT http://localhost:8090/api/settings -H 'Content-Type: application/json' \
+  -d '{"share_enabled":true}'
+SHARE_URL=$(curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
+  -X POST http://localhost:8090/api/share-links -H 'Content-Type: application/json' \
+  -d '{"kind":"collection","name":"README screenshot"}' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["url"])')
+export SHARE_TOKEN=${SHARE_URL##*/s/}
+shoot share
 ```
 
 Tear the throwaway project down once you have what you need:
