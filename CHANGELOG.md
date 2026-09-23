@@ -153,7 +153,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   on the node's own disk) and the settings above; see
   `deploy/docker-stack.yaml`.
 - An authenticating proxy in front (forward-auth or an SSO gateway) keeps
-  working and is recommended until single sign-on arrives in v0.32.0.
+  working and is recommended until single sign-on arrives in v0.33.0.
 - Any stored secret still in plain text is cleared and named, to be entered
   again. Every secret saved since v0.10 is already encrypted.
 - Revision `a0001` creates the `cabinet_auth` schema; the backend applies it

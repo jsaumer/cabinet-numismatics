@@ -297,7 +297,7 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   database-backed sessions, and scoped API tokens, then single sign-on
   (OpenID Connect and a trusted-header mode). **Phase 7, P8, A1 shipped for
   v0.30.0**: one admin, sessions, and scoped API tokens, with every route
-  denied by default. A2, single sign-on, follows as v0.32.0, both before
+  denied by default. A2, single sign-on, follows as v0.33.0, both before
   v1.0.0. Until A2 ships, an authenticating reverse proxy (e.g. Traefik +
   Authentik forward-auth) in front is recommended as a second door. A
   decision on 20 September 2026 to ship v1.0.0 without login was reversed
@@ -815,7 +815,7 @@ checklist:
 
 - ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
   a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single
-  sign-on (A2) follows as v0.32.0.
+  sign-on (A2) follows as v0.33.0.
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -985,7 +985,7 @@ v0.26.0.
 - ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
   decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
   v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 follows as
-  v0.32.0**, after P11. A session lasts one
+  v0.33.0**, after P11 and P9. A session lasts one
   day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
   Origin check, not a token; photos go through nginx `auth_request` rather
   than signed URLs; passwords use Argon2id (`argon2-cffi`, a new
@@ -1033,13 +1033,13 @@ v0.26.0.
     repeated failures, new tokens, downloads, and restores; and **every
     backup archive is encrypted** with a backup key the owner keeps,
     because an archive on a backup share was a readable copy of the whole
-    collection outside the login. Until v0.32.0, the recommended
+    collection outside the login. Until v0.33.0, the recommended
     deployment also keeps an authenticating proxy (any forward-auth or
     SSO gateway) in front, as a second door rather than a replacement for
     Cabinet's own sign-in. The contract, with a walkthrough of setup,
     password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
-    - **A2: Single sign-on. As v0.32.0, after P11.** OpenID Connect against any
+    - **A2: Single sign-on. As v0.33.0, after P11 and P9.** OpenID Connect against any
     provider (Authentik, Keycloak, Authelia, Google), signing in as the
     admin through an identity linked to that account, and a trusted-header
     mode for a forward-auth proxy that already authenticates, with a
@@ -1067,7 +1067,8 @@ v0.26.0.
   is worked out from ordinary items, so a bar had to be a Coin with a
   required denomination, and then counted as a coin everywhere. The owner
   chose a third item type, fully featured, as **v0.31.0**, moving single
-  sign-on to v0.32.0. `bullion` ("Bar or round") needs no migration: a
+  sign-on back a release (to v0.33.0 once P9 took v0.32.0 as well).
+  `bullion` ("Bar or round") needs no migration: a
   Metal select, fineness defaulting to .999, weight in grams or troy
   ounces, refiner and serial, a suggested product name, its own count and
   list filter, and Numista's "Bullion › Bar" exonumia in the fill and the

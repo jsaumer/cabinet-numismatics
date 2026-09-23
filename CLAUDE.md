@@ -25,7 +25,7 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 (OIDC single
+  start. v0.31.0 shipped bars and rounds (P11); v0.33.0 (OIDC single
   sign-on and a trusted-header mode) is next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
