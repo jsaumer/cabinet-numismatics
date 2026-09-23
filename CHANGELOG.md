@@ -10,7 +10,7 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-## [0.30.1] - unreleased
+## [0.30.1] - 2026-09-22
 
 ### Changed
 - **Backup retention is by age.** Settings → Backups keeps archives for 7,
