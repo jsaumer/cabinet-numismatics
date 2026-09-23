@@ -69,7 +69,7 @@ export function setupChecks(
       key: "backup_schedule",
       text: (
         <>
-          Scheduled backups are off. <Link to="/settings">Turn them on</Link>, and point{" "}
+          Scheduled backups are off. <Link to="/settings/backups">Turn them on</Link>, and point{" "}
           <code>/data/backups</code> somewhere off this host.
         </>
       ),
@@ -79,7 +79,7 @@ export function setupChecks(
       key: "backup_never",
       text: (
         <>
-          No backup has run yet. <Link to="/settings">Back up now</Link> proves the directory is
+          No backup has run yet. <Link to="/settings/backups">Back up now</Link> proves the directory is
           writable.
         </>
       ),
@@ -90,7 +90,7 @@ export function setupChecks(
       key: "backup_failed",
       text: (
         <>
-          The last backup failed: {backups.last_run.error} (<Link to="/settings">Settings</Link>).
+          The last backup failed: {backups.last_run.error} (<Link to="/settings/backups">Settings</Link>).
         </>
       ),
     });
@@ -101,7 +101,7 @@ export function setupChecks(
       text: (
         <>
           Every backup is encrypted, and the key has no recovery. Save it from{" "}
-          <Link to="/settings">Settings → Backups</Link>.
+          <Link to="/settings/backups">Settings → Backups</Link>.
         </>
       ),
     });
@@ -112,7 +112,7 @@ export function setupChecks(
       text: (
         <>
           Failures only reach the log. Add an alert webhook or an Uptime Kuma heartbeat in{" "}
-          <Link to="/settings">Settings</Link>.
+          <Link to="/settings/alerts">Settings</Link>.
         </>
       ),
     });
@@ -123,7 +123,7 @@ export function setupChecks(
       text: (
         <>
           No price-source key. A free Numista API key prices items and fills them in from the
-          catalogue (<Link to="/settings">Settings → Price sources</Link>).
+          catalogue (<Link to="/settings/pricing">Settings → Price sources</Link>).
         </>
       ),
     });

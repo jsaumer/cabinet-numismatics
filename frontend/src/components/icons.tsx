@@ -147,3 +147,17 @@ export const SlidersIcon = () => (
     <circle cx="10" cy="16" r="2.2" />
   </Icon>
 );
+
+export const EyeIcon = () => (
+  <Icon>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);
+
+export const EyeOffIcon = () => (
+  <Icon>
+    <path d="M3 3l18 18M9.9 5.1A10.6 10.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a15.6 15.6 0 0 1-3.1 3.9M6.3 6.9C3.8 8.7 2.5 12 2.5 12S6 18.5 12 18.5a9.6 9.6 0 0 0 3.4-.6" />
+    <path d="M14.6 14.6a3 3 0 0 1-4.2-4.2" />
+  </Icon>
+);

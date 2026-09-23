@@ -60,7 +60,7 @@ function FailedSignInsNotice() {
   return (
     <p className="error notice-bar no-print">
       {notice.count} failed sign-in{notice.count === 1 ? "" : "s"} since your last visit on{" "}
-      {since}. <Link to="/settings#account">See the audit log.</Link>{" "}
+      {since}. <Link to="/settings/account">See the audit log.</Link>{" "}
       <button type="button" className="link-button" onClick={() => setNotice(null)}>
         Dismiss
       </button>
@@ -129,7 +129,8 @@ function AuthedApp({
           <Route path="/checklists" element={<Checklists />} />
           <Route path="/import" element={<Import />} />
           <Route path="/trash" element={<Trash />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
+          <Route path="/settings/:section" element={<Settings />} />
           <Route path="/items/new" element={<ItemForm />} />
           <Route path="/items/run" element={<AddRun />} />
           <Route path="/items/:id" element={<ItemDetail />} />

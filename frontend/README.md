@@ -71,6 +71,14 @@ src/
     item-form/          the item form's parts: model.ts (form state,
                         toPayload, fromItem, the designation and problem
                         lists), NumistaFill.tsx, PcgsFill.tsx
+    settings/           Settings, routed into sections (v0.30.2): shared.tsx
+                        (the section list, Section, SettingRow, the
+                        useSettings load/apply hook), and one file per
+                        section (General.tsx, Pricing.tsx, Backups.tsx,
+                        Alerts.tsx, Account.tsx, About.tsx); Alerts.tsx and
+                        Account.tsx are thin wrappers around
+                        components/alerts.tsx and components/account.tsx,
+                        which already render their own single-h2 card
   components/         shared pieces
     item-hero.tsx       the item page's top: photo, title, grade, value
     item-facts.tsx      the rest of an item's fields, grouped, empty ones
@@ -115,7 +123,10 @@ playwright.config.ts, vite.config.ts, tsconfig.json
 Routes: `/` is the dashboard, `/collection` the list (its filters, sort, and
 page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
 `/items/:id/edit`, `/pricing`, `/stack`, `/report`, `/checklists`, `/import`,
-`/trash`, and `/settings`. `/dashboard` redirects to `/`. `/setup` and
+`/trash`, and `/settings/:section` (`general`, `pricing`, `backups`,
+`alerts`, `account`, `about`; `/settings` redirects to `/settings/general`,
+and an unknown section falls back to it too). `/dashboard` redirects to `/`.
+`/setup` and
 `/login` render outside the app shell (brand only, no nav); everything else
 is gated on being signed in, see "Sign-in" below.
 

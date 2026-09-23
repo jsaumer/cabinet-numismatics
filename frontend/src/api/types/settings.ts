@@ -33,7 +33,8 @@ export interface AppSettings {
   numista_priceable_items: number;
   pcgs_priceable_items: number;
   backup_schedule: BackupSchedule | null;
-  backup_retention_days: number; // 7, 14, 30, 90, 365, or 0 = kept forever
+  backup_retention_days: number; // one of backup_retention_choices (daily or weekly set), or 0 = kept forever
+  backup_retention_choices: { daily: number[]; weekly: number[] };
   backup_include_photos: boolean;
   trash_retention_days: number; // 0 = never emptied automatically
   // Saved URLs are secrets: only scheme://host/… comes back.

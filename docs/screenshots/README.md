@@ -9,16 +9,15 @@ page is captured twice, dark first because dark is Cabinet's default:
 | `dashboard-dark.png`, `dashboard-light.png` | `/` |
 | `collection-dark.png`, `collection-light.png` | `/collection` |
 | `item-detail-dark.png`, `item-detail-light.png` | `/items/<id>` |
-| `settings-dark.png`, `settings-light.png` | `/settings` |
+| `settings-backups-dark.png`, `settings-backups-light.png` | `/settings/backups` |
+| `settings-general-dark.png`, `settings-general-light.png` | `/settings/general` |
 
-The Settings pair is captured straight off the demo seed with no
-price-source keys configured, so both Numista and PCGS show "(not
-configured)" and no `secret_hint`. If you ever capture it with a key
-actually saved, double-check the image doesn't show the masked hint before
-committing it; a fake, obviously-non-functional key (e.g.
-`demo-key-not-real`) is the safe way to show that state. The same goes for
-every shot: check it for a token secret, a real key's fingerprint, or a
-setup code before committing it, not just the Settings pair.
+Settings is routed into sections (v0.30.2); Backups and General are the
+two worth showing, captured after the configuration step below so the
+Backups pair shows a schedule and a stored archive. The Backups pair shows
+the backup key field: that is the public key, safe to publish, but check
+the shot all the same, as you would every shot, for a token secret, a
+setup code, or a real API key before committing it.
 
 ## Regenerating them
 
@@ -92,11 +91,10 @@ shoot() {
 ```
 
 Capture the sign-in page (nothing to configure first, since it's shown
-signed out) and Settings, while nothing is configured:
+signed out):
 
 ```bash
 shoot signin
-shoot settings
 ```
 
 Then satisfy the dashboard's setup checklist so it doesn't crowd out the
@@ -124,6 +122,7 @@ curl -fsS -b "$COOKIES" -c "$COOKIES" -H "Origin: http://localhost:8090" \
 ITEM=$(curl -fsS -b "$COOKIES" -H "Origin: http://localhost:8090" \
   'http://localhost:8090/api/items?limit=100' \
   | python -c 'import json,sys; print(next(i["id"] for i in json.load(sys.stdin)["items"] if i["grade"] and i["latest_value"]))')
+shoot settings
 shoot rest "$ITEM"
 ```
 

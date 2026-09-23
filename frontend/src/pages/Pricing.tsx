@@ -220,7 +220,7 @@ export default function Pricing() {
             sources.preferred_source &&
             ` (${sourceName(sources.preferred_source)})`}
           {sources.averaged_items > 0 && ` (${sources.averaged_items} item(s) averaged)`}.{" "}
-          <Link to="/settings">Change in Settings</Link>.
+          <Link to="/settings/general">Change in Settings</Link>.
         </p>
         <div className="table-scroll">
           <table className="estimates">

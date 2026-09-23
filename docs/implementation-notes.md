@@ -1288,15 +1288,28 @@ The day after v0.30.0 went live, the owner's first-run pass. Retention
 by age, a delete button, and the pre-v0.30.0 archive mechanism removed.
 Rules a later change has to respect:
 
-- **`backup_retention_days` is one of `backup.RETENTION_CHOICES` (7, 14,
-  30, 90, 365) or 0 (forever), checked in `routers/settings.py` (422
-  otherwise); the frontend's `RETENTION_CHOICES`/`RETENTION_LABELS` in
-  `pages/Settings.tsx` mirror it.** 0 means forever the way
-  `trash_retention_days` does (a stored `null` reads as the default, so
-  "forever" can't be `None`). Age comes from the archive's name
-  (`backup.archive_time`), never its mtime: a copy or an NFS share can give
-  a file any mtime. `prune` always keeps the newest full and the newest
-  data-only archive; the pre-restore rule (`PRERESTORE_KEEP`) is unchanged.
+- **`backup_retention_days` is one of `backup.RETENTION_CHOICES` or 0
+  (forever), checked in `routers/settings.py` (422 otherwise).**
+  `RETENTION_CHOICES` is the sorted union of `DAILY_RETENTION_CHOICES` (7,
+  14, 30, 90, 365) and `WEEKLY_RETENTION_CHOICES` (28, 56, 91, 182, 365,
+  i.e. 4/8/13/26/52 weeks stored as days); `backup.retention_choices(schedule)`
+  picks the set for the current `backup_schedule` (weekly gets the weekly
+  set, daily or none gets the daily set), returned to the client as
+  `backup_retention_choices` on `GET`/`PUT /api/settings` (v0.30.2) so
+  neither side hard-codes the numbers. The `PUT` check is against the union,
+  not the current schedule's own set: a value valid for the other schedule
+  is still a sensible number of days, and rejecting it would fight the
+  frontend, which snaps `backup_retention_days` to the nearest choice in the
+  new set (and sends both fields in one `PUT`) when the owner changes the
+  schedule and the current value no longer belongs to it;
+  `pages/settings/Backups.tsx` reads the choices from the response rather
+  than a mirrored constant. 0
+  means forever the way `trash_retention_days` does (a stored `null` reads
+  as the default, so "forever" can't be `None`). Age comes from the
+  archive's name (`backup.archive_time`), never its mtime: a copy or an NFS
+  share can give a file any mtime. `prune` always keeps the newest full and
+  the newest data-only archive; the pre-restore rule (`PRERESTORE_KEEP`) is
+  unchanged.
 - **`NAME_RE` matches `.zip.age` only.** A plain `cabinet-backup-*.zip` is
   not a Cabinet archive anywhere: not listed, downloaded, deleted, pruned,
   inspected (404, not the `LEGACY_REFUSED` 422, which still guards an
@@ -1311,6 +1324,101 @@ Rules a later change has to respect:
   opens the password dialog when the window has lapsed; Playwright's
   `withPasswordConfirm` covers it, and `stack-smoke.sh backup-restore`
   proves the anonymous 401, the fresh 200, and the 404 after.
+
+## v0.30.2
+
+The Settings page had grown into one 733-line file of stacked cards; the
+owner's word for it was that Cabinet had "just been adding and adding
+without a look at proper layout." No migration: this is a frontend-only
+release. Rules a later change here has to respect:
+
+- **One file per section under `frontend/src/pages/settings/`**: `General.tsx`,
+  `Pricing.tsx`, `Backups.tsx`, `Alerts.tsx`, `Account.tsx`, `About.tsx`, and
+  `shared.tsx` for what they share. `pages/Settings.tsx` is now the shell: a
+  `<nav aria-label="Settings sections">` (`.settings-nav` in `styles.css`,
+  a left column at 900px and up, a horizontal scrolling strip below it) and
+  the section named by the route. `/settings/:section` takes `general`,
+  `pricing`, `backups`, `alerts`, `account`, `about`; `/settings` redirects
+  to `/settings/general` (`App.tsx`), and a section name the shell doesn't
+  recognize falls back to General rather than 404ing. Every other page's
+  link into Settings now points at the section that setting lives in
+  (`components/setup.tsx`, `dashboard/widgets/operations.tsx`, `AddRun.tsx`,
+  `Import.tsx`, `item-form/NumistaFill.tsx`, `item-form/PcgsFill.tsx`,
+  `pages/Pricing.tsx`, `Trash.tsx`), and the failed-sign-ins notice
+  (`App.tsx`) points at `/settings/account` instead of the old
+  `/settings#account` hash.
+- **Each section has exactly one h2**, named `General`, `Pricing`,
+  `Backups`, `Alerts & metrics`, `Account`, or `About`; Pricing carries two
+  h3s, `Price sources` and `Cached market data` (merged from the old
+  two-card layout, keys still first), and Backups carries four, `Backup
+  key`, `Schedule and retention`, `Archives`, `Restore`. Account and Alerts
+  are thin wrappers: `components/account.tsx` and `components/alerts.tsx`
+  already render their own single-h2 `.card`, so `pages/settings/Account.tsx`
+  and `Alerts.tsx` just supply what each needs (nothing, and
+  `settings`/`saving`/`apply`) and return them directly. A new section
+  needs the same shape (one `.card`, one h2) or the "every Settings section
+  renders" Playwright test (which visits all six routes and checks each
+  h2) won't find it.
+- **`shared.tsx` is where a setting reaches the page.** `Section` gives a
+  section its card, h2, and one-line description; `SettingRow` gives one
+  setting a label and help text on the left and its control on the right,
+  stacking under 700px (`.setting-row` in `styles.css`); `useSettings()`
+  loads `GET /api/settings` once per section (each section is its own
+  route now, so each fetches independently: SPEC_0300 didn't change, this
+  is just more requests for one visit) and wraps `PUT /api/settings` as
+  `apply(payload, message)`, which sets a page-level `error`/`note` the way
+  the single page used to, unless `message` is `null`. **A control that
+  applies as soon as it changes, with no separate Save button, passes
+  `null` and calls `useSavedTick()`'s trigger instead**, showing a quiet
+  `SavedTick` ("Saved", `.saved-tick`) beside the control for two seconds:
+  General's trash-retention row is the example. A row that already has its
+  own descriptive message (the batched General form's "General settings
+  saved.", every row in Backups) keeps the page-level note; don't switch
+  those to a tick; the message says more than "Saved" does.
+- **Backups reads its retention choices from `settings.backup_retention_choices`**
+  (`{ daily: number[]; weekly: number[] }`, added to `AppSettings` in
+  `api/types/settings.ts` for this release, replacing the old hardcoded
+  `RETENTION_CHOICES`): the weekly set applies when the schedule is
+  `"weekly"`, the daily set otherwise (off included). Labels are still
+  hardcoded on the frontend (`DAILY_LABELS`/`WEEKLY_LABELS` in
+  `pages/settings/Backups.tsx`), keyed by the day count each choice is;
+  `"Forever"` (0) is added to both sets rather than coming from the
+  backend. **Changing the schedule snaps a retention that isn't in the new
+  set (and isn't 0) to the nearest value in it**, and sends both fields in
+  one `PUT`, with a message that says so (`"Backups scheduled weekly;
+  keeping archives for 13 weeks (a quarter)."`); a retention already valid
+  for the new schedule, or set to forever, is left alone. A new choice set
+  needs a label in both maps or it falls back to `"${days} days"`.
+- **The backup key shows its public half, not the whole thing.** The
+  masked field is a real `<input type="password" readOnly>` holding
+  `backups.key.fingerprint`, with an eye toggle (`aria-label` "Show public
+  key" / "Hide public key", `EyeIcon`/`EyeOffIcon` in `components/icons.tsx`,
+  new this release) that switches it to `type="text"`, and a "Copy" button
+  (`navigator.clipboard.writeText`, then "Copied" for two seconds, the same
+  pattern `components/account.tsx`'s token copy already used). The
+  fingerprint is public by design (it's what confirms which key is in use,
+  never the secret), but the masked-by-default field and the exact wording
+  under it ("The secret half never leaves the container:
+  `python -m app.cli backup-key show` prints it.") keep a screen-share or a
+  screenshot from showing it by accident.
+- **Playwright and `docs/screenshots/capture.cjs` selectors that survived
+  the split, unchanged**: "Back up now", the two `FreshLink` downloads,
+  the `/^Backup written: cabinet-backup-/` text, a table row holding the
+  archive's link, "Restore…" and "Delete" per row, `Deleted <name>.`,
+  "before restore", "Restore this archive", "Type RESTORE to confirm", and
+  the "Confirm your password" dialog. What moved: every `page.goto("/settings")`
+  a test relied on for a specific control now goes to that control's route
+  (`/settings/backups` for anything backup or restore related,
+  `/settings/account` for tokens, sessions, password, and username), and
+  "every Settings section renders" (`smoke.spec.ts`) now visits all six
+  routes and checks each one's h2 instead of checking six headings on one
+  page. `capture.cjs`'s `settings` mode now captures two pairs,
+  `settings-backups-{dark,light}.png` and `settings-general-{dark,light}.png`,
+  at their own routes; the old single `settings-{dark,light}.png` pair and
+  the scroll-into-view hack for "Price sources" (which lived on the old
+  page, now on its own Pricing route with nothing pushing it below the
+  fold) are both gone. `README.md`'s screenshot table points at the
+  Backups pair.
 
 ## Releases
 

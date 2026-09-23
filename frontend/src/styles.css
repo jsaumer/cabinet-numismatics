@@ -1654,3 +1654,114 @@ main {
   gap: 0.4rem;
   align-items: center;
 }
+
+/* Settings, routed into sections (v0.30.2): a section nav beside the
+   content on a wide screen, a horizontal scrolling strip above it on a
+   narrow one. */
+.settings-shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 0 0 11rem;
+  position: sticky;
+  top: 1rem;
+}
+.settings-nav a {
+  padding: 0.4rem 0.7rem;
+  border-radius: 6px;
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+.settings-nav a:hover {
+  background: var(--hover);
+  text-decoration: none;
+}
+.settings-nav a.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.settings-content {
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .settings-shell {
+    flex-direction: column;
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex: none;
+    width: 100%;
+    position: static;
+    overflow-x: auto;
+    gap: 0.3rem;
+    padding-bottom: 0.2rem;
+  }
+  .settings-nav a {
+    white-space: nowrap;
+  }
+}
+
+/* A single setting inside a Settings section: label and help text on the
+   left, its control on the right. */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.setting-row:last-of-type {
+  border-bottom: none;
+}
+.setting-row-text {
+  flex: 1 1 16rem;
+}
+.setting-row-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.setting-row-help {
+  margin: 0.2rem 0 0;
+}
+.setting-row-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+@media (max-width: 700px) {
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* The quiet confirmation beside a control that saves as soon as it changes. */
+.saved-tick {
+  color: var(--gain);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* The masked backup-key field in Settings -> Backups. */
+.key-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 28rem;
+  flex: 1 1 20rem;
+}
+.key-field input {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.85rem;
+}

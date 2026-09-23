@@ -83,7 +83,7 @@ test("the confirm dialog appears once for a fresh route, not again within the wi
   expect(csv.suggestedFilename()).toMatch(/\.csv$/);
 
   // Still within the 5-minute window: backup.zip downloads without asking again.
-  await page.goto("/settings");
+  await page.goto("/settings/backups");
   const [backup] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("link", { name: "Download backup" }).click(),
@@ -94,7 +94,7 @@ test("the confirm dialog appears once for a fresh route, not again within the wi
 
 test("an API token is shown once, then revoked", async ({ page }) => {
   await signIn(page);
-  await page.goto("/settings");
+  await page.goto("/settings/account");
 
   const name = `e2e-token-${Date.now()}`;
   const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Create token" }) });
@@ -125,7 +125,7 @@ test("ending another session", async ({ page, browser }) => {
   await other.close();
 
   await signIn(page);
-  await page.goto("/settings");
+  await page.goto("/settings/account");
   const row = page.getByRole("row", { name: new RegExp(marker) });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "End" }).click();
