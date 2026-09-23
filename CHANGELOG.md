@@ -10,6 +10,29 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-09-22
+
+### Changed
+- **Backup retention is by age.** Settings → Backups keeps archives for 7,
+  14, 30, or 90 days, 1 year, or forever (with a warning: the directory then
+  grows without limit), in place of the "keep newest N" count. After each
+  run, archives older than the retention are deleted, but the newest full
+  archive and the newest data-only archive always stay, whatever their age,
+  so a schedule that stopped can never leave nothing. The default is 90
+  days; a saved `backup_keep` is ignored. Pre-restore safety archives keep
+  their own rule (newest three).
+- **Plain `.zip` archives from before v0.30.0 are no longer detected or
+  managed.** They were never restorable; now they are not listed or
+  deleted by Cabinet either (`DELETE /api/backups/unencrypted` and the
+  `encrypted` flag on the listing are gone). Delete any you still have by
+  hand from the backup directory.
+
+### Added
+- **Delete a stored backup** from Settings → Backups (`DELETE
+  /api/backups/{name}`): admin, asks for the password again, refused while
+  a backup or restore is running, audited and alerted. The stack smoke
+  suite and Playwright cover it.
+
 ## [0.30.0] - 2026-09-22
 
 Roadmap Phase 7, P8 A1: sign-in and encrypted backups.

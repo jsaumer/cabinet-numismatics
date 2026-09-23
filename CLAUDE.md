@@ -220,7 +220,7 @@ date as struck (`services/calendars.py`); see "Parity fields" in the
 implementation notes.
 P2, in-app restore, shipped in v0.26.0 (no migration): `services/restore.py`
 and `maintenance.py`, `/api/restore/*`, `components/restore.tsx`; verify,
-safety backup (`-prerestore`, outside `backup_keep`), typed `RESTORE`,
+safety backup (`-prerestore`, outside the retention), typed `RESTORE`,
 unpack, database in one transaction, then the file swap; outcome and journal
 on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Admin-only and
 password-confirmed from P8 A1 (v0.30.0); see "In-app restore" in the

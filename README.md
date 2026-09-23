@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.30.0-informational)
+![Version](https://img.shields.io/badge/version-0.30.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
@@ -200,8 +200,9 @@ Dark is the default; the header toggle switches to light and remembers it.
 - **Backups from the app**: download the collection as one encrypted,
   tamper-evident archive (database + photos + documents + manifest, `.zip.age`,
   encrypted with a backup key you keep a copy of) from Settings, or schedule
-  daily or weekly archives with retention into a directory you can point at
-  a NAS. Nothing unencrypted ever lands there.
+  daily or weekly archives with retention by age (7 days to a year, or
+  forever) into a directory you can point at a NAS, and delete any archive
+  from the same page. Nothing unencrypted ever lands there.
 - **Restore from the app**: pick a stored archive or upload one in
   Settings. It is decrypted in private staging, its MAC checked, compared
   with what is there now (an older archive needs `RESTORE OLDER`), and restored

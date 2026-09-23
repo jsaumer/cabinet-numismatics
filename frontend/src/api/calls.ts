@@ -213,8 +213,8 @@ export const api = {
     req<MonitorOutcome>(`/api/alerts/test?target=${target}`, { method: "POST" }),
   runBackup: () => req<BackupRun>("/api/backups", { method: "POST" }),
   markBackupKeySaved: () => req<BackupKey>("/api/backups/key/saved", { method: "POST" }),
-  deleteUnencryptedBackups: () =>
-    req<{ deleted: string[] }>("/api/backups/unencrypted", { method: "DELETE" }),
+  deleteBackup: (name: string) =>
+    req<{ deleted: string }>(`/api/backups/${encodeURIComponent(name)}`, { method: "DELETE" }),
 
   restoreStatus: () => req<RestoreStatus>("/api/restore/status"),
   inspectRestoreFile: (file: File) => {

@@ -371,6 +371,13 @@ run = json.load(sys.stdin)
 print(run)
 assert run["ok"]
 '
+
+  # deleting a stored archive (v0.30.1) needs a recent password, and is gone after
+  gone=$(adminf -X POST "$BASE/api/backups" | field file)
+  test "$(status_of -X DELETE "$BASE/api/backups/$gone")" = 401  # anonymous: refused
+  fresh -X DELETE "$BASE/api/backups/$gone" | grep -q '"deleted"'
+  test "$(fresh_status "$BASE/api/backups/$gone")" = 404
+  echo "stored archive $gone deleted through the API"
 }
 
 restore_drill() {

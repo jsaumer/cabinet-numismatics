@@ -53,18 +53,21 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
 - A failed run is retried within the hour. The outcome of the last run
   (file and size, or the error) shows in Settings, and a failure raises the
   backup alert if a webhook is set ([monitoring.md](monitoring.md)).
-- After each successful run, archives beyond **Keep newest** are deleted.
-  Full archives and data-only ones are counted separately, so data-only
-  backups never push out the last full ones.
-  Only files named `cabinet-backup-*.zip.age` (and older `cabinet-backup-*.zip`)
-  are ever touched.
+- After each successful run, archives older than **Keep archives for** (7,
+  14, 30, or 90 days, 1 year, or forever; v0.30.1) are deleted. The newest
+  full archive and the newest data-only archive are never deleted by
+  retention, whatever their age, so a schedule that stopped can't leave
+  nothing. **Forever** shows a warning: the directory then grows without
+  limit. Only files named `cabinet-backup-*.zip.age` are ever touched.
 - **Back up now** writes one immediately and counts toward the same
   retention. **Include photos** applies to scheduled and on-demand archives,
   and covers the documents too.
-- Stored archives are listed with download links and a **Restore…** button.
+- Stored archives are listed with download links, a **Restore…** button,
+  and **Delete** (v0.30.1), which asks for your password again and is
+  refused while a backup or restore is running.
 - The safety backups an in-app restore takes (`-prerestore`, below) are
-  listed with a "before restore" badge. They don't count toward **Keep
-  newest** and aren't removed by it; the newest three are kept.
+  listed with a "before restore" badge. They sit outside the retention;
+  the newest three are kept.
 
 The backup directory must not be inside the photo directory (nginx serves
 that publicly), and the backend refuses to write there.
@@ -189,12 +192,11 @@ encrypts every archive and keys its MAC.
 
 Archives from before v0.30.0 are plain `.zip` files: readable copies of the
 whole collection by anyone who can read the backup directory. They **can't be
-restored by any path** from v0.30.0 on. Settings lists them as
-**unencrypted**, with **Delete unencrypted archives**
-(`DELETE /api/backups/unencrypted`), which deletes every plain
-`cabinet-backup-*.zip` in the backup directory and nothing else. Take a new
-backup, then delete them. Copies made by the old `backup.sh` (directories of
-`db.dump` and tar files) are plain too: delete them yourself.
+restored by any path** from v0.30.0 on, and from v0.30.1 Cabinet ignores
+them altogether (not listed, not deleted, not counted by retention). Delete
+any `cabinet-backup-*.zip` you still have from the backup directory by
+hand, and copies made by the old `backup.sh` (directories of `db.dump` and
+tar files) with them.
 
 ## Backing up from the host
 

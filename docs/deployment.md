@@ -74,7 +74,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.30.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.30.1`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -332,9 +332,9 @@ Prometheus, scripts) needs an API token from then on. From the first start
 every backup is encrypted.
 Save the backup key (`backup-key show`, above) or supply your own as a
 secret (`BACKUP_KEY_FILE`) or a variable (`BACKUP_KEY`) before relying on them; take a new backup; then
-delete the old unencrypted archives (Settings → Backups → **Delete
-unencrypted archives**), which can no longer be restored and are readable
-by anyone who can read the backup directory. Old `backup.sh` directories
+delete the old unencrypted `cabinet-backup-*.zip` files from the backup
+directory by hand (Cabinet ignores them from v0.30.1): they can no longer be
+restored and are readable by anyone who can read the backup directory. Old `backup.sh` directories
 are plain too. Going back then means the older
 image plus that backup: an older Cabinet refuses an archive made by a newer
 one, and a newer one migrates an older archive after restoring it. The
@@ -405,7 +405,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.30.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.30.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy

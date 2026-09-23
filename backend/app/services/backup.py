@@ -46,14 +46,19 @@ logger = logging.getLogger(__name__)
 
 FORMAT = "cabinet-backup"
 FORMAT_VERSION = 1
-# `.zip.age` from v0.30.0; a plain `.zip` is an unencrypted archive from an
-# earlier release, listed (and deletable) but never restored.
-NAME_RE = re.compile(r"^cabinet-backup-\d{8}-\d{6}(-data|-prerestore)?\.zip(\.age)?$")
+# Only `.zip.age` archives (v0.30.0) are Cabinet's: a plain `.zip` from an
+# earlier release is ignored everywhere (never listed, pruned, downloaded, or
+# restored); from v0.30.1 the operator deletes any left by hand.
+NAME_RE = re.compile(r"^cabinet-backup-\d{8}-\d{6}(-data|-prerestore)?\.zip\.age$")
 ENCRYPTED = ".zip.age"
 AGE_MAGIC = b"age-encryption.org/v1\n"
-# Safety archives written before an in-app restore: outside `backup_keep`.
+# Safety archives written before an in-app restore: outside the retention.
 PRERESTORE_MARK = "-prerestore.zip"
 PRERESTORE_KEEP = 3
+# How long scheduled and on-demand archives are kept (v0.30.1), in days;
+# 0 keeps them forever (like `trash_retention_days`). The newest full and the
+# newest data-only archive are never deleted by retention, whatever their age.
+RETENTION_CHOICES = (7, 14, 30, 90, 365)
 # Working directories a restore makes inside the photo and document volumes
 # (`.restore-new`, `.restore-old`) and the backup directory (`.restore-staging`).
 RESTORE_PREFIX = ".restore-"
@@ -105,8 +110,10 @@ def is_prerestore(path: Path) -> bool:
     return PRERESTORE_MARK in path.name
 
 
-def is_encrypted(path: Path) -> bool:
-    return path.name.endswith(ENCRYPTED)
+def archive_time(path: Path) -> datetime:
+    """When an archive was written, from its name (UTC): a copy or an NFS
+    share can give the file any mtime."""
+    return datetime.strptime(path.name[15:30], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
 
 
 def looks_encrypted(path: Path) -> bool:
@@ -679,21 +686,24 @@ def stored_backups(dest: Path) -> list[Path]:
     )
 
 
-def prune(dest: Path, keep: int) -> list[str]:
-    """Delete archives beyond the newest `keep`, and leftovers from
+def prune(dest: Path, retention_days: int) -> list[str]:
+    """Delete archives older than the retention, and leftovers from
     interrupted runs. Only files matching Cabinet's own names are touched.
-    Full and data-only archives are counted separately, so a run of quick
-    data-only backups can never push out the last archives that hold the
-    photos and documents. Pre-restore safety archives don't count toward
-    `keep`; they have their own limit."""
+    The newest full archive and the newest data-only archive are always
+    kept, whatever their age, so a schedule that stopped can never leave
+    nothing; `0` keeps everything. Pre-restore safety archives are
+    outside the retention; they have their own limit."""
     removed = []
     stored = stored_backups(dest)
     regular = [p for p in stored if not is_prerestore(p)]
     full = [p for p in regular if not is_data_only(p)]
     data_only = [p for p in regular if is_data_only(p)]
     safety = [p for p in stored if is_prerestore(p)]
-    keep = max(keep, 1)
-    for old in full[keep:] + data_only[keep:] + safety[PRERESTORE_KEEP:]:
+    expired: list[Path] = []
+    if retention_days:
+        cutoff_at = utcnow() - timedelta(days=retention_days)
+        expired = [p for p in full[1:] + data_only[1:] if archive_time(p) < cutoff_at]
+    for old in expired + safety[PRERESTORE_KEEP:]:
         old.unlink()
         removed.append(old.name)
     cutoff = (utcnow() - STALE_TEMP_AGE).timestamp()
@@ -739,7 +749,7 @@ def run_backup(db: Session, include_photos: bool | None = None, kind: str = "man
             dest = backup_dir()
             final = dest / archive_name(started, include_photos)
             _write_encrypted(final, db, include_photos, kind)
-            pruned = prune(dest, int(store.get_setting(db, "backup_keep")))
+            pruned = prune(dest, int(store.get_setting(db, "backup_retention_days")))
         except (BackupError, OSError) as exc:
             db.rollback()
             _record(db, {"at": started.isoformat(), "ok": False, "error": str(exc)})
