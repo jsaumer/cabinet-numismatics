@@ -174,6 +174,7 @@ def test_collection_stats(client):
         "wishlist": 1,
         "coins": 2,  # owned only: the split describes current holdings
         "notes": 0,
+        "bullion": 0,
     }
     assert stats["cost_basis"] == 100.0
     assert stats["estimated_value"] == 150.0

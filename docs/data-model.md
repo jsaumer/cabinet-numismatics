@@ -148,7 +148,7 @@ not as native postgres enum types.
 | Column             | Type          | Notes                                   |
 |--------------------|---------------|-----------------------------------------|
 | `id`               | uuid PK       |                                         |
-| `type`             | enum          | `coin` \| `note`; indexed               |
+| `type`             | enum          | `coin` \| `note` \| `bullion` (v0.31.0); indexed |
 | `status`           | enum          | `owned` \| `sold` \| `wishlist`; indexed |
 | `country`          | text          | indexed                                 |
 | `denomination`     | text          | e.g. "25 cents", "10 dollars"           |

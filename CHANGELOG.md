@@ -14,6 +14,19 @@ applies them itself on startup; for earlier releases, run
 
 Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
 
+### Added
+- **A third item type, `bullion`** ("Bar or round"), on the API side (the
+  form and the rest of the frontend follow in a later change). No year is
+  required for it (neither `year` nor `year_nd`), its label reads
+  "PAMP Suisse 1 oz silver bar" with no mint mark, and it never gets fancy
+  serial traits. `GET /api/stats/collection` gains `counts.bullion`; the
+  list's `type=` filter and bulk edit accept it; the type breakdown and
+  `/api/metrics` pick it up automatically. Filling an item in from Numista,
+  and both the account and file imports, now take a bar or round from
+  Numista's exonumia catalogue (still refusing tokens and medals), and a
+  spreadsheet's Type column reads "bar", "round", "ingot", or "bullion" the
+  same way.
+
 ### Fixed
 - **Metal detection** no longer counts a named alloy as the metal it is
   named after, or a coating as the metal: nickel silver, German silver, and

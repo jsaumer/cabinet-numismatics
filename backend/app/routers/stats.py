@@ -64,7 +64,15 @@ def collection_stats(
     strategy, preferred_source = _resolve_strategy(db)
     items = _load_items(db)
 
-    counts = {"total": len(items), "owned": 0, "sold": 0, "wishlist": 0, "coins": 0, "notes": 0}
+    counts = {
+        "total": len(items),
+        "owned": 0,
+        "sold": 0,
+        "wishlist": 0,
+        "coins": 0,
+        "notes": 0,
+        "bullion": 0,
+    }
     cost_basis = 0.0
     estimated_value = 0.0
     unrealized = 0.0
@@ -73,8 +81,13 @@ def collection_stats(
 
     for item in items:
         counts[item.status] += 1
-        if item.status == "owned":  # coins/notes split describes the current holdings
-            counts["coins" if item.type == "coin" else "notes"] += 1
+        if item.status == "owned":  # the split describes the current holdings
+            if item.type == "coin":
+                counts["coins"] += 1
+            elif item.type == "note":
+                counts["notes"] += 1
+            else:
+                counts["bullion"] += 1
         resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)
 
         if item.status == "owned":
