@@ -78,6 +78,7 @@ class SettingsOut(BaseModel):
     pcgs_priceable_items: int
     backup_schedule: Literal["daily", "weekly"] | None
     backup_retention_days: int  # 0 = kept forever
+    backup_retention_choices: dict[str, list[int]]  # {"daily": [...], "weekly": [...]}
     backup_include_photos: bool
     trash_retention_days: Literal[0, 7, 30, 90, 365]
     # Alerts & metrics. Saved URLs are secrets: only scheme://host/… comes back.
@@ -112,7 +113,7 @@ class SettingsUpdate(BaseModel):
     numista_refresh_days: Literal[7, 14, 30] | None = None
     pcgs_auto_refresh: bool | None = None
     backup_schedule: Literal["daily", "weekly"] | None = None
-    backup_retention_days: int | None = None  # one of backup.RETENTION_CHOICES, or 0
+    backup_retention_days: int | None = None  # one of backup.RETENTION_CHOICES (daily/weekly), or 0
     backup_include_photos: bool | None = None
     trash_retention_days: Literal[0, 7, 30, 90, 365] | None = None
     alert_webhook_url: str | None = Field(default=None, max_length=2000)  # "" clears
@@ -236,6 +237,10 @@ def _build(db: Session) -> SettingsOut:
         pcgs_priceable_items=pcgs_priceable,
         backup_schedule=store.get_setting(db, "backup_schedule"),
         backup_retention_days=int(store.get_setting(db, "backup_retention_days")),
+        backup_retention_choices={
+            "daily": list(backup.DAILY_RETENTION_CHOICES),
+            "weekly": list(backup.WEEKLY_RETENTION_CHOICES),
+        },
         backup_include_photos=bool(store.get_setting(db, "backup_include_photos")),
         trash_retention_days=int(store.get_setting(db, "trash_retention_days") or 0),
         alert_webhook_hint=alerts.url_hint(str(store.get_setting(db, "alert_webhook_url"))),

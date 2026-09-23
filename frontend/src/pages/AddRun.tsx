@@ -180,7 +180,7 @@ export default function AddRun() {
         {configured === false ? (
           <p className="muted" style={{ margin: 0 }}>
             Adding a run reads a type's dates and mints from Numista. Add a Numista API key in{" "}
-            <Link to="/settings">Settings</Link> first.
+            <Link to="/settings/pricing">Settings</Link> first.
           </p>
         ) : (
           <>

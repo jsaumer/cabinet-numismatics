@@ -80,7 +80,7 @@ export default function Trash() {
         {trash.retention_days
           ? `They're deleted for good after ${trash.retention_days} days`
           : "They stay until you delete them; automatic emptying is off"}{" "}
-        (<Link to="/settings">Settings</Link>).
+        (<Link to="/settings/general">Settings</Link>).
       </p>
       {error && <p className="error">{error}</p>}
       {note && <p className="gain">{note}</p>}
