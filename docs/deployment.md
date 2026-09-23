@@ -40,6 +40,11 @@ Edit `.env`:
   it the archives can't be opened. Supply it as a secret whenever backups
   leave the host; see
   [backup-restore.md](backup-restore.md#the-backup-key).
+- `BACKUP_KEY` (optional, not with `BACKUP_KEY_FILE`): the key itself as a
+  variable, the `AGE-SECRET-KEY-1...` line printed by `python -m app.cli
+  backup-key new`, for a secret manager that delivers variables. It is
+  visible to anything that can inspect the service, so the secret file is
+  preferred where you have the choice.
 - `SETUP_CODE` or `SETUP_CODE_FILE` (optional): the one-time code for creating
   the admin, at least 32 characters (`openssl rand -hex 32`); a code that is
   too short or mostly one character stops the backend. Unset, one is

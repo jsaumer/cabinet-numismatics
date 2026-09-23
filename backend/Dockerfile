@@ -38,9 +38,9 @@ RUN apt-get update \
 # owns. A new named volume inherits that ownership from the image.
 RUN groupadd --gid 1000 cabinet \
     && useradd --uid 1000 --gid 1000 --no-create-home --shell /usr/sbin/nologin cabinet \
-    && mkdir -p /data/photos /data/state /data/backups /data/documents /data/staging \
-    && chown -R cabinet:cabinet /data \
-    && chmod 700 /data/staging
+    && mkdir -p /data/photos /data/state /data/backups /data/documents /data/staging /run/cabinet \
+    && chown -R cabinet:cabinet /data /run/cabinet \
+    && chmod 700 /data/staging /run/cabinet
 ENV PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app

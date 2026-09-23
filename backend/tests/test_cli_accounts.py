@@ -178,3 +178,8 @@ def test_backup_key_commands_are_audited(db, owner, capsys):
     assert run("backup-key", "rotate") == 0
     assert len(audited(db, "backup_key_rotated")) == 1
     assert len(archive_keys.identities()) == 2
+
+
+def test_backup_key_new_works_before_setup(db, capsys):
+    assert run("backup-key", "new") == 0
+    assert "AGE-SECRET-KEY-1" in capsys.readouterr().out

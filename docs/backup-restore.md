@@ -120,11 +120,29 @@ refuses and points at `backup.sh`, which uses the db container's own
 One [age](https://age-encryption.org) identity (`AGE-SECRET-KEY-1…`)
 encrypts every archive and keys its MAC.
 
-- **Where it comes from.** `BACKUP_KEY_FILE`, a file of identities (a Docker
-  secret on a Swarm), when set; Cabinet never modifies it, and one it can't
-  read or parse stops the backend at startup, before any backup is written.
-  Otherwise Cabinet generates one on its first start, into `backup.key` on
-  the state volume (mode 0600), and logs its public key. Settings → Backups
+- **Where it comes from.** One of three places. `BACKUP_KEY_FILE`, a file of
+  identities (a Docker secret on a Swarm), is the recommended form: Cabinet
+  never modifies it, and one it can't read or parse stops the backend at
+  startup, before any backup is written. `BACKUP_KEY`, the identity text
+  itself as a variable (identities separated by commas or newlines, the
+  first encrypting), is for a secret manager that delivers variables: it
+  is written at every start to a private file inside the container, never
+  to a data volume, and it is visible to anything that can inspect the
+  service, so guard it as you would the database password. Setting both
+  stops startup. Otherwise Cabinet generates one on its first start, into
+  `backup.key` on the state volume (mode 0600), and logs its public key.
+- **Making one.** One command, for either form, needing no database and
+  working before setup:
+
+  ```bash
+  docker compose run --rm backend python -m app.cli backup-key new
+  ```
+
+  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.30.0
+  python -m app.cli backup-key new` where the stack isn't running). It
+  prints a key in `age-keygen`'s format: save the whole output as the
+  secret file, or put the `AGE-SECRET-KEY-1...` line in `BACKUP_KEY`. Keep
+  a copy in your password manager either way. Settings → Backups
   shows the public key (the fingerprint) and, until you tick **I have saved
   it**, a "Save your backup key" reminder; ticking records only the public
   key, so a new key asks again.
@@ -146,9 +164,11 @@ encrypts every archive and keys its MAC.
   first in a generated `backup.key` and keeps the old ones after it: new
   archives use the new key, and each older archive is checked with the
   identity its `mac_recipient` names, so it stays readable while that
-  identity stays in the file. Save the new key afterwards. With
-  `BACKUP_KEY_FILE` the command changes nothing and prints the steps: make a
-  new secret holding the new identity first and the old one after it.
+  identity stays in the file. Save the new key afterwards. With a supplied
+  key (`BACKUP_KEY_FILE` or `BACKUP_KEY`) the command changes nothing and
+  prints the steps: make a new key with `backup-key new`, put it first and
+  the old one after it (a new secret file, or both in `BACKUP_KEY` separated
+  by a comma), and redeploy.
 - **Where it lives.** A generated key is only as private as the state
   volume. When it shares storage with the backups, the key sits beside the
   archives it protects. On every start Cabinet reads the container's mounts

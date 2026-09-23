@@ -1029,8 +1029,9 @@ answers `directory`, `free_bytes`, `last_run`, `backups` (`name`, `size`,
 took first, and `encrypted`: false for a plain `.zip` from before v0.30.0,
 which can't be restored), and `key`: `fingerprint` (the backup key's public
 key, `age1…`; the key itself never crosses the API), `saved`, `supplied`
-(from `BACKUP_KEY_FILE`), `location` (`separate`, `shared`, `not_verified`,
-or `secret`), and `location_message`. `POST /api/backups/key/saved` records
+(from `BACKUP_KEY_FILE` or `BACKUP_KEY`), `location` (`separate`, `shared`, `not_verified`,
+`secret` for a supplied file, or `environment` for a supplied variable), and
+`location_message`. `POST /api/backups/key/saved` records
 the current public key as saved (a rotated key asks again) and answers the
 `key` object. `DELETE /api/backups/unencrypted` deletes every plain
 `cabinet-backup-*.zip` in the backup directory, nothing else, sends an

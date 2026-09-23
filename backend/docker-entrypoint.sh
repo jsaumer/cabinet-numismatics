@@ -30,7 +30,8 @@ if [ "$(id -u)" = "0" ]; then
     fi
   done
   for dir in "${PHOTO_DIR:-/data/photos}" "${key_file%/*}" \
-             "${BACKUP_DIR:-/data/backups}" "${DOCUMENT_DIR:-/data/documents}" "$staging"; do
+             "${BACKUP_DIR:-/data/backups}" "${DOCUMENT_DIR:-/data/documents}" "$staging" \
+             /run/cabinet; do
     mkdir -p "$dir" 2>/dev/null || true
     # Only when the owner differs: a one-time hand-over, not a walk of the
     # whole photo volume on every start.

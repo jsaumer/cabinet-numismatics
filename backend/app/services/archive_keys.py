@@ -2,8 +2,10 @@
 archive Cabinet writes and keys the MAC that proves Cabinet wrote it.
 
 - **Where it comes from.** `BACKUP_KEY_FILE` (a Docker secret) when set,
-  never modified by Cabinet; otherwise `backup.key` on the state volume,
-  generated at first start (0600). Either holds one identity a line
+  never modified by Cabinet; or `BACKUP_KEY` (the same text as a variable,
+  commas or newlines between identities), written at every start to a
+  container-local file for `age`; otherwise `backup.key` on the state
+  volume, generated at first start (0600). Each holds one identity a line
   (`AGE-SECRET-KEY-1...`, `#` comments allowed); the first encrypts, and an
   archive is verified with the identity its `mac_recipient` names, so older
   archives stay readable after a rotation while their identity is kept.
@@ -26,6 +28,7 @@ import json
 import logging
 import os
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -166,8 +169,42 @@ def parse_identities(text: str) -> list[Identity]:
 # --- the key file -----------------------------------------------------------------
 
 
+def source() -> str:
+    """Where the key comes from: `file` (BACKUP_KEY_FILE), `environment`
+    (BACKUP_KEY), or `generated` (backup.key on the state volume)."""
+    config = get_settings()
+    if config.backup_key_file:
+        return "file"
+    if config.backup_key.strip():
+        return "environment"
+    return "generated"
+
+
 def supplied() -> bool:
-    return bool(get_settings().backup_key_file)
+    """A supplied key, file or variable, is never changed by Cabinet."""
+    return source() != "generated"
+
+
+def parse_environment_key(text: str) -> list[Identity]:
+    """BACKUP_KEY: identities separated by newlines or commas, comments
+    allowed, the first encrypting."""
+    return parse_identities(text.replace(",", "\n"))
+
+
+RUNTIME_DIR = Path("/run/cabinet")  # inside the container, never a data volume
+
+
+def _runtime_dir() -> Path:
+    """Where an environment-supplied key is written for `age` to read (it
+    takes identities only from a file): inside the container, on the node's
+    own disk and gone with the container, never the state volume, which may
+    be shared storage. Outside the image (tests, a dev machine) a private
+    folder in the temp directory stands in."""
+    if RUNTIME_DIR.is_dir() and os.access(RUNTIME_DIR, os.W_OK):
+        return RUNTIME_DIR
+    fallback = Path(tempfile.gettempdir()) / "cabinet-backup-key"
+    fallback.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return fallback
 
 
 def state_dir() -> Path:
@@ -178,7 +215,12 @@ def key_path() -> Path:
     """The file age reads identities from: BACKUP_KEY_FILE, or the generated
     one on the state volume."""
     config = get_settings()
-    return Path(config.backup_key_file) if config.backup_key_file else state_dir() / GENERATED_NAME
+    where = source()
+    if where == "file":
+        return Path(config.backup_key_file)
+    if where == "environment":
+        return _runtime_dir() / GENERATED_NAME
+    return state_dir() / GENERATED_NAME
 
 
 def _fsync_dir(folder: Path) -> None:
@@ -223,7 +265,8 @@ def _create_exclusively(path: Path, text: str) -> bool:
 
 
 def _replace(path: Path, text: str) -> None:
-    """Rotation only: replace the generated key file, synced."""
+    """Replace a key file Cabinet owns (a rotated generated key, or the
+    runtime copy of BACKUP_KEY), synced."""
     partial = _write_partial(path, text)
     partial.replace(path)
     _fsync_dir(path.parent)
@@ -267,8 +310,24 @@ def ensure_key() -> list[Identity]:
     parsed is a ConfigError naming BACKUP_KEY_FILE, so startup stops before
     any backup is written. A generated key is created exclusively, so a key
     already there is never replaced, even if looking for it failed."""
+    config = get_settings()
+    if config.backup_key_file and config.backup_key.strip():
+        raise ConfigError(
+            "Set BACKUP_KEY_FILE or BACKUP_KEY, not both: Cabinet can't tell which key you mean."
+        )
     path = key_path()
-    if supplied():
+    where = source()
+    if where == "environment":
+        try:
+            found = parse_environment_key(config.backup_key)
+        except ValueError as exc:
+            raise ConfigError(
+                f"BACKUP_KEY: {exc}. Make one with: python -m app.cli backup-key new"
+            ) from None
+        # Written afresh on every start, inside the container, for age.
+        _replace(path, _key_file_text(found))
+        return _read_key(path)
+    if where == "file":
         try:
             return _read_key(path)
         except KeyUnavailable as exc:
@@ -303,7 +362,8 @@ def primary() -> Identity:
 def rotate() -> Identity | None:
     """Put a new identity first in the generated key file, keeping the old
     ones so older archives stay readable. Returns it, or None when the key
-    is supplied (BACKUP_KEY_FILE): that file is never modified."""
+    is supplied (BACKUP_KEY_FILE or BACKUP_KEY): a supplied key is never
+    modified; the operator rotates it."""
     if supplied():
         return None
     current = identities()
@@ -460,10 +520,14 @@ def _read_mountinfo() -> str | None:
 
 
 def location() -> str:
-    """For the backup key: `secret` when supplied (nothing to check),
-    otherwise how the generated key sits relative to BACKUP_DIR."""
-    if supplied():
+    """For the backup key: `secret` (a supplied file) or `environment` (a
+    supplied variable), nothing to check either way; otherwise how the
+    generated key sits relative to BACKUP_DIR."""
+    where = source()
+    if where == "file":
         return "secret"
+    if where == "environment":
+        return "environment"
     return compare_locations(
         key_path().resolve(), Path(get_settings().backup_dir).resolve(), _read_mountinfo()
     )
@@ -480,8 +544,8 @@ def secret_key_location() -> str | None:
 
 
 LOCATION_MESSAGES = {
-    "shared": "Your backup key is stored beside your backups; move it to a secret "
-    "(BACKUP_KEY_FILE).",
+    "shared": "Your backup key is stored beside your backups; supply it instead "
+    "(BACKUP_KEY_FILE, or BACKUP_KEY).",
     "not_verified": "Cabinet cannot tell where your backup key is stored relative to your "
-    "backups; supplying it as a secret (BACKUP_KEY_FILE) removes the doubt.",
+    "backups; supplying it (BACKUP_KEY_FILE, or BACKUP_KEY) removes the doubt.",
 }
