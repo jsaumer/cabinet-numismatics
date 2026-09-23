@@ -1,11 +1,14 @@
 """Photos carry no metadata (v0.32.0, SPEC_0320 stage 4, the review's HIGH 1):
 every upload is re-encoded without EXIF, GPS, XMP, IPTC, or text chunks, its
 colour profile kept, and photos stored before that are cleaned once by
-`photos.strip_existing`."""
+`photos.strip_existing`. The share view's per-file check (v0.32.1) is an
+allowlist walk of the whole file from v0.32.2."""
 
 import io
+import json
 import logging
 import os
+import zlib
 from pathlib import Path
 
 import pytest
@@ -170,8 +173,9 @@ def test_the_pass_rewrites_every_stored_photo_thumbnails_included():
     # A damaged file mustn't put every start on the slow path, so the marker
     # is written; the share view's per-file check refuses to trust it.
     assert photos.marker_exists()
+    assert photos.marker_unreadable() == {"item-3/broken.jpg"}  # refused when shared
     assert not photos.looks_clean(broken)
-    assert photos.looks_clean(jpeg) and photos.looks_clean(png)
+    assert photos.looks_clean(jpeg) and photos.looks_clean(png) and photos.looks_clean(webp)
     # A second pass (the container command) finds everything still clean.
     assert photos.strip_existing()["failed"] == 0
     assert_clean(jpeg.read_bytes(), "JPEG")
@@ -262,7 +266,9 @@ def _jpeg_with_segment_after_scan() -> bytes:
         ("time.png", png_with_time, False),
         ("app12.jpg", jpeg_with_app12, False),
         ("comment.jpg", old_thumbnail, False),
-        ("clean.webp", lambda: _clean("WEBP"), False),
+        ("clean.webp", lambda: _clean("WEBP"), True),
+        ("gps.webp", lambda: dirty("WEBP"), False),
+        ("truncated.webp", lambda: _clean("WEBP")[:-10], False),
         ("broken.jpg", lambda: b"not an image at all", False),
         ("empty.jpg", lambda: b"", False),
     ],
@@ -280,6 +286,7 @@ def test_looks_clean_decodes_no_pixels(tmp_path, monkeypatch):
     paths = [
         plant(tmp_path, "clean.png", _clean("PNG")),
         plant(tmp_path, "clean.jpg", _clean("JPEG")),
+        plant(tmp_path, "clean.webp", _clean("WEBP")),
     ]
 
     def refuse(self, *args, **kwargs):
@@ -412,3 +419,268 @@ def test_the_container_command(capsys):
     assert "Rewrote 1 of 1 stored photos" in capsys.readouterr().out
     assert_clean(path.read_bytes(), "PNG")
     assert photos.marker_exists()
+
+
+# --- the allowlist walks (v0.32.2) --------------------------------------------------
+
+
+CANARY = b"CANARY-7f3a-where-i-live"
+
+
+def segment(marker: int, body: bytes) -> bytes:
+    """A JPEG marker segment with its length."""
+    return bytes([0xFF, marker]) + (len(body) + 2).to_bytes(2, "big") + body
+
+
+def after_soi(data: bytes, extra: bytes) -> bytes:
+    return data[:2] + extra + data[2:]
+
+
+def before_eoi(data: bytes, extra: bytes) -> bytes:
+    return data[:-2] + extra + data[-2:]
+
+
+def png_chunk(kind: bytes, body: bytes, crc: int | None = None) -> bytes:
+    crc = zlib.crc32(kind + body) if crc is None else crc
+    return len(body).to_bytes(4, "big") + kind + body + crc.to_bytes(4, "big")
+
+
+def after_ihdr(data: bytes, extra: bytes) -> bytes:
+    return data[:33] + extra + data[33:]  # signature (8) and IHDR (25)
+
+
+def before_iend(data: bytes, extra: bytes) -> bytes:
+    return data[:-12] + extra + data[-12:]
+
+
+def plain(fmt: str, mode: str = "RGB", icc: bool = False, quality: int = photos.QUALITY) -> bytes:
+    """What Cabinet itself writes for an image with no metadata."""
+    img = Image.new(mode, (60, 40))
+    if icc:
+        img.info["icc_profile"] = ICC
+    return photos.clean_bytes(img, fmt, quality)
+
+
+def app0_body(data: bytes) -> bytes:
+    assert data[2:4] == b"\xff\xe0"
+    return data[6 : 4 + int.from_bytes(data[4:6], "big")]
+
+
+def with_app0(data: bytes, body: bytes) -> bytes:
+    """`data` with its JFIF segment's body replaced."""
+    end = 4 + int.from_bytes(data[4:6], "big")
+    return data[:2] + segment(0xE0, body) + data[end:]
+
+
+def gps_bit_flip() -> bytes:
+    """The review's case: one bit flipped in an APP1 marker (E1 to F1)
+    turns the EXIF segment, GPS and all, into a reserved JPG1 segment that
+    Pillow's `applist` doesn't list."""
+    exif = Image.Exif()
+    exif[0x010F] = CANARY.decode()  # Make
+    exif[0x8825] = {1: "N", 2: (51.0, 30.0, 12.5), 3: "W", 4: (0.0, 7.0, 39.0)}
+    buf = io.BytesIO()
+    Image.new("RGB", (60, 40), (200, 30, 30)).save(buf, "JPEG", exif=exif.tobytes())
+    data = buf.getvalue()
+    at = data.index(b"\xff\xe1")
+    return data[: at + 1] + b"\xf1" + data[at + 2 :]
+
+
+def webp_with_exif() -> bytes:
+    exif = Image.Exif()
+    exif[0x010F] = CANARY.decode()
+    buf = io.BytesIO()
+    Image.new("RGB", (60, 40), (200, 30, 30)).save(buf, "WEBP", exif=exif.tobytes())
+    return buf.getvalue()
+
+
+def riff(chunks: list[tuple[bytes, bytes]], pad: bytes = b"\0") -> bytes:
+    body = b"WEBP"
+    for kind, payload in chunks:
+        body += kind + len(payload).to_bytes(4, "little") + payload
+        body += pad if len(payload) % 2 else b""
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
+
+
+def webp_parts(data: bytes) -> list[tuple[bytes, bytes]]:
+    chunks, pos = [], 12
+    while pos < len(data):
+        size = int.from_bytes(data[pos + 4 : pos + 8], "little")
+        chunks.append((data[pos : pos + 4], data[pos + 8 : pos + 8 + size]))
+        pos += 8 + size + size % 2
+    return chunks
+
+
+def webp_flagged(flag: int) -> bytes:
+    parts = webp_parts(plain("WEBP", icc=True))
+    kind, payload = parts[0]
+    assert kind == b"VP8X"
+    return riff([(kind, bytes([payload[0] | flag]) + payload[1:]), *parts[1:]])
+
+
+def jpeg_with_fake_icc() -> bytes:
+    """An APP2 that says ICC_PROFILE but holds no profile."""
+    return after_soi(plain("JPEG"), segment(0xE2, b"ICC_PROFILE\0\x01\x01" + CANARY))
+
+
+def jpeg_icc_fragments_that_dont_add_up() -> bytes:
+    """A real profile, but the fragment count is wrong, so Pillow drops it
+    without a word and reports no profile at all."""
+    return after_soi(plain("JPEG"), segment(0xE2, b"ICC_PROFILE\0\x01\x02" + ICC + CANARY))
+
+
+ADOBE = b"Adobe\0d\0\0\0\0\x01"  # APP14's twelve bytes, as Pillow writes them
+
+
+# (name, bytes) the share view must never send from disk: each carries
+# CANARY somewhere past the pixels, or is malformed.
+REFUSED = {
+    "jpgn-in-header.jpg": lambda: after_soi(plain("JPEG"), segment(0xF1, CANARY)),
+    "jpgn-after-scan.jpg": lambda: before_eoi(plain("JPEG"), segment(0xF1, CANARY)),
+    "exp.jpg": lambda: after_soi(plain("JPEG"), segment(0xDF, CANARY)),
+    "big-jfif.jpg": lambda: with_app0(plain("JPEG"), app0_body(plain("JPEG")) + CANARY),
+    "jfif-thumbnail.jpg": lambda: with_app0(
+        plain("JPEG"), app0_body(plain("JPEG"))[:12] + b"\x01\x01" + CANARY[:3]
+    ),
+    "fake-icc.jpg": jpeg_with_fake_icc,
+    "icc-miscounted.jpg": jpeg_icc_fragments_that_dont_add_up,
+    "fpxr.jpg": lambda: after_soi(plain("JPEG"), segment(0xE2, b"FPXR\0" + CANARY)),
+    "big-adobe.jpg": lambda: after_soi(plain("JPEG"), segment(0xEE, ADOBE + CANARY)),
+    "comment.jpg": lambda: after_soi(plain("JPEG"), segment(0xFE, CANARY)),
+    "app1-after-scan.jpg": lambda: before_eoi(plain("JPEG"), segment(0xE1, b"Exif\0\0" + CANARY)),
+    "second-sos-baseline.jpg": lambda: before_eoi(
+        plain("JPEG"), segment(0xDA, b"\x01\x01\x00\x00\x3f\x00") + CANARY
+    ),
+    "fill-bytes.jpg": lambda: after_soi(plain("JPEG"), b"\xff\xff"),
+    "length-past-end.jpg": lambda: plain("JPEG")[:-2] + b"\xff\xc4\xff\xf0" + CANARY,
+    "appended.jpg": lambda: plain("JPEG") + gps_bit_flip(),
+    "trailer.jpg": lambda: plain("JPEG") + CANARY,
+    "gps-bit-flip.jpg": gps_bit_flip,
+    "padded-phys.png": lambda: after_ihdr(
+        plain("PNG"), png_chunk(b"pHYs", b"\0\0\x0b\x13\0\0\x0b\x13\x01" + CANARY)
+    ),
+    "bad-crc.png": lambda: before_iend(plain("PNG"), png_chunk(b"IDAT", CANARY, crc=1)),
+    "text.png": lambda: before_iend(plain("PNG"), png_chunk(b"tEXt", b"Comment\0" + CANARY)),
+    "private.png": lambda: before_iend(plain("PNG"), png_chunk(b"prVt", CANARY)),
+    "chunk-past-end.png": lambda: plain("PNG")[:-12] + png_chunk(b"IDAT", CANARY)[:-6],
+    "after-iend.png": lambda: plain("PNG") + CANARY,
+    "icc-renamed.png": lambda: after_ihdr(
+        plain("PNG"), png_chunk(b"iCCP", CANARY + b"\0\0" + zlib.compress(ICC))
+    ),
+    "exif.webp": webp_with_exif,
+    "xmp-flag.webp": lambda: webp_flagged(0x04),
+    "unknown-chunk.webp": lambda: riff([*webp_parts(plain("WEBP", icc=True)), (b"NOTE", CANARY)]),
+    "second-iccp.webp": lambda: riff([*webp_parts(plain("WEBP", icc=True)), (b"ICCP", CANARY)]),
+    "fake-iccp.webp": lambda: riff(
+        [(k, CANARY if k == b"ICCP" else p) for k, p in webp_parts(plain("WEBP", icc=True))]
+    ),
+    "trailer.webp": lambda: plain("WEBP") + CANARY,
+    "riff-size.webp": lambda: (lambda d: d[:4] + len(d).to_bytes(4, "little") + d[8:])(
+        plain("WEBP")
+    ),
+    "nonzero-pad.webp": lambda: riff(webp_parts(plain("WEBP", "RGBA")), pad=b"Z"),
+}
+# Hidden inside the compressed pixel stream, where a structure-only check
+# can't look: known limits of the fast path, pinned so a change is noticed.
+BEYOND_STRUCTURE = {
+    "text-before-eoi.jpg": lambda: before_eoi(plain("JPEG"), b"plain text " + CANARY),
+    "extra-idat.png": lambda: before_iend(plain("PNG"), png_chunk(b"IDAT", CANARY)),
+}
+
+
+@pytest.mark.parametrize(
+    "fmt, mode, icc, quality",
+    [
+        ("JPEG", "RGB", True, photos.QUALITY),
+        ("JPEG", "RGB", True, photos.THUMB_QUALITY),
+        ("JPEG", "RGB", False, photos.QUALITY),
+        ("JPEG", "RGB", False, photos.THUMB_QUALITY),
+        ("JPEG", "L", False, photos.QUALITY),
+        ("JPEG", "CMYK", False, photos.QUALITY),  # Adobe's APP14
+        ("PNG", "RGB", True, photos.QUALITY),
+        ("PNG", "RGB", False, photos.QUALITY),
+        ("PNG", "RGBA", True, photos.QUALITY),
+        ("PNG", "LA", False, photos.QUALITY),
+        ("WEBP", "RGB", True, photos.QUALITY),
+        ("WEBP", "RGB", False, photos.QUALITY),
+        ("WEBP", "RGBA", True, photos.QUALITY),
+        ("WEBP", "RGBA", False, photos.QUALITY),
+    ],
+)
+def test_what_cabinet_writes_passes_the_walk(tmp_path, fmt, mode, icc, quality):
+    """The fast path has to hold for Cabinet's own output, or every request
+    would re-encode: `clean_bytes` at both qualities, with and without a
+    profile, is sent as it is."""
+    data = plain(fmt, mode, icc, quality)
+    path = plant(tmp_path, f"own.{fmt.lower()}", data)
+    assert photos.checked_bytes(path) == (data, photos.MEDIA_TYPES[fmt])
+
+
+@pytest.mark.parametrize("transparency", [1, bytes([0, 128])], ids=["index", "alpha list"])
+def test_a_palette_with_transparency_passes_the_walk(tmp_path, transparency):
+    img = Image.new("P", (20, 20), 1)
+    img.putpalette([0, 0, 0, 255, 0, 0])
+    img.info["transparency"] = transparency
+    data = photos.clean_bytes(img, "PNG")
+    assert photos.checked_bytes(plant(tmp_path, "p.png", data)) == (data, "image/png")
+
+
+@pytest.mark.parametrize("name", sorted(REFUSED))
+def test_the_walk_refuses(tmp_path, name):
+    assert not photos.looks_clean(plant(tmp_path, name, REFUSED[name]()))
+
+
+def test_a_long_trns_or_bkgd_is_refused(tmp_path):
+    img = Image.new("P", (20, 20), 1)
+    img.putpalette([0, 0, 0, 255, 0, 0])
+    data = photos.clean_bytes(img, "PNG")
+    assert photos.looks_clean(plant(tmp_path, "p.png", data))
+    for extra in (png_chunk(b"tRNS", b"\0\x80\x10"), png_chunk(b"bKGD", b"\0\0")):
+        at = data.index(b"IDAT") - 4
+        bad = data[:at] + extra + data[at:]
+        assert not photos.looks_clean(plant(tmp_path, "bad.png", bad))
+
+
+@pytest.mark.parametrize("name", sorted(BEYOND_STRUCTURE))
+def test_what_structure_cannot_see(tmp_path, name):
+    """Bytes inside the compressed stream (after a JPEG's last coded unit,
+    or an IDAT after the zlib stream ends) are indistinguishable from pixel
+    data without decoding it, which the check never does."""
+    assert photos.looks_clean(plant(tmp_path, name, BEYOND_STRUCTURE[name]()))
+
+
+def test_a_fake_profile_is_not_kept(tmp_path):
+    """Pillow reports whatever an ICC_PROFILE segment holds as the profile;
+    one that isn't shaped like a profile is dropped, never re-encoded in."""
+    img, fmt = photos.open_validated(jpeg_with_fake_icc())
+    assert img.info.get("icc_profile", b"").endswith(CANARY)
+    data = photos.clean_bytes(img, fmt)
+    assert CANARY not in data and "icc_profile" not in Image.open(io.BytesIO(data)).info
+    assert photos.looks_clean(plant(tmp_path, "rewritten.jpg", data))
+
+
+# --- the marker's list of unreadable files (v0.32.2) --------------------------------
+
+
+def test_the_marker_lists_what_the_pass_could_not_read():
+    root = Path(get_settings().photo_dir)
+    plant(root, "item-1/one.jpg", dirty("JPEG"))
+    plant(root, "item-2/sub/broken.png", b"not an image at all")
+    assert photos.marker_unreadable() is None  # no marker yet
+    photos.strip_existing()
+    assert photos.marker_unreadable() == {"item-2/sub/broken.png"}
+    assert json.loads(photos._marker_path().read_text("utf-8")) == {
+        "unreadable": ["item-2/sub/broken.png"]
+    }
+
+
+def test_an_older_marker_still_counts():
+    """A v0.32.0 or v0.32.1 marker is a line of prose: it lists nothing, and
+    the pass isn't run again for it."""
+    path = photos._marker_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("Every stored photo has had its metadata removed.\n", "utf-8")
+    assert photos.marker_exists() and photos.marker_unreadable() == frozenset()
+    assert photos.clean_in_background() is False
+    path.write_text('{"unreadable": ', "utf-8")  # cut short: trust nothing
+    assert photos.marker_unreadable() is None
