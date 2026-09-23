@@ -16,7 +16,8 @@ from pathlib import Path
 import pytest
 
 from app.config import get_settings
-from app.services import backup, maintenance, restore, scheduled, schema
+from app.models.auth import AuditEntry
+from app.services import alerts, backup, maintenance, restore, scheduled, schema
 from tests.conftest import COIN, image_bytes, open_archive, seal
 from tests.test_backup import FAKE_DUMP, _session
 
@@ -76,7 +77,7 @@ def clock(monkeypatch):
 @pytest.fixture()
 def calls(monkeypatch):
     """Run the restore inline, with the database step recorded, not run."""
-    seen = {"dumps": [], "migrated": 0, "during": None}
+    seen = {"dumps": [], "migrated": 0, "during": None, "photo_passes": 0}
 
     def fake_restore(dump_path, on_drop=None):
         seen["dumps"].append(Path(dump_path).read_bytes())
@@ -90,6 +91,14 @@ def calls(monkeypatch):
     monkeypatch.setattr(
         restore, "migrate", lambda engine: seen.__setitem__("migrated", seen["migrated"] + 1)
     )
+    # The photo pass after a restore, run inline and counted.
+    from app.services import photos as photo_files
+
+    def pass_inline(fn):
+        seen["photo_passes"] += 1
+        fn()
+
+    monkeypatch.setattr(photo_files, "_spawn", pass_inline)
     return seen
 
 
@@ -1172,3 +1181,199 @@ def test_a_refused_second_run_leaves_the_first_runs_grant(client, coin, fake_dum
     finally:
         restore._lock.release()
         restore.drop_grant()
+
+
+# --- share links are kept like sign-in data (v0.32.0, SPEC_0320 stage 4) ----------
+
+
+def _share_link(client, **body) -> tuple[str, dict]:
+    resp = client.post("/api/share-links", json={"kind": "collection", "name": "Show", **body})
+    assert resp.status_code == 201, resp.text
+    return resp.json()["url"].rsplit("/", 1)[1], resp.json()
+
+
+def _archive_sharing(enabled: bool, links: list[tuple[str, str]]) -> None:
+    """Make the database look like an archive's: its own links and switch."""
+    import uuid
+
+    from app.models import ShareLink
+    from app.services import app_settings as store
+    from app.services import share
+
+    db = _session()
+    try:
+        db.execute(ShareLink.__table__.delete())
+        for token, name in links:
+            db.add(
+                ShareLink(
+                    id=uuid.uuid4(),
+                    token_hash=share.token_hash(token),
+                    kind="collection",
+                    name=name,
+                    created_by="owner",
+                    opens=0,
+                )
+            )
+        store.set_setting(db, "share_enabled", enabled)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_a_restore_keeps_the_live_links_and_switch(
+    client, anon_client, coin, fake_dump, calls, clock, monkeypatch
+):
+    """A leaked link the owner revoked can't come back with an older
+    archive, and an archive can't switch sharing on."""
+    from app.services import share
+
+    sent = []
+    monkeypatch.setattr(
+        alerts, "event", lambda db, key, title, message: sent.append((key, message))
+    )
+    client.put("/api/settings", json={"share_enabled": True})
+    kept, _ = _share_link(client, name="Kept")
+    set_id = client.post("/api/sets", json={"name": "Quarters"}).json()["id"]
+    _share_link(client, kind="set", set_id=set_id, name="Set")
+    client.put("/api/settings", json={"share_enabled": False})
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+    leaked = share.new_token()
+    calls["during"] = lambda: _archive_sharing(True, [(leaked, "Leaked")])
+
+    assert _restore(client, name).status_code == 202
+
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["ok"] is True
+    assert last["sharing"] == {
+        "links_kept": 2,
+        "links_dropped": 0,
+        "archive_links": 1,
+        "archive_enabled": True,
+        "enabled": False,
+        "differed": True,
+    }
+    assert sorted(link["name"] for link in client.get("/api/share-links").json()) == [
+        "Kept",
+        "Set",
+    ]
+    assert client.get("/api/settings").json()["share_enabled"] is False
+    assert share.cached() is False  # the gate's copy was reloaded
+    client.put("/api/settings", json={"share_enabled": True})
+    assert anon_client.get(f"/api/share/{leaked}").status_code == 404
+    assert anon_client.get(f"/api/share/{kept}").status_code == 200
+    finished = [m for k, m in sent if k == "restore_finished"]
+    assert len(finished) == 1 and "this Cabinet's were kept" in finished[0]
+    db = _session()
+    try:
+        row = db.query(AuditEntry).filter(AuditEntry.action == "restore_sharing").one()
+        assert row.actor_label == "owner" and row.detail == last["sharing"]
+    finally:
+        db.close()
+    everything = json.dumps(last) + json.dumps(sent)
+    assert leaked not in everything and share.token_hash(leaked) not in everything
+
+
+def test_an_unchanged_archive_is_not_named_in_the_alert(
+    client, coin, fake_dump, calls, clock, monkeypatch
+):
+    sent = []
+    monkeypatch.setattr(
+        alerts, "event", lambda db, key, title, message: sent.append((key, message))
+    )
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client)
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+    assert _restore(client, name).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["sharing"]["differed"] is False and last["sharing"]["links_kept"] == 1
+    assert [m for k, m in sent if k == "restore_finished"] == [f"Restore of {name} finished."]
+
+
+def test_a_set_link_is_dropped_when_the_archive_has_another_set(
+    client, coin, fake_dump, calls, clock
+):
+    """Ids are the archive's after a restore: a link is put back only onto
+    the same set (id and name), never onto whatever now has its id."""
+    from app.models import ItemSet
+
+    client.put("/api/settings", json={"share_enabled": True})
+    set_id = client.post("/api/sets", json={"name": "Quarters"}).json()["id"]
+    _share_link(client, kind="set", set_id=set_id, name="Set")
+    _share_link(client, name="Everything")
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+
+    def archive_renamed_the_set():
+        db = _session()
+        try:
+            db.get(ItemSet, set_id).name = "Private dimes"
+            db.commit()
+        finally:
+            db.close()
+
+    calls["during"] = archive_renamed_the_set
+    assert _restore(client, name).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert (last["sharing"]["links_kept"], last["sharing"]["links_dropped"]) == (1, 1)
+    assert [link["name"] for link in client.get("/api/share-links").json()] == ["Everything"]
+
+
+def test_a_failed_put_back_switches_sharing_off(client, coin, fake_dump, calls, clock, monkeypatch):
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client)
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+
+    def broken(link):
+        raise ValueError("unreadable snapshot")
+
+    monkeypatch.setattr(restore, "_as_row", broken)
+    assert _restore(client, name).status_code == 202
+    last = client.get("/api/restore/status").json()["last"]
+    assert last["sharing"]["enabled"] is False and "switched off" in last["sharing"]["error"]
+    assert client.get("/api/settings").json()["share_enabled"] is False
+
+
+def test_recover_puts_the_links_back_from_the_journal(client):
+    """A restart after the database step: the snapshot is in the journal."""
+    from app.services import share
+
+    client.put("/api/settings", json={"share_enabled": True})
+    _share_link(client, name="Live")
+    snapshot = restore._snapshot_sharing(_engine())
+    _archive_sharing(True, [(share.new_token(), "Leaked")])
+    path = restore._journal_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"phase": "swapping", "archive": "x.zip", "sharing_snapshot": snapshot})
+    )
+    restore.recover(_engine())
+    last = restore.last_outcome()
+    assert last["ok"] is True and last["sharing"]["links_kept"] == 1
+    assert "sharing_snapshot" not in last
+    assert [link["name"] for link in client.get("/api/share-links").json()] == ["Live"]
+
+
+def test_a_restore_with_photos_cleans_them_afterwards(client, coin, fake_dump, calls, clock):
+    from app.services import photos as photo_files
+
+    photo_files._write_marker()
+    name = _stored(client)
+    clock[0] += timedelta(minutes=1)
+    seen = []
+    calls["during"] = lambda: seen.append(photo_files.marker_exists())
+    assert _restore(client, name).status_code == 202
+    assert seen == [False]  # removed before the database step, ahead of the swap
+    assert calls["photo_passes"] == 1 and photo_files.marker_exists()
+
+
+def test_a_data_only_restore_leaves_the_photo_marker(client, coin, fake_dump, calls, clock):
+    from app.services import photos as photo_files
+
+    photo_files._write_marker()
+    name = _stored(client, photos=False)
+    clock[0] += timedelta(minutes=1)
+    assert _restore(client, name).status_code == 202
+    assert calls["photo_passes"] == 0 and photo_files.marker_exists()

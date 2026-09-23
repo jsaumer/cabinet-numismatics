@@ -21,23 +21,37 @@ Roadmap Phase 7, P9: the share and showcase view
   `items`, `items/{id}`, `checklist` (filled slots only), and
   `photos/{photo_id}/{thumb|full}` routes answer anyone holding the link;
   a session or token on the request is ignored. What a piece shows is an
-  allowlist (identity, physical facts, and quantity, plus photos, grades
-  and certs, tags, notes, and the estimated value as the link chooses;
-  values off by default): never a cost, gain, storage location, document,
-  serial number, or custom field. Every failure, sharing off included, is
-  the same `404`, slowed per address past 20; every answer carries
-  `X-Robots-Tag: noindex, nofollow`, and no public route makes a network
-  call.
+  allowlist (identity, physical facts, and quantity, plus photos, grades,
+  cert numbers, tags, notes, and the estimated value as the link chooses;
+  cert numbers and values off by default): never a cost, gain, storage
+  location, document, serial number, or custom field. A wrong, unknown, or
+  revoked token is the same `404`. The link is looked up first, so a live
+  link is never throttled; failed lookups are slowed per address past 20
+  (an IPv6 address by its /64) and capped at 300 a minute overall, in a
+  throttle kept apart from sign-in's. Every answer carries
+  `X-Robots-Tag: noindex, nofollow`, a shared photo carries no file time
+  (`Last-Modified`, `ETag`), and no public route makes a network call.
 - **Managing links**: `GET`/`POST /api/share-links`, `PATCH` and `DELETE
   /api/share-links/{id}`, and `POST /api/share-links/{id}/regenerate`. The
-  URL is shown once and only its hash is kept; making, regenerating, and
-  revoking a link ask for the password again, and at most 20 links exist.
-  Deleting a set or checklist deletes its links.
-- **The switch**: `share_enabled` in Settings, off by default. Off, every
-  link answers not found and none can be made; the links are kept.
-  Switching it, and each link event, is audited and sent through the alert
-  webhook (`sharing_switched`, `share_link_created`,
-  `share_link_regenerated`, `share_link_revoked`).
+  URL is shown once, on the admin's own address when it is one of
+  `PUBLIC_ORIGINS` (else the first https one), and only its hash is kept;
+  making, changing, regenerating, and revoking a link ask for the password
+  again, and at most 20 links exist. Deleting a set or checklist deletes
+  its links.
+- **The switch**: `share_enabled` in Settings, off by default. Off, a
+  stranger gets the same `401` under `/api/share/` as on any other path
+  (answered from memory, no database read) and no link can be made; the
+  links are kept. Switching it, and each link event, is audited and sent
+  through the alert webhook (`sharing_switched`, `share_link_created`,
+  `share_link_regenerated`, `share_link_revoked`, and `share_link_changed`
+  when a link starts showing notes, values, or cert numbers).
+- **A restore keeps the live share links and switch.** Links are access
+  grants, so an in-app restore puts back the links and switch it found,
+  whatever the archive held: a revoked link can't return with an older
+  archive, and an archive can't switch sharing on. The outcome says what
+  the archive held, it is audited (`restore_sharing`), and the restore's
+  alert says so when they differed. After `restore.sh`, check Settings,
+  Sharing.
 - Metrics `cabinet_share_links` and `cabinet_share_opens_total`, and a
   sharing line in `python -m app.cli status`.
 - Migration `0022`: the `share_links` table.
@@ -49,8 +63,27 @@ Roadmap Phase 7, P9: the share and showcase view
   isn't active." Settings gains a Sharing section: the switch, the links
   table (Rename, Options, Regenerate, Revoke), and a form to create one,
   with the new URL shown once and a Copy button, the same as a new API
-  token. nginx marks `/s/` non-indexable (`X-Robots-Tag`, `robots.txt`)
-  and keeps a share token out of its own access log too.
+  token. Each link's six toggles (photos, grades, tags, notes, the
+  estimated value, the cert number) sit in the create form and a row's
+  Options panel, the last two with a line saying why they are off by
+  default. nginx marks `/s/` non-indexable (`X-Robots-Tag` and the page's
+  own `noindex` tag; `robots.txt` disallows `/api/` only, since a crawler
+  has to fetch the page to see the tag) and keeps a share token out of its
+  own access log too.
+
+### Changed
+- **Photos are stored without their metadata.** A phone photo taken at home
+  carries GPS coordinates, the time, and the camera's details, and a share
+  link can now show a full-size photo to anyone holding it. Every upload,
+  URL import, and edited image is re-encoded before it is stored: turned
+  upright, with every EXIF block, XMP, IPTC, comment, and PNG text chunk
+  dropped and the colour profile kept (JPEG at quality 95; an animated
+  image keeps its first frame). Photos already stored are cleaned once, in
+  the background, on the first start after upgrading, and again after an
+  in-app restore brings photos; after `restore.sh`, run
+  `python -m app.cli strip-photo-metadata`. Found, with the throttle,
+  restore, and cert-number fixes above, by a security review before release
+  ([SPEC_0320](docs/specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)).
 
 **Deploying:** if you keep an authenticating reverse proxy in front of
 Cabinet (recommended as a second door until single sign-on in v0.33.0) and

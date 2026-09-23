@@ -7,11 +7,15 @@ Reads only the method, the raw path, and headers, never the body. In order:
 2. During maintenance only two requests get this far (the maintenance
    middleware runs first): health passes with no lookup, and the restore
    status passes only for the session holding the restore grant. No database.
-3. A `GET` or `HEAD` under an ANONYMOUS_PREFIXES path (the share view,
-   v0.32.0) passes with no credential looked up at all: a cookie never
-   touches `last_seen_at`, a token is never validated, and no Sec-Fetch-Site
-   check applies (a share link is opened from anywhere). Layer 2 then finds
-   the `share` class on every route there. Other methods go on as below.
+3. While sharing is on, a `GET` or `HEAD` under an ANONYMOUS_PREFIXES path
+   (the share view, v0.32.0) passes with no credential looked up at all: a
+   cookie never touches `last_seen_at`, a token is never validated, and no
+   Sec-Fetch-Site check applies (a share link is opened from anywhere).
+   Layer 2 then finds the `share` class on every route there. While it is
+   off there is no such rule: the request goes on as below like any other
+   (anonymous is 401), with no database read and no throttle work, since
+   the switch is held in memory (`share.enabled`). Other methods always go
+   on as below.
 4. The credential: `Authorization: Bearer cabinet_...` is a token (an invalid
    one is 401, never a fall back to the cookie); any other Authorization is
    ignored; otherwise the session cookie.
@@ -29,6 +33,7 @@ Reads only the method, the raw path, and headers, never the body. In order:
 Database work runs in a worker thread, never on the event loop.
 """
 
+import logging
 import re
 from urllib.parse import urlsplit
 
@@ -39,6 +44,8 @@ from app.auth import common, sessions, tokens
 from app.auth.permissions import Principal
 from app.config import get_settings, normalize_origin, public_origins
 from app.services import maintenance
+
+logger = logging.getLogger(__name__)
 
 ANONYMOUS = {
     (b"GET", b"/api/health"),
@@ -137,6 +144,31 @@ def _lookup(provider, bearer: str | None, cookie: str | None, meta: dict, csrf_o
         generator.close()
 
 
+def _load_sharing(provider) -> bool:
+    """In a worker thread, once a process (or after a restore): the switch
+    from the database. A failure reads as off and isn't remembered."""
+    from app.services import share
+
+    generator = provider()
+    db = next(generator)
+    try:
+        return share.load(db)
+    except Exception:
+        logger.exception("Could not read whether sharing is on; treating it as off")
+        return False
+    finally:
+        generator.close()
+
+
+async def _sharing_on(scope) -> bool:
+    from app.services import share
+
+    known = share.cached()
+    if known is not None:
+        return known
+    return await anyio.to_thread.run_sync(_load_sharing, _db_provider(scope))
+
+
 def _origin_of(value: bytes | None) -> str | None:
     if not value:
         return None
@@ -210,7 +242,11 @@ class AuthGate:
             await self.app(scope, receive, send)
             return
 
-        if method in (b"GET", b"HEAD") and path.startswith(ANONYMOUS_PREFIXES):
+        if (
+            method in (b"GET", b"HEAD")
+            and path.startswith(ANONYMOUS_PREFIXES)
+            and await _sharing_on(scope)
+        ):
             scope.setdefault("state", {})["principal"] = None
             await self.app(scope, receive, send)
             return

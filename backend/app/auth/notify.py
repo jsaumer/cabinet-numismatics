@@ -26,6 +26,7 @@ TITLES = {
     "share_link_created": "Cabinet share link created",
     "share_link_regenerated": "Cabinet share link regenerated",
     "share_link_revoked": "Cabinet share link revoked",
+    "share_link_changed": "Cabinet share link now shows more",
 }
 FAILURE_BURST = 20
 FAILURE_WINDOW = 15 * 60

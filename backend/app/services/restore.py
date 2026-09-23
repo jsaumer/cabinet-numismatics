@@ -27,6 +27,14 @@ pg_restore takes `public` only, and an archive whose dump holds anything in
 folder (`backup.staging_dir`), never in the backup directory. A marker row
 written just before the database step tells a restarted backend whether the
 database had been replaced when it stopped (`recover`).
+
+Share links are access grants, so they are kept like sign-in data (v0.32.0):
+the live `share_links` rows and the `share_enabled` switch are read after
+the safety backup, and put back after the database step and the migrations,
+replacing whatever the archive held; a revoked link can't come back with an
+older archive, and an archive can't switch sharing on. An archive's photos
+may carry metadata, so the photo marker is removed before they are swapped
+in and a cleaning pass runs after.
 """
 
 import hmac
@@ -52,7 +60,7 @@ from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
-from app.models import AppSetting
+from app.models import AppSetting, Checklist, ItemSet, ShareLink
 from app.models.auth import BackupRecord
 from app.services import (
     alerts,
@@ -61,8 +69,10 @@ from app.services import (
     crypto,
     maintenance,
     metrics,
+    photos,
     scheduled,
     schema,
+    share,
 )
 from app.services import app_settings as store
 
@@ -896,6 +906,169 @@ def _after_database(engine: Engine) -> list[str]:
     return [store.SECRET_LABELS[key] for key in cleared]
 
 
+# --- share links, kept like sign-in data --------------------------------------------
+
+_LINK_FIELDS = (
+    "token_hash",
+    "kind",
+    "set_id",
+    "checklist_id",
+    "name",
+    *share.OPTIONS,
+    "created_by",
+    "opens",
+)
+_LINK_TIMES = ("created_at", "last_opened_at")
+
+
+def _target_name(db: Session, link: ShareLink) -> str | None:
+    if link.kind == "set" and link.set_id is not None:
+        found = db.get(ItemSet, link.set_id)
+    elif link.kind == "checklist" and link.checklist_id is not None:
+        found = db.get(Checklist, link.checklist_id)
+    else:
+        return None
+    return found.name if found is not None else None
+
+
+def _snapshot_sharing(engine: Engine) -> dict:
+    """The live links and switch, as JSON (the journal carries them, so a
+    restart can still put them back). Hashes only: no link's token is known."""
+    with Session(engine) as db:
+        links = []
+        for row in db.scalars(select(ShareLink)):
+            link = {"id": str(row.id), **{name: getattr(row, name) for name in _LINK_FIELDS}}
+            for name in _LINK_TIMES:
+                value = getattr(row, name)
+                link[name] = value.isoformat() if value is not None else None
+            link["target_name"] = _target_name(db, row)
+            links.append(link)
+        return {"enabled": bool(store.get_setting(db, "share_enabled")), "links": links}
+
+
+def _fingerprint(link: dict) -> tuple:
+    return (str(link["id"]), *(link[name] for name in _LINK_FIELDS if name != "opens"))
+
+
+def _row_fingerprint(row: ShareLink) -> tuple:
+    return _fingerprint({"id": row.id, **{name: getattr(row, name) for name in _LINK_FIELDS}})
+
+
+def _as_row(link: dict) -> ShareLink:
+    row = ShareLink(id=uuid.UUID(link["id"]), **{name: link[name] for name in _LINK_FIELDS})
+    for name in _LINK_TIMES:
+        value = link.get(name)
+        setattr(row, name, datetime.fromisoformat(value) if value else None)
+    return row
+
+
+def _put_back_sharing(engine: Engine, snapshot: dict | None, actor) -> dict | None:
+    """Replace the archive's links and switch with the snapshot. A set or
+    checklist link is put back only when a target with the same id and name
+    is in the restored database; otherwise it could open a different set. On
+    any failure sharing is switched off (the archive's links are its own,
+    and must not open). Audited as `restore_sharing`; the summary goes in
+    the outcome."""
+    if snapshot is None:
+        return None
+    result = {
+        "links_kept": 0,
+        "links_dropped": 0,
+        "archive_links": 0,
+        "archive_enabled": False,
+        "enabled": bool(snapshot["enabled"]),
+        "differed": False,
+    }
+    try:
+        with engine.connect() as conn:
+            found = inspect_db(conn)
+            has_links = found.has_table(ShareLink.__tablename__)
+            has_settings = found.has_table(AppSetting.__tablename__)
+        with Session(engine) as db:
+            archived = list(db.scalars(select(ShareLink))) if has_links else []
+            result["archive_links"] = len(archived)
+            if has_settings:
+                result["archive_enabled"] = bool(store.get_setting(db, "share_enabled"))
+            result["differed"] = result["archive_enabled"] != result["enabled"] or {
+                _row_fingerprint(row) for row in archived
+            } != {_fingerprint(link) for link in snapshot["links"]}
+            db.expunge_all()  # the snapshot's rows reuse the archive's ids
+            if has_links:
+                db.execute(ShareLink.__table__.delete())
+            for link in snapshot["links"]:
+                if not has_links:
+                    result["links_dropped"] += 1
+                    continue
+                if link["kind"] != "collection":
+                    probe = ShareLink(
+                        kind=link["kind"], set_id=link["set_id"], checklist_id=link["checklist_id"]
+                    )
+                    if _target_name(db, probe) != link.get("target_name"):
+                        result["links_dropped"] += 1
+                        continue
+                db.add(_as_row(link))
+                result["links_kept"] += 1
+            if has_settings:
+                store.set_setting(db, "share_enabled", result["enabled"])
+            db.commit()
+    except Exception:
+        logger.exception("Restore: putting the share links back failed; switching sharing off")
+        result["error"] = (
+            "The share links could not be put back, so sharing was switched off. "
+            "Check Settings, Sharing."
+        )
+        result["enabled"] = False
+        try:
+            with Session(engine) as db:
+                store.set_setting(db, "share_enabled", False)
+                db.commit()
+        except Exception:
+            logger.exception("Restore: could not switch sharing off either")
+    _audit_sharing(engine, result, actor)
+    return result
+
+
+def _audit_sharing(engine: Engine, result: dict, actor) -> None:
+    from app.auth import audit
+
+    detail = {key: value for key, value in result.items() if key != "error"}
+    try:
+        with Session(engine) as db:
+            audit.record(db, "restore_sharing", actor or audit.Actor.system(), detail=detail)
+            db.commit()
+    except Exception:
+        logger.exception("Restore: could not record restore_sharing")
+
+
+def _sharing_sentence(sharing: dict | None) -> str:
+    """For the restore's alert: said only when the archive differed."""
+    if not sharing:
+        return ""
+    if sharing.get("error"):
+        return " " + sharing["error"]
+    words = ""
+    if sharing.get("differed"):
+        words = (
+            " The archive held other share links or another sharing switch; this "
+            "Cabinet's were kept."
+        )
+    if sharing.get("links_dropped"):
+        words += (
+            f" {sharing['links_dropped']} share link(s) whose set or checklist the archive "
+            "doesn't hold were removed."
+        )
+    return words
+
+
+def _reload_sharing(engine: Engine) -> None:
+    try:
+        with Session(engine) as db:
+            share.load(db)
+    except Exception:
+        logger.exception("Restore: could not read whether sharing is on")
+        share.reset_memory()  # the gate reads it on first use
+
+
 # --- running ----------------------------------------------------------------
 
 
@@ -1008,6 +1181,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
     dump: Path | None = None
     marker: str | None = None
     manifest: dict | None = None
+    sharing: dict | None = None
     database_restored = False
     try:
         maintenance.enter()
@@ -1039,6 +1213,9 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             finally:
                 db.close()
             outcome["safety_backup"] = safety.name
+            # After the safety backup (which carries them too), before the
+            # database step: what to put back.
+            sharing = _snapshot_sharing(engine)
 
             # Unpack first, swap last: unpacking is what can run out of room
             # or meet a bad member, and it touches nothing live.
@@ -1052,9 +1229,19 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             _step("database")
             dump = extract_dump(archive, restore_id)
             refuse_auth(dump, _server_major(engine))  # again, from the file about to be used
+            if _swaps_photos(manifest):
+                # The archive's photos may carry metadata: the pass after the
+                # swap cleans them, and a restart before then runs one too.
+                photos.remove_marker()
             # From here a restarted backend asks the database what happened.
             marker = _write_marker(engine)
-            journal = {"phase": "database", "marker": marker, "dropped": [], **outcome}
+            journal = {
+                "phase": "database",
+                "marker": marker,
+                "dropped": [],
+                "sharing_snapshot": sharing,
+                **outcome,
+            }
             _write_json(_journal_path(), journal)
 
             def journal_drop(names: list[str]) -> None:
@@ -1076,7 +1263,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
                 ) from exc
             raise RestoreError(f"{_sentence(exc)} {NOTHING_CHANGED}") from exc
         database_restored = True
-        _write_json(_journal_path(), {"phase": "swapping", **outcome})
+        _write_json(_journal_path(), {"phase": "swapping", "sharing_snapshot": sharing, **outcome})
         go_back = f"Restore {outcome['safety_backup']} to return to how things were."
         outcome["secrets_cleared"] = _after_database(engine)
 
@@ -1089,6 +1276,9 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             except Exception as exc:
                 logger.exception("Restore: migrating the restored database failed")
                 migration_error = exc
+        # After the migrations: an archive from before 0022 has no share_links
+        # table until they run.
+        outcome["sharing"] = _put_back_sharing(engine, sharing, entry.get("actor"))
 
         _step("finishing")
         try:
@@ -1107,6 +1297,8 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
             ) from exc
         for swap in swaps:
             swap.finish()
+        if _swaps_photos(manifest):
+            photos.clean_in_background(force=True)
         if migration_error is not None:
             raise RestoreError(
                 "The archive was restored, but bringing its database up to this version "
@@ -1142,6 +1334,7 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         dispose_engine(engine)
         metrics.reset_cache()
         alerts.reset_memory()
+        _reload_sharing(engine)
     except Exception:
         logger.exception("Restore: tidying up failed")
     _record(outcome)
@@ -1154,9 +1347,12 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         entry["name"],
         # Never the error itself: pg_restore's output can quote the
         # collection's rows. The reason is in Settings and the outcome file.
-        f"Restore of {entry['name']} finished."
-        if outcome["ok"]
-        else f"Restore of {entry['name']} failed. The reason is in Settings, Backups.",
+        (
+            f"Restore of {entry['name']} finished."
+            if outcome["ok"]
+            else f"Restore of {entry['name']} failed. The reason is in Settings, Backups."
+        )
+        + _sharing_sentence(outcome.get("sharing")),
         {"ok": bool(outcome["ok"])},
     )
     _set_state(state="done" if outcome["ok"] else "failed", step=None)
@@ -1213,6 +1409,7 @@ def recover(engine: Engine | None = None) -> None:
     phase = journal.pop("phase", None)
     marker = journal.pop("marker", None)
     dropped = journal.pop("dropped", None) or []
+    snapshot = journal.pop("sharing_snapshot", None)
     outcome = {**journal, "ok": False}
     folders = [folder for _m, _s, folder in _file_targets()]
     try:
@@ -1247,6 +1444,8 @@ def recover(engine: Engine | None = None) -> None:
                 logger.warning("A restore was interrupted before the database was replaced")
             else:
                 outcome["secrets_cleared"] = _after_database(engine)
+                outcome["sharing"] = _put_back_sharing(engine, snapshot, None)
+                photos.remove_marker()  # the startup pass cleans what comes in
                 _roll_forward(folders)
                 outcome["ok"] = True
                 outcome["finished_after_restart"] = True
@@ -1254,6 +1453,8 @@ def recover(engine: Engine | None = None) -> None:
                     "Finished a restore that was interrupted after the database was replaced"
                 )
         elif phase == "swapping":
+            outcome["sharing"] = _recover_sharing(engine, snapshot)
+            photos.remove_marker()
             _roll_forward(folders)
             outcome["ok"] = True
             logger.warning("Finished a restore that was interrupted while replacing files")
@@ -1270,6 +1471,24 @@ def recover(engine: Engine | None = None) -> None:
     _record(outcome)
     _journal_path().unlink(missing_ok=True)
     _clear_legacy_dumps()
+
+
+def _recover_sharing(engine: Engine | None, snapshot: dict | None) -> dict | None:
+    """The put-back again for a restore stopped after the database step: it
+    may or may not have run, and running it twice gives the same result."""
+    if snapshot is None:
+        return None
+    if engine is None:
+        from app.db import engine
+    try:
+        schema.wait_for_database(engine)
+    except Exception:
+        logger.exception("Restore: the database can't be reached to put the share links back")
+    return _put_back_sharing(engine, snapshot, None)
+
+
+def _swaps_photos(manifest: dict | None) -> bool:
+    return manifest is not None and "photos.tar.gz" in manifest.get("members", {})
 
 
 def _clear_uploads() -> None:

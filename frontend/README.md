@@ -216,36 +216,59 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   dying session elsewhere in the app can never redirect a share visitor to
   `/login`.
 - **Every call the share page makes is `raw`** (`api.shareManifest`,
-  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`): a 404
-  there means "not a valid link," and must never reach `req()`'s global
-  401 handler (which isn't even registered here, `AuthProvider` not being
-  mounted, but `raw` keeps the calls correct regardless of that).
-  `sharePhotoUrl(token, photoId, variant)` builds the photo URL directly;
-  it isn't a `req()` call at all, the same as `photoUrl`.
+  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`), and
+  `SharePage` treats any failed `shareManifest` call the same way: a bad
+  or revoked token is `404`, but sharing switched off answers `401`
+  instead (stage 4, finding 3, so an anonymous scan of `/api/share/`
+  while it's off costs the gate no lookup); the page's `.catch()` doesn't
+  read the status, so both, and a `429` from the per-address throttle,
+  land on the same "This link isn't active" page. None of this must ever
+  reach `req()`'s global 401 handler (which isn't even registered here,
+  `AuthProvider` not being mounted, but `raw` keeps the calls correct
+  regardless of that). `sharePhotoUrl(token, photoId, variant)` builds the
+  photo URL directly; it isn't a `req()` call at all, the same as
+  `photoUrl`.
 - **The page never links into the signed-in app.** No `/items/...`,
   `/settings/...`, or sign-in link appears anywhere on a share page; the
   footer's "Shared from Cabinet" names the app without linking anywhere.
 - **`<meta name="robots" content="noindex">`** is added to `document.head`
   while `SharePage` is mounted and removed on unmount; nginx repeats the
-  intent server-side with `X-Robots-Tag` on `/s/` and a `robots.txt`
-  disallowing `/s/` and `/api/` (`proxy/nginx.conf`). A share link's token
-  is also kept out of nginx's own access log: a `map`/`log_format` at the
-  top of that file rewrites `/api/share/<token>...` and `/s/<token>...` to
-  `.../[token]...` before logging, the same redaction the backend already
-  does for its own `uvicorn.access` log.
+  intent server-side with `X-Robots-Tag` on `/s/` (`proxy/nginx.conf`).
+  `robots.txt` disallows `/api/` but not `/s/` (stage 4, finding 7): a
+  crawler has to fetch a share page to see its `noindex` tag, so blocking
+  the path outright would have hidden the tag from the crawler that's
+  supposed to read it. A share link's token is kept out of nginx's own
+  access log regardless: a `map`/`log_format` at the top of that file
+  rewrites `/api/share/<token>...` and `/s/<token>...` to `.../[token]...`
+  before logging, the same redaction the backend already does for its own
+  `uvicorn.access` log. nginx's error log isn't redacted (an upstream
+  error can quote the path, token included); see
+  [deployment.md](../docs/deployment.md#sharing-and-the-forward-auth-exemption).
 - **A `ShareItem`'s toggle-gated keys are absent, not null, when the
   link's own `show_*` is off** (`api/types/share.ts`): `SharePiece.tsx`
   reads `item.grade_label === undefined` (and the same for `tags` and
   `notes`) to tell "not shown by this link" apart from "shown, but empty,"
   which is why a share never displays an empty grade or tags section on a
-  piece with none.
+  piece with none. `cert_number` is its own toggle (`show_certs`, stage 4,
+  finding 10) and is checked the same way, independently of
+  `grade_label`: a link can show the certification service
+  (`cert_service`, still under `show_grades`) without the cert number, or
+  neither, or both.
 - **Settings → Sharing** (`pages/settings/Sharing.tsx`) is a seventh
   routed section, after Alerts & metrics: the `share_enabled` switch,
   the links table (Rename, Options, Regenerate, Revoke, each an admin
   call through `req()`, so the fresh ones open the confirm-password
-  dialog by themselves), and a create form. A link's URL is shown once,
-  the same show-once-with-Copy pattern as a new API token in
-  `components/account.tsx`.
+  dialog by themselves; `PATCH /api/share-links/{id}` became fresh in
+  stage 4, finding 9, so Options and Rename both need nothing extra), and
+  a create form. A link's URL is shown once, the same show-once-with-Copy
+  pattern as a new API token in `components/account.tsx`. The six
+  `show_*` toggles live in one `OPTIONS` array in `Sharing.tsx`, shared by
+  the create form and a row's Options panel; `show_values` and
+  `show_certs` each carry a one-line reason beyond their label (composition,
+  weight, and fineness always show regardless, so a melt value already
+  follows without the values toggle; a cert number is a lookup key into
+  public auction records), shown as a hover title and as small text under
+  the toggle list.
 
 - **Design tokens.** Colours and the typeface are CSS variables on `:root`
   at the top of `styles.css`, with the dark values under
@@ -301,14 +324,18 @@ the dev server, and they create and delete their own items; the stack test
 asserts on ounces and cost only, never on a live spot price.
 
 `e2e/share.spec.ts` drives Settings → Sharing end to end: switch sharing
-on, create a collection link, open its URL in a brand-new browser context
-that carries none of the suite's storage state (`browser.newContext()`, not
-a signed-out `storageState` like `auth.spec.ts`'s, since the point is a
-context that never had a session to begin with), and check the share's name
-in the header, at least one piece card, no link back into the signed-in
-app, and no price anywhere on the page (the link's `show_values` defaults
-off); open a piece's own page; then, back in the signed-in page, revoke the
-link and see the signed-out context's reload show "This link isn't
+on, create a collection link for an item that carries a cert service and
+number, open its URL in a brand-new browser context that carries none of
+the suite's storage state (`browser.newContext()`, not a signed-out
+`storageState` like `auth.spec.ts`'s, since the point is a context that
+never had a session to begin with), and check the share's name in the
+header, at least one piece card, no link back into the signed-in app, and
+no price anywhere on the page (the link's `show_values` defaults off);
+open a piece's own page and check it shows the cert service but not the
+cert number (`show_certs` defaults off too); then, back in the signed-in
+page, turn `show_certs` on through the row's Options panel (a `PATCH`,
+fresh since stage 4) and check the reload picks up the cert number; revoke
+the link and see the signed-out context's reload show "This link isn't
 active."; and a second test checks the create form's 409 message while
 sharing is off. Its own copies of `withPasswordConfirm` and `deleteForGood`
 match `smoke.spec.ts`'s, the convention every spec here follows rather than

@@ -1,14 +1,17 @@
 """The share view's public routes (v0.32.0, SPEC_0320): anyone with a link,
-no sign-in. The gate passes a `GET` or `HEAD` under `/api/share/` without
-looking up any credential, and every route here declares `share`, so a
-signed-in admin sees exactly what a stranger sees.
+no sign-in. While sharing is on, the gate passes a `GET` or `HEAD` under
+`/api/share/` without looking up any credential, and every route here
+declares `share`, so a signed-in admin sees exactly what a stranger sees.
+While it is off the gate has no such rule, and an anonymous caller gets its
+401 before anything here runs.
 
-Every failure is the same `404 {"detail": "Not found"}` (sharing off, a
-wrong, unknown, or revoked token, anything outside the share); a failed
-link lookup is counted against the caller's address, and past the free
-allowance the address waits (429, `Retry-After`). The token is only ever
-read from the path and is never logged. What an item shows is
-`share.item_view`'s allowlist.
+Every failure is the same `404 {"detail": "Not found"}` (a wrong, unknown,
+or revoked token, a target gone, anything outside the share). The link is
+resolved first, so a live link is never throttled; only a failed lookup
+consults the throttle, which answers 429 (`Retry-After`, not counted) for
+an address inside its wait or past the global limit, and otherwise counts
+the failure and answers 404. The token is only ever read from the path and
+is never logged. What an item shows is `share.item_view`'s allowlist.
 """
 
 from fastapi import APIRouter, Depends, Request
@@ -33,6 +36,15 @@ PHOTO_HEADERS = {
 }
 NOT_FOUND = {"detail": "Not found"}
 VARIANTS = ("thumb", "full")
+MAX_OFFSET = 1_000_000  # past bigint range is a database error, not a 422
+
+
+class _PhotoFile(FileResponse):
+    """No `Last-Modified` or `ETag`: both are built from the file's time,
+    which is when the photo was uploaded, close to when the piece was bought."""
+
+    def set_stat_headers(self, stat_result) -> None:
+        self.headers.setdefault("content-length", str(stat_result.st_size))
 
 
 def _address(request: Request) -> str:
@@ -42,21 +54,20 @@ def _address(request: Request) -> str:
 
 def _answer(request: Request, db: Session, token: str, work):
     """Resolve the link and run `work(link)`, or answer 429 or the one 404."""
-    address = _address(request)
-    wait = throttle.wait("share", address)
-    if wait > 0:
-        refused = throttle.Throttled(wait)
-        return JSONResponse(
-            {"detail": str(refused)},
-            429,
-            headers={**HEADERS, "Retry-After": str(refused.retry_after)},
-        )
     try:
         link = share.resolve(db, token)
     except share.NotFound:
-        # Only a failed lookup counts against the address: a valid link
-        # whose photo file is missing must not push its viewer into 429s.
-        throttle.fail("share", address)
+        # Only a failed lookup reaches the throttle: a live link is never
+        # refused, whoever else shares its viewer's address (behind a proxy
+        # or a Swarm ingress, every viewer does).
+        wait = throttle.share_failure(_address(request))
+        if wait > 0:
+            refused = throttle.Throttled(wait)
+            return JSONResponse(
+                {"detail": str(refused)},
+                429,
+                headers={**HEADERS, "Retry-After": str(refused.retry_after)},
+            )
         return JSONResponse(NOT_FOUND, 404, headers=HEADERS)
     try:
         return work(link)
@@ -88,12 +99,13 @@ def share_items(
     limit: int = 50,
     db: Session = Depends(get_db),
 ):
-    """A page of the shared pieces, newest first; `limit` 1 to 100."""
+    """A page of the shared pieces, newest first; `offset` 0 to 1,000,000,
+    `limit` 1 to 100."""
 
     def work(link):
-        if offset < 0 or not 1 <= limit <= 100:
+        if not 0 <= offset <= MAX_OFFSET or not 1 <= limit <= 100:
             return JSONResponse(
-                {"detail": "offset is 0 or more, limit 1 to 100."}, 422, headers=HEADERS
+                {"detail": "offset is 0 to 1000000, limit 1 to 100."}, 422, headers=HEADERS
             )
         values = share.value_context(db) if link.show_values else None
         rows = share.page_items(db, link, offset, limit)
@@ -146,6 +158,6 @@ def share_photo(
         path = photo_store.path_of(key) if key else None
         if path is None or not path.is_file():
             raise share.NotFound()
-        return FileResponse(path, headers=PHOTO_HEADERS)
+        return _PhotoFile(path, headers=PHOTO_HEADERS)
 
     return _answer(request, db, token, work)

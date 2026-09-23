@@ -15,13 +15,15 @@ Commands (v0.30.0):
     decrypt-archive           decrypt an archive from stdin to stdout (restore.sh)
     verify-archive PATH|-     check a decrypted archive was made with this key
     write-archive --name N    write an encrypted archive to stdout (backup.sh)
+    strip-photo-metadata      remove EXIF, GPS, and the rest from stored photos
+                              (after restore.sh put back an archive's photos)
 
 Started as root (as `docker compose exec` does), a command first drops to
 the app's own user (PUID:PGID), so any file it writes keeps its owner.
 Nothing here prints a secret except `backup-key show`, which exists to.
 The account and backup-key commands refuse until Cabinet is set up, and
-each change is audited as `cli`; the archive commands serve the scripts,
-which work before setup too.
+each change is audited as `cli`; the archive commands and
+`strip-photo-metadata` serve the scripts, which work before setup too.
 """
 
 import argparse
@@ -339,6 +341,21 @@ def write_archive(args) -> int:
     return 0
 
 
+def strip_photo_metadata(_args) -> int:
+    """The same pass the backend runs once at startup (v0.32.0); needed after
+    restore.sh, which puts back whatever the archive's photos carry."""
+    from app.services import photos
+
+    found = photos.strip_existing()
+    print(
+        f"Rewrote {found['rewritten']} of {found['checked']} stored photos "
+        f"({found['unreadable']} unreadable, {found['failed']} failed)."
+    )
+    if found["failed"]:
+        return _fail("some photos could not be rewritten; the lines above name them")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -372,6 +389,9 @@ def main(argv: list[str] | None = None) -> int:
     write.add_argument("--name", required=True)
     write.add_argument("--data-only", action="store_true", help="leave photos and documents out")
     write.set_defaults(run=write_archive)
+    commands.add_parser(
+        "strip-photo-metadata", help="remove EXIF, GPS, and the rest from stored photos"
+    ).set_defaults(run=strip_photo_metadata)
 
     args = parser.parse_args(argv)
     _drop_privileges()

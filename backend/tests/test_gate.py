@@ -151,10 +151,16 @@ def anonymous_requests():
     yield "GET", "/"
 
 
-def test_anonymous_matrix(anon_client, dry_run):
+@pytest.mark.parametrize("sharing", [False, True])
+def test_anonymous_matrix(anon_client, dry_run, sharing):
+    """Sharing off (the default), the share routes are 401 like any other
+    path; on, a GET or HEAD under /api/share/ gets through to layer 2."""
+    from app.services import share
+
+    share.set_enabled(sharing)
     for method, path in anonymous_requests():
         resp = call(anon_client, method, path)
-        if (method, path) in ANONYMOUS or shared(method, path):
+        if (method, path) in ANONYMOUS or (sharing and shared(method, path)):
             assert resp.status_code != 401, (method, path)
         else:
             assert resp.status_code == 401, (method, path, resp.status_code)
@@ -267,9 +273,9 @@ def fresh_operations():
 def test_fresh_matrix(client, stale_client, token_client, dry_run):
     ops = fresh_operations()
     # The spec's 15, less the two confirmed by their body, plus the three
-    # photo and document deletions (section 16), plus making, regenerating,
-    # and revoking a share link (v0.32.0).
-    assert len(ops) == 19
+    # photo and document deletions (section 16), plus making, changing,
+    # regenerating, and revoking a share link (v0.32.0).
+    assert len(ops) == 20
     tokens = [token_client(scope) for scope in ("read", "write", "metrics")]
     for method, path in ops:
         stale = call(stale_client, method, path)
@@ -358,9 +364,12 @@ def test_origin_only_in_allowed_hosts_is_refused(client, monkeypatch, dry_run):
 def test_share_routes_need_no_credential_and_ignore_one(
     client, anon_client, token_client, monkeypatch
 ):
-    """The share class (v0.32.0): the gate looks nobody up for a GET under
-    /api/share/, so an invalid token isn't refused, a session isn't touched,
-    and layer 2 sees no principal whoever is calling."""
+    """The share class (v0.32.0): while sharing is on, the gate looks nobody
+    up for a GET under /api/share/, so an invalid token isn't refused, a
+    session isn't touched, and layer 2 sees no principal whoever is calling."""
+    from app.services import share
+
+    share.set_enabled(True)
     seen = []
     real = permissions.check
 

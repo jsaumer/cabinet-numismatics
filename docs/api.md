@@ -20,7 +20,8 @@ document files, and metrics answer files or text).
 /api/health` (just `{"status": ...}` for anonymous callers), `GET
 /api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`; and
 the share view's `GET /api/share/...` routes (v0.32.0), which need a share
-link's token instead (see [Sharing](#sharing)). A
+link's token instead, and only while sharing is on (see
+[Sharing](#sharing)). A
 browser signs in and carries a session cookie; scripts send an API token
 (`Authorization: Bearer cabinet_...`). What each route allows is in
 [Sign-in and permissions](#sign-in-and-permissions) below. The three
@@ -101,8 +102,8 @@ They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
 deleted), `DELETE /api/documents/{id}`, `DELETE
 /api/items/{id}/documents/{id}` when this item is the document's last
 holder (the file goes with it), creating or revoking a token, creating,
-regenerating, or revoking a share link, ending another session, and
-signing out everywhere. Changing the password or the
+changing, regenerating, or revoking a share link, ending another session,
+and signing out everywhere. Changing the password or the
 username takes the current password in the body instead.
 
 A `read` or `metrics` token is refused on any `POST`, `PUT`, `PATCH`, or
@@ -119,9 +120,9 @@ Scripts that use the cookie send `Origin`.
 
 **Paths.** A path containing `%` is `400` before anything else, and
 anonymous callers get `401` for every path but the four above (unknown ones
-included), and a `GET` or `HEAD` under `/api/share/`, which passes with no
-credential looked up (see [Sharing](#sharing)); signed in, an unknown path
-is `404`. Responses without their
+included), and, while sharing is on, a `GET` or `HEAD` under
+`/api/share/`, which passes with no credential looked up (see
+[Sharing](#sharing)); signed in, an unknown path is `404`. Responses without their
 own `Cache-Control` get `private, no-store`.
 
 | Method | Path | Class | Purpose |
@@ -366,7 +367,14 @@ ND with the range's first year attributed.
 Upload accepts a single image file plus optional `angle`. Files are validated
 as real JPEG/PNG/WebP images (the declared content-type is not trusted), EXIF
 orientation is corrected, and a JPEG thumbnail is generated alongside the
-original. The first photo uploaded becomes the primary image. Responses
+original. **The original is stored re-encoded, without its metadata**
+(v0.32.0): the orientation is applied, then every EXIF block (GPS, camera,
+dates), XMP, IPTC, comment, and PNG text chunk is dropped; only the colour
+profile (and a palette's transparency) is kept. A JPEG is written at
+quality 95, so the stored file is not byte for byte the upload, and an
+animated WebP or PNG keeps its first frame only. Photos stored before
+v0.32.0 are cleaned once, in the background, on the first start (see
+[backup-restore.md](backup-restore.md#photo-metadata)). The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
 
@@ -1017,27 +1025,38 @@ page for the collection, a set, or a checklist behind an unguessable link,
 opened without signing in. The whole feature is the `share_enabled`
 setting (off by default, see [Settings](#settings)).
 
-**Public routes** (class `share`). The gate lets any `GET` or `HEAD` under
-`/api/share/` through without looking up a credential, and the routes ignore
-one: a session or a token on the request changes nothing, so the admin
-previewing a link sees what a stranger sees. The token is read from the
-path only. Every answer carries `X-Robots-Tag: noindex, nofollow`; the JSON
-ones `Cache-Control: no-store`.
+**Public routes** (class `share`). While sharing is on, the gate lets any
+`GET` or `HEAD` under `/api/share/` through without looking up a
+credential, and the routes ignore one: a session or a token on the request
+changes nothing, so the admin previewing a link sees what a stranger sees.
+While it is off the gate has no such rule: an anonymous request there is
+`401 {"detail": "Sign in to continue."}` like any other unlisted path,
+answered from memory with no database read, so a closed instance looks the
+same as one without the feature. The token is read from the path only.
+Every answer carries `X-Robots-Tag: noindex, nofollow`; the JSON ones
+`Cache-Control: no-store`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/share/{token}` | The manifest: `kind`, `name`, `show_photos`, `show_grades`, `show_tags`, `show_notes`, `show_values`, `item_count`, and for a checklist `filled` and `total`. Counts one open |
-| `GET` | `/api/share/{token}/items` | `?offset=&limit=` (`limit` 1 to 100, default 50): `{"items": [...], "total": n}`, newest first |
+| `GET` | `/api/share/{token}` | The manifest: `kind`, `name`, `show_photos`, `show_grades`, `show_tags`, `show_notes`, `show_values`, `show_certs`, `item_count`, and for a checklist `filled` and `total`. Counts one open |
+| `GET` | `/api/share/{token}/items` | `?offset=&limit=` (`offset` 0 to 1,000,000, `limit` 1 to 100, default 50; `422` outside them): `{"items": [...], "total": n}`, newest first |
 | `GET` | `/api/share/{token}/items/{item_id}` | One piece, if it is in the share |
 | `GET` | `/api/share/{token}/checklist` | A checklist link's **filled** slots only, `{"slots": [{position, label, year, mint_mark, item_id}]}` (`item_id` is `null` for a slot ticked by hand with no piece); other kinds `404` |
-| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox` |
+| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The file carries no metadata (see [Photos](#photos)) |
 
-**One 404.** Sharing switched off, a malformed token, an unknown one, a
-revoked one, a set or checklist that is gone, and a piece or photo outside
-the share all answer the same `404 {"detail": "Not found"}`, so nothing says
-whether sharing exists. Each counts against the caller's address; past 20
-in 15 minutes the address waits (`429` with `Retry-After`, the sign-in
-curve, at most a minute).
+**One 404.** A malformed token, an unknown one, a revoked one, a set or
+checklist that is gone, and a piece or photo outside the share all answer
+the same `404 {"detail": "Not found"}`. The link is looked up first, so a
+live link is never throttled, whoever else shares its viewer's address
+(behind a gateway or a Swarm ingress, every viewer does). Only a failed
+lookup reaches the throttle: an address inside its wait gets `429` with
+`Retry-After` (not counted), otherwise the failure is counted and answered
+`404`. An address may fail 20 times in 15 minutes, then waits the sign-in
+curve (1 second, doubling, at most a minute); an IPv6 address is counted by
+its /64. Past 300 failed lookups a minute across every address, a failed
+lookup is `429` too. Share failures are kept apart from the sign-in
+throttles, so a flood of them can't weaken those. A piece or photo outside
+a resolved share is never counted.
 
 **What a link covers.** `collection`: every owned piece (not sold, not the
 wish list, never the trash). `set`: the set's owned pieces. `checklist`: the
@@ -1049,8 +1068,10 @@ slot ticked by hand).
 `composition`, `weight_g`, `fineness`, `diameter_mm`, `width_mm`,
 `height_mm`, `shape`, `issuer`, `quantity`; with `show_photos`, `photos`
 (`id`, `angle`, `has_thumbnail`); with `show_grades`, `grade_label`,
-`grade_details`, `designations`, `cac_sticker`, `cert_service`,
-`cert_number`; with `show_tags`, `tags` (names); with `show_notes`, `notes`;
+`grade_details`, `designations`, `cac_sticker`, `cert_service`; with
+`show_certs` (off by default), `cert_number`, which looks a slab up in
+auction archives that often give its sale price and date; with `show_tags`,
+`tags` (names); with `show_notes`, `notes`;
 with `show_values`, `value`: the list's shown value (the `value_strategy`
 setting) in the display currency, `{"amount", "currency"}`, or `null` when
 the piece has none or it can't be converted from the cached exchange rates
@@ -1058,14 +1079,17 @@ the piece has none or it can't be converted from the cached exchange rates
 or sale field, the estimate's source or history, a storage location, a
 document, a serial number, custom fields, the population, wish-list fields,
 spot at purchase, the import origin, timestamps, or the edit history.
+Composition, weight, fineness, and quantity are always shown, so a
+precious-metal piece's melt value can be worked out from the spot price
+even with `show_values` off.
 
 **Managing links** (admin):
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/share-links` | Every link: `id`, `kind`, `set_id`, `checklist_id`, `target_name`, `name`, the five `show_*`, `created_at`, `created_by`, `last_opened_at`, `opens`. Never the token or its hash |
-| `POST` | `/api/share-links` | Recent password. `{kind, set_id?, checklist_id?, name, show_*?}` (`show_photos`, `show_grades`, `show_tags` default on; `show_notes`, `show_values` off): `201`, the row plus `url` (`{first PUBLIC_ORIGINS entry}/s/{token}`), shown this once. `422` when the target is missing or the wrong one is given; `409` `"Switch sharing on in Settings first."` while sharing is off, and `409` with 20 links already |
-| `PATCH` | `/api/share-links/{id}` | `{name?, show_*?}`: rename or change what it shows; the link stays the same |
+| `GET` | `/api/share-links` | Every link: `id`, `kind`, `set_id`, `checklist_id`, `target_name`, `name`, the six `show_*`, `created_at`, `created_by`, `last_opened_at`, `opens`. Never the token or its hash |
+| `POST` | `/api/share-links` | Recent password. `{kind, set_id?, checklist_id?, name, show_*?}` (`show_photos`, `show_grades`, `show_tags` default on; `show_notes`, `show_values`, `show_certs` off): `201`, the row plus `url` (`{origin}/s/{token}`, below), shown this once. `422` when the target is missing or the wrong one is given; `409` `"Switch sharing on in Settings first."` while sharing is off, and `409` with 20 links already |
+| `PATCH` | `/api/share-links/{id}` | Recent password. `{name?, show_*?}`: rename or change what it shows; the link stays the same. Audited as `share_link_changed` with the options that changed (and the old name on a rename); alerted when `show_notes`, `show_values`, or `show_certs` is switched on, since that shows every holder of the link more than before |
 | `POST` | `/api/share-links/{id}/regenerate` | Recent password. A new `url`, shown once; the old one stops working at once; `409` while sharing is off |
 | `DELETE` | `/api/share-links/{id}` | Recent password. Revoke for good (the row is deleted); `204` |
 
@@ -1077,6 +1101,18 @@ link, and switching sharing on or off, are audited (`share_link_created`,
 link's id, name, and kind, never the token) and sent through the alert
 webhook. Switched off, the links are kept and work again when it is
 switched back on.
+
+**The link's origin.** A new or regenerated `url` is built on the request's
+own `Origin` when that is one of `PUBLIC_ORIGINS` (the address the admin is
+using), else on the first `https://` entry, else on the first entry. With
+`PUBLIC_ORIGINS=http://cabinet.lan,https://cabinet.example.com`, a link made
+from the LAN name is on the LAN name, and one made anywhere else is on the
+public https name, never on plain http when an https origin exists.
+
+**A restore keeps the links** (v0.32.0). Share links are access grants, so
+an in-app restore treats them like sign-in data: the live links and the
+`share_enabled` switch are put back after the archive's database is in
+place, whatever the archive held. See [Restore](#restore).
 
 ## Settings
 
@@ -1130,9 +1166,9 @@ the API keys (`""` clears; reads return only `alert_webhook_hint` /
 `heartbeat_hint`, the URL's `scheme://host/…`), `alert_webhook_format` is
 `generic`, `ntfy`, `discord`, `slack`, or `gotify`, and `metrics_enabled`
 serves `/api/metrics`. `share_enabled` (v0.32.0, default `false`) is the
-share view's switch: off, every share link answers `404` and none can be
-made or regenerated; turning it on or off is audited and alerted (see
-[Sharing](#sharing)). Read-only: `alerts` (each check that has ever failed:
+share view's switch: off, no share link opens (an anonymous caller gets the
+gate's `401`) and none can be made or regenerated; turning it on or off is
+audited and alerted (see [Sharing](#sharing)). Read-only: `alerts` (each check that has ever failed:
 `key`, `label`, `failing`, `since`, `message`), `alert_delivery` and
 `heartbeat` (the last attempt since the backend started: `at`, `ok`,
 `detail`), `refresh_last_run` (per source: `at`, `updated`, `skipped`,
@@ -1246,7 +1282,15 @@ state volume and is `null` until a restore has run; `items`, `photos`, and
 stored secrets the restore cleared because this deployment couldn't use
 them (plain text, or encrypted with another key), and
 `finished_after_restart` is `true` when the backend stopped after the
-database step and finished the restore on its next start. Switched off, it answers `enabled:
+database step and finished the restore on its next start. `sharing`
+(v0.32.0) says what happened to the share links, which a restore keeps
+like sign-in data: `links_kept` (put back), `links_dropped` (a set or
+checklist link whose target, by id and name, the archive doesn't hold),
+`archive_links` and `archive_enabled` (what the archive held, now
+replaced), `enabled` (the switch, as it was before), and `differed`; an
+`error` there means the links couldn't be put back and sharing was switched
+off. It is audited as `restore_sharing`, and the restore's alert says so
+when the archive differed. Switched off, it answers `enabled:
 false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
 
 `POST /api/restore/inspect` takes either a multipart upload (field `file`),
@@ -1345,8 +1389,8 @@ reached (generic JSON `alert` `wishlist_target`, `status` `event`), and a
 spot-price threshold crossed (`alert` `spot_gold` / `spot_silver` /
 `spot_platinum` / `spot_palladium`, `status` `event`, one per metal that has
 a saved threshold), and the share view's `sharing_switched`,
-`share_link_created`, `share_link_regenerated`, and `share_link_revoked`
-(v0.32.0).
+`share_link_created`, `share_link_regenerated`, `share_link_revoked`, and
+`share_link_changed` (when notes, values, or cert numbers go on) (v0.32.0).
 
 ## Checklists (completeness tracking)
 
