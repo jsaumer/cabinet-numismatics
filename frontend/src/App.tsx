@@ -18,6 +18,7 @@ import Login from "./pages/Login";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
 import AddRun from "./pages/AddRun";
+import SharePage from "./pages/share/SharePage";
 import Setup from "./pages/Setup";
 import Stack from "./pages/Stack";
 import Trash from "./pages/Trash";
@@ -183,7 +184,25 @@ function RedirectToLogin() {
   return <Navigate to={`/login${next}`} replace />;
 }
 
+/** A share link (v0.32.0): read-only, no sign-in, rendered before anything
+ * about auth runs. It never calls GET /api/auth/state or /api/auth/me (the
+ * page's own calls are all `raw`, see api/calls.ts), and AuthProvider isn't
+ * mounted at all here, so its 401 handler can never fire on this branch. */
+function ShareRoutes() {
+  return (
+    <Routes>
+      <Route path="/s/:token" element={<SharePage />} />
+      <Route path="/s/:token/items/:itemId" element={<SharePage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 export default function App() {
+  const location = useLocation();
+  if (location.pathname === "/s" || location.pathname.startsWith("/s/")) {
+    return <ShareRoutes />;
+  }
   return (
     <AuthProvider>
       <Gate />

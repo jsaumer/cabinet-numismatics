@@ -268,6 +268,7 @@ test("every Settings section renders, with the version", async ({ page }) => {
     ["/settings/pricing", "Pricing"],
     ["/settings/backups", "Backups"],
     ["/settings/alerts", "Alerts & metrics"],
+    ["/settings/sharing", "Sharing"],
     ["/settings/account", "Account"],
     ["/settings/about", "About"],
   ] as const) {

@@ -8,6 +8,7 @@ import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
 import type { ApiToken, AuditEntry, AuthSession, AuthState, LoginResult, Me, NewApiToken, PasswordChangeResult, TokenScope } from "./types/auth";
+import type { NewShareLink, ShareChecklistView, ShareItem, ShareItemsPage, ShareLink, ShareLinkCreate, ShareLinkPatch, ShareManifest } from "./types/share";
 
 export const api = {
   // Sign-in, the account, sessions, tokens, and the audit log (v0.30.0).
@@ -252,6 +253,41 @@ export const api = {
   pricingStale: (days: number) => req<StaleReport>(`/api/pricing/stale?days=${days}`),
   pricingSources: () => req<SourcesReport>("/api/pricing/sources"),
   pricingAccuracy: () => req<AccuracyReport>("/api/pricing/accuracy"),
+
+  // Share links (v0.32.0): managing them is admin, through req() as usual
+  // (the fresh ones open the password dialog by themselves). Opening a link
+  // is public and outside the sign-in gate, so those calls are raw: a 404
+  // there means "not a valid link," not "signed out."
+  listShareLinks: () => req<ShareLink[]>("/api/share-links"),
+  createShareLink: (payload: ShareLinkCreate) =>
+    req<NewShareLink>("/api/share-links", json("POST", payload)),
+  updateShareLink: (id: string, patch: ShareLinkPatch) =>
+    req<ShareLink>(`/api/share-links/${id}`, json("PATCH", patch)),
+  regenerateShareLink: (id: string) =>
+    req<NewShareLink>(`/api/share-links/${id}/regenerate`, { method: "POST" }),
+  revokeShareLink: (id: string) => req<void>(`/api/share-links/${id}`, { method: "DELETE" }),
+
+  shareManifest: (token: string) =>
+    req<ShareManifest>(`/api/share/${encodeURIComponent(token)}`, undefined, { raw: true }),
+  shareItems: (token: string, offset: number, limit = 100) =>
+    req<ShareItemsPage>(
+      `/api/share/${encodeURIComponent(token)}/items?${new URLSearchParams({
+        offset: String(offset),
+        limit: String(limit),
+      })}`,
+      undefined,
+      { raw: true },
+    ),
+  shareItem: (token: string, itemId: string) =>
+    req<ShareItem>(
+      `/api/share/${encodeURIComponent(token)}/items/${encodeURIComponent(itemId)}`,
+      undefined,
+      { raw: true },
+    ),
+  shareChecklist: (token: string) =>
+    req<ShareChecklistView>(`/api/share/${encodeURIComponent(token)}/checklist`, undefined, {
+      raw: true,
+    }),
 
   async allItems(): Promise<ItemListEntry[]> {
     const items: ItemListEntry[] = [];

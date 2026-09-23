@@ -7,6 +7,7 @@ export * from "./types/settings";
 export * from "./types/dashboard";
 export * from "./types/stack";
 export * from "./types/auth";
+export * from "./types/share";
 export { api } from "./calls";
 export { ApiError, setReauthHandler, setUnauthorizedHandler } from "./client";
 export type { ReqOptions } from "./client";
@@ -30,6 +31,12 @@ export function certLookupUrl(service: string | null, cert: string | null): stri
 }
 
 export const photoUrl = (key: string) => `/photos/${key}`;
+
+/** A shared piece's photo, served by the share route rather than nginx's
+ * /photos/ (which stays "session or token"). `thumb` falls back to the full
+ * image on the backend when a photo has no thumbnail. */
+export const sharePhotoUrl = (token: string, photoId: string, variant: "thumb" | "full") =>
+  `/api/share/${encodeURIComponent(token)}/photos/${photoId}/${variant}`;
 
 const moneyFormats = new Map<string, Intl.NumberFormat | null>();
 

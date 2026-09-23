@@ -1690,6 +1690,77 @@ permission class. Rules a later change has to respect:
   `cabinet_share_links` and `cabinet_share_opens_total`; `cli status`
   prints `Sharing: on|off, N links`.
 
+Stage 2, the frontend (23 September 2026): the share page
+(`frontend/src/pages/share/`: `SharePage.tsx`, `ShareGrid.tsx`,
+`SharePiece.tsx`, `ShareChecklist.tsx`), Settings → Sharing
+(`pages/settings/Sharing.tsx`), and nginx's `/s/` location, `robots.txt`,
+and log redaction. Rules this stage left:
+
+- **The share routes are checked for before `AuthProvider` is even
+  mounted**, not inside it: `App.tsx`'s `App` reads `location.pathname`
+  itself (it already renders inside `main.tsx`'s `BrowserRouter`, so
+  `useLocation()` works there) and, for a path under `/s/`, renders the
+  share routes directly, skipping `<AuthProvider>` entirely. That is what
+  guarantees the boot check never runs for a share visitor, not merely
+  that the share page's own calls are `raw`; a share link and the signed-in
+  app share no in-memory auth state at all.
+- **Every call `pages/share/*.tsx` makes is `raw`** (`api.shareManifest`,
+  `shareItems`, `shareItem`, `shareChecklist`), so a 404 (an inactive link)
+  is caught by `SharePage` itself, the same convention as the setup and
+  sign-in calls. `sharePhotoUrl` builds the photo URL directly, the same
+  shape as `photoUrl` but through `/api/share/{token}/photos/{id}/{variant}`
+  rather than `/photos/{key}`, since a share's photos are served by the API
+  (`routers/share.py`), never nginx's `/photos/` (which stays "session or
+  token").
+- **A `ShareItem`'s toggle-gated fields are absent, not `null`, when the
+  link's own `show_*` is off** (`api/types/share.ts` marks them optional):
+  `SharePiece.tsx` reads `item.grade_label === undefined` (and the same for
+  `tags`, `notes`) to tell "this link doesn't show grades" apart from
+  "shown, but this piece has none," which is why a share page never renders
+  an empty Grade & certification, Tags, or Notes group.
+- **`try_files`'s fallback to `/index.html` is an internal redirect that
+  gets re-matched against `location /`, not served by the location that
+  redirected**, so `location /s/`'s own `add_header`s never reached the
+  response when they were set directly in it: found by testing the built
+  image with real nginx, not by reading the config alone. The fix
+  (`proxy/nginx.conf`) is a named location, `@share_index`, that `/s/`
+  falls back to instead: `auth_request off` and every `add_header` (the
+  headers include, the repeated CSP from `location /`, `X-Robots-Tag`, and
+  `Referrer-Policy: no-referrer`) live there, since that is the location
+  that actually serves the fallback file. `auth_request off` has to be
+  repeated in `@share_index` too, for the same reason: a named location
+  doesn't inherit a directive set only in the location that dispatched to
+  it, only from the enclosing server or http context, where `auth_request
+  /_auth/photo` is still on.
+- **nginx sends both `Referrer-Policy` headers rather than merging or
+  dropping one** (confirmed against real nginx): `@share_index` includes
+  `cabinet-headers.conf` (which sets `strict-origin-when-cross-origin`,
+  among the other three headers every page gets) and then adds its own
+  `Referrer-Policy: no-referrer` afterwards. Both reach the browser; the
+  Referrer Policy spec has a browser keep the last valid one it sees, which
+  is what makes this an override rather than a conflict. A location that
+  wants to change a `cabinet-headers.conf` value some other way should
+  expect the same two-header result, not assume `add_header` replaces one
+  of the same name.
+- **The access log redacts a share token too**, alongside the backend's
+  existing `uvicorn.access` filter: a `map`/`log_format` at the top of
+  `nginx.conf` (outside any `server` block, since the file is included
+  inside the image's `http {}`, see `frontend/Dockerfile`) rewrites
+  `/api/share/<token>...` and `/s/<token>...` to `.../[token]...`, and each
+  `server` block opts in with `access_log ... cabinet;`. Confirmed by
+  reading the container's own access log during testing, not just the
+  config.
+- **`/robots.txt`** is a `location = /robots.txt { auth_request off; ...
+  return 200 "..."; }`, disallowing `/s/` and `/api/`; it needs no backend
+  route and no static file in `frontend/public`.
+- Settings → Sharing follows the section-per-file convention from v0.30.2:
+  `pages/settings/Sharing.tsx`, key `sharing`, after Alerts & metrics in
+  `SETTINGS_SECTIONS` (`pages/settings/shared.tsx`) and
+  `SECTION_COMPONENTS` (`pages/Settings.tsx`). The create form's 409 while
+  sharing is off is left to the backend's message (`share.SWITCHED_OFF`)
+  rather than disabled client-side, so the same "Switch sharing on in
+  Settings first" text the API route documents is what the owner sees.
+
 ## Releases
 
 
