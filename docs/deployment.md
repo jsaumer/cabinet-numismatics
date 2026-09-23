@@ -173,7 +173,7 @@ things still call for one:
   front (the nginx config is baked into the proxy image, so terminating TLS
   there instead means building your own image with a certificate and a
   `443` server block).
-- **A second door, until single sign-on.** Until v0.32.0 adds OpenID Connect
+- **A second door, until single sign-on.** Until v0.33.0 adds OpenID Connect
   and a trusted-header mode, keep an authenticating reverse proxy (any
   forward-auth or SSO gateway: Traefik + Authentik, Authelia, oauth2-proxy,
   Pomerium, Cloudflare Access) in front as well. It brings its own second
