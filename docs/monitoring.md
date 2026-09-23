@@ -67,8 +67,13 @@ met when saved fires on the very next check. The alert key is `spot_<metal>`
 making, regenerating, or revoking a share link sends `share_link_created`,
 `share_link_regenerated`, or `share_link_revoked`, naming the link and its
 kind (collection, set, or checklist), never its token, so a link made from
-a session that isn't yours is noticed. Opening a link sends nothing; its
-count is in Settings and in the metrics below.
+a session that isn't yours is noticed; changing a link so that it starts
+showing notes, values, or cert numbers sends `share_link_changed` (a
+change that shows less is audited but not sent). An in-app restore that
+found other share links or another sharing switch in the archive says so
+in its own finish message (the live links and switch are kept; the audit
+event is `restore_sharing`). Opening a link sends nothing; its count is in
+Settings and in the metrics below.
 
 ### Formats
 

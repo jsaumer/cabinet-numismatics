@@ -8,26 +8,32 @@ target gone), so a caller can't tell them apart. Everything a public route
 shows goes through `item_view`, an allowlist pinned by tests/test_share.py: a
 field not named there never reaches a share, whatever the item holds.
 Nothing here makes a network call: values convert at cached rates only.
+
+Whether sharing is on is held in memory (`enabled`), because the gate asks
+on every anonymous request under `/api/share/` and must not read the
+database for it: loaded from the database once, set by the settings route,
+reloaded after a restore and every hourly tick.
 """
 
 import hashlib
 import re
 import secrets
+import threading
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.config import get_settings, public_origins
-from app.models import Checklist, Item, ItemPhoto, ItemSet, ShareLink
+from app.config import get_settings, normalize_origin, public_origins
+from app.models import AppSetting, Checklist, Item, ItemPhoto, ItemSet, ShareLink
 from app.services import app_settings, checklists, pricing
 from app.services.currency import Converter
 
 PREFIX = "share_"
 TOKEN_RE = re.compile(r"^share_[A-Za-z0-9_-]{43}$")
 KINDS = ("collection", "set", "checklist")
-OPTIONS = ("show_photos", "show_grades", "show_tags", "show_notes", "show_values")
+OPTIONS = ("show_photos", "show_grades", "show_tags", "show_notes", "show_values", "show_certs")
 MAX_LINKS = 20
 SWITCHED_OFF = "Switch sharing on in Settings first."
 SHARE_PATH = re.compile(r"(/api/share/)[^/?#\s]+")
@@ -50,11 +56,17 @@ FIELDS = (
     "issuer",
     "quantity",
 )
-GRADE_FIELDS = ("grade_details", "cac_sticker", "cert_service", "cert_number")
+# The grading service stays with the grade; the cert number has a toggle of
+# its own (`show_certs`, off by default): it looks a slab up in auction
+# archives, which often give the owner's own purchase price and date.
+GRADE_FIELDS = ("grade_details", "cac_sticker", "cert_service")
 # Said outright, not left to the ORM listener: a count or a column select
 # must hide the trash too.
 _OWNED = (Item.status == "owned", Item.deleted_at.is_(None))
 ITEM_LOAD = (selectinload(Item.photos), selectinload(Item.tags), selectinload(Item.estimates))
+
+_enabled_lock = threading.Lock()
+_enabled: bool | None = None  # None: not known yet, read from the database
 
 
 class NotFound(Exception):
@@ -82,12 +94,68 @@ def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("ascii")).hexdigest()
 
 
-def link_url(token: str) -> str:
-    return f"{public_origins(get_settings())[0]}/s/{token}"
+def link_origin(origin: str | None) -> str:
+    """The origin a new link is built on: the request's own when it is one
+    of PUBLIC_ORIGINS (the address the admin is using), else the first https
+    origin, else the first."""
+    origins = public_origins(get_settings())
+    found = normalize_origin(origin) if origin else None
+    if found is not None and found in origins:
+        return found
+    return next((o for o in origins if o.startswith("https://")), origins[0])
 
 
-def enabled(db: Session) -> bool:
-    return bool(app_settings.get_setting(db, "share_enabled"))
+def link_url(token: str, request=None) -> str:
+    origin = request.headers.get("origin") if request is not None else None
+    return f"{link_origin(origin)}/s/{token}"
+
+
+# --- the switch, in memory ---------------------------------------------------------
+
+
+def cached() -> bool | None:
+    """What memory holds: True, False, or None when not loaded yet."""
+    return _enabled
+
+
+def set_enabled(value: bool) -> None:
+    global _enabled
+    with _enabled_lock:
+        _enabled = bool(value)
+
+
+def load(db: Session | None = None) -> bool:
+    """Read the switch from the database into memory. With no session one
+    is opened (the gate and the loops have none of their own). An
+    `app_settings` table that isn't there yet (an archive from before it,
+    not migrated) reads as off."""
+    if db is None:
+        from app.db import SessionLocal
+
+        own = SessionLocal()
+        try:
+            return load(own)
+        finally:
+            own.close()
+    if not inspect(db.get_bind()).has_table(AppSetting.__tablename__):
+        value = False
+    else:
+        value = bool(app_settings.get_setting(db, "share_enabled"))
+    set_enabled(value)
+    return value
+
+
+def enabled(db: Session | None = None) -> bool:
+    value = _enabled
+    return load(db) if value is None else value
+
+
+def reset_memory() -> None:
+    """Forget the switch; the next read loads it (tests, and after a restore
+    that couldn't read it back)."""
+    global _enabled
+    with _enabled_lock:
+        _enabled = None
 
 
 def target(db: Session, link: ShareLink) -> ItemSet | Checklist | None:
@@ -257,6 +325,8 @@ def item_view(item: Item, link: ShareLink, values=None) -> dict:
         view["designations"] = list(item.designations or [])
         for name in GRADE_FIELDS:
             view[name] = getattr(item, name)
+    if link.show_certs:
+        view["cert_number"] = item.cert_number
     if link.show_tags:
         view["tags"] = [tag.name for tag in item.tags]
     if link.show_notes:

@@ -1,17 +1,21 @@
 import { expect, Page, test } from "@playwright/test";
 
-// Settings -> Sharing end to end (SPEC_0320, stage 3): create a collection
-// link, open it in a signed-out context with no storage state at all (a
-// share visitor never runs the sign-in boot check, App.tsx routes /s/*
-// before AuthProvider is even mounted), see a piece and no price on the
-// page (values are off by default), revoke it, and see the same page a
-// stranger without the link would see.
+// Settings -> Sharing end to end (SPEC_0320, stage 3 and 4): create a
+// collection link, open it in a signed-out context with no storage state at
+// all (a share visitor never runs the sign-in boot check, App.tsx routes
+// /s/* before AuthProvider is even mounted), see a piece and no price on the
+// page (values are off by default) and no cert number (show_certs is off by
+// default too, stage 4 finding 10), turn show_certs on and see the number
+// appear, revoke the link, and see the same page a stranger without the
+// link would see.
 
 const CABINET_PASSWORD = process.env.CABINET_PASSWORD ?? "correct horse battery";
 
 const ITEM_COUNTRY = `Share test ${Date.now()}`;
 const ITEM_DENOMINATION = "1 share test";
 const ITEM_YEAR = "2026";
+const CERT_SERVICE = "PCGS";
+const CERT_NUMBER = `88${Date.now()}`;
 const LINK_NAME = `E2E share ${Date.now()}`;
 
 test.describe.configure({ mode: "serial" });
@@ -47,11 +51,15 @@ async function deleteForGood(page: Page, url: string, country: string) {
 }
 
 test("a collection share link works for a signed-out visitor, then stops", async ({ page, browser }) => {
-  // A piece for the link to show.
+  // A piece for the link to show, with a cert number: show_certs (stage 4,
+  // finding 10) needs one to prove it's held back, and cert_service to
+  // prove show_grades still carries the service name on its own.
   await page.goto("/items/new");
   await page.getByLabel("Country *").fill(ITEM_COUNTRY);
   await page.getByLabel("Denomination *").fill(ITEM_DENOMINATION);
   await page.getByLabel("Year *").fill(ITEM_YEAR);
+  await page.getByLabel("Cert service").fill(CERT_SERVICE);
+  await page.getByLabel("Cert number").fill(CERT_NUMBER);
   await page.getByRole("button", { name: "Add item", exact: true }).click();
   await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
   const itemUrl = new URL(page.url()).pathname;
@@ -95,10 +103,29 @@ test("a collection share link works for a signed-out visitor, then stops", async
   await guestPage.locator(".share-card").first().click();
   await expect(guestPage.locator(".share-piece")).toBeVisible();
   await expect(guestPage.locator("body")).not.toContainText(/\$\d/);
+  // show_grades defaults on: the certification service shows.
+  await expect(guestPage.locator("body")).toContainText(CERT_SERVICE);
+  // show_certs defaults off: the cert number itself doesn't, even though
+  // the service above it does.
+  await expect(guestPage.locator("body")).not.toContainText(CERT_NUMBER);
+
+  // Turn show_certs on from the row's Options panel: PATCH /api/share-links/
+  // {id} is fresh (stage 4, finding 9).
+  const row = page.getByRole("row", { name: new RegExp(LINK_NAME) });
+  await row.getByRole("button", { name: "Options" }).click();
+  // Scoped to the links table: the create form below repeats the same
+  // toggle labels, so an unscoped getByLabel would match both.
+  const linksTable = page.locator("table.estimates");
+  const certsToggle = linksTable.getByLabel("Certification number");
+  await expect(certsToggle).not.toBeChecked();
+  await certsToggle.check();
+  await withPasswordConfirm(page, () => linksTable.getByRole("button", { name: "Save" }).click());
+
+  await guestPage.reload();
+  await expect(guestPage.locator("body")).toContainText(CERT_NUMBER);
 
   // Revoke from the signed-in side: a native confirm, then DELETE (fresh).
   acceptDialogs(page);
-  const row = page.getByRole("row", { name: new RegExp(LINK_NAME) });
   await withPasswordConfirm(page, () => row.getByRole("button", { name: "Revoke" }).click());
   await expect(row).toHaveCount(0);
 

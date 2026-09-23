@@ -11,7 +11,7 @@ from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
 from app.routers.monitoring import AlertStatus, Outcome, alert_statuses
-from app.services import alerts, backup, numista, pcgs, stack
+from app.services import alerts, backup, numista, pcgs, share, stack
 from app.services import app_settings as store
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -87,7 +87,7 @@ class SettingsOut(BaseModel):
     alert_webhook_format: AlertFormat
     heartbeat_hint: str | None
     metrics_enabled: bool
-    share_enabled: bool  # the share view (v0.32.0); off makes every link 404
+    share_enabled: bool  # the share view (v0.32.0); off, no link opens
     # Secrets cleared because they weren't encrypted with this deployment's
     # key, by name, until each is entered again ("Re-enter: alert webhook").
     secrets_cleared: list[str]
@@ -269,6 +269,9 @@ def _build(db: Session) -> SettingsOut:
 @router.get("", response_model=SettingsOut)
 @permission("admin")
 def get_app_settings(db: Session = Depends(get_db)):
+    # Opening Settings also brings the gate's copy of the switch in line with
+    # the database (after restore.sh, say), without waiting for the hourly tick.
+    share.set_enabled(bool(store.get_setting(db, "share_enabled")))
     return _build(db)
 
 
@@ -290,8 +293,11 @@ def update_app_settings(payload: SettingsUpdate, request: Request, db: Session =
         # alerts again rather than staying quiet.
         stack.prune_alert_state(db)
     db.commit()
-    if bool(store.get_setting(db, "share_enabled")) != sharing:
-        _sharing_switched(db, request, not sharing)
+    now_sharing = bool(store.get_setting(db, "share_enabled"))
+    # The gate reads the switch from memory, never the database.
+    share.set_enabled(now_sharing)
+    if now_sharing != sharing:
+        _sharing_switched(db, request, now_sharing)
     return _build(db)
 
 
@@ -303,6 +309,6 @@ def _sharing_switched(db: Session, request: Request, enabled: bool) -> None:
     message = (
         "Anyone with a share link can now see what it shares, without signing in."
         if enabled
-        else "Every share link now answers not found; the links are kept."
+        else "No share link opens now; the links are kept and open again when it is back on."
     )
     alerts.event(db, "sharing_switched", f"Cabinet sharing switched {word}", message)

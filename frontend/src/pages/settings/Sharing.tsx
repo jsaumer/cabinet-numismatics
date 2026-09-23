@@ -11,14 +11,28 @@ const KIND_LABELS: Record<ShareKind, string> = {
   checklist: "Checklist",
 };
 
-/** The five show_* toggles, in the order every form and table here uses. */
-const OPTIONS: { key: keyof Pick<ShareLink, "show_photos" | "show_grades" | "show_tags" | "show_notes" | "show_values">; label: string }[] = [
+/** The six show_* toggles, in the order every form and table here uses. */
+const OPTIONS: {
+  key: keyof Pick<
+    ShareLink,
+    "show_photos" | "show_grades" | "show_tags" | "show_notes" | "show_values" | "show_certs"
+  >;
+  label: string;
+}[] = [
   { key: "show_photos", label: "Photos" },
   { key: "show_grades", label: "Grades & certification" },
   { key: "show_tags", label: "Tags" },
   { key: "show_notes", label: "Notes" },
   { key: "show_values", label: "Estimated value" },
+  { key: "show_certs", label: "Certification number" },
 ];
+
+/** A one-line reason for the two toggles that need more than their label,
+ * shown under the checkbox list and as its hover title. */
+const OPTION_HELP: Partial<Record<ToggleKey, string>> = {
+  show_values: "Composition, weight, and fineness always show, so a melt value already follows without this; this toggle adds the estimated value itself. Costs and gains are never shown.",
+  show_certs: "The certification number. A cert number is a lookup key into public auction records, which often show what the piece last sold for.",
+};
 
 type ToggleKey = (typeof OPTIONS)[number]["key"];
 
@@ -29,6 +43,7 @@ function optionsFrom(link: Pick<ShareLink, ToggleKey>): Record<ToggleKey, boolea
     show_tags: link.show_tags,
     show_notes: link.show_notes,
     show_values: link.show_values,
+    show_certs: link.show_certs,
   };
 }
 
@@ -65,8 +80,10 @@ function NewLinkPanel({ link, onDismiss }: { link: NewShareLink; onDismiss: () =
   );
 }
 
-/** The five toggles, inline: used by both the create form and a row's
- * "Options" panel. */
+/** The six toggles, inline: used by both the create form and a row's
+ * "Options" panel. Two of them (values, cert number) carry a one-line
+ * reason beyond their label, shown as a hover title and, since a title
+ * alone is easy to miss, as small text underneath the list too. */
 function OptionToggles({
   values,
   onChange,
@@ -76,18 +93,31 @@ function OptionToggles({
   onChange: (key: ToggleKey, checked: boolean) => void;
   disabled?: boolean;
 }) {
+  const notes = OPTIONS.filter((o) => OPTION_HELP[o.key]);
   return (
-    <div className="estimate-form" style={{ marginTop: 0 }}>
-      {OPTIONS.map((o) => (
-        <label key={o.key} className="field" style={{ flexDirection: "row", alignItems: "center", gap: "0.4rem" }}>
-          <input
-            type="checkbox"
-            checked={values[o.key]}
-            disabled={disabled}
-            onChange={(e) => onChange(o.key, e.target.checked)}
-          />
-          {o.label}
-        </label>
+    <div className="estimate-form" style={{ flexDirection: "column", alignItems: "stretch", marginTop: 0 }}>
+      <div className="estimate-form" style={{ marginTop: 0 }}>
+        {OPTIONS.map((o) => (
+          <label
+            key={o.key}
+            className="field"
+            style={{ flexDirection: "row", alignItems: "center", gap: "0.4rem" }}
+            title={OPTION_HELP[o.key]}
+          >
+            <input
+              type="checkbox"
+              checked={values[o.key]}
+              disabled={disabled}
+              onChange={(e) => onChange(o.key, e.target.checked)}
+            />
+            {o.label}
+          </label>
+        ))}
+      </div>
+      {notes.map((o) => (
+        <p key={o.key} className="muted" style={{ margin: 0 }}>
+          {o.label}: {OPTION_HELP[o.key]}
+        </p>
       ))}
     </div>
   );
@@ -113,6 +143,7 @@ function CreateLinkForm({
     show_tags: true,
     show_notes: false,
     show_values: false,
+    show_certs: false,
   });
   const [busy, setBusy] = useState(false);
 
@@ -180,9 +211,6 @@ function CreateLinkForm({
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required />
       </label>
       <OptionToggles values={options} onChange={(key, checked) => setOptions((o) => ({ ...o, [key]: checked }))} />
-      <p className="muted" style={{ margin: 0 }}>
-        Shows each piece's estimated value; costs and gains are never shown.
-      </p>
       <div className="estimate-form" style={{ marginTop: 0 }}>
         <button
           className="primary"

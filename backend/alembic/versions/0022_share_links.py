@@ -38,6 +38,8 @@ def upgrade() -> None:
         sa.Column("show_tags", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("show_notes", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("show_values", sa.Boolean(), nullable=False, server_default=sa.false()),
+        # The cert number alone: a lookup key into auction archives (v0.32.0 review).
+        sa.Column("show_certs", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

@@ -12,6 +12,12 @@
 # and its MAC is checked before anything is touched. The key is the running
 # backend's, or a key file on this host: AGE_IDENTITY=key.txt (needs `age`).
 # Unencrypted archives from before v0.30.0 can't be restored by any path.
+#
+# Two things the in-app restore does that this script can't (v0.32.0; see
+# docs/backup-restore.md): it keeps the live share links and sharing switch,
+# where this script restores the archive's (check Settings, Sharing after),
+# and it removes any metadata from the archive's photos, which here takes
+#   docker compose exec backend python -m app.cli strip-photo-metadata
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SRC="${1:?usage: restore.sh <archive.zip.age>}"

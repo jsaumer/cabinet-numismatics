@@ -371,8 +371,11 @@ point at the same `catalog_refs` row.
 ### share_links
 A read-only public link to the collection, a set, or a checklist (v0.32.0,
 migration `0022`; the share view, see [api.md](api.md#sharing)). In
-`public`, so backups carry it and a restore brings it back; it has no key
-into `cabinet_auth`.
+`public`, so backups carry it; it has no key into `cabinet_auth`. An in-app
+restore puts the live rows (and `share_enabled`) back after the archive's
+database is in place, since a link is an access grant: a revoked or
+replaced token never comes back with an older archive. `restore.sh` can't
+do that; after a script restore the archive's links are the ones in force.
 
 | Column           | Type                | Notes                                          |
 |------------------|---------------------|------------------------------------------------|
@@ -383,10 +386,11 @@ into `cabinet_auth`.
 | `checklist_id`   | fk → checklists null | a checklist link's target; cascade delete, indexed |
 | `name`           | text(100)           | the shared page's title                        |
 | `show_photos`    | bool                | default true                                   |
-| `show_grades`    | bool                | grade, designations, cert; default true        |
+| `show_grades`    | bool                | grade, designations, grading service; default true |
 | `show_tags`      | bool                | default true                                   |
 | `show_notes`     | bool                | default false                                  |
 | `show_values`    | bool                | the shown estimate only; default false         |
+| `show_certs`     | bool                | the cert number; default false (added to `0022` before release) |
 | `created_at`     | timestamptz         |                                                |
 | `created_by`     | text(100)           | the admin's username as text                   |
 | `last_opened_at` | timestamptz null    | stamped by each manifest request               |

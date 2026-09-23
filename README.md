@@ -125,7 +125,10 @@ Dark is the default; the header toggle switches to light and remembers it.
 - Multiple photos per item with angle designation (obverse/reverse/edge/
   other), a primary image, and reordering.
 - Uploads are validated as real JPEG/PNG/WebP images, EXIF orientation is
-  corrected, and thumbnails are generated automatically. Files live on a
+  corrected, and thumbnails are generated automatically. Every stored photo
+  is re-encoded with its EXIF, XMP, and IPTC metadata stripped (the colour
+  profile is kept), so nothing but the image itself, no camera, location,
+  or timestamp data, ever leaves the app, shared or not. Files live on a
   plain Docker volume served directly by nginx, with no object store.
 - Add photos by file picker, drag and drop, pasting an image, a URL, or a
   webcam or phone camera; view them full size in a zoomable lightbox; and
@@ -245,11 +248,12 @@ Dark is the default; the header toggle switches to light and remembers it.
 - **Share and showcase view**: a read-only link to the collection, a set, or
   a checklist, opened without signing in. Off by default; while off, no
   link can be made and every link answers not found. Each link chooses what
-  it shows (photos, grades and certs, tags, notes, and the estimated
-  value); never a cost, gain, storage location, document, serial number, or
-  custom field. The token is shown once and stored only as its hash, with a
-  Regenerate for a lost link and a Revoke that kills it at once. See
-  [docs/security.md](docs/security.md).
+  it shows (photos, grades, tags, notes, the estimated value, and the cert
+  number, each its own toggle); never a cost, gain, storage location,
+  document, serial number, or custom field. Shared photos carry no
+  metadata, the same as every stored photo. The token is shown once and
+  stored only as its hash, with a Regenerate for a lost link and a Revoke
+  that kills it at once. See [docs/security.md](docs/security.md).
 - **Hardened by default**: the backend container drops to an unprivileged
   user (`PUID`/`PGID`), the image installs a hash-pinned lockfile, nginx
   sets a Content-Security-Policy and the usual security headers, and a

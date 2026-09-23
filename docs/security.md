@@ -168,7 +168,9 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
   refused rather than silently allowed. A path containing `%` is refused
   before routing. From v0.32.0 the share view's `GET /api/share/...` routes
   are open too, to anyone holding a share link, and only while the admin
-  has switched sharing on (see [api.md](api.md#sharing)). An authenticating
+  has switched sharing on (see [api.md](api.md#sharing)); while it is off
+  they answer the same 401 as any other path, from memory, so a closed
+  instance looks like one without the feature. An authenticating
   reverse proxy kept in front (below) guards everything by default too, so
   it needs `/s/`, `/api/share/`, and `/robots.txt` exempted from its own
   check, or it blocks share links Cabinet itself would answer; see
@@ -219,10 +221,10 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 
 | Risk | Covered by |
 |---|---|
-| Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot |
+| Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot. Failed share lookups (v0.32.0) are counted in a map of their own, so a flood of them from many addresses can never push the account or address delays out of memory |
 | A stolen password reused later, or a token outliving a compromise | Password change revokes every other session, every known device, and every API token; `read`/`write` tokens expire within a week regardless |
 | An unlocked, signed-in browser | The recent-password window on sensitive actions; `no-store` and `Clear-Site-Data` on sign-out |
-| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. Wrong, unknown, and revoked tokens, and sharing switched off, all answer the same 404, counted per address and slowed past 20 (429). Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
+| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. The cert number has a toggle of its own, off by default, since it looks a slab up in auction archives. Photos carry no metadata (below), and the photo response no file time. Wrong, unknown, and revoked tokens all answer the same 404; the link is looked up first, so a live link is never throttled, and only failed lookups are: 20 per address (an IPv6 address by its /64), then the sign-in curve, and 300 a minute from all addresses, answered 429 without counting. Sharing switched off is the gate's plain 401. A restore keeps the live links and switch, whatever the archive held, so a revoked link can't come back with an older archive. Widening a link (notes, values, the cert number) needs the password again and is alerted. Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
 | A tampered or planted archive | The backup key's MAC (see "What is *not* encrypted"); a stored secret only used if it decrypts with this deployment's key |
 | **Shared Docker networks.** A container on the same network as the backend could otherwise reach it directly, bypassing nginx and the gate | Not enforced by Cabinet: the docs say nothing but nginx should reach the backend, and the example Swarm stack puts it on a network of its own. A deployment that shares a network with the backend anyway loses this protection |
 | **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |
@@ -298,12 +300,14 @@ Two more kinds of caller are not accounts:
 - **Share link** (Phase 7, P9): an anonymous, read-only, revocable link to
   one set, one checklist, or the collection. Sharing as a whole is a switch
   in the admin's Settings, **off by default**: while it is off the public
-  routes answer "not found", no link can be made, and existing links stop
-  working (kept, not deleted, so switching it back on restores them).
+  routes answer 401 like any path a stranger asks for, no link can be made,
+  and existing links stop working (kept, not deleted, so switching it back
+  on restores them). Links are access grants: an in-app restore keeps the
+  live ones and the switch rather than the archive's (v0.32.0).
 
 | Action | Admin | Editor | Viewer | API token | Share link |
 |---|---|---|---|---|---|
-| View items, photos, checklists, dashboard, reports, edit history | yes | yes | yes | `read` | only what the link shares |
+| View items, photos, checklists, dashboard, reports, edit history | yes | yes | yes | `read` | only what the link shares; the grading service with grades, but the cert number only on a link with it switched on (off by default); photos without their metadata, as every stored photo is |
 | View costs, values, and gains | yes | yes | yes (an admin can hide them per viewer) | `read`, if its owner can | the estimated value only, and only on a link with values switched on (off by default); costs and gains never |
 | View storage locations | yes | yes | yes | `read` | never |
 | View and download documents | yes | yes | yes | no (a session only) | never |
@@ -315,7 +319,7 @@ Two more kinds of caller are not accounts:
 | Delete for good, empty the trash | yes, with the password again | no | no | no | no |
 | Delete a photo or replace its image, delete a document or unlink it from its last item (the files go for good) | yes, with the password again | no | no | no | no |
 | Switch sharing on or off for the whole app | yes | no | no | no | no |
-| Create and revoke share links (only while sharing is on) | yes | own links | no | no | no |
+| Create, change, and revoke share links (only while sharing is on; with the password again) | yes | own links | no | no | no |
 | Settings: display currency, value strategy, refresh cadence, trash retention | yes, with the password again | view only | no | no | no |
 | Save, reset, or delete the dashboard layout | yes | no | no | no | no |
 | Secrets: price-source keys, alert webhook, heartbeat URL | yes (write-only, as today) | no | no | no | no |
@@ -436,6 +440,18 @@ Rules that go with the table:
   Pillow; the client-declared content type is not trusted. Images are
   re-encoded for thumbnails, and originals are stored under generated UUID
   filenames, so user-supplied filenames never reach the filesystem or a URL.
+- **Photos carry no metadata** (v0.32.0). A phone or camera photo taken at
+  home carries GPS coordinates, the time, and the camera's make, model, and
+  serial, and from v0.32.0 a share link can show a full-size photo to
+  anyone holding it. So every original is re-encoded before it is stored
+  (upload, URL import, and the in-browser editor alike): orientation
+  applied, every EXIF block, XMP, IPTC, comment, and PNG text chunk dropped,
+  only the colour profile kept. Nothing written to the photo volume carries
+  metadata, whatever serves it (a share, nginx's `/photos/`, a backup).
+  Photos stored before that are cleaned once by a background pass at the
+  first start, again after an in-app restore that brings photos, and by
+  `python -m app.cli strip-photo-metadata` after `restore.sh` (see
+  [backup-restore.md](backup-restore.md#photo-metadata)).
 - **Database access** goes exclusively through SQLAlchemy's parameter binding;
   there is no string-built SQL.
 - **Documents** are stored on their own volume, never the photo volume nginx

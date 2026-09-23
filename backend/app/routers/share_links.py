@@ -1,7 +1,9 @@
 """Managing share links (v0.32.0, SPEC_0320): the admin's side of the share
-view. Making, regenerating, or revoking a link asks for the password again,
-as an API token does; a link's token is shown once, in the answer that makes
-it, and only its hash is kept. Each of those is audited and alerted."""
+view. Making, regenerating, revoking, or changing a link asks for the
+password again, as an API token does; a link's token is shown once, in the
+answer that makes it, and only its hash is kept. Each of those is audited
+and alerted, a change alerted only when it switches notes, values, or the
+cert number on (that widens what every holder of the link already sees)."""
 
 import uuid
 from datetime import datetime
@@ -22,6 +24,8 @@ from app.services import share
 router = APIRouter(prefix="/api/share-links", tags=["share"])
 
 NO_STORE = {"Cache-Control": "no-store"}
+# Switched on, these show a link's holders more than they could see before.
+WIDENING = {"show_notes": "notes", "show_values": "values", "show_certs": "cert numbers"}
 
 
 class LinkBody(BaseModel):
@@ -34,6 +38,7 @@ class LinkBody(BaseModel):
     show_tags: bool = True
     show_notes: bool = False
     show_values: bool = False
+    show_certs: bool = False
 
 
 class LinkPatch(BaseModel):
@@ -43,6 +48,7 @@ class LinkPatch(BaseModel):
     show_tags: bool | None = None
     show_notes: bool | None = None
     show_values: bool | None = None
+    show_certs: bool | None = None
 
 
 class LinkOut(BaseModel):
@@ -57,6 +63,7 @@ class LinkOut(BaseModel):
     show_tags: bool
     show_notes: bool
     show_values: bool
+    show_certs: bool
     created_at: str | None
     created_by: str
     last_opened_at: str | None
@@ -140,23 +147,53 @@ def create_link(body: LinkBody, request: Request, db: Session = Depends(get_db))
         "what it shares without signing in.",
     )
     db.refresh(row)
-    return JSONResponse({**_out(db, row), "url": share.link_url(token)}, 201, headers=NO_STORE)
+    return JSONResponse(
+        {**_out(db, row), "url": share.link_url(token, request)}, 201, headers=NO_STORE
+    )
 
 
 @router.patch("/{link_id}", response_model=LinkOut)
-@permission("admin")
-def update_link(link_id: uuid.UUID, body: LinkPatch, db: Session = Depends(get_db)):
-    """Rename a link or change what it shows; the token stays."""
+@permission("admin", fresh=True)
+def update_link(
+    link_id: uuid.UUID, body: LinkPatch, request: Request, db: Session = Depends(get_db)
+):
+    """Rename a link or change what it shows; the token stays. Audited with
+    what changed, and alerted when notes, values, or cert numbers go on."""
     row = _get_or_404(db, link_id)
     fields = body.model_dump(exclude_unset=True, exclude_none=True)
+    renamed_from = None
     if "name" in fields:
         name = fields.pop("name").strip()
         if not name:
             raise HTTPException(422, "A link's name is 1 to 100 characters.")
+        if name != row.name:
+            renamed_from = row.name
         row.name = name
+    changed = {}
     for option, value in fields.items():
+        if bool(getattr(row, option)) != bool(value):
+            changed[option] = bool(value)
         setattr(row, option, bool(value))
-    db.commit()
+    if changed or renamed_from is not None:
+        detail = {"name": row.name, "kind": row.kind, "changed": changed}
+        if renamed_from is not None:
+            detail["renamed_from"] = renamed_from
+        widened = [label for option, label in WIDENING.items() if changed.get(option) is True]
+        events.record(
+            db,
+            request,
+            "share_link_changed",
+            target=str(row.id),
+            detail=detail,
+            alert=(
+                f"The share link {row.name!r} now shows {', '.join(widened)} to anyone "
+                "who holds it."
+                if widened
+                else None
+            ),
+        )
+    else:
+        db.commit()
     db.refresh(row)
     return _out(db, row)
 
@@ -178,7 +215,7 @@ def regenerate_link(link_id: uuid.UUID, request: Request, db: Session = Depends(
         f"The share link {row.name!r} was replaced with a new one; the old one no longer works.",
     )
     db.refresh(row)
-    return JSONResponse({**_out(db, row), "url": share.link_url(token)}, headers=NO_STORE)
+    return JSONResponse({**_out(db, row), "url": share.link_url(token, request)}, headers=NO_STORE)
 
 
 @router.delete("/{link_id}", status_code=204)

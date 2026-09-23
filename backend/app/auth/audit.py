@@ -55,6 +55,8 @@ EVENTS = frozenset(
         "share_link_created",
         "share_link_regenerated",
         "share_link_revoked",
+        "share_link_changed",
+        "restore_sharing",
     }
 )
 FAILED = "sign_in_failed"

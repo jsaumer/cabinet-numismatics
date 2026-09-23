@@ -40,7 +40,9 @@ from app.routers import (
 )
 from app.services import archive_keys, scheduled, schema
 from app.services import backup as backups
+from app.services import photos as photo_files
 from app.services import restore as restores
+from app.services import share as share_service
 from app.services.maintenance import MaintenanceMiddleware
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,13 @@ async def _hourly_loop() -> None:
         except Exception:
             logger.exception("Hourly task failed")
         await asyncio.sleep(3600)
+
+
+def _load_sharing(db) -> None:
+    try:
+        share_service.load(db)
+    except Exception:  # the gate loads it on first use instead
+        logger.exception("Could not read whether sharing is on")
 
 
 def _check_key_against_record(db) -> None:
@@ -194,6 +203,12 @@ async def lifespan(app: FastAPI):
         # Claimed: the marker that makes SETUP_CODE inert. With migrations
         # off, the first setup-state request decides instead.
         await asyncio.to_thread(_in_session, auth_setup.prepare)
+        # The sharing switch, into memory before the first request asks.
+        await asyncio.to_thread(_in_session, _load_sharing)
+        # Photos stored before v0.32.0 may carry EXIF and GPS: cleaned once,
+        # in the background, so a large volume never holds up startup.
+        if not photo_files.clean_in_background():
+            logger.info("Photo metadata: every stored photo is already clean")
     # The loop always runs; each cycle re-reads the cadence setting, so
     # changing it in Settings takes effect without a restart.
     tasks = [asyncio.create_task(_reestimation_loop()), asyncio.create_task(_hourly_loop())]

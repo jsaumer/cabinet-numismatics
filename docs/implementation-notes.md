@@ -1616,7 +1616,7 @@ permission class. Rules a later change has to respect:
 
 - **The item view is an allowlist, and a test pins it.** `share.item_view`
   names every key a shared piece can carry (`FIELDS`, `GRADE_FIELDS`, and
-  the five toggles' keys); `tests/test_share.py` builds a piece with every
+  the six toggles' keys); `tests/test_share.py` builds a piece with every
   field filled (a cost, a storage location, custom fields, a serial, a
   document, an estimate) and checks the view's keys equal the expected set
   exactly, with everything off, everything on, and each toggle alone. A new
@@ -1626,6 +1626,7 @@ permission class. Rules a later change has to respect:
   population, wish-list fields, spot at purchase, the import origin, or a
   timestamp. `value` is the one money field, behind `show_values`.
 - **`share` is a permission class, and the gate knows its prefix.**
+  While sharing is on (stage 4: never while it is off, see below),
   `gate.ANONYMOUS_PREFIXES` (`/api/share/`) passes a `GET` or `HEAD` before
   any credential is looked up (after the `%` rule and maintenance), so a
   cookie never moves `last_seen_at`, a Cabinet token is never validated (an
@@ -1643,14 +1644,10 @@ permission class. Rules a later change has to respect:
   checklist route on another kind, a bad variant or id), into
   `404 {"detail": "Not found"}` with `X-Robots-Tag` and `no-store`. Path
   ids are read as strings and parsed by hand so a malformed one is the same
-  404, not FastAPI's 422. Only a failed link lookup (sharing off, a
-  malformed, unknown, or revoked token, a target gone) calls
-  `throttle.fail("share", address)` (address from `X-Real-IP`, as sign-in
-  takes it, else `unknown`); a 404 inside a resolved share (a photo file
-  missing, a piece outside it) doesn't, so a valid link can't push its
-  viewer into 429s. `throttle.wait` above 0 is 429 with `Retry-After`
-  before anything is resolved. `share` is in `throttle.FREE` (20, the
-  address curve).
+  404, not FastAPI's 422. How a failed lookup is throttled changed in
+  stage 4 (below): the link is resolved first, and only a failed lookup
+  reaches `throttle.share_failure`; a 404 inside a resolved share (a photo
+  file missing, a piece outside it) is never counted.
 - **No fetch on a public route.** Values resolve through
   `pricing.resolve_display_value` with a `Converter(..., fetch=False)`
   (`currency.get_rate(fetch=False)` reads the cache however old, never
@@ -1664,8 +1661,8 @@ permission class. Rules a later change has to respect:
   `checklists.slot_views` (a match, else the piece linked to a ticked
   slot); the collection. The checklist route returns filled slots only.
 - **Tokens are hashed.** `share_` plus `secrets.token_urlsafe(32)`; only
-  `token_hash` (SHA-256 hex) is stored; the URL
-  (`{PUBLIC_ORIGINS[0]}/s/{token}`) is in the create and regenerate answers
+  `token_hash` (SHA-256 hex) is stored; the URL (`{origin}/s/{token}`,
+  `share.link_origin` from stage 4) is in the create and regenerate answers
   and nowhere else. Nothing logs a token; audit details carry the link's
   name and kind, the target its id. Regenerate replaces the hash in place.
   The token is in the path, and uvicorn's access log prints paths, so
@@ -1676,10 +1673,11 @@ permission class. Rules a later change has to respect:
 - **Revoking deletes the row, and so does deleting the target.**
   `share_links.set_id` and `checklist_id` (two columns where the spec had
   one `target_id`, so each has a real foreign key) cascade from `sets` and
-  `checklists`. The table is in `public`, so backups and restores carry it,
-  with no key into `cabinet_auth`.
+  `checklists`. The table is in `public`, so backups carry it, with no key
+  into `cabinet_auth`; an in-app restore puts the live rows back (stage 4).
 - **The switch is `share_enabled`** (`app_settings.DEFAULTS`, false). Off:
-  every public route 404s, `POST /api/share-links` and regenerate answer
+  every public route is the gate's 401 to a stranger (stage 4) and a
+  signed-in caller's 404, `POST /api/share-links` and regenerate answer
   409 (`share.SWITCHED_OFF`), and rows stay. `PUT /api/settings` audits and
   alerts `sharing_switched` only when the value actually changes; the
   alert's title says on or off, so it goes through `alerts.event` directly
@@ -1793,6 +1791,117 @@ pass that closed out this release. Rules this stage left:
   the API layer (the allowlist, the photo route against `/photos/`, the
   session-is-ignored rule, the throttled wrong-token case) so both layers
   are checked, not just the UI.
+
+Stage 4, the security review's findings (23 September 2026,
+[SPEC_0320](specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)
+and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
+
+- **No photo is stored with its metadata.** `photos.save_photo` writes
+  `photos.clean_bytes(img, fmt)`, never the bytes that arrived: the image
+  from `open_validated` (already turned upright by `exif_transpose`), its
+  `info` cut down to `KEEP_INFO` (`icc_profile`, `transparency`) so nothing
+  else can reach an encoder by default, saved with `exif=b""` and
+  `xmp=b""` (JPEG and WebP at quality 95, PNG with no `pnginfo`). Upload,
+  URL import, the in-browser editor's `PUT /api/photos/{id}/image`, and an
+  import's photos all go through `save_photo`; a new path that writes to
+  `PHOTO_DIR` must too. Stored width and height are the upright image's,
+  as before. `carries_metadata` is a whitelist (`HARMLESS_INFO`): anything
+  Pillow reports outside it counts as metadata, and everything
+  `clean_bytes` writes is inside it, so a second pass rewrites nothing.
+  Documents are untouched (they are never shared, and a receipt's bytes are
+  the record).
+- **The one-time pass and its marker.** `photos.strip_existing()` walks
+  `PHOTO_DIR` with `os.walk(followlinks=False)`, skipping dot-folders (a
+  restore's `.restore-*`), dot-files, symlinks, and thumbnails
+  (`*_thumb.jpg`, always clean), rewrites an original that carries metadata
+  to `.strip-<hex>.<ext>` beside it and `os.replace`s it in (skipped if the
+  original was deleted meanwhile), and never raises. It writes the marker
+  `photos_clean` (`archive_keys.state_dir()`, beside `auth_claimed`) only
+  when no rewrite failed, so the next start tries again; a file Pillow
+  can't open is counted as unreadable and doesn't hold the marker back. A
+  leftover `.strip-*` older than ten minutes is deleted. One pass at a time
+  per process (`_pass_lock`). Callers: startup (`main.lifespan`, after the
+  migrations, only with `AUTO_MIGRATE`, through `clean_in_background`,
+  which skips when the marker exists), an in-app restore that brings
+  `photos.tar.gz` (`photos.remove_marker()` before the database step, so a
+  restart after it runs a pass too; `clean_in_background(force=True)` after
+  the swap; `recover()` removes the marker when it rolls a swap forward),
+  and `python -m app.cli strip-photo-metadata` after `restore.sh`. Tests
+  patch `photos._spawn` to run inline (test_restore's `calls` fixture
+  counts the passes).
+- **The sharing switch lives in memory.** `share.enabled()` reads a module
+  flag; `None` means not loaded, and `share.load(db)` reads
+  `share_enabled` (an absent `app_settings` table reads as off) and sets
+  it. Who sets or reloads it: startup after migrations (`main._load_sharing`),
+  the gate lazily when it is `None` (`gate._sharing_on`, in a worker thread
+  through the same `get_db` provider as `_lookup`, a failure read as off
+  and not remembered), `PUT /api/settings` after its commit (every time,
+  not only on a change), `GET /api/settings` (so opening Settings after
+  `restore.sh` corrects it), every hourly tick (`scheduled._hourly`, second,
+  after the secrets), and the restore's `_finish` (`restore._reload_sharing`,
+  falling back to `reset_memory`). conftest calls `share.reset_memory()`
+  before every test. **A new path that writes `share_enabled` has to set
+  the memory too**, or the gate keeps the old answer until the next tick.
+- **Off, the gate has no share rule.** `AuthGate` passes the prefix only
+  when `_sharing_on(scope)` is true; off, the request goes on like any
+  other (an anonymous one is 401, with no database read and no throttle
+  work), and a signed-in caller reaches the route and gets `resolve`'s 404
+  (counted, which only a signed-in caller can reach). `test_gate.py`'s
+  anonymous matrix runs both ways (`sharing` off expects 401 on every share
+  route, on expects anything but).
+- **Resolve first, then the throttle, in its own map.**
+  `routers/share._answer` calls `share.resolve` before anything else; only
+  a `NotFound` there calls `throttle.share_failure(address)`, which returns
+  the wait (answered 429 with `Retry-After`, nothing counted) when the
+  address is inside its wait or the global count is at
+  `SHARE_GLOBAL_PER_MINUTE` (300, failures only, all addresses, a sliding
+  minute), and otherwise counts the failure and returns 0 (answered 404).
+  Share buckets live in `throttle._shares`, bounded by `MAX_KEYS` and
+  evicting only among themselves; `_entries` (the `user:`, `addr:`, and
+  `setup:` buckets) is never touched by a share failure.
+  `throttle.share_address` keys an IPv6 address by its /64 (an IPv4-mapped
+  one by the IPv4 address) and anything unparseable as given; `wait`,
+  `fail`, and `succeed` with kind `share` use the same keying and map. The
+  sign-in functions are unchanged. `test_share_failures_never_push_out_sign_in_buckets`
+  is the review's eviction script turned round.
+- **A restore keeps the live links and switch.** `restore._run` takes
+  `_snapshot_sharing(engine)` right after the safety backup (rows as JSON:
+  hashes, never a token, plus each set or checklist target's name) and
+  carries it in the journal (`sharing_snapshot`, in the `database` and
+  `swapping` phases), then after the migrations `_put_back_sharing` reads
+  what the archive held (for `differed`, `archive_links`,
+  `archive_enabled`), deletes every row, `expunge_all()`s (the snapshot
+  reuses the archive's ids), and inserts the snapshot, keeping a set or
+  checklist link only when a target with the same id **and name** exists
+  (else `links_dropped`: ids are the archive's now, and a link must never
+  open a different set), then writes `share_enabled`. Tables are checked
+  first (`has_table`), so an archive whose migration failed, or one older
+  than `app_settings`, never raises there. Any failure switches sharing off
+  and records `error`. The result is the outcome's `sharing`, is audited as
+  `restore_sharing` (under the restore's actor, every run), and adds a
+  sentence to the `restore_finished` alert only when `differed` or a link
+  was dropped (`_sharing_sentence`). `recover()` pops the snapshot from the
+  journal (never into `restore_last.json`) and puts it back the same way
+  after a replaced database or during `swapping` (`_recover_sharing` waits
+  for the database first); running it twice gives the same rows.
+- **`PATCH /api/share-links/{id}` is `admin, fresh`**, audited as
+  `share_link_changed` only when something changed (`detail.changed`: each
+  option's new value, and `renamed_from` on a rename) and alerted
+  (`notify.TITLES`) only when `show_notes`, `show_values`, or `show_certs`
+  goes from off to on (`share_links.WIDENING`).
+- **`show_certs`** (migration `0022` amended in place, nothing released
+  carried it): `cert_number` left `GRADE_FIELDS` and is added by
+  `item_view` only when it is on; `cert_service` stays with `show_grades`.
+- **The link's origin** is `share.link_origin(request Origin)`: the
+  request's `Origin` when it normalises (`config.normalize_origin`) to one
+  of `PUBLIC_ORIGINS`, else the first `https://` entry, else the first.
+  `share.link_url(token, request)` takes the request for that.
+- **The photo response has no file time.** `routers/share._PhotoFile`
+  overrides `FileResponse.set_stat_headers` to set only `content-length`,
+  so neither `Last-Modified` nor `ETag` is sent (both derive from the
+  file's mtime, the upload time). `offset` on the items route is at most
+  `MAX_OFFSET` (1,000,000; 422 past it), since a value past bigint range
+  was a Postgres error.
 
 ## Releases
 

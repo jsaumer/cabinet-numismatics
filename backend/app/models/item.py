@@ -481,6 +481,7 @@ class ShareLink(Base):
     show_tags: Mapped[bool] = mapped_column(Boolean, default=True)
     show_notes: Mapped[bool] = mapped_column(Boolean, default=False)
     show_values: Mapped[bool] = mapped_column(Boolean, default=False)
+    show_certs: Mapped[bool] = mapped_column(Boolean, default=False)  # cert_number only
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_by: Mapped[str] = mapped_column(String(100))  # a username, no key into cabinet_auth
     last_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

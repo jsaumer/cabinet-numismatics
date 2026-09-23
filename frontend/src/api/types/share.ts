@@ -22,6 +22,7 @@ export interface ShareLink {
   show_tags: boolean;
   show_notes: boolean;
   show_values: boolean;
+  show_certs: boolean;
   created_at: string | null;
   created_by: string;
   last_opened_at: string | null;
@@ -44,6 +45,7 @@ export interface ShareLinkCreate {
   show_tags?: boolean;
   show_notes?: boolean;
   show_values?: boolean;
+  show_certs?: boolean;
 }
 
 export interface ShareLinkPatch {
@@ -53,6 +55,7 @@ export interface ShareLinkPatch {
   show_tags?: boolean;
   show_notes?: boolean;
   show_values?: boolean;
+  show_certs?: boolean;
 }
 
 // --- opening a link (public, no sign-in) ---------------------------------------------
@@ -66,6 +69,7 @@ export interface ShareManifest {
   show_tags: boolean;
   show_notes: boolean;
   show_values: boolean;
+  show_certs: boolean;
   item_count: number;
   filled?: number; // checklist links only
   total?: number; // checklist links only
@@ -104,8 +108,8 @@ export interface ShareItem {
   grade_details?: string | null;
   designations?: string[];
   cac_sticker?: CacSticker | null;
-  cert_service?: string | null;
-  cert_number?: string | null;
+  cert_service?: string | null; // show_grades
+  cert_number?: string | null; // show_certs
   tags?: string[]; // show_tags
   notes?: string | null; // show_notes
   value?: { amount: number; currency: string } | null; // show_values

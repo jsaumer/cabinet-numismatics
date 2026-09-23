@@ -254,6 +254,18 @@ export interface RestoreOutcome {
   documents: number | null;
   // By name only: stored secrets cleared because this deployment can't use them.
   secrets_cleared?: string[];
+  // The live share links and switch were kept over the archive's (v0.32.0).
+  sharing?: RestoreSharing | null;
+}
+
+export interface RestoreSharing {
+  links_kept: number;
+  links_dropped: number;
+  archive_links: number;
+  archive_enabled: boolean;
+  enabled: boolean;
+  differed: boolean;
+  error?: string;
 }
 
 export interface RestoreStatus {

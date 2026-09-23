@@ -269,12 +269,13 @@ own gate. An authenticating reverse proxy in front doesn't know that: it
 guards everything behind it by default, so it blocks your own share links
 too unless you exempt those paths from its authentication middleware. The
 share routes carry their own throttle (an unknown or wrong token is slowed,
-not refused outright) and mark themselves non-indexable (`X-Robots-Tag`,
-and `/robots.txt` disallows `/s/`), so there is nothing else the edge proxy
-needs to add.
+not refused outright) and mark themselves non-indexable (`X-Robots-Tag` and
+a `noindex` meta tag on the page itself; `/robots.txt` no longer disallows
+`/s/`, since a crawler has to fetch the page to see that tag), so there is
+nothing else the edge proxy needs to add.
 
 With the Traefik + Authentik example above, give the share paths their own
-router with no `middlewares` and a higher priority than the general rule:
+router with no `middlewares`:
 
 ```yaml
 http:
@@ -283,7 +284,6 @@ http:
       rule: "Host(`cabinet.example.com`) && (PathPrefix(`/s/`) || PathPrefix(`/api/share/`) || Path(`/robots.txt`))"
       entryPoints: [websecure]
       service: cabinet
-      priority: 10
       tls:
         certResolver: letsencrypt
     cabinet:
@@ -295,10 +295,28 @@ http:
         certResolver: letsencrypt
 ```
 
+No `priority` is set: Traefik ranks routers by rule length when priorities
+tie, and the share rule is the longer one, so it already wins over the
+general host rule without one; an explicit low number here would do the
+opposite of what it looks like and lose to the general rule instead.
+
 Any other forward-auth gateway needs the equivalent: whatever it offers for
 excluding a path prefix from its own authentication check. Skipping this
 doesn't fail loudly: a share link just shows the gateway's own sign-in page
 instead of Cabinet's share page, since the request never reaches Cabinet.
+The gateway also has to normalise the request path (collapse `..`
+segments, decode encoded dots) before it matches its own rules, or a path
+that only looks like it starts under `/s/` or `/api/share/` after
+normalisation could ride the exemption to a route it was never meant to
+cover. Traefik does this itself unless `sanitizePath` is turned off on the
+entry point; check that a custom gateway does the equivalent before
+trusting a prefix match on unnormalised input.
+
+A share token is redacted from nginx's access log (and the backend's), but
+not from its error log: an upstream error on a share request, such as a 502
+while the backend restarts during a deploy, can quote the full request line,
+token included. Treat that log as sensitive wherever it is shipped or kept,
+the same as you would the access log before it was redacted.
 
 Sharing on, and the instance reachable from outside your network, means
 exactly what a share link says: anyone holding the link can see what it
@@ -437,8 +455,11 @@ docker compose build --pull && docker compose up -d
   and names them, and clears the running backend's sign-in delays.
   `sign-out-everywhere` ends every session and known device (a lost laptop),
   and `revoke-tokens [--name NAME]` revokes every token or one. There is
-  deliberately no command that undoes the setup or deletes the admin. On a
-  Swarm, `docker exec -it` into the backend task instead.
+  deliberately no command that undoes the setup or deletes the admin.
+  `strip-photo-metadata` (v0.32.0) removes EXIF, GPS, and the rest from
+  every stored photo, the pass the backend runs once by itself; it is for
+  after `restore.sh`, which puts back whatever the archive's photos carry.
+  On a Swarm, `docker exec -it` into the backend task instead.
 
 ## 7. Swarm / multi-host deployment
 

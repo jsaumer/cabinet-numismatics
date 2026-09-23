@@ -152,10 +152,13 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
     {
       // item.grade_label is only present at all when the link shows grades
       // (see the allowlist in services/share.py); absent means "not shown,"
-      // not "ungraded," so the whole group is skipped rather than shown empty.
+      // not "ungraded," so those facts are left out rather than shown empty.
+      // item.cert_number is its own toggle (show_certs) and can be present
+      // or absent independently of the grade fields, so it's checked on its
+      // own rather than folded into the grade_label check above it.
       title: "Grade & certification",
-      facts:
-        item.grade_label === undefined
+      facts: [
+        ...(item.grade_label === undefined
           ? []
           : [
               { label: "Grade", value: item.grade_label },
@@ -166,11 +169,10 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
                 value:
                   item.cac_sticker === "gold" ? "Gold sticker" : item.cac_sticker === "green" ? "Green sticker" : null,
               },
-              {
-                label: "Certification",
-                value: item.cert_service ? `${item.cert_service} ${item.cert_number ?? ""}`.trim() : null,
-              },
-            ],
+              { label: "Certification service", value: item.cert_service },
+            ]),
+        ...(item.cert_number === undefined ? [] : [{ label: "Cert number", value: item.cert_number }]),
+      ],
     },
     {
       title: "Physical",

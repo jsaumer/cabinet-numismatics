@@ -1,5 +1,6 @@
-"""The share view (v0.32.0, SPEC_0320 stage 1): public read-only links, the
-switch, the allowlist, the one 404, the throttle, and the admin routes."""
+"""The share view (v0.32.0, SPEC_0320 stages 1 and 4): public read-only
+links, the switch, the allowlist, the one 404, the throttle, and the admin
+routes."""
 
 import json
 from datetime import datetime, timedelta, timezone
@@ -7,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
+from app.auth import common, gate, throttle
 from app.db import Base, get_db
 from app.main import app
 from app.models import ExchangeRate, ShareLink
@@ -41,7 +43,6 @@ GRADE_KEYS = {
     "designations",
     "cac_sticker",
     "cert_service",
-    "cert_number",
 }
 ALL_OFF = dict.fromkeys(share.OPTIONS, False)
 ALL_ON = dict.fromkeys(share.OPTIONS, True)
@@ -153,8 +154,10 @@ def test_the_item_view_is_exactly_the_allowlist(client, anon_client):
     assert set(item) == BASE_KEYS
     client.patch(f"/api/share-links/{link['id']}", json=ALL_ON)
     item = anon_client.get(f"/api/share/{token}/items").json()["items"][0]
-    assert set(item) == BASE_KEYS | GRADE_KEYS | {"photos", "tags", "notes", "value"}
+    everything = {"photos", "tags", "notes", "value", "cert_number"}
+    assert set(item) == BASE_KEYS | GRADE_KEYS | everything
     assert item["value"] == {"amount": 250.0, "currency": "USD"}
+    assert item["cert_number"] == "12345678" and item["cert_service"] == "PCGS"
     assert item["tags"] == ["key date"] and item["notes"] == "Bought at the spring show"
     assert set(item["photos"][0]) == {"id", "angle", "has_thumbnail"}
     assert item["weight_g"] == 6.25 and item["fineness"] == 0.9  # JSON numbers
@@ -173,6 +176,7 @@ def test_the_item_view_is_exactly_the_allowlist(client, anon_client):
         ("show_tags", {"tags"}),
         ("show_notes", {"notes"}),
         ("show_values", {"value"}),
+        ("show_certs", {"cert_number"}),
     ],
 )
 def test_each_toggle_adds_only_its_own_keys(client, anon_client, option, keys):
@@ -226,14 +230,22 @@ def assert_not_found(resp):
     assert resp.headers["cache-control"] == "no-store"
 
 
-def test_switched_off_every_public_route_is_not_found(client, anon_client):
+def test_switched_off_a_stranger_gets_the_gates_401(client, anon_client):
+    """Off, the gate has no share rule at all: a stranger is refused like on
+    any other path (v0.31.0 looked the same), and the signed-in admin, who
+    gets past the gate, finds nothing."""
     enable(client)
     item = full_item(client)
     token, link = make_link(client)
     assert anon_client.get(f"/api/share/{token}/items").status_code == 200
     enable(client, False)
-    for path in public_paths(token, item["id"], item["photo_id"]):
-        assert_not_found(anon_client.get(path))
+    paths = public_paths(token, item["id"], item["photo_id"])
+    for path in paths:
+        resp = anon_client.get(path)
+        assert resp.status_code == 401 and resp.json() == {"detail": "Sign in to continue."}
+    assert throttle.share_size() == 0  # nothing anonymous reached the share throttle
+    for path in paths:
+        assert_not_found(client.get(path))
     resp = client.post("/api/share-links", json={"kind": "collection", "name": "Again"})
     assert resp.status_code == 409 and resp.json()["detail"] == share.SWITCHED_OFF
     assert client.post(f"/api/share-links/{link['id']}/regenerate").status_code == 409
@@ -251,18 +263,111 @@ def test_wrong_unknown_and_revoked_tokens_look_the_same(client, anon_client):
             assert_not_found(anon_client.get(path, headers={"X-Real-IP": f"192.0.2.{n}"}))
 
 
-def test_unknown_tokens_are_throttled_per_address(client, anon_client):
+@pytest.fixture()
+def clock(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(common, "monotonic", lambda: now[0])
+    return now
+
+
+def test_unknown_tokens_are_throttled_per_address(client, anon_client, clock):
+    """Resolve first: a failed lookup inside the address's wait is 429 and
+    not counted, a counted one is 404, and a live link is never refused,
+    whoever else shares its viewer's address."""
     enable(client)
     token, _ = make_link(client)
     here = {"X-Real-IP": "203.0.113.9"}
+
+    def bogus():
+        return anon_client.get(f"/api/share/{share.new_token()}", headers=here)
+
     for _ in range(20):
-        assert anon_client.get(f"/api/share/{share.new_token()}", headers=here).status_code == 404
-    refused = anon_client.get(f"/api/share/{share.new_token()}", headers=here)
+        assert bogus().status_code == 404
+    refused = bogus()
     assert refused.status_code == 429 and int(refused.headers["retry-after"]) >= 1
     assert refused.headers["x-robots-tag"] == "noindex, nofollow"
-    assert anon_client.get(f"/api/share/{token}", headers=here).status_code == 429
+    assert anon_client.get(f"/api/share/{token}", headers=here).status_code == 200
+    assert anon_client.get(f"/api/share/{token}/items", headers=here).status_code == 200
+    for _ in range(5):
+        assert bogus().status_code == 429  # not counted: the wait stays one second
+    clock[0] += 1.5
+    assert bogus().status_code == 404  # the 21st counted failure
+    assert bogus().status_code == 429  # and now two seconds
+    clock[0] += 2.5
+    assert bogus().status_code == 404
     elsewhere = {"X-Real-IP": "198.51.100.7"}
-    assert anon_client.get(f"/api/share/{token}", headers=elsewhere).status_code == 200
+    assert anon_client.get(f"/api/share/{share.new_token()}", headers=elsewhere).status_code == 404
+
+
+def test_failed_lookups_have_a_global_cap(client, anon_client, clock, monkeypatch):
+    monkeypatch.setattr(throttle, "SHARE_GLOBAL_PER_MINUTE", 30)
+    enable(client)
+    token, _ = make_link(client)
+    for n in range(30):
+        resp = anon_client.get(
+            f"/api/share/{share.new_token()}", headers={"X-Real-IP": f"192.0.2.{n}"}
+        )
+        assert resp.status_code == 404
+    fresh = {"X-Real-IP": "198.51.100.200"}
+    refused = anon_client.get(f"/api/share/{share.new_token()}", headers=fresh)
+    assert refused.status_code == 429 and 1 <= int(refused.headers["retry-after"]) <= 60
+    assert anon_client.get(f"/api/share/{token}", headers=fresh).status_code == 200
+    clock[0] += 61
+    assert anon_client.get(f"/api/share/{share.new_token()}", headers=fresh).status_code == 404
+
+
+def test_share_failures_never_push_out_sign_in_buckets(clock):
+    """The v0.32.0 review's check, the other way round: 10,000 failed share
+    lookups from as many addresses leave the admin's own bucket alone."""
+    for _ in range(30):
+        throttle.fail("user", "admin")
+        throttle.fail("addr", "192.0.2.1")
+    assert throttle.wait("user", "admin") == 60
+    for n in range(throttle.MAX_KEYS + 1):
+        throttle.fail("share", f"2001:db8:{n // 65536:x}:{n % 65536:x}::1")
+    assert throttle.wait("user", "admin") == 60
+    assert throttle.wait("addr", "192.0.2.1") == 60
+    assert throttle.share_size() == throttle.MAX_KEYS
+    assert throttle.size() == 2
+
+
+def test_an_ipv6_client_is_counted_by_its_64():
+    assert throttle.share_address("2001:db8:1:2:aaaa::1") == "2001:db8:1:2::/64"
+    assert throttle.share_address("2001:db8:1:2:ffff::9") == "2001:db8:1:2::/64"
+    assert throttle.share_address("2001:db8:1:3::1") == "2001:db8:1:3::/64"
+    assert throttle.share_address("::ffff:192.0.2.7") == "192.0.2.7"
+    assert throttle.share_address("192.0.2.7") == "192.0.2.7"
+    assert throttle.share_address("unknown") == "unknown"
+    for n in range(20):
+        assert throttle.share_failure(f"2001:db8:1:2::{n:x}") == 0
+    assert throttle.share_failure("2001:db8:1:2:dead::1") > 0  # same /64
+    assert throttle.share_failure("2001:db8:1:3::1") == 0  # its neighbour isn't
+
+
+def test_sharing_off_costs_the_gate_nothing(client, anon_client, monkeypatch):
+    """Off is known from memory: no database read, no lookup, no throttle."""
+    enable(client, False)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("the database was read for an anonymous share request")
+
+    monkeypatch.setattr(share, "load", boom)
+    monkeypatch.setattr(gate, "_lookup", boom)
+    for _ in range(3):
+        assert anon_client.get(f"/api/share/{share.new_token()}").status_code == 401
+    assert throttle.share_size() == 0
+
+
+def test_the_switch_is_loaded_once_then_held(client, anon_client, monkeypatch):
+    enable(client)
+    token, _ = make_link(client)
+    share.reset_memory()
+    reads = []
+    real = share.load
+    monkeypatch.setattr(share, "load", lambda db=None: reads.append(1) or real(db))
+    for _ in range(3):
+        assert anon_client.get(f"/api/share/{token}").status_code == 200
+    assert len(reads) == 1 and share.cached() is True
 
 
 # --- what a link covers -----------------------------------------------------------
@@ -275,7 +380,7 @@ def test_the_manifest_counts_opens(client, anon_client):
     body = anon_client.get(f"/api/share/{token}").json()
     assert body == {"kind": "collection", "name": "Spring show", **{
         "show_photos": True, "show_grades": True, "show_tags": True, "show_notes": False,
-        "show_values": False}, "item_count": 1}  # fmt: skip
+        "show_values": False, "show_certs": False}, "item_count": 1}  # fmt: skip
     anon_client.get(f"/api/share/{token}")
     listed = client.get("/api/share-links").json()[0]
     assert listed["opens"] == 2 and listed["last_opened_at"] is not None
@@ -303,6 +408,10 @@ def test_paging(client, anon_client):
     page = anon_client.get(f"/api/share/{token}/items?offset=1&limit=1").json()
     assert page["total"] == 3 and len(page["items"]) == 1
     assert anon_client.get(f"/api/share/{token}/items?limit=101").status_code == 422
+    far = anon_client.get(f"/api/share/{token}/items?offset=1000000")
+    assert far.status_code == 200 and far.json()["items"] == []
+    for offset in ("1000001", "-1", str(2**70)):
+        assert anon_client.get(f"/api/share/{token}/items?offset={offset}").status_code == 422
 
 
 def test_a_set_share(client, anon_client):
@@ -359,6 +468,8 @@ def test_photos_through_the_share(client, anon_client):
         assert resp.headers["x-content-type-options"] == "nosniff"
         assert resp.headers["content-security-policy"] == "default-src 'none'; sandbox"
         assert resp.headers["x-robots-tag"] == "noindex, nofollow"
+        # Both would say when the photo was uploaded.
+        assert "last-modified" not in resp.headers and "etag" not in resp.headers
     assert_not_found(anon_client.get(f"/api/share/{token}/photos/{item['photo_id']}/huge"))
     assert_not_found(anon_client.get(f"/api/share/{token}/photos/{other_photo}/thumb"))
     client.patch(f"/api/share-links/{link['id']}", json={"show_photos": False})
@@ -385,6 +496,7 @@ def test_the_url_is_shown_once_and_never_stored(client, sent):
     enable(client)
     token, created = make_link(client)
     assert created["url"] == f"https://testserver/s/{token}"
+    assert created["show_certs"] is False
     assert share.TOKEN_RE.fullmatch(token) and len(token) == len("share_") + 43
     listed = client.get("/api/share-links")
     assert "url" not in listed.json()[0] and token not in listed.text
@@ -425,6 +537,44 @@ def test_at_most_twenty_links(client):
     assert resp.status_code == 409
 
 
+@pytest.mark.parametrize(
+    "origins, origin, want",
+    [
+        ("http://cabinet.lan,https://cabinet.example.com", None, "https://cabinet.example.com"),
+        ("http://cabinet.lan,https://cabinet.example.com", "http://cabinet.lan", "http://cabinet.lan"),
+        ("http://cabinet.lan,https://cabinet.example.com", "https://evil.example", "https://cabinet.example.com"),
+        ("http://cabinet.lan,https://cabinet.example.com", "HTTPS://Cabinet.Example.com:443", "https://cabinet.example.com"),
+        ("http://cabinet.lan,http://cabinet.local", "null", "http://cabinet.lan"),
+        ("https://a.example,https://b.example", "https://b.example", "https://b.example"),
+    ],
+)  # fmt: skip
+def test_the_links_origin(monkeypatch, origins, origin, want):
+    """The request's Origin when it is one of PUBLIC_ORIGINS, else the first
+    https origin, else the first: never a LAN name over plain http when a
+    public https one exists."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("PUBLIC_ORIGINS", origins)
+    get_settings.cache_clear()
+    assert share.link_origin(origin) == want
+
+
+def test_a_new_links_url_follows_the_admins_origin(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("PUBLIC_ORIGINS", "http://cabinet.lan,https://testserver")
+    get_settings.cache_clear()
+    enable(client)
+    _, created = make_link(client)
+    assert created["url"].startswith("https://testserver/s/share_")
+    resp = client.post(
+        "/api/share-links",
+        json={"kind": "collection", "name": "Lan"},
+        headers={"Origin": "http://cabinet.lan"},
+    )
+    assert resp.json()["url"].startswith("http://cabinet.lan/s/share_")
+
+
 def test_patch_regenerate_and_revoke(client, anon_client, sent):
     enable(client)
     make_item(client)
@@ -463,19 +613,53 @@ def test_deleting_the_set_or_checklist_deletes_its_links(client):
 def test_minting_or_killing_a_link_asks_for_the_password(client, stale_client, token_client):
     enable(client)
     _, link = make_link(client)
-    for method, path in (
-        ("POST", "/api/share-links"),
-        ("POST", f"/api/share-links/{link['id']}/regenerate"),
-        ("DELETE", f"/api/share-links/{link['id']}"),
+    for method, path, body in (
+        ("POST", "/api/share-links", {"kind": "collection", "name": "x"}),
+        ("POST", f"/api/share-links/{link['id']}/regenerate", None),
+        ("PATCH", f"/api/share-links/{link['id']}", {"show_values": True}),
+        ("DELETE", f"/api/share-links/{link['id']}", None),
     ):
-        body = {"kind": "collection", "name": "x"} if method == "POST" else None
         resp = stale_client.request(method, path, json=body)
         assert resp.json().get("reauth_required") is True, path
         assert token_client("write").request(method, path, json=body).status_code == 403
     assert stale_client.get("/api/share-links").status_code == 200
-    assert (
-        stale_client.patch(f"/api/share-links/{link['id']}", json={"name": "y"}).status_code == 200
-    )
+
+
+def test_a_change_is_audited_and_widening_is_alerted(client, sent):
+    enable(client)
+    _, link = make_link(client, name="Spring show")
+    sent.clear()
+    url = f"/api/share-links/{link['id']}"
+    assert client.patch(url, json={"show_tags": True}).status_code == 200  # no change
+    assert client.patch(url, json={"show_tags": False, "name": "Autumn"}).status_code == 200
+    assert sent == []  # narrower, and a rename: audited, not alerted
+    body = {"show_notes": True, "show_values": True, "show_certs": True, "show_photos": True}
+    assert client.patch(url, json=body).json()["show_certs"] is True
+    db = db_session()
+    try:
+        rows = db.scalars(
+            select(AuditEntry)
+            .where(AuditEntry.action == "share_link_changed")
+            .order_by(AuditEntry.id)
+        ).all()
+    finally:
+        db.close()
+    assert [(r.target, r.detail) for r in rows] == [
+        (
+            link["id"],
+            {"name": "Autumn", "kind": "collection", "changed": {"show_tags": False},
+             "renamed_from": "Spring show"},
+        ),
+        (
+            link["id"],
+            {"name": "Autumn", "kind": "collection",
+             "changed": {"show_notes": True, "show_values": True, "show_certs": True}},
+        ),
+    ]  # fmt: skip
+    assert [(key, title) for key, title, _ in sent] == [
+        ("share_link_changed", "Cabinet share link now shows more")
+    ]
+    assert "notes, values, cert numbers" in sent[0][2]
 
 
 def test_every_event_is_audited_and_alerted_without_the_token(client, sent):
@@ -560,3 +744,34 @@ def test_the_access_log_never_carries_a_token():
     assert all(f.filter(record) for f in logging.getLogger("uvicorn.access").filters)
     line = record.getMessage()
     assert token not in line and "/api/share/[token]/items?limit=5" in line
+
+
+def test_settings_and_the_hourly_tick_reread_the_switch(client, anon_client):
+    """A database changed behind the backend's back (restore.sh) is picked
+    up by opening Settings, and by the hourly tick."""
+    from app.services import app_settings, scheduled
+
+    enable(client)
+    token, _ = make_link(client)
+
+    def flip(on: bool):
+        db = db_session()
+        try:
+            app_settings.set_setting(db, "share_enabled", on)
+            db.commit()
+        finally:
+            db.close()
+
+    flip(False)
+    assert share.cached() is True  # memory still says on
+    assert client.get("/api/settings").json()["share_enabled"] is False
+    assert share.cached() is False
+    assert anon_client.get(f"/api/share/{token}").status_code == 401
+    flip(True)
+    db = db_session()
+    try:
+        scheduled.hourly(db)
+    finally:
+        db.close()
+    assert share.cached() is True
+    assert anon_client.get(f"/api/share/{token}").status_code == 200

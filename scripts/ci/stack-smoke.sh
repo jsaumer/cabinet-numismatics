@@ -509,9 +509,11 @@ share() {
   echo "== share =="
   local bogus_token="share_$(printf 'a%.0s' $(seq 1 43))"
 
-  # Sharing starts off: every public route is the same 404, and making a
-  # link answers 409 (the message says to switch sharing on first).
-  test "$(status_of "$BASE/api/share/$bogus_token")" = 404
+  # Sharing starts off: the gate has no share rule then, so a stranger gets
+  # the same 401 as on any other path (v0.32.0 stage 4), and making a link
+  # answers 409 (the message says to switch sharing on first).
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 401
+  test "$(status_of "$BASE/api/share/$bogus_token/items")" = 401
   test "$(fresh_status -X POST "$BASE/api/share-links" -H 'Content-Type: application/json' \
     -d '{"kind":"collection","name":"share smoke, off"}')" = 409
 
@@ -519,13 +521,14 @@ share() {
   fresh -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' \
     -d '{"share_enabled": true}' -o /dev/null
 
-  # An item carrying one of everything a share must never leak, plus a photo.
+  # An item carrying one of everything a share must never leak, plus a cert
+  # and a photo whose EXIF names a camera and a place.
   id=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
-    -d '{"type":"coin","country":"Share check","denomination":"1 test","year":2026,"acquisition_price":"12.50","storage_location":"Box 1","serial_number":"A123456","custom_fields":{"note":"x"}}' \
+    -d '{"type":"coin","country":"Share check","denomination":"1 test","year":2026,"acquisition_price":"12.50","storage_location":"Box 1","serial_number":"A123456","custom_fields":{"note":"x"},"cert_service":"PCGS","cert_number":"12345678"}' \
     | field id)
-  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; b = io.BytesIO(); Image.new("RGB", (120, 90), "gray").save(b, "PNG"); sys.stdout.buffer.write(b.getvalue())' > "$STATE_DIR/share-photo.png"
+  docker compose exec -T backend python -c 'import io, sys; from PIL import Image; e = Image.Exif(); e[0x0110] = "SmokeCam"; e[0x8825] = {1: "N", 2: (51.0, 30.0, 0.0)}; b = io.BytesIO(); Image.new("RGB", (120, 90), "gray").save(b, "JPEG", exif=e.tobytes()); sys.stdout.buffer.write(b.getvalue())' > "$STATE_DIR/share-photo.jpg"
   photo=$(apif -X POST "$BASE/api/items/$id/photos" \
-    -F "file=@-;filename=photo.png;type=image/png" < "$STATE_DIR/share-photo.png")
+    -F "file=@-;filename=photo.jpg;type=image/jpeg" < "$STATE_DIR/share-photo.jpg")
   photo_id=$(printf '%s' "$photo" | field id)
   photo_thumb="/photos/$(printf '%s' "$photo" | field thumb_key)"
 
@@ -548,6 +551,17 @@ forbidden = {
 }
 leaked = forbidden & item.keys()
 assert not leaked, f"share item view leaked: {leaked}"
+assert "cert_number" not in item, "cert_number shown with show_certs off"
+assert item.get("cert_service") == "PCGS", "cert_service belongs to show_grades"
+'
+  # The cert number has a toggle of its own, off by default; changing a
+  # link's options asks for the password again (fresh).
+  fresh -X PATCH "$BASE/api/share-links/$link_id" -H 'Content-Type: application/json' \
+    -d '{"show_certs": true}' -o /dev/null
+  curl -fsS "$BASE/api/share/$token/items" | "$PY" -c '
+import json, sys
+item = json.load(sys.stdin)["items"][0]
+assert item.get("cert_number") == "12345678", "cert_number missing with show_certs on"
 '
 
   # The photo, through the share route (anonymous, with a CSP header), and
@@ -556,19 +570,54 @@ assert not leaked, f"share item view leaked: {leaked}"
     | grep -qi '^content-security-policy:'
   test "$(status_of "$BASE/api/share/$token/photos/$photo_id/thumb")" = 200
   test "$(status_of "$BASE$photo_thumb")" = 401
+  # No upload time on a shared photo (no Last-Modified, no ETag), and the
+  # full image carries no EXIF: it was stripped when it was uploaded.
+  photo_headers=$(curl -fsS -D - -o /dev/null "$BASE/api/share/$token/photos/$photo_id/full")
+  if printf '%s' "$photo_headers" | grep -qiE '^(last-modified|etag):'; then
+    echo "share: the photo response names its file time" >&2
+    exit 1
+  fi
+  curl -fsS "$BASE/api/share/$token/photos/$photo_id/full" \
+    | docker compose exec -T backend python -c 'import io, sys; from PIL import Image; d = sys.stdin.buffer.read(); i = Image.open(io.BytesIO(d)); assert not dict(i.getexif()) and b"SmokeCam" not in d, "photo metadata reached a share"'
 
   # A session cookie on the manifest route gets exactly the anonymous
   # answer: a share route ignores whatever credential rides along.
   test "$(status_of -b "$COOKIES" -H "Origin: $BASE" "$BASE/api/share/$token")" = 200
 
-  # A token that matches no link is the same 404 as sharing being off.
-  test "$(status_of "$BASE/api/share/$bogus_token")" = 404
+  # Revoke (fresh, 204): that link's manifest is 404 from then on.
+  gone=$(fresh -X POST "$BASE/api/share-links" -H 'Content-Type: application/json' \
+    -d '{"kind":"collection","name":"share smoke, revoked"}')
+  gone_token=$(printf '%s' "$gone" | field url | sed 's#.*/s/##')
+  test "$(status_of "$BASE/api/share/$gone_token")" = 200
+  fresh -X DELETE "$BASE/api/share-links/$(printf '%s' "$gone" | field id)" -o /dev/null
+  test "$(status_of "$BASE/api/share/$gone_token")" = 404
 
-  # Revoke (fresh, 204): the manifest is 404 from then on.
-  fresh -X DELETE "$BASE/api/share-links/$link_id" -o /dev/null
-  test "$(status_of "$BASE/api/share/$token")" = 404
+  # The throttle, last (it leaves this address waiting a few seconds). A
+  # token that matches no link is 404 and counted; from the 21st failure on
+  # the address waits, and a failed lookup inside the wait is 429 and not
+  # counted. The live link is resolved first, so it always answers 200.
+  got=404
+  for _ in $(seq 1 25); do
+    got=$(status_of "$BASE/api/share/$bogus_token")
+    [ "$got" = 404 ] || break
+  done
+  test "$got" = 429
+  test "$(status_of "$BASE/api/share/$token")" = 200
+  test "$(status_of "$BASE/api/share/$token/items")" = 200
+  test "$(status_of "$BASE/api/share/$token/photos/$photo_id/thumb")" = 200
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 429
+  # Wait the wait out: the next failure is counted again (404), and the one
+  # after it waits once more.
+  retry=$(curl -s -D - -o /dev/null "$BASE/api/share/$bogus_token" \
+    | tr -d '\r' | awk -F': ' 'tolower($1) == "retry-after" { print $2 }')
+  test -n "$retry"
+  sleep "$((retry + 1))"
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 404
+  test "$(status_of "$BASE/api/share/$token")" = 200
+  test "$(status_of "$BASE/api/share/$bogus_token")" = 429
 
   # Off again, and clean up what this phase made.
+  fresh -X DELETE "$BASE/api/share-links/$link_id" -o /dev/null
   fresh -X PUT "$BASE/api/settings" -H 'Content-Type: application/json' \
     -d '{"share_enabled": false}' -o /dev/null
   fresh -X DELETE "$BASE/api/items/$id?permanent=true" -o /dev/null

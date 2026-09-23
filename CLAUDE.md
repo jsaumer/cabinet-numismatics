@@ -273,14 +273,23 @@ default. The rules that bite: `share` is a permission class of its own, and
 the gate lets a `GET`/`HEAD` under its `/api/share/` prefix through before
 any credential is looked up, so a session or a token on the request changes
 nothing; what a piece shows is an allowlist (`services/share.py`'s
-`FIELDS`/`GRADE_FIELDS` plus the five `show_*` toggles) pinned by a test,
+`FIELDS`/`GRADE_FIELDS` plus the six `show_*` toggles) pinned by a test,
 never a cost, gain, storage location, document, serial number, or custom
-field; every failure (sharing off, a malformed, unknown, or revoked token,
-a target gone) is the same one `404`, slowed per address past 20; a public
-route never makes a network call (values convert at cached rates only); and
-the token is hashed (never stored plain) and redacted from both logs (the
-backend's `uvicorn.access` filter and nginx's own `access_log` rewrite the
-path to `[token]`). An authenticating reverse proxy kept in front must
+field; while sharing is off the gate has no share rule at all (an anonymous
+caller gets 401 like any unlisted path, from the in-memory switch
+`share.enabled()`, no database read), and while on every failure (a
+malformed, unknown, or revoked token, a target gone) is the same one `404`,
+with the link resolved before the throttle is consulted, so a live link is
+never 429'd and failed lookups live in a throttle map of their own; a public
+route never makes a network call (values convert at cached rates only);
+every stored photo is re-encoded without metadata (`photos.clean_bytes`,
+the one-time `strip_existing` pass, marker `photos_clean`); an in-app
+restore keeps the live `share_links` and `share_enabled` over the
+archive's; and the token is hashed (never stored plain) and redacted from
+both logs (the backend's `uvicorn.access` filter and nginx's own
+`access_log` rewrite the path to `[token]`). The security review that set
+those rules is `docs/specs/SPEC_0320-review-opus.md`. An authenticating
+reverse proxy kept in front must
 exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
 blocks the app's own share links; see "Share and showcase view" in the
 implementation notes and
