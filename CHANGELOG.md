@@ -10,7 +10,7 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-## [0.30.0] - unreleased
+## [0.30.0] - 2026-09-22
 
 Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 
