@@ -10,7 +10,7 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-## [0.31.0] - unreleased
+## [0.31.0] - 2026-09-23
 
 Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
 
