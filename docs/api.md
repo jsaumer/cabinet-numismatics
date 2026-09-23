@@ -83,6 +83,11 @@ and everything under `/api/auth` that changes the account. The full table,
 route by route, is the appendix of
 [SPEC_0300](specs/SPEC_0300.md#appendix-route-permissions-v0300).
 
+A fifth class, `share` (v0.32.0), sits outside this table: every route
+under `/api/share/` is open to anyone holding a share link, session or
+token on the request or not, and only while the admin has switched sharing
+on. See [Sharing](#sharing).
+
 **Recent password.** A few admin routes also need the password confirmed
 in the last 5 minutes by this session (`POST /api/auth/confirm`); a token
 can never have that. Without it they answer `403`

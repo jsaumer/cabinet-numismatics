@@ -1606,7 +1606,7 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   an adapter-driven estimate. The caller commits; `melt_on_save` itself
   never does, matching every other `pricing` write helper.
 
-## Share and showcase view (v0.32.0, in progress)
+## Share and showcase view (v0.32.0)
 
 Roadmap Phase 7, P9, built to [SPEC_0320](specs/SPEC_0320.md) on
 `p9-share` (PR 25), stage by stage. Stage 1 is the backend: migration
@@ -1760,6 +1760,39 @@ and log redaction. Rules this stage left:
   sharing is off is left to the backend's message (`share.SWITCHED_OFF`)
   rather than disabled client-side, so the same "Switch sharing on in
   Settings first" text the API route documents is what the owner sees.
+
+Stage 3, proof and paperwork (23 September 2026): `frontend/e2e/share.spec.ts`,
+a `share` phase in `scripts/ci/stack-smoke.sh` (and its own CI step, after
+`photos`), a `share` mode in `docs/screenshots/capture.cjs`, and the docs
+pass that closed out this release. Rules this stage left:
+
+- **The two locations that set the app's CSP share one include**
+  (`proxy/cabinet-csp.conf`, copied into the image alongside
+  `cabinet-proxy.conf` and `cabinet-headers.conf`): `location /` and
+  `@share_index` both need it (a sibling location's `add_header` is never
+  inherited), and a hand-copied policy string drifting between the two was
+  a standing risk this removes. A new location that needs the app's CSP
+  (never `/api/`, which documents keep their own stricter policy for)
+  includes this file rather than repeating the string a third time.
+- **A forward-auth proxy kept in front must exempt the share paths.**
+  `/s/`, `/api/share/`, and `/robots.txt` are meant to open for anyone
+  holding a link, without signing in and without reaching Cabinet's own
+  gate; an authenticating reverse proxy in front of Cabinet (recommended
+  as a second door until v0.33.0) guards everything behind it by default,
+  so it blocks a share link too unless those paths are excluded from its
+  own authentication check. This is a deployment note, not application
+  behaviour Cabinet can enforce, but it is the rule a later change to
+  `docs/deployment.md`'s Traefik + Authentik example, or to the set of
+  paths the share view answers on, has to keep true; see
+  [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
+- **The Playwright share test drives a second, storage-state-free browser
+  context** (`browser.newContext()`, not the suite's shared
+  `storageState`) to open the link the way an actual stranger would: no
+  cookies, no session, nothing carried over from the signed-in page that
+  created it. The smoke script's `share` phase covers the same ground at
+  the API layer (the allowlist, the photo route against `/photos/`, the
+  session-is-ignored rule, the throttled wrong-token case) so both layers
+  are checked, not just the UI.
 
 ## Releases
 

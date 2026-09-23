@@ -13,7 +13,7 @@ RUN npm run build
 FROM nginx:1.31-alpine
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY proxy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY proxy/cabinet-proxy.conf proxy/cabinet-headers.conf /etc/nginx/cabinet/
+COPY proxy/cabinet-proxy.conf proxy/cabinet-headers.conf proxy/cabinet-csp.conf /etc/nginx/cabinet/
 # Run by the image's entrypoint before nginx starts: writes the Host names
 # nginx answers from PUBLIC_ORIGINS and ALLOWED_HOSTS, and stops the
 # container on a bad value.

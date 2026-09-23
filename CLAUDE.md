@@ -25,8 +25,9 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 shipped bars and rounds (P11); v0.33.0 (OIDC single
-  sign-on and a trusted-header mode) is next. Every design decision was
+  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 shipped the share
+  view (P9); v0.33.0 (OIDC single sign-on and a trusted-header mode) is
+  next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -264,10 +265,27 @@ so a new bullion piece's melt estimate comes from the cached spot price
 only; and Numista's bars and rounds are read by `object_type` (id 36, or
 the name Bars/Rounds/Ingots/Bullion), never by a word in the title. See
 "Bars and rounds" in the implementation notes.
-**Next, in order:** P9, the share and showcase view, as v0.32.0
-(`docs/specs/SPEC_0320.md`, staged 23 September 2026 as PR 25 on
-`p9-share`, pending the owner's approval of the spec; the whole feature is
-an admin setting, off by default); then P8 A2, single sign-on (OpenID
+P9, the share and showcase view, shipped in v0.32.0 (`docs/specs/SPEC_0320.md`,
+built 23 September 2026 as PR 25 on `p9-share`; migration `0022`,
+`share_links`): a read-only link to the collection, a set, or a checklist,
+opened without signing in, the whole feature an admin setting off by
+default. The rules that bite: `share` is a permission class of its own, and
+the gate lets a `GET`/`HEAD` under its `/api/share/` prefix through before
+any credential is looked up, so a session or a token on the request changes
+nothing; what a piece shows is an allowlist (`services/share.py`'s
+`FIELDS`/`GRADE_FIELDS` plus the five `show_*` toggles) pinned by a test,
+never a cost, gain, storage location, document, serial number, or custom
+field; every failure (sharing off, a malformed, unknown, or revoked token,
+a target gone) is the same one `404`, slowed per address past 20; a public
+route never makes a network call (values convert at cached rates only); and
+the token is hashed (never stored plain) and redacted from both logs (the
+backend's `uvicorn.access` filter and nginx's own `access_log` rewrite the
+path to `[token]`). An authenticating reverse proxy kept in front must
+exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
+blocks the app's own share links; see "Share and showcase view" in the
+implementation notes and
+[deployment.md](docs/deployment.md#sharing-and-the-forward-auth-exemption).
+**Next, in order:** P8 A2, single sign-on (OpenID
 Connect and a trusted-header mode for the same admin, plus two-factor
 sign-in) as v0.33.0; labels, a phone app, and more accounts are optional. Research
 and propose each before building, as always. v1.0.0 follows P8 and the

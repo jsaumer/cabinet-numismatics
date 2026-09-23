@@ -13,7 +13,7 @@ applies them itself on startup; for earlier releases, run
 ## [0.32.0] - unreleased
 
 Roadmap Phase 7, P9: the share and showcase view
-([SPEC_0320](docs/specs/SPEC_0320.md)), in progress; the API side so far.
+([SPEC_0320](docs/specs/SPEC_0320.md)).
 
 ### Added
 - **Share links** (API): a read-only link to the collection, a set, or a
@@ -51,6 +51,15 @@ Roadmap Phase 7, P9: the share and showcase view
   with the new URL shown once and a Copy button, the same as a new API
   token. nginx marks `/s/` non-indexable (`X-Robots-Tag`, `robots.txt`)
   and keeps a share token out of its own access log too.
+
+**Deploying:** if you keep an authenticating reverse proxy in front of
+Cabinet (recommended as a second door until single sign-on in v0.33.0) and
+turn sharing on, exempt `/s/`, `/api/share/`, and `/robots.txt` from its
+authentication check. Cabinet's own gate already lets those routes through
+without a session or token; a forward-auth proxy that doesn't know that
+will show its own sign-in page instead of the share, blocking a link
+Cabinet itself would answer. See
+[deployment.md](docs/deployment.md#sharing-and-the-forward-auth-exemption).
 
 ## [0.31.0] - 2026-09-23
 

@@ -74,7 +74,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.31.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.32.0`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -260,6 +260,52 @@ runs
 the app answers 503 to everything but `/api/health` and
 `/api/restore/status`; that is expected, not an outage.
 
+### Sharing, and the forward-auth exemption
+
+Turning sharing on (Settings → Sharing, off by default) means a share link
+(`/s/<token>`) and its API (`/api/share/...`) are meant to open for anyone
+holding the link, without signing in and without going through Cabinet's
+own gate. An authenticating reverse proxy in front doesn't know that: it
+guards everything behind it by default, so it blocks your own share links
+too unless you exempt those paths from its authentication middleware. The
+share routes carry their own throttle (an unknown or wrong token is slowed,
+not refused outright) and mark themselves non-indexable (`X-Robots-Tag`,
+and `/robots.txt` disallows `/s/`), so there is nothing else the edge proxy
+needs to add.
+
+With the Traefik + Authentik example above, give the share paths their own
+router with no `middlewares` and a higher priority than the general rule:
+
+```yaml
+http:
+  routers:
+    cabinet-share:
+      rule: "Host(`cabinet.example.com`) && (PathPrefix(`/s/`) || PathPrefix(`/api/share/`) || Path(`/robots.txt`))"
+      entryPoints: [websecure]
+      service: cabinet
+      priority: 10
+      tls:
+        certResolver: letsencrypt
+    cabinet:
+      rule: "Host(`cabinet.example.com`)"
+      entryPoints: [websecure]
+      service: cabinet
+      middlewares: [authentik@file]
+      tls:
+        certResolver: letsencrypt
+```
+
+Any other forward-auth gateway needs the equivalent: whatever it offers for
+excluding a path prefix from its own authentication check. Skipping this
+doesn't fail loudly: a share link just shows the gateway's own sign-in page
+instead of Cabinet's share page, since the request never reaches Cabinet.
+
+Sharing on, and the instance reachable from outside your network, means
+exactly what a share link says: anyone holding the link can see what it
+shares, without signing in. Keep the switch off unless you mean to hand a
+link to someone; see [security.md](security.md#accounts-and-permissions)
+for what a link can and can't show.
+
 ### Other proxies
 
 Any proxy works: Caddy with `basicauth`, nginx with `auth_request`, or a
@@ -405,7 +451,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.31.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.32.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy
