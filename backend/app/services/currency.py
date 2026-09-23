@@ -37,11 +37,15 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
-def get_rate(db: Session, base: str, quote: str) -> Decimal | None:
-    """Cached rate base→quote, or None if unobtainable. Never raises."""
+def get_rate(db: Session, base: str, quote: str, fetch: bool = True) -> Decimal | None:
+    """Cached rate base→quote, or None if unobtainable. Never raises. With
+    `fetch=False` only the cache is read, however old: the share view's
+    public routes never make a network call."""
     if base == quote:
         return Decimal(1)
     cached = db.get(ExchangeRate, (base, quote))
+    if not fetch:
+        return Decimal(cached.rate) if cached is not None else None
     now = datetime.now(timezone.utc)
     if cached is not None and now - _as_utc(cached.fetched_at) < CACHE_TTL:
         return Decimal(cached.rate)
@@ -64,9 +68,10 @@ class Converter:
     """Converts amounts into one display currency, memoizing rates per request.
     Tracks whether anything was converted or had to be excluded."""
 
-    def __init__(self, db: Session, display: str):
+    def __init__(self, db: Session, display: str, fetch: bool = True):
         self.db = db
         self.display = display
+        self.fetch = fetch  # False: cached rates only, never a request
         self.converted = 0
         self.excluded = 0
 
@@ -76,7 +81,7 @@ class Converter:
             return None
         if currency == self.display:
             return float(amount)
-        rate = get_rate(self.db, currency, self.display)
+        rate = get_rate(self.db, currency, self.display, fetch=self.fetch)
         if rate is None:
             self.excluded += 1
             return None

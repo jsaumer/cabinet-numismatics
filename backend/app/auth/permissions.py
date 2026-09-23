@@ -18,8 +18,10 @@ refused (under pytest it raises, so the completeness test names it).
 | metrics token  | yes    | 403  | 403   | 403   | yes               |
 
 `fresh` also needs the session's recent-password window; a token never has
-one. Layer 1 (`gate.py`) has already refused anonymous callers everywhere
-but the public routes.
+one. `share` (v0.32.0) is the public share view under `/api/share/`: anyone,
+and a session or token on the request is ignored, so an admin previewing a
+link sees what a stranger sees. Layer 1 (`gate.py`) has already refused
+anonymous callers everywhere but the public and share routes.
 """
 
 import logging
@@ -30,7 +32,7 @@ from fastapi import HTTPException, Request
 
 logger = logging.getLogger(__name__)
 
-CLASSES = ("public", "read", "write", "admin")
+CLASSES = ("public", "read", "write", "admin", "share")
 ATTRIBUTE = "__cabinet_permission__"
 REAUTH_DETAIL = "Confirm your password to continue."
 
@@ -93,8 +95,10 @@ def reauth_body() -> dict:
 
 
 def check(who: Principal | None, cls: str, *, metrics_ok: bool = False, fresh: bool = False):
-    """Raise 401 or 403 unless `who` may call a route of this class."""
-    if cls == "public":
+    """Raise 401 or 403 unless `who` may call a route of this class. A share
+    route answers everyone alike: the gate never looks a credential up for
+    one, and `who` is ignored here, never trusted."""
+    if cls in ("public", "share"):
         return
     if who is None:
         raise HTTPException(401, detail="Sign in to continue.")

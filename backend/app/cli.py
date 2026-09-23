@@ -5,7 +5,7 @@ the machine running Cabinet is the proof of ownership.
 
 Commands (v0.30.0):
 
-    status                    the account, its sessions and tokens, the backup key
+    status                    the account, sessions, tokens, sharing, the backup key
     reset-password            set a new password (asked twice, never an argument)
     sign-out-everywhere       end every session and known device (a lost laptop)
     revoke-tokens [--name N]  revoke every API token, or the one named N
@@ -92,7 +92,10 @@ def _token_line(token: dict) -> str:
 
 
 def status(_args) -> int:
+    from sqlalchemy import func, select
+
     from app.auth import accounts
+    from app.models import ShareLink
     from app.services import app_settings as store
     from app.services import archive_keys
 
@@ -103,6 +106,8 @@ def status(_args) -> int:
             return _fail(str(exc))
         found = accounts.status(db)
         saved = store.get_setting(db, "backup_key_saved")
+        sharing = bool(store.get_setting(db, "share_enabled"))
+        links = db.scalar(select(func.count()).select_from(ShareLink)) or 0
     print(f"Account:       {found['username']} (set up)")
     print(f"Last sign-in:  {_when(found['last_sign_in_at'])}")
     print(f"Failed sign-ins in the past 24 hours: {found['failed_sign_ins_24h']}")
@@ -116,6 +121,7 @@ def status(_args) -> int:
     for row in found["tokens"]:
         expires = _when(row["expires_at"]) if row["expires_at"] else "never"
         print(f"  {_token_line(row)}, last used {_when(row['last_used_at'])}, expires {expires}")
+    print(f"Sharing:       {'on' if sharing else 'off'}, {links} link{'' if links == 1 else 's'}")
     try:
         primary = archive_keys.primary()
     except archive_keys.KeyUnavailable as exc:
@@ -337,9 +343,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("status", help="the account, sessions, tokens, backup key").set_defaults(
-        run=status
-    )
+    commands.add_parser(
+        "status", help="the account, sessions, tokens, sharing, backup key"
+    ).set_defaults(run=status)
     commands.add_parser("reset-password", help="asked twice, never an argument").set_defaults(
         run=reset_password
     )

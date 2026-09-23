@@ -1606,6 +1606,90 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   an adapter-driven estimate. The caller commits; `melt_on_save` itself
   never does, matching every other `pricing` write helper.
 
+## Share and showcase view (v0.32.0, in progress)
+
+Roadmap Phase 7, P9, built to [SPEC_0320](specs/SPEC_0320.md) on
+`p9-share` (PR 25), stage by stage. Stage 1 is the backend: migration
+`0022` (`share_links`), `services/share.py`, `routers/share.py` (public),
+`routers/share_links.py` (admin), the `share_enabled` setting, the `share`
+permission class. Rules a later change has to respect:
+
+- **The item view is an allowlist, and a test pins it.** `share.item_view`
+  names every key a shared piece can carry (`FIELDS`, `GRADE_FIELDS`, and
+  the five toggles' keys); `tests/test_share.py` builds a piece with every
+  field filled (a cost, a storage location, custom fields, a serial, a
+  document, an estimate) and checks the view's keys equal the expected set
+  exactly, with everything off, everything on, and each toggle alone. A new
+  item column never reaches a share unless it is added to `FIELDS` and the
+  test in the same change; never add a cost, a fee, a gain, an acquisition
+  or sale field, a location, a document, a serial, custom fields, the
+  population, wish-list fields, spot at purchase, the import origin, or a
+  timestamp. `value` is the one money field, behind `show_values`.
+- **`share` is a permission class, and the gate knows its prefix.**
+  `gate.ANONYMOUS_PREFIXES` (`/api/share/`) passes a `GET` or `HEAD` before
+  any credential is looked up (after the `%` rule and maintenance), so a
+  cookie never moves `last_seen_at`, a Cabinet token is never validated (an
+  invalid one isn't 401 there), and `Sec-Fetch-Site` isn't checked;
+  `permissions.check` returns for `share` without reading `who`. Every
+  route under the prefix must declare `share`, and no other route may live
+  under it: anything else there would be reachable anonymously. Any other
+  method under the prefix is handled as before (anonymous 401).
+  `test_gate.py` knows the class (`shared()`, the appendix parser, the
+  matrices), and `test_share_routes_need_no_credential_and_ignore_one`
+  replaces `gate._lookup` with one that fails.
+- **One 404.** `share.resolve` raises one `NotFound` for sharing off, a
+  token not matching `TOKEN_RE`, no row with its hash, or a target gone;
+  the routes turn it, and anything outside the share (an item, a photo, a
+  checklist route on another kind, a bad variant or id), into
+  `404 {"detail": "Not found"}` with `X-Robots-Tag` and `no-store`. Path
+  ids are read as strings and parsed by hand so a malformed one is the same
+  404, not FastAPI's 422. Only a failed link lookup (sharing off, a
+  malformed, unknown, or revoked token, a target gone) calls
+  `throttle.fail("share", address)` (address from `X-Real-IP`, as sign-in
+  takes it, else `unknown`); a 404 inside a resolved share (a photo file
+  missing, a piece outside it) doesn't, so a valid link can't push its
+  viewer into 429s. `throttle.wait` above 0 is 429 with `Retry-After`
+  before anything is resolved. `share` is in `throttle.FREE` (20, the
+  address curve).
+- **No fetch on a public route.** Values resolve through
+  `pricing.resolve_display_value` with a `Converter(..., fetch=False)`
+  (`currency.get_rate(fetch=False)` reads the cache however old, never
+  requests or commits); an amount that can't convert is `null`. Anything
+  added to a share route must not call anything that can fetch (spot
+  prices, Numista, PCGS, exchange rates); the tests replace
+  `currency.fetch_rate` with one that fails.
+- **What a link covers** is computed on read, owned and untrashed only,
+  both said outright (`share._OWNED`), not left to the ORM listener: a set's
+  owned pieces; a checklist's filled slots' pieces through
+  `checklists.slot_views` (a match, else the piece linked to a ticked
+  slot); the collection. The checklist route returns filled slots only.
+- **Tokens are hashed.** `share_` plus `secrets.token_urlsafe(32)`; only
+  `token_hash` (SHA-256 hex) is stored; the URL
+  (`{PUBLIC_ORIGINS[0]}/s/{token}`) is in the create and regenerate answers
+  and nowhere else. Nothing logs a token; audit details carry the link's
+  name and kind, the target its id. Regenerate replaces the hash in place.
+  The token is in the path, and uvicorn's access log prints paths, so
+  `main._configure_logging` puts a filter on `uvicorn.access` that turns
+  `/api/share/<anything>` into `/api/share/[token]` (`share.redact`). A
+  new log line that prints a request path must go through it too. nginx's
+  own access log is stage 2's to handle, with the `/s/` location.
+- **Revoking deletes the row, and so does deleting the target.**
+  `share_links.set_id` and `checklist_id` (two columns where the spec had
+  one `target_id`, so each has a real foreign key) cascade from `sets` and
+  `checklists`. The table is in `public`, so backups and restores carry it,
+  with no key into `cabinet_auth`.
+- **The switch is `share_enabled`** (`app_settings.DEFAULTS`, false). Off:
+  every public route 404s, `POST /api/share-links` and regenerate answer
+  409 (`share.SWITCHED_OFF`), and rows stay. `PUT /api/settings` audits and
+  alerts `sharing_switched` only when the value actually changes; the
+  alert's title says on or off, so it goes through `alerts.event` directly
+  rather than `notify.TITLES`. The three link events are in
+  `notify.TITLES` and recorded through `events.record`.
+- The manifest counts an open (`opens`, `last_opened_at`) on each request
+  and commits; the other routes count nothing. Metrics:
+  `cabinet_share_links` and `cabinet_share_opens_total`; `cli status`
+  prints `Sharing: on|off, N links`.
+
 ## Releases
 
 

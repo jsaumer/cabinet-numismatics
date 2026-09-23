@@ -166,7 +166,9 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
   whether setup is still open, setup, and sign-in); every other route
   answers 401 without one, and a route that doesn't declare a permission is
   refused rather than silently allowed. A path containing `%` is refused
-  before routing.
+  before routing. From v0.32.0 the share view's `GET /api/share/...` routes
+  are open too, to anyone holding a share link, and only while the admin
+  has switched sharing on (see [api.md](api.md#sharing)).
 - **Sessions.** A signed-in browser gets an HttpOnly, Secure,
   `SameSite=Lax` cookie, valid a day after its last use and seven days at
   the most.
@@ -216,6 +218,7 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 | Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot |
 | A stolen password reused later, or a token outliving a compromise | Password change revokes every other session, every known device, and every API token; `read`/`write` tokens expire within a week regardless |
 | An unlocked, signed-in browser | The recent-password window on sensitive actions; `no-store` and `Clear-Site-Data` on sign-out |
+| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. Wrong, unknown, and revoked tokens, and sharing switched off, all answer the same 404, counted per address and slowed past 20 (429). Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
 | A tampered or planted archive | The backup key's MAC (see "What is *not* encrypted"); a stored secret only used if it decrypts with this deployment's key |
 | **Shared Docker networks.** A container on the same network as the backend could otherwise reach it directly, bypassing nginx and the gate | Not enforced by Cabinet: the docs say nothing but nginx should reach the backend, and the example Swarm stack puts it on a network of its own. A deployment that shares a network with the backend anyway loses this protection |
 | **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |

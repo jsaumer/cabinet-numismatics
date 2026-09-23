@@ -32,6 +32,8 @@ from app.routers import (
     reference,
     restore,
     settings,
+    share,
+    share_links,
     stack,
     stats,
     trash,
@@ -58,6 +60,18 @@ def _configure_logging() -> None:
             named.addHandler(handler)
             named.setLevel(logging.INFO)
             named.propagate = False
+    # uvicorn's access log prints each path, and a share link's is its token.
+    logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
+
+
+class _RedactShareTokens(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        from app.services.share import redact
+
+        if isinstance(record.args, tuple):
+            record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
+        record.msg = redact(record.msg) if isinstance(record.msg, str) else record.msg
+        return True
 
 
 _configure_logging()
@@ -251,3 +265,5 @@ app.include_router(monitoring.router)
 app.include_router(restore.router)
 app.include_router(dashboard.router)
 app.include_router(stack.router)
+app.include_router(share.router)
+app.include_router(share_links.router)
