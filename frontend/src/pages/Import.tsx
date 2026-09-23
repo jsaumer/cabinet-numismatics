@@ -329,6 +329,7 @@ export default function Import() {
                   >
                     <option value="coin">Coin</option>
                     <option value="note">Banknote</option>
+                    <option value="bullion">Bar or round</option>
                   </select>
                 </label>
                 <label className="field">
@@ -442,7 +443,9 @@ export default function Import() {
                       <td className="muted">{r.row}</td>
                       <td>
                         {r.label}
-                        {r.type === "note" && <span className="muted"> · note</span>}
+                        {r.type && r.type !== "coin" && (
+                          <span className="muted"> · {r.type === "bullion" ? "bar or round" : r.type}</span>
+                        )}
                         {(r.error || r.messages.length > 0) && (
                           <ul className="import-messages">
                             {r.error && <li>{r.error}</li>}

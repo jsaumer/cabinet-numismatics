@@ -1495,10 +1495,71 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   `bar`/`round`/`ingot`/`bullion` type cell by word (an export file and a
   spreadsheet carry no object type, so a word is all there is). The Cabinet CSV round trip needed no
   code change: `type` is written and read as plain text on both sides.
-  **Not yet built** (stages 3-5): the frontend (Add form, item form, item
-  page, list, bulk edit, dashboard), `GET /api/stack`'s `skipped_items`,
-  `GET /api/items?metal=`, and melt on save for a bullion piece with no
-  estimate.
+  **Not yet built as of this stage** (stages 3-5): the frontend (Add form,
+  item form, item page, list, bulk edit, dashboard), `GET /api/stack`'s
+  `skipped_items`, `GET /api/items?metal=`, and melt on save for a bullion
+  piece with no estimate. The frontend followed in stage 3, directly below.
+- **The `bullion` type, frontend** (stage 3): `pages/ItemForm.tsx`'s type
+  select gains "Bar or round"; `/items/new?type=bullion` presets it, for a
+  new item only, in a `useEffect` keyed on `id` alone so it never re-fires
+  as the owner edits the URL. A bullion piece gets a **Metal select** whose
+  value is `detectMetal(form.composition)`, so it always reflects whatever
+  the owner typed and writes just the metal's name when changed by hand;
+  **fineness defaults to .999** (`model.ts`'s `presetBullionFineness`,
+  applied both by the query preset and by switching Type to bullion,
+  filling only while the field is still empty, so it never overwrites a
+  Numista-filled or typed value); a **product name suggestion**
+  (`model.ts`'s `suggestDenomination`, from weight, metal, and shape)
+  follows the exact `autoYear` pattern already used for the date-as-struck
+  conversion: a ref (`autoDenomination`) remembers the last suggestion, and
+  a fresh one is written only while Denomination is empty or still holds
+  that remembered value, so it stops the moment the owner types their own.
+  **Weight gets a g / oz switch** (coins too, since bullion reuses the same
+  field): unit choice is form-only state in `localStorage`
+  `cabinet.form.weightUnit`, never sent to the server; the payload's
+  `weight_g` is always grams, converted at the shared `TROY_OUNCE_G` and
+  rounded to four decimal places on every edit, and the field's own label
+  reads "Weight (g)" or "Weight (oz)" so existing tests that fill
+  "Weight (g)" (the default unit) keep working unchanged. Country reads
+  "Country of refiner", denomination "Product name", and Year drops "Year
+  \*"/the ND checkbox (no placeholder-free required attribute either: a
+  bar's year is optional and never ND); mint mark, series stays, variety,
+  strike, designations, die axis, the date as struck, mintage, and
+  demonetised are all hidden (`!isBullion` guards, or the block simply
+  isn't reached); shown are weight, fineness (with a ".9999 for
+  four-nines" `title`, not visible text, so `getByLabel("Fineness", {exact:
+  true})` still matches just the label), shape, the note-style width/height
+  and thickness fields, serial number, and issuer labelled "Refiner or
+  mint". A coin's Composition field gains a one-line hint about the
+  bullion stack; the Stack page's empty state says the same and links to
+  `/items/new?type=bullion`.
+  **`components/item-facts.tsx`'s `forType` now takes an `ItemType` or an
+  array of them** (`forTypeMatches`), so a fact can be offered to two of the
+  three types (weight/fineness/fine-weight/composition already had no
+  `forType` and needed no change); the item page's title
+  (`components/item-hero.tsx`) branches on `item.type === "bullion"` and
+  builds `[issuer || country, denomination, year_label].filter(Boolean).join(" ")`,
+  matching the backend's `Item.label` exactly (space-joined, no comma,
+  nothing printed for an empty year), unlike the coin/note title's own
+  comma-before-year style, which stays as it was.
+  **The list, bulk edit, and dashboard**: the type filter and bulk edit's
+  type select both gain "Bars and rounds"/"Bar or round"; the value hero
+  reads "12 coins · 3 notes · 4 bars and rounds" (the last clause only when
+  `counts.bullion` is non-zero); the type breakdown chart needed a
+  friendlier label than its raw key for the first time, so
+  `components/charts.tsx`'s `ChartDatum` gained an optional `label`
+  (falling back to `key` everywhere else) and `breakdowns.tsx` maps
+  `bullion` to "Bars and rounds" (and `coin`/`note` to "Coin"/"Note") only
+  for the `type` dimension. `lookup.tsx`'s CoinFacts link is now explicitly
+  `item.type === "coin"` (it was unconditional on a `pcgs` catalogue ref
+  existing, which a bullion piece could technically carry), so a bar's
+  lookups are the eBay search alone, as the spec asks.
+  **Numista fill**: `NumistaFill.tsx` searches `category=exonumia` when the
+  form's type is bullion and shows each hit's `object_type` beside its
+  title; a 422 from a non-bullion exonumia type surfaces through the
+  existing error handling unchanged. **Not yet built** (stages 4-5): the
+  Stack page's skipped list, `GET /api/items?metal=`, and melt on save for
+  a bullion piece with no estimate.
 
 ## Releases
 

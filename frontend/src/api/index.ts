@@ -53,7 +53,9 @@ export const money = (value: number | null | undefined, currency: string | null 
     : `${value.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${code}`.trim();
 };
 
-export const gradeScaleFor = (type: ItemType) => (type === "coin" ? "sheldon" : "pmg");
+// Notes grade on PMG's scale; coins and bullion (NGC slabs some rounds on
+// the same numeric scale as a coin) grade on Sheldon's.
+export const gradeScaleFor = (type: ItemType) => (type === "note" ? "pmg" : "sheldon");
 
 /** "1922", "ND", or "ND (1922)": the same convention as `Item.year_label`,
  * for a catalogue issue that isn't an item yet (a Numista issue, a run pick). */

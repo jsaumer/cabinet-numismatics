@@ -1,6 +1,17 @@
 // The item form's state, its lookups, and the conversion to and from the API.
 
-import { CacSticker, CatalogRef, ItemDetail, ItemPayload, ItemStatus, ItemType, Metal, Priority, Strike } from "../../api";
+import {
+  CacSticker,
+  CatalogRef,
+  ItemDetail,
+  ItemPayload,
+  ItemStatus,
+  ItemType,
+  Metal,
+  Priority,
+  Strike,
+  TROY_OUNCE_G,
+} from "../../api";
 
 export const EMPTY = {
   type: "coin" as ItemType,
@@ -93,6 +104,7 @@ export const DESIGNATIONS: Record<ItemType, [string, string][]> = {
     ["FT", "Full torch (Roosevelt dime)"],
   ],
   note: [["EPQ", "Exceptional paper quality (PMG)"]],
+  bullion: [], // no designations: the form hides the whole block for bullion
 };
 
 export const PROBLEMS: Record<ItemType, string[]> = {
@@ -101,6 +113,7 @@ export const PROBLEMS: Record<ItemType, string[]> = {
     "Tooled", "Altered surfaces", "Bent",
   ],
   note: ["Restoration", "Tears", "Annotations", "Stains", "Trimmed", "Pinholes"],
+  bullion: ["Scratched", "Corroded", "Tarnished", "Damaged"],
 };
 
 export const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
@@ -140,6 +153,26 @@ export function detectMetal(composition: string): Metal | null {
   return found[0].metal;
 }
 
+/** A new bullion piece defaults to .999 fine (four-nines a click away); an
+ * already-filled fineness, from Numista or the owner, is left alone. */
+export function presetBullionFineness(f: FormState): FormState {
+  return f.fineness === "" ? { ...f, fineness: "0.999" } : f;
+}
+
+/** The product name a bullion piece suggests from its weight, metal, and
+ * shape: "1 oz silver bar", "10 g gold bar", "1 oz silver round". Ounces are
+ * shown for a whole or half number of troy ounces, grams otherwise. */
+export function suggestDenomination(weightG: number, metal: Metal, shape: string): string {
+  const oz = weightG / TROY_OUNCE_G;
+  // Grams are stored to four places (31.1035 for an ounce), so a stored
+  // weight is a hair off the exact ounce: allow a couple of thousandths.
+  const wholeOrHalfOz = Math.abs(oz * 2 - Math.round(oz * 2)) < 0.004;
+  const amount = wholeOrHalfOz ? oz : weightG;
+  const rounded = Math.round(amount * 10000) / 10000;
+  const kind = shape === "Round" ? "round" : "bar";
+  return `${rounded} ${wholeOrHalfOz ? "oz" : "g"} ${metal} ${kind}`;
+}
+
 /** Whether a date falls inside the historic-spot lookup's coverage: on or
  * after 2 March 2024, and before today (today uses current spot instead). */
 export function inHistoricCoverage(dateStr: string): boolean {
@@ -159,6 +192,7 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
   }
   const coin = form.type === "coin";
   const note = form.type === "note";
+  const bullion = form.type === "bullion";
   const allowed = new Set(DESIGNATIONS[form.type].map(([code]) => code));
   const designations = form.designations.filter((d) => allowed.has(d));
   const sold = form.status === "sold";
@@ -168,16 +202,17 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     status: form.status,
     country: form.country.trim(),
     denomination: form.denomination.trim(),
-    // With a date as struck and no year, the server converts it.
+    // With a date as struck and no year, the server converts it. A bar with
+    // no year is neither dated nor ND (the year-or-ND rule doesn't apply).
     year: form.year === "" ? null : Number(form.year),
-    year_nd: form.year_nd,
+    year_nd: bullion ? false : form.year_nd,
     struck_calendar: struck ? form.struck_calendar : null,
     struck_year: struck ? Number(form.struck_year) : null,
     struck_era: struck && form.struck_calendar === "japanese" ? opt(form.struck_era) : null,
     die_axis: coin ? optNum(form.die_axis) : null,
-    mint_mark: opt(form.mint_mark),
+    mint_mark: bullion ? null : opt(form.mint_mark),
     series: opt(form.series),
-    variety: opt(form.variety),
+    variety: bullion ? null : opt(form.variety),
     strike: form.strike,
     set_id: form.set_id === "" ? null : Number(form.set_id),
     custom_fields: Object.keys(custom).length ? custom : null,
@@ -185,17 +220,18 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     weight_g: optNum(form.weight_g),
     fineness: optNum(form.fineness),
     diameter_mm: coin ? optNum(form.diameter_mm) : null,
-    thickness_mm: coin ? optNum(form.thickness_mm) : null,
+    thickness_mm: coin || bullion ? optNum(form.thickness_mm) : null,
     // Size, printer, and watermark are edited on a note but kept on anything
-    // that already carries them (an import may give a coin its size).
+    // that already carries them (an import may give a coin its size); a
+    // bar's size (not round) uses the same width/height fields.
     width_mm: optNum(form.width_mm),
     height_mm: optNum(form.height_mm),
     edge: coin ? opt(form.edge) : null,
-    shape: coin ? opt(form.shape) : null,
+    shape: coin || bullion ? opt(form.shape) : null,
     printer: opt(form.printer),
     watermark: opt(form.watermark),
-    demonetized_on: form.demonetized_on || null,
-    mintage: optNum(form.mintage),
+    demonetized_on: bullion ? null : form.demonetized_on || null,
+    mintage: bullion ? null : optNum(form.mintage),
     grade_id: form.grade_id === "" ? null : Number(form.grade_id),
     grade_plus: form.grade_plus,
     grade_star: form.grade_star,
@@ -206,10 +242,10 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     cert_number: opt(form.cert_number),
     pcgs_population: coin ? optNum(form.pcgs_population) : null,
     pcgs_pop_higher: coin ? optNum(form.pcgs_pop_higher) : null,
-    serial_number: note ? opt(form.serial_number) : null,
+    serial_number: note || bullion ? opt(form.serial_number) : null,
     prefix_block: note ? opt(form.prefix_block) : null,
     signatures: note ? opt(form.signatures) : null,
-    issuer: note ? opt(form.issuer) : null,
+    issuer: note || bullion ? opt(form.issuer) : null,
     replacement_note: note && form.replacement_note,
     charter_number: note ? opt(form.charter_number) : null,
     bank_city: note ? opt(form.bank_city) : null,

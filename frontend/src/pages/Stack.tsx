@@ -80,8 +80,9 @@ export default function Stack() {
 
       {empty ? (
         <div className="empty">
-          No precious-metal pieces with a weight and fineness yet.{" "}
-          <Link to="/items/new">Add an item</Link>.
+          No precious-metal pieces with a weight and fineness yet. Name a precious metal and give a
+          weight and fineness to include a coin or note, or{" "}
+          <Link to="/items/new?type=bullion">Add a bar or round</Link>.
         </div>
       ) : (
         <>
