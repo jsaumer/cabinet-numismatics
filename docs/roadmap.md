@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): v0.30.0 (sign-in and encrypted backups) is the
+**Status (September 2026): v0.31.0 (bars and rounds) is the
 latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
@@ -24,10 +24,10 @@ v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
 (P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
 "group C" widgets followed in v0.29.0, alongside note details and a
 regrouped item page from the data-entry pass; authentication's first part
-(P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0.
-**What's next**: bars and rounds as an item type of their own (P11), as
-v0.31.0 ([SPEC_0310](specs/SPEC_0310.md)), then A2, single sign-on, as
-v0.32.0, then the share view (P9).
+(P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0; bars
+and rounds as a third item type (P11, [SPEC_0310](specs/SPEC_0310.md))
+shipped in v0.31.0.
+**What's next**: A2, single sign-on, as v0.32.0, then the share view (P9).
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -220,11 +220,14 @@ guidance, not appraisals.
 - ✔ **[Nice]** PCGS population and eBay sold-listings / Photograde links on
   the item page. Phase 5.9. Links **shipped in v0.22.0**; population on the
   item page (Phase 7, P1) **shipped in v0.25.0**.
-- **[Core]** Bars and rounds as an item type of their own, with metal
+- ✔ **[Core]** Bars and rounds as an item type of their own, with metal
   detection that no longer counts nickel silver or Nordic gold as precious,
   fineness read from the metal's own percentage, weight in troy ounces, and
-  bars from Numista's catalogue. Phase 7, P11. **Planned: v0.31.0**, see
-  [SPEC_0310](specs/SPEC_0310.md).
+  bars from Numista's catalogue. Phase 7, P11. **Shipped in v0.31.0**, see
+  [SPEC_0310](specs/SPEC_0310.md). As built: a Metal select, a g/oz weight
+  switch, a suggested product name, a `metal=` list filter, the Stack
+  page's "Left out" list, and a melt value from the moment a piece is
+  saved.
 - ✔ **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
   at purchase, cost per ounce, break-even, and spot-price thresholds through
   the alert webhook. Phase 7, P7 (was parked). **Shipped in v0.28.0.**
@@ -368,7 +371,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   sitting: README quick start plus `deployment.md` (secrets, reverse proxy +
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: `scripts/seed_demo.py` seeds a
-  14-item demo collection; screenshots are captured headlessly at a fixed
+  16-item demo collection; screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
@@ -819,6 +822,10 @@ checklist:
   `watermark`, `demonetization`, added in v0.29.0) confirmed against the
   live API: it was built without a key on the dev machine, so it reads
   every shape defensively and could not be tried against a real response.
+- ✔ The Numista bars-and-rounds exonumia shape (`object_type`, `mints`,
+  `size`/`size2`) confirmed against the live API by the owner's probe of
+  `types/430821` on 22 September 2026, so P11 (v0.31.0) needed no
+  defensive guess the way the banknote mapping above still does.
 - ✔ An API consistency pass while breaking changes are still free. **Folded
   into P8's A1 (v0.30.0)**, decided 21 September 2026, with three changes
   approved: the old `POST /api/items/import` goes, leaving `/api/imports` as
@@ -1053,7 +1060,7 @@ v0.26.0.
     and share links, action by action, with the rules around it) is in
     [security.md](security.md#accounts-and-permissions); only the admin
     row is built, the editor and viewer rows stay optional.
-- **P11: Bars and rounds** (M). Added 22 September 2026, when the owner
+- ✔ **P11: Bars and rounds** (M). Added 22 September 2026, when the owner
   asked how to put a bar in the stack and found nothing under Add: the stack
   is worked out from ordinary items, so a bar had to be a Coin with a
   required denomination, and then counted as a coin everywhere. The owner
@@ -1066,7 +1073,11 @@ v0.26.0.
   German silver, Nordic gold, and plated metals read as precious, and
   "Copper 10%, Silver 90%" read as .100 fine. Also: the pieces the stack
   leaves out are listed, a `metal=` list filter, and a melt value for a new
-  piece without pressing a button. The contract is
+  piece without pressing a button. **Shipped in v0.31.0**: as built, the
+  year-or-ND rule and fancy serial traits don't apply to bullion, nothing
+  fetches a price on the save path (a melt estimate comes from the cached
+  spot price only), and the Numista exonumia shape was confirmed live
+  (`object_type`, see the build log). The contract is
   [SPEC_0310](specs/SPEC_0310.md).
 - **P9: Share and showcase view** (M). A read-only public page for a set, a
   checklist, or the whole collection, behind an unguessable link that can be
@@ -1128,7 +1139,7 @@ v0.26.0.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
 P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
-and P8 A1 for v0.30.0): P11 bars and rounds as v0.31.0, P8 A2 single
+P8 A1 for v0.30.0, and P11 bars and rounds for v0.31.0): P8 A2 single
 sign-on as v0.32.0, then P9 the share view.
 
 Optional, after the above and only if still wanted:

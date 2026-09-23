@@ -25,9 +25,8 @@ changelog entry when releasing.
 - Sign-in (roadmap Phase 7, P8 A1: one admin, database-backed sessions,
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
-  start. v0.31.0 is bars and rounds (P11, `docs/specs/SPEC_0310.md`, PR 22,
-  branch `p11-bullion`); v0.32.0 (OIDC single sign-on and a trusted-header
-  mode) follows. Every design decision was
+  start. v0.31.0 shipped bars and rounds (P11); v0.32.0 (OIDC single
+  sign-on and a trusted-header mode) is next. Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -254,10 +253,18 @@ P8 A1, sign-in and encrypted backups, shipped in v0.30.0
 with a setup code, sessions, scoped API tokens, and a deny-by-default gate
 (details in the rules below); see "Authentication and encrypted backups" in
 the implementation notes and `docs/specs/SPEC_0300.md`.
-**Next, in order:** P11, bars and rounds as an item type of their own, as
-v0.31.0 (SPEC_0310, staged 22 September 2026 as PR 22: the owner chose a
-third type, fully featured, and it also fixes metal detection and fineness
-parsing); then P8 A2, single sign-on (OpenID Connect and a
+P11, bars and rounds, shipped in v0.31.0 (SPEC_0310, staged 22 September
+2026 as PR 22, branch `p11-bullion`): a third item type, `bullion` ("Bar or
+round"), no migration. The rules that bite: `pricing.detect_metal` and
+`pricing.parse_fineness` are the one detector and one parser a composition's
+metal and fineness are ever read by, mirrored (never duplicated) in the
+frontend's `detectMetal`; the year-or-ND rule and fancy serial traits don't
+apply to bullion; nothing on the item save path ever makes a network call,
+so a new bullion piece's melt estimate comes from the cached spot price
+only; and Numista's bars and rounds are read by `object_type` (id 36, or
+the name Bars/Rounds/Ingots/Bullion), never by a word in the title. See
+"Bars and rounds" in the implementation notes.
+**Next, in order:** P8 A2, single sign-on (OpenID Connect and a
 trusted-header mode for the same admin, plus two-factor sign-in) as
 v0.32.0; then P9 a share view (the whole feature is an admin setting, off
 by default); labels, a phone app, and more accounts are optional. Research

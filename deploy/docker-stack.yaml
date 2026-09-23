@@ -1,7 +1,7 @@
 # Cabinet as a Docker Swarm stack. Deploy from the repo root:
 #
 #   set -a; . ./.env; set +a           # stack deploy reads the shell, not .env
-#   TAG=0.30.2 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+#   TAG=0.31.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 #
 # From v0.30.0 set PUBLIC_ORIGINS (required: the https address browsers use),
 # ALLOWED_HOSTS for any internal name (cabinet_proxy for Homepage or

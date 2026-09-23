@@ -1420,7 +1420,7 @@ release. Rules a later change here has to respect:
   fold) are both gone. `README.md`'s screenshot table points at the
   Backups pair.
 
-## Bars and rounds (v0.31.0, in progress)
+## Bars and rounds (v0.31.0)
 
 Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
 `p11-bullion` (PR 22), stage by stage. Rules so far:
@@ -1495,10 +1495,6 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   `bar`/`round`/`ingot`/`bullion` type cell by word (an export file and a
   spreadsheet carry no object type, so a word is all there is). The Cabinet CSV round trip needed no
   code change: `type` is written and read as plain text on both sides.
-  **Not yet built as of this stage** (stages 3-5): the frontend (Add form,
-  item form, item page, list, bulk edit, dashboard), `GET /api/stack`'s
-  `skipped_items`, `GET /api/items?metal=`, and melt on save for a bullion
-  piece with no estimate. The frontend followed in stage 3, directly below.
 - **The `bullion` type, frontend** (stage 3): `pages/ItemForm.tsx`'s type
   select gains "Bar or round"; `/items/new?type=bullion` presets it, for a
   new item only, in a `useEffect` keyed on `id` alone so it never re-fires
@@ -1557,9 +1553,7 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   **Numista fill**: `NumistaFill.tsx` searches `category=exonumia` when the
   form's type is bullion and shows each hit's `object_type` beside its
   title; a 422 from a non-bullion exonumia type surfaces through the
-  existing error handling unchanged. **Not yet built** (stages 4-5): the
-  Stack page's skipped list, `GET /api/items?metal=`, and melt on save for
-  a bullion piece with no estimate.
+  existing error handling unchanged.
 - **Stack and melt** (stage 4): `GET /api/stack` gains `skipped_items`
   (`item_id`, `label`, `missing`: `"weight"`, `"fineness"`, or `"weight and
   fineness"`), built alongside the existing `skipped` count in

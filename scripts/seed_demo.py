@@ -186,6 +186,29 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
         },
         [(2650.0, "dealer quote")],  # over the target for now
     ),
+    (
+        {
+            # A bar: bullion (P11, v0.31.0), no year, a serial, and a refiner in issuer.
+            "type": "bullion", "country": "Switzerland", "denomination": "1 oz silver bar",
+            "issuer": "PAMP Suisse", "composition": "999 silver", "weight_g": 31.1035,
+            "fineness": 0.999, "serial_number": "A1234567",
+            "acquisition_date": "2025-01-20", "acquisition_price": 34.0,
+            "acquired_from": "online dealer", "storage_location": "Safe",
+            "tags": ["silver", "bullion"],
+        },
+        [(36.0, "dealer quote")],
+    ),
+    (
+        {
+            # A round: same metal, no serial, deliberately unestimated.
+            "type": "bullion", "country": "Canada", "denomination": "1 oz silver round",
+            "issuer": "Royal Canadian Mint", "composition": "999.9 silver",
+            "weight_g": 31.1035, "fineness": 0.9999,
+            "acquisition_date": "2025-06-02", "acquisition_price": 33.0,
+            "storage_location": "Safe", "tags": ["silver", "bullion"],
+        },
+        [],
+    ),
 ]
 
 

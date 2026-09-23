@@ -300,7 +300,7 @@ date; coins and notes alike). None of the five are accepted in a bulk
 type from the catalogue's `size`/`size2`, `printers`, `watermark`, and
 `demonetization` fields, when present.
 
-**Bullion (v0.31.0, roadmap Phase 7, P11, backend stage)**: a third item
+**Bullion (v0.31.0, roadmap Phase 7, P11)**: a third item
 `type`, `bullion` ("Bar or round" in the UI), alongside `coin` and `note`.
 The year-or-ND rule is exempt for it: a bar may have both `year` and
 `year_nd` empty, and its `year_label` is then `""` rather than `"ND"` (a bar
@@ -316,9 +316,9 @@ items of that type; `coins` and `notes` keep their own meaning), and
 `/api/metrics` pick it up automatically. `GET /api/numista/search` accepts
 `category=exonumia`, and filling in or importing an exonumia type maps it to
 `bullion` when it reads as a bar, round, or ingot (never a token or medal,
-which is refused); see Numista catalogue lookup and Imports below. Frontend
-support (the Add form, the item page, bulk edit, the list, the dashboard)
-follows in a later stage.
+which is refused); see Numista catalogue lookup and Imports below. The item
+form's own Add/edit UI (a Metal select, a g/oz weight switch, a suggested
+product name) is frontend behaviour, not part of this API.
 
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
