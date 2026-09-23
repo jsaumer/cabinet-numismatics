@@ -10,6 +10,35 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-09-23
+
+A post-release review of v0.32.0 (a third fresh-context pass, over Codex's
+findings) found one latent gap in the photo-metadata work and a
+deployment omission; both are closed here.
+
+### Fixed
+- **A share photo is checked before it is trusted.** The one-time cleaning
+  pass wrote its "all clean" marker even when a stored file could not be
+  decoded, and once the marker existed the share route streamed such a file
+  from disk as it was, metadata included. A file like that only arrives
+  after upload (damage on the volume, a `restore.sh` interrupted while
+  unpacking photos, a file copied onto the volume by hand), and the pass
+  logs each one, but the marker is now only an optimisation: the share
+  route serves a file from disk only when a header-only check finds no
+  metadata and, for a JPEG, no trailer after the image; anything else is
+  re-encoded on the fly or refused, as before the marker. A pass that was
+  already running when a restore removed the marker no longer writes it
+  afterwards, and the pass's summary line ("rewrote X of Y stored photos")
+  reaches the backend's log.
+
+### Changed
+- The Traefik example in `deployment.md` now carries an `hsts` headers
+  middleware on both routers, with the rule that `Strict-Transport-Security`
+  belongs on whatever terminates TLS (Cabinet's nginx only sees plain HTTP),
+  and a note that the edge proxy's own access log records share URLs in
+  clear. Two stale sentences corrected in `security.md` and the
+  implementation notes.
+
 ## [0.32.0] - 2026-09-23
 
 Roadmap Phase 7, P9: the share and showcase view

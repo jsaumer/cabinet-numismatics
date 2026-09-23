@@ -1749,8 +1749,9 @@ and log redaction. Rules this stage left:
   reading the container's own access log during testing, not just the
   config.
 - **`/robots.txt`** is a `location = /robots.txt { auth_request off; ...
-  return 200 "..."; }`, disallowing `/s/` and `/api/`; it needs no backend
-  route and no static file in `frontend/public`.
+  return 200 "..."; }`, disallowing `/api/` only (stage 4 took `/s/` out:
+  a crawler has to fetch a share page to see its `noindex`); it needs no
+  backend route and no static file in `frontend/public`.
 - Settings → Sharing follows the section-per-file convention from v0.30.2:
   `pages/settings/Sharing.tsx`, key `sharing`, after Alerts & metrics in
   `SETTINGS_SECTIONS` (`pages/settings/shared.tsx`) and
@@ -1922,7 +1923,8 @@ Rules it left:
   media type; no `Last-Modified`, no `ETag`, no ranges, no cache (the
   window is one pass long). A file that can't be decoded raises
   `ValueError`, answered as the one 404. With the marker, `_PhotoFile`
-  serves the file as before. Anything that removes the marker
+  serves the file as before (from v0.32.1 only a file `looks_clean`
+  passes; see below). Anything that removes the marker
   (`remove_marker`, and `restore.sh` through it) switches this on, which
   is the point: remove it before photos of unknown cleanliness arrive.
 - **The pass rewrites everything, once.** `strip_existing` walks originals
@@ -1999,6 +2001,52 @@ Rules it left:
   fatal), and it always ends by printing that the archive's share links
   and switch are live. The Swarm steps in backup-restore.md carry the same
   two lines.
+
+## v0.32.1
+
+A review after v0.32.0 found that `strip_existing` wrote the marker with
+an unreadable file on the volume, which the share view then streamed from
+disk as it was, and that a pass already walking when a restore removed the
+marker wrote it back over the restored photos. Rules:
+
+- **The marker is an optimisation, never a promise.**
+  `routers/share.share_photo` sends `_PhotoFile` from disk only when
+  `photos.marker_exists()` **and** `photos.looks_clean(path)`; anything
+  else goes through `cleaned_file` (a `ValueError` stays the one 404).
+  `strip_existing` still writes the marker with unreadable files counted,
+  since a damaged file mustn't put every start on the slow path.
+- **`looks_clean` reads headers only**, since it runs on every shared
+  photo request: never a pixel decode. A JPEG passes when its header walks
+  to an SOS (`_jpeg_scan_start`), the bytes end at `FF D9`, no APPn, COM,
+  SOI, or EOI marker sits between the first scan and that end
+  (`_JPEG_HIDDEN`: between progressive scans, or an appended image, where
+  Pillow's header read never looks), and `carries_metadata` is false; a PNG
+  when its chunk walk ends at `IEND` and `carries_metadata` is false. Any
+  other format, WebP included (nothing walks its chunks), and any
+  exception answer False. What Cabinet itself writes (`clean_bytes`)
+  passes, so the fast path holds for the normal case; a test pins that.
+- **`carries_metadata` no longer reads `img.text`** for a PNG: that
+  property decodes the whole image to find text chunks after the pixels,
+  and the chunk walk already counts every text chunk.
+- **A generation counter guards the marker.** `remove_marker` moves
+  `photos._marker_generation` under `_marker_lock`; `strip_existing` reads
+  it inside `_pass_lock` before walking and writes the marker only through
+  `_write_marker_unless_moved`, which checks and writes under the same
+  lock, logging at INFO when it held back. The in-app restore removes the
+  marker twice, before the database step and again just before it
+  starts its own pass after the file swap, so a pass that began between
+  the two (after the first removal, before the swap) can't write the
+  marker over photos it never saw. The counter is per process, so
+  `restore.sh`'s removal from a second process isn't seen; the per-file
+  check covers that.
+- **The summary line is the operator's signal.** `strip_existing` logs
+  each unreadable file at WARNING and one INFO summary ("rewrote N of M
+  stored photos (U unreadable, F failed)") on `app.services.photos`, which
+  has no level or handler of its own and reaches the container's log
+  through the `app` logger `main._configure_logging` sets up at import,
+  before the lifespan starts the pass. Alembic's `fileConfig` would
+  disable it, which is why `schema.py` keeps `configure_logger` off; a
+  test pins the summary on that logger.
 
 ## Releases
 
