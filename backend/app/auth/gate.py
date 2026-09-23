@@ -7,19 +7,24 @@ Reads only the method, the raw path, and headers, never the body. In order:
 2. During maintenance only two requests get this far (the maintenance
    middleware runs first): health passes with no lookup, and the restore
    status passes only for the session holding the restore grant. No database.
-3. The credential: `Authorization: Bearer cabinet_...` is a token (an invalid
+3. A `GET` or `HEAD` under an ANONYMOUS_PREFIXES path (the share view,
+   v0.32.0) passes with no credential looked up at all: a cookie never
+   touches `last_seen_at`, a token is never validated, and no Sec-Fetch-Site
+   check applies (a share link is opened from anywhere). Layer 2 then finds
+   the `share` class on every route there. Other methods go on as below.
+4. The credential: `Authorization: Bearer cabinet_...` is a token (an invalid
    one is 401, never a fall back to the cookie); any other Authorization is
    ignored; otherwise the session cookie.
-4. Anonymous callers reach only the four ANONYMOUS pairs; everything else,
+5. Anonymous callers reach only the four ANONYMOUS pairs; everything else,
    unknown paths included, is 401. A read or metrics token is refused on
    any unsafe method (every such route is write or admin) before a body is
    read.
-5. `/api/openapi.json` (the one framework route, never seen by layer 2): a
+6. `/api/openapi.json` (the one framework route, never seen by layer 2): a
    session only, a token 403.
-6. CSRF for a cookie request: `Sec-Fetch-Site: same-origin`, or no such
+7. CSRF for a cookie request: `Sec-Fetch-Site: same-origin`, or no such
    header and an Origin (or Referer's origin) in PUBLIC_ORIGINS.
-7. The principal goes on `scope["state"]["principal"]` for layer 2.
-8. On the way out, a response with no Cache-Control gets `private, no-store`.
+8. The principal goes on `scope["state"]["principal"]` for layer 2.
+9. On the way out, a response with no Cache-Control gets `private, no-store`.
 
 Database work runs in a worker thread, never on the event loop.
 """
@@ -41,6 +46,9 @@ ANONYMOUS = {
     (b"POST", b"/api/auth/setup"),
     (b"POST", b"/api/auth/login"),
 }
+# Anonymous GET and HEAD by prefix: the share view, whose token is in the
+# path. Every route under it declares the `share` class.
+ANONYMOUS_PREFIXES = (b"/api/share/",)
 SMALL_BODY = {(b"POST", b"/api/auth/setup"), (b"POST", b"/api/auth/login")}
 SMALL_BODY_LIMIT = 8 * 1024
 OPENAPI = b"/api/openapi.json"
@@ -199,6 +207,11 @@ class AuthGate:
                 await _json(503, maintenance.DETAIL)(scope, receive, send)
                 return
             scope.setdefault("state", {})["principal"] = who
+            await self.app(scope, receive, send)
+            return
+
+        if method in (b"GET", b"HEAD") and path.startswith(ANONYMOUS_PREFIXES):
+            scope.setdefault("state", {})["principal"] = None
             await self.app(scope, receive, send)
             return
 

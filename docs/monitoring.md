@@ -62,6 +62,14 @@ alerts again rather than staying quiet, and a new threshold that is already
 met when saved fires on the very next check. The alert key is `spot_<metal>`
 (`spot_gold`, `spot_silver`, `spot_platinum`, `spot_palladium`).
 
+**The share view** (v0.32.0). Switching sharing on or off in Settings sends
+`sharing_switched` (title `Cabinet sharing switched on` or `... off`), and
+making, regenerating, or revoking a share link sends `share_link_created`,
+`share_link_regenerated`, or `share_link_revoked`, naming the link and its
+kind (collection, set, or checklist), never its token, so a link made from
+a session that isn't yours is noticed. Opening a link sends nothing; its
+count is in Settings and in the metrics below.
+
 ### Formats
 
 One URL, in one of five formats. The URL is stored encrypted, like the API
@@ -195,6 +203,8 @@ so scraping more often than that gains nothing.
 | `cabinet_refresh_last_run_items` | `source`, `outcome` | Its updated / skipped / failed items |
 | `cabinet_estimate_attempts` | `source`, `outcome` | Each item's latest automatic attempt (`ok`, `not_applicable`, `unavailable`) |
 | `cabinet_stack_fine_ounces` | `metal` | Fine troy ounces of owned bullion (the same set the Stack page reports); no network call |
+| `cabinet_share_links` | | Share links that exist (each works only while sharing is on) |
+| `cabinet_share_opens_total` | | Times those links have been opened (manifest requests; a revoked link's opens go with it) |
 | `cabinet_alert_failing` | `alert` | 1 while that check is failing |
 | `cabinet_alert_delivery_success`, `cabinet_heartbeat_success` | | The last delivery / push (after the first one since startup) |
 

@@ -26,6 +26,7 @@ ANONYMOUS = {
     ("POST", "/api/auth/login"),
 }
 SPEC = Path(__file__).resolve().parents[2] / "docs" / "specs" / "SPEC_0300.md"
+SHARE_PREFIX = "/api/share/"  # anonymous GET and HEAD, the share class (v0.32.0)
 
 
 def operations() -> list[tuple[str, str]]:
@@ -38,6 +39,11 @@ def operations() -> list[tuple[str, str]]:
 
 def concrete(path: str) -> str:
     return re.sub(r"\{[^}]+\}", "1", path)
+
+
+def shared(method: str, path: str) -> bool:
+    """A request the gate passes without looking anyone up."""
+    return method in ("GET", "HEAD") and path.startswith(SHARE_PREFIX)
 
 
 def call(c, method: str, path: str, **kwargs):
@@ -81,7 +87,7 @@ def spec_table() -> dict[tuple[str, str], permissions.Declared]:
         method, path, cls = cells[0], cells[1].strip("`").split("?")[0], cells[2]
         if cls.startswith("write (admin"):  # the handler asks for more when purging
             cls = "write"
-        base = re.match(r"(public|read|write|admin)", cls).group(1)
+        base = re.match(r"(public|read|write|admin|share)", cls).group(1)
         fresh = "fresh" in cls and "unless" not in cls
         table[(method, path)] = permissions.Declared(base, "metrics_ok" in cls, fresh)
     return table
@@ -95,7 +101,7 @@ BODY_CONFIRMED = {("POST", "/api/auth/password"), ("POST", "/api/auth/username")
 def test_every_operation_declares_what_the_spec_says():
     table = spec_table()
     ops = operations()
-    assert len(ops) == 117 == len(table)
+    assert len(ops) == 127 == len(table)
     for method, path in ops:
         found = declared(endpoint_for(method, path))
         assert found is not None, f"{method} {path} declares no @permission"
@@ -111,8 +117,9 @@ def test_class_counts():
         cls = declared(endpoint_for(method, path)).cls
         counts[cls] = counts.get(cls, 0) + 1
     # 99 existing (public 1, read 33, write 42, admin 23: photo delete and
-    # replace and document delete moved to admin in stage 12) and 18 new.
-    assert counts == {"public": 4, "read": 35, "write": 42, "admin": 36}
+    # replace and document delete moved to admin in stage 12) and 18 new;
+    # then v0.32.0's share view: 5 public share routes and 5 admin ones.
+    assert counts == {"public": 4, "read": 35, "write": 42, "admin": 41, "share": 5}
 
 
 def test_completeness_every_operation_reaches_layer_two(client, dry_run):
@@ -147,7 +154,7 @@ def anonymous_requests():
 def test_anonymous_matrix(anon_client, dry_run):
     for method, path in anonymous_requests():
         resp = call(anon_client, method, path)
-        if (method, path) in ANONYMOUS:
+        if (method, path) in ANONYMOUS or shared(method, path):
             assert resp.status_code != 401, (method, path)
         else:
             assert resp.status_code == 401, (method, path, resp.status_code)
@@ -205,7 +212,7 @@ def test_schema_is_for_a_session_only(client, token_client, anon_client):
 
 
 def expected_for_token(scope: str, found: permissions.Declared) -> int:
-    if found.cls == "public":
+    if found.cls in ("public", "share"):
         return ALLOWED
     ok = (
         (found.cls == "read" and scope in ("read", "write"))
@@ -260,8 +267,10 @@ def fresh_operations():
 def test_fresh_matrix(client, stale_client, token_client, dry_run):
     ops = fresh_operations()
     # The spec's 15, less the two confirmed by their body, plus the three
-    # photo and document deletions (section 16).
-    assert len(ops) == 16
+    # photo and document deletions (section 16), plus making, regenerating,
+    # and revoking a share link (v0.32.0).
+    assert len(ops) == 19
+    tokens = [token_client(scope) for scope in ("read", "write", "metrics")]
     for method, path in ops:
         stale = call(stale_client, method, path)
         assert stale.status_code == 403, (method, path)
@@ -270,8 +279,8 @@ def test_fresh_matrix(client, stale_client, token_client, dry_run):
             "reauth_required": True,
         }
         assert call(client, method, path).status_code == ALLOWED, (method, path)
-        for scope in ("read", "write", "metrics"):
-            assert call(token_client(scope), method, path).status_code == 403
+        for c in tokens:
+            assert call(c, method, path).status_code == 403
 
 
 def test_deleting_for_good_asks_for_the_password(client, stale_client, coin):
@@ -308,7 +317,7 @@ def test_csrf_table(client, token_client, dry_run):
     reader = token_client("read")
     direct = {("GET", "/api/documents/{document_id}/file")}
     for method, path in operations():
-        if (method, path) in ANONYMOUS:
+        if (method, path) in ANONYMOUS or shared(method, path):
             continue
         photo = (method, path) == ("GET", "/api/auth/photo")
         assert call(client, method, path).status_code == ALLOWED, (method, path)
@@ -344,6 +353,53 @@ def test_origin_only_in_allowed_hosts_is_refused(client, monkeypatch, dry_run):
     bare = session_with(client)
     assert bare.post("/api/items", headers={"Origin": "http://localhost"}).status_code == 403
     bare.close()
+
+
+def test_share_routes_need_no_credential_and_ignore_one(
+    client, anon_client, token_client, monkeypatch
+):
+    """The share class (v0.32.0): the gate looks nobody up for a GET under
+    /api/share/, so an invalid token isn't refused, a session isn't touched,
+    and layer 2 sees no principal whoever is calling."""
+    seen = []
+    real = permissions.check
+
+    def check(who, cls, *, metrics_ok=False, fresh=False):
+        real(who, cls, metrics_ok=metrics_ok, fresh=fresh)
+        seen.append(who)
+        raise HTTPException(ALLOWED, "allowed")
+
+    callers = [
+        anon_client,
+        client,
+        session_with(client, **{"Sec-Fetch-Site": "cross-site"}),
+        session_with(client),
+        *(token_client(scope) for scope in ("read", "write", "metrics")),
+    ]
+    bad = bearer_client("Bearer cabinet_" + "a" * 10 + "_" + "b" * 43)
+    callers.append(bad)
+
+    def boom(*args, **kwargs):
+        raise AssertionError("the gate looked a credential up for a share route")
+
+    monkeypatch.setattr(gate, "_lookup", boom)
+    monkeypatch.setattr(permissions, "check", check)
+    ops = [op for op in operations() if declared(endpoint_for(*op)).cls == "share"]
+    assert len(ops) == 5 and all(shared(*op) for op in ops)
+    for method, path in ops:
+        for c in callers:
+            assert call(c, method, path).status_code == ALLOWED, (method, path)
+    assert seen and all(who is None for who in seen)
+    # Any other method under the prefix is handled as before.
+    assert anon_client.post("/api/share/x").status_code == 401
+    assert anon_client.delete("/api/share/x").status_code == 401
+    bad.close()
+
+
+def bearer_client(authorization: str):
+    from fastapi.testclient import TestClient
+
+    return TestClient(app, base_url="https://testserver", headers={"Authorization": authorization})
 
 
 def test_csrf_helper_on_its_own():

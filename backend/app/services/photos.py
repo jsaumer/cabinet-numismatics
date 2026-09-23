@@ -28,6 +28,12 @@ def _root() -> Path:
     return Path(get_settings().photo_dir)
 
 
+def path_of(key: str) -> Path:
+    """The file behind a stored key, for the share view, which serves photos
+    itself rather than through nginx's `/photos/`."""
+    return _root() / key
+
+
 def open_validated(data: bytes) -> tuple[Image.Image, str]:
     """Open upload bytes as an EXIF-corrected image plus its format name;
     ValueError if not a real, supported image."""

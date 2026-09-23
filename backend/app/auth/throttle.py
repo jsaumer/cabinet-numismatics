@@ -6,6 +6,7 @@
 | `addr:<ip>`   | 20 failures           | the same curve from the 20th                     |
 | global        | 60 checks a minute    | 429                                              |
 | `setup:<ip>`  | 5 wrong codes         | 429 until 15 minutes after the last              |
+| `share:<ip>`  | 20 failed lookups     | the same curve as `addr`                         |
 
 Never a lock-out. A bucket forgets its failures 15 minutes after the last
 one, and on a success. One bounded map of at most MAX_KEYS entries, oldest
@@ -31,7 +32,7 @@ from app.auth import common
 WINDOW = 15 * 60
 MAX_KEYS = 10_000
 CAP = 60
-FREE = {"user": 5, "addr": 20}
+FREE = {"user": 5, "addr": 20, "share": 20}
 SETUP_FREE = 5
 GLOBAL_PER_MINUTE = 60
 RESET_FLAG = "throttle_reset"

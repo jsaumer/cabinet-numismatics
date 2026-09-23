@@ -1,11 +1,12 @@
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.auth import events
 from app.auth.permissions import permission
 from app.db import get_db
 from app.models import ExchangeRate, Item, SpotPrice
@@ -86,6 +87,7 @@ class SettingsOut(BaseModel):
     alert_webhook_format: AlertFormat
     heartbeat_hint: str | None
     metrics_enabled: bool
+    share_enabled: bool  # the share view (v0.32.0); off makes every link 404
     # Secrets cleared because they weren't encrypted with this deployment's
     # key, by name, until each is entered again ("Re-enter: alert webhook").
     secrets_cleared: list[str]
@@ -120,6 +122,7 @@ class SettingsUpdate(BaseModel):
     alert_webhook_format: AlertFormat | None = None
     heartbeat_url: str | None = Field(default=None, max_length=2000)  # "" clears
     metrics_enabled: bool | None = None
+    share_enabled: bool | None = None
     spot_alerts: list[SpotAlert] | None = Field(default=None, max_length=stack.MAX_SPOT_ALERTS)
 
     @field_validator("alert_webhook_url", "heartbeat_url")
@@ -247,6 +250,7 @@ def _build(db: Session) -> SettingsOut:
         alert_webhook_format=str(store.get_setting(db, "alert_webhook_format")),
         heartbeat_hint=alerts.url_hint(str(store.get_setting(db, "heartbeat_url"))),
         metrics_enabled=bool(store.get_setting(db, "metrics_enabled")),
+        share_enabled=bool(store.get_setting(db, "share_enabled")),
         secrets_cleared=[
             store.SECRET_LABELS[key]
             for key in store.get_setting(db, "secrets_cleared") or []
@@ -270,7 +274,7 @@ def get_app_settings(db: Session = Depends(get_db)):
 
 @router.put("", response_model=SettingsOut)
 @permission("admin", fresh=True)
-def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
+def update_app_settings(payload: SettingsUpdate, request: Request, db: Session = Depends(get_db)):
     fields = payload.model_dump(exclude_unset=True)
     if "display_currency" in fields:
         fields["display_currency"] = fields["display_currency"].upper()
@@ -278,6 +282,7 @@ def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
     if days is not None and days != 0 and days not in backup.RETENTION_CHOICES:
         choices = ", ".join(str(d) for d in backup.RETENTION_CHOICES)
         raise HTTPException(422, f"backup_retention_days must be one of {choices}, or 0 (forever).")
+    sharing = bool(store.get_setting(db, "share_enabled"))
     for key, value in fields.items():
         store.set_setting(db, key, value)
     if "spot_alerts" in fields:
@@ -285,4 +290,19 @@ def update_app_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
         # alerts again rather than staying quiet.
         stack.prune_alert_state(db)
     db.commit()
+    if bool(store.get_setting(db, "share_enabled")) != sharing:
+        _sharing_switched(db, request, not sharing)
     return _build(db)
+
+
+def _sharing_switched(db: Session, request: Request, enabled: bool) -> None:
+    """Audited and alerted, as making a share link is: either way round is
+    worth the owner noticing."""
+    events.record(db, request, "sharing_switched", detail={"enabled": enabled})
+    word = "on" if enabled else "off"
+    message = (
+        "Anyone with a share link can now see what it shares, without signing in."
+        if enabled
+        else "Every share link now answers not found; the links are kept."
+    )
+    alerts.event(db, "sharing_switched", f"Cabinet sharing switched {word}", message)

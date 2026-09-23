@@ -10,6 +10,38 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.32.0] - unreleased
+
+Roadmap Phase 7, P9: the share and showcase view
+([SPEC_0320](docs/specs/SPEC_0320.md)), in progress; the API side so far.
+
+### Added
+- **Share links** (API): a read-only link to the collection, a set, or a
+  checklist, opened without signing in. `GET /api/share/{token}` and its
+  `items`, `items/{id}`, `checklist` (filled slots only), and
+  `photos/{photo_id}/{thumb|full}` routes answer anyone holding the link;
+  a session or token on the request is ignored. What a piece shows is an
+  allowlist (identity, physical facts, and quantity, plus photos, grades
+  and certs, tags, notes, and the estimated value as the link chooses;
+  values off by default): never a cost, gain, storage location, document,
+  serial number, or custom field. Every failure, sharing off included, is
+  the same `404`, slowed per address past 20; every answer carries
+  `X-Robots-Tag: noindex, nofollow`, and no public route makes a network
+  call.
+- **Managing links**: `GET`/`POST /api/share-links`, `PATCH` and `DELETE
+  /api/share-links/{id}`, and `POST /api/share-links/{id}/regenerate`. The
+  URL is shown once and only its hash is kept; making, regenerating, and
+  revoking a link ask for the password again, and at most 20 links exist.
+  Deleting a set or checklist deletes its links.
+- **The switch**: `share_enabled` in Settings, off by default. Off, every
+  link answers not found and none can be made; the links are kept.
+  Switching it, and each link event, is audited and sent through the alert
+  webhook (`sharing_switched`, `share_link_created`,
+  `share_link_regenerated`, `share_link_revoked`).
+- Metrics `cabinet_share_links` and `cabinet_share_opens_total`, and a
+  sharing line in `python -m app.cli status`.
+- Migration `0022`: the `share_links` table.
+
 ## [0.31.0] - 2026-09-23
 
 Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
