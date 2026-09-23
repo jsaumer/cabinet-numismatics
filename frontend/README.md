@@ -126,11 +126,14 @@ playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
 Routes: `/` is the dashboard, `/collection` the list (its filters, sort, and
-page live in the URL), `/items/new`, `/items/run`, `/items/:id`,
-`/items/:id/edit`, `/pricing`, `/stack`, `/report`, `/checklists`, `/import`,
-`/trash`, and `/settings/:section` (`general`, `pricing`, `backups`,
-`alerts`, `account`, `about`; `/settings` redirects to `/settings/general`,
-and an unknown section falls back to it too). `/dashboard` redirects to `/`.
+page live in the URL, a Metal select beside Type among them since v0.31.0),
+`/items/new`, `/items/run`, `/items/:id`, `/items/:id/edit`, `/pricing`,
+`/stack` (fine ounces by metal, and, since v0.31.0, a "Left out" card
+listing owned precious-metal pieces missing a weight or fineness), `/report`,
+`/checklists`, `/import`, `/trash`, and `/settings/:section` (`general`,
+`pricing`, `backups`, `alerts`, `account`, `about`; `/settings` redirects to
+`/settings/general`, and an unknown section falls back to it too).
+`/dashboard` redirects to `/`.
 `/setup` and
 `/login` render outside the app shell (brand only, no nav); everything else
 is gated on being signed in, see "Sign-in" below.
