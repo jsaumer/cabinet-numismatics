@@ -10,7 +10,7 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
-## [0.32.0] - unreleased
+## [0.32.0] - 2026-09-23
 
 Roadmap Phase 7, P9: the share and showcase view
 ([SPEC_0320](docs/specs/SPEC_0320.md)).
