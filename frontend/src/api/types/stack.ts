@@ -59,6 +59,14 @@ export interface StackTotals {
   fine_oz_by_metal: Record<string, number>;
 }
 
+// A precious-metal piece left out of the stack for want of a weight or a
+// fineness (P11, v0.31.0).
+export interface StackSkippedItem {
+  item_id: string;
+  label: string;
+  missing: "weight" | "fineness" | "weight and fineness";
+}
+
 export interface StackReport {
   currency: string;
   metals: StackMetalRow[];
@@ -66,6 +74,7 @@ export interface StackReport {
   items: StackItemRow[];
   missing_spot: number;
   skipped: number;
+  skipped_items: StackSkippedItem[];
   excluded_other_currency: number;
   history_start: string;
 }

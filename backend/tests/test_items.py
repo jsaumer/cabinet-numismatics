@@ -89,3 +89,31 @@ def test_list_filters_sort_and_pagination(client):
     assert body["total"] == 3 and len(body["items"]) == 1 and body["items"][0]["year"] == 1950
 
     assert client.get("/api/items", params={"sort": "evil"}).status_code == 422
+
+
+def test_metal_filter(client):
+    """P11, v0.31.0: `metal=` is evaluated in Python (detect_metal has no SQL
+    equivalent), so it needs its own check on filtering, "none", and paging."""
+    silver = client.post("/api/items", json={**COIN, "composition": "90% silver"}).json()
+    gold = client.post("/api/items", json={**COIN, "composition": "Gold"}).json()
+    plain = client.post("/api/items", json=COIN).json()  # no composition: metal=none
+
+    body = client.get("/api/items", params={"metal": "silver"}).json()
+    assert body["total"] == 1 and {i["id"] for i in body["items"]} == {silver["id"]}
+
+    body = client.get("/api/items", params={"metal": "gold"}).json()
+    assert body["total"] == 1 and {i["id"] for i in body["items"]} == {gold["id"]}
+
+    body = client.get("/api/items", params={"metal": "none"}).json()
+    assert body["total"] == 1 and {i["id"] for i in body["items"]} == {plain["id"]}
+
+    assert client.get("/api/items", params={"metal": "tin"}).status_code == 422
+
+
+def test_metal_filter_pagination(client):
+    for _ in range(5):
+        client.post("/api/items", json={**COIN, "composition": "silver"})
+    client.post("/api/items", json=COIN)  # no metal: excluded from the count too
+
+    body = client.get("/api/items", params={"metal": "silver", "limit": 2, "offset": 3}).json()
+    assert body["total"] == 5 and len(body["items"]) == 2

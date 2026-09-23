@@ -1560,6 +1560,55 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   existing error handling unchanged. **Not yet built** (stages 4-5): the
   Stack page's skipped list, `GET /api/items?metal=`, and melt on save for
   a bullion piece with no estimate.
+- **Stack and melt** (stage 4): `GET /api/stack` gains `skipped_items`
+  (`item_id`, `label`, `missing`: `"weight"`, `"fineness"`, or `"weight and
+  fineness"`), built alongside the existing `skipped` count in
+  `stack.stack_figures`'s same loop (no second pass), scoped by the same
+  `tag`/`set_id` as the rest of the report. The Stack page adds a "Left
+  out" card (shown whenever `skipped_items` isn't empty, in both the empty
+  and the normal state, since a piece can be flagged before anything else
+  is in the stack) listing each with a link to the item; the existing
+  empty-state message and its `/items/new?type=bullion` link are unchanged.
+  `GET /api/items` gains `metal=` (`gold`/`silver`/`platinum`/`palladium`/`none`;
+  an unknown value is a 422 from the `Query` pattern, the same way `type`
+  and `status` already validate). It's evaluated in Python
+  (`routers/items._metal_matches`, `pricing.detect_metal` again: no SQL
+  equivalent, and at a few hundred pieces no column is worth adding), so
+  `metal` is popped out of the filters dict before `_filtered()` runs, and
+  `list_items` fetches every other-filter match in order, filters in
+  Python, then paginates the filtered list itself (`total` is `len()` of
+  that list, not the SQL count); the two export routes filter their full
+  row set the same way, since the frontend's "Export the current filters"
+  menu reuses the same query string. The list page gets a Metal select next
+  to Type, in `FILTER_KEYS` like every other filter so it round-trips
+  through the URL and the export links.
+  **A value from the start**: `pricing.refresh_melt_estimates` used to skip
+  an item outright whenever it had no estimate at all (`latest is None`
+  short-circuited to skipped); it now only skips when there *is* a latest
+  estimate and that one isn't melt, or isn't stale yet, which lets a
+  never-priced owned piece through to `run_adapter` the same as a stale
+  melt one. **`pricing.melt_on_save(db, item)`** is the save-path half:
+  called after `db.flush()` (so `item.id` exists) in `create_item`,
+  `add_run`, `update_item`, and `importing.run()` (all four `_build_item`
+  callers, since none of them go through the router's `create_item`), it
+  reads `melt_from_cache(db, item)` (a new `pricing` function, the same
+  arithmetic as `melt_estimate` factored into a shared `_melt_result`, but
+  `db.get(SpotPrice, metal)` instead of `get_spot_price`, so a missing or
+  stale cache row (`freshness(...)["stale"]`) returns `None` instead of
+  fetching); nothing else in Cabinet reads `SpotPrice` without going
+  through `get_spot_price`, and this is deliberately the one exception,
+  because the save path must never make a network call, full stop. Only
+  for `item.status == "owned"` (the stack's own scope). Skipped, too, when
+  the item already carries a melt estimate (`item.estimates`, newest
+  first) whose `details` match the new one on `metal`, `weight_g`,
+  `fineness`, and `quantity` (`_MELT_INPUT_KEYS`): an edit that touches
+  none of those adds nothing, so `notes` or `storage_location` churn
+  doesn't pile up estimate rows, but a reweigh does. On success it records
+  the attempt itself (`_record_attempt(db, item, "melt", "ok", None)`, the
+  same call `run_adapter` makes) before `pricing.add_estimate`, so
+  `estimate_attempts` and the pricing-coverage report see it exactly like
+  an adapter-driven estimate. The caller commits; `melt_on_save` itself
+  never does, matching every other `pricing` write helper.
 
 ## Releases
 

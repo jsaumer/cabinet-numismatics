@@ -543,6 +543,7 @@ def run(
     stored; photos given as URLs only when `fetch_remote_photos`."""
     from app.routers.items import _build_item, record_event
     from app.routers.photos import _create_photo
+    from app.services import pricing
 
     # Anything the readers had to create for validation (a Cabinet export's
     # sets) is kept before the first item, so one failing row can't take it back.
@@ -564,6 +565,7 @@ def run(
             db.add(item)
             db.flush()
             record_event(db, item.id, "created", {"via": ["import", source_label]})
+            pricing.melt_on_save(db, item)
             db.commit()
         except (ValueError, HTTPException) as exc:
             db.rollback()

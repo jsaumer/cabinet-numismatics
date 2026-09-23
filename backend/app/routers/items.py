@@ -320,6 +320,15 @@ def _filtered(
     return stmt
 
 
+def _metal_matches(item: Item, metal: str) -> bool:
+    """Whether `item`'s composition detects as `metal` (P11, v0.31.0);
+    "none" matches a piece with no precious metal detected. Evaluated in
+    Python, like the metal breakdown: at a few hundred pieces no column is
+    needed for it."""
+    detected = pricing.detect_metal(item.composition)
+    return detected is None if metal == "none" else detected == metal
+
+
 def _list_entry(
     item: Item,
     strategy: str,
@@ -369,8 +378,10 @@ def filter_query(
     fancy: bool | None = None,
     serial_trait: str | None = Query(default=None, max_length=20),
     target_reached: bool | None = None,
+    metal: str | None = Query(default=None, pattern="^(gold|silver|platinum|palladium|none)$"),
 ) -> dict:
-    """The list filters, shared by list and both exports via Depends."""
+    """The list filters, shared by list and both exports via Depends. `metal`
+    is popped and applied separately (in Python, not SQL; P11, v0.31.0)."""
     if serial_trait is not None and serial_trait not in serials.TRAITS:
         raise HTTPException(
             status_code=422,
@@ -396,6 +407,7 @@ def filter_query(
         "fancy": fancy,
         "serial_trait": serial_trait,
         "target_reached": target_reached,
+        "metal": metal,
     }
 
 
@@ -429,17 +441,31 @@ def list_items(
     else:
         ordering = (order,)
 
+    metal = filters.pop("metal", None)
     stmt = _filtered(select(Item), **filters)
     if field == "grade":
         stmt = stmt.outerjoin(Grade, Item.grade_id == Grade.id)
-    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
-    rows = (
-        db.execute(
-            stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id).limit(limit).offset(offset)
+    if metal:
+        # Filtered in Python (no column for it), so fetch every match in
+        # order, filter, then paginate the filtered list ourselves.
+        matching = [
+            i
+            for i in db.execute(stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id))
+            .scalars()
+            .all()
+            if _metal_matches(i, metal)
+        ]
+        total = len(matching)
+        rows = matching[offset : offset + limit]
+    else:
+        total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+        rows = (
+            db.execute(
+                stmt.options(*ITEM_LOAD).order_by(*ordering, Item.id).limit(limit).offset(offset)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
     strategy, preferred_source, converter = _value_settings(db)
     items = [_list_entry(i, strategy, preferred_source, converter) for i in rows]
     return ItemList(items=items, total=total, limit=limit, offset=offset)
@@ -454,11 +480,14 @@ def export_csv(
     events.record(
         db, request, "export_downloaded", target="csv", alert="The collection was exported (CSV)."
     )
+    metal = filters.pop("metal", None)
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
         .all()
     )
+    if metal:
+        rows = [i for i in rows if _metal_matches(i, metal)]
     strategy, preferred_source, converter = _value_settings(db)
 
     def generate():
@@ -500,11 +529,14 @@ def export_xlsx(
         target="xlsx",
         alert="The collection was exported (Excel).",
     )
+    metal = filters.pop("metal", None)
     rows = (
         db.execute(_filtered(select(Item), **filters).options(*ITEM_LOAD).order_by(Item.created_at))
         .scalars()
         .all()
     )
+    if metal:
+        rows = [i for i in rows if _metal_matches(i, metal)]
 
     strategy, preferred_source, converter = _value_settings(db)
     wb = Workbook()
@@ -719,6 +751,7 @@ def create_item(payload: ItemCreate, db: Session = Depends(get_db)):
     db.add(item)
     db.flush()
     record_event(db, item.id, "created")
+    pricing.melt_on_save(db, item)
     db.commit()
     return get_item_or_404(db, item.id, load_related=True)
 
@@ -773,6 +806,7 @@ def add_run(payload: RunCreate, db: Session = Depends(get_db)):
         db.add(item)
         db.flush()
         record_event(db, item.id, "created")
+        pricing.melt_on_save(db, item)
         created.append(item.id)
     db.commit()
     return RunResult(created=len(created), skipped=skipped, item_ids=created)
@@ -854,6 +888,7 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
     _sync_derived(item, changes)
     if changes:
         record_event(db, item.id, "updated", changes)
+    pricing.melt_on_save(db, item)
     db.commit()
     return get_item_or_404(db, item_id, load_related=True)
 

@@ -1110,6 +1110,15 @@ class StackTotals(BaseModel):
     fine_oz_by_metal: dict[str, float]
 
 
+class StackSkippedItem(BaseModel):
+    """A precious-metal piece left out of the stack for want of a weight or a
+    fineness (P11, v0.31.0)."""
+
+    item_id: uuid.UUID
+    label: str
+    missing: str  # "weight", "fineness", or "weight and fineness"
+
+
 class StackReport(BaseModel):
     currency: str
     metals: list[StackMetal]
@@ -1117,6 +1126,7 @@ class StackReport(BaseModel):
     items: list[StackItem]
     missing_spot: int  # pieces whose purchase-day spot could be looked up
     skipped: int  # precious-metal pieces with no weight or fineness
+    skipped_items: list[StackSkippedItem]
     excluded_other_currency: int
     history_start: date
 

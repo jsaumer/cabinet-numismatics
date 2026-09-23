@@ -335,15 +335,9 @@ def melt_prerequisite(db: Session, item: Item) -> str | None:
     return None
 
 
-def melt_estimate(db: Session, item: Item) -> EstimateResult:
-    """Melt value for a precious-metal item. Raises NotApplicable/SpotUnavailable."""
-    reason = melt_prerequisite(db, item)
-    if reason:
-        raise NotApplicable(reason)
-    metal = detect_metal(item.composition)
-    fineness = effective_fineness(item)
-
-    spot = get_spot_price(db, metal)
+def _melt_result(item: Item, metal: str, fineness: Decimal, spot) -> EstimateResult:
+    """Build the EstimateResult for one melt calculation from a spot price row
+    (live or cached). Shared by `melt_estimate` and `melt_from_cache`."""
     per_piece = Decimal(item.weight_g) * fineness * Decimal(spot.price_per_gram)
     value = (per_piece * item.quantity).quantize(Decimal("0.01"))
     return EstimateResult(
@@ -363,6 +357,60 @@ def melt_estimate(db: Session, item: Item) -> EstimateResult:
             **freshness(spot.fetched_at, CACHE_TTL),
         },
     )
+
+
+def melt_estimate(db: Session, item: Item) -> EstimateResult:
+    """Melt value for a precious-metal item. Raises NotApplicable/SpotUnavailable."""
+    reason = melt_prerequisite(db, item)
+    if reason:
+        raise NotApplicable(reason)
+    metal = detect_metal(item.composition)
+    fineness = effective_fineness(item)
+    spot = get_spot_price(db, metal)
+    return _melt_result(item, metal, fineness, spot)
+
+
+def melt_from_cache(db: Session, item: Item) -> EstimateResult | None:
+    """The same melt calculation, but from the cached spot price only, never
+    fetching: None when the item doesn't qualify, or there is no cache entry
+    for its metal or it is stale. Used on the item save path (P11, v0.31.0),
+    where no network call is ever allowed."""
+    if melt_prerequisite(db, item) is not None:
+        return None
+    metal = detect_metal(item.composition)
+    fineness = effective_fineness(item)
+    spot = db.get(SpotPrice, metal)
+    if spot is None or freshness(spot.fetched_at, CACHE_TTL)["stale"]:
+        return None
+    return _melt_result(item, metal, fineness, spot)
+
+
+_MELT_INPUT_KEYS = ("metal", "weight_g", "fineness", "quantity")
+
+
+def melt_on_save(db: Session, item: Item) -> PriceEstimate | None:
+    """Add a melt estimate for an owned item on create or update (P11,
+    v0.31.0: "a value from the start" for a new bullion piece), from the
+    cached spot price only. None when the item isn't owned, doesn't qualify,
+    or the cached spot for its metal is missing or stale (the scheduled
+    refresh catches it later; no fetch happens here, ever). Skipped, too,
+    when the piece already has a melt estimate with the same inputs (metal,
+    weight, fineness, quantity), so an edit that changes nothing
+    melt-relevant adds no duplicate row. The caller commits."""
+    if item.status != "owned":
+        return None
+    result = melt_from_cache(db, item)
+    if result is None:
+        return None
+    latest_melt = next((e for e in item.estimates if e.source.startswith("melt:")), None)
+    if (
+        latest_melt is not None
+        and latest_melt.details
+        and all(latest_melt.details.get(key) == result.details.get(key) for key in _MELT_INPUT_KEYS)
+    ):
+        return None
+    _record_attempt(db, item, "melt", "ok", None)
+    return add_estimate(db, item, estimate_row(item.id, result))
 
 
 # Adapter registry. Sources are resolved lazily so each adapter module can
@@ -510,11 +558,13 @@ def resolve_display_value(
 
 def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     """Re-run melt estimates for owned items whose LATEST estimate is a melt
-    estimate older than max_age_days. Items whose latest estimate is manual are
-    left alone: a fresh melt value must never bury the user's own number.
-    An item that no longer qualifies (NotApplicable) counts as skipped.
-    Returns {"updated": n, "skipped": n, "failed": n}, plus "error" (the last
-    failure's message) when anything failed."""
+    estimate older than max_age_days, and for owned items with NO estimate at
+    all (P11, v0.31.0: a new bullion piece gets a value without a button
+    press). Items whose latest estimate is manual, or from another source,
+    are left alone: a fresh melt value must never bury the user's own number
+    or another source's. An item that doesn't qualify (NotApplicable) counts
+    as skipped. Returns {"updated": n, "skipped": n, "failed": n}, plus
+    "error" (the last failure's message) when anything failed."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
@@ -528,10 +578,8 @@ def refresh_melt_estimates(db: Session, max_age_days: int = 7) -> dict:
     )
     for item in items:
         latest = item.estimates[0] if item.estimates else None
-        if (
-            latest is None
-            or not latest.source.startswith("melt:")
-            or _as_utc(latest.fetched_at) > cutoff
+        if latest is not None and (
+            not latest.source.startswith("melt:") or _as_utc(latest.fetched_at) > cutoff
         ):
             skipped += 1
             continue

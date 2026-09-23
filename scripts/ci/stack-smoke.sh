@@ -276,7 +276,12 @@ import json, sys
 report = json.load(sys.stdin)
 assert isinstance(report["metals"], list), report
 assert report["history_start"] == "2024-03-02", report
+assert isinstance(report["skipped_items"], list), report
 '
+  # metal= is evaluated in Python, not SQL (P11, v0.31.0): a known metal
+  # answers, an unknown one is 422.
+  apif "$BASE/api/items?metal=silver" > /dev/null
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/items?metal=tin")" = 422
 
   # metrics: anonymous 401, a read token 403, a metrics token 404 while off,
   # then 200 once an admin session turns it on. Explicitly turned off first,

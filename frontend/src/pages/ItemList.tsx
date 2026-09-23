@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
-import { api, CollectionStats, ItemPage, money, photoUrl, PRIORITY_LABELS } from "../api";
+import {
+  api,
+  CollectionStats,
+  ItemPage,
+  METAL_LABELS,
+  money,
+  photoUrl,
+  PRIORITY_LABELS,
+} from "../api";
 import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
@@ -32,7 +40,7 @@ const ADVANCED_KEYS = [
 ];
 
 const FILTER_KEYS = [
-  "type", "status", "strike", "country", "year", "q", "tag", "set_id",
+  "type", "status", "strike", "country", "metal", "year", "q", "tag", "set_id",
   "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
   "fancy", "serial_trait", "target_reached",
 ] as const;
@@ -258,6 +266,16 @@ export default function ItemList() {
             <option value="coin">Coins</option>
             <option value="note">Notes</option>
             <option value="bullion">Bars and rounds</option>
+          </select>
+        </label>
+        <label className="field">
+          Metal
+          <select value={get("metal")} onChange={(e) => set("metal", e.target.value)}>
+            <option value="">All</option>
+            {Object.entries(METAL_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+            <option value="none">None detected</option>
           </select>
         </label>
         <label className="field">
