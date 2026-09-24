@@ -11,6 +11,9 @@ COPY frontend/. .
 RUN npm run build
 
 FROM nginx:1.31-alpine
+# Alpine's pending security updates (as the backend image applies Debian's),
+# so a CVE fixed in the repository (libexpat's, found by Trivy) isn't shipped.
+RUN apk upgrade --no-cache
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY proxy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY proxy/cabinet-proxy.conf proxy/cabinet-headers.conf proxy/cabinet-csp.conf /etc/nginx/cabinet/

@@ -56,6 +56,22 @@ Single sign-on (v0.33.0), in progress.
   Settings → Sign-in (providers, linked identities, the alert switches, and
   the exposure warning shared with Settings → Sharing); a line in the
   dashboard setup checklist pointing at the same exposure guidance.
+- Stage 5, the CI proof: a mock identity provider
+  (`scripts/ci/mock_idp.py`, CI only, from `docker-compose.ci.yml`, never in
+  a published image); a `sso` phase in `scripts/ci/stack-smoke.sh` that
+  configures a provider, links, signs in, refuses nine kinds of broken ID
+  token, a replayed callback, and an unlinked identity, confirms at the
+  provider, signs out there, raises and clears the credentials alert, then
+  switches the trusted-header mode on and signs in with an assertion sent
+  through real nginx; and `frontend/e2e/sso.spec.ts` for the same in a
+  browser (the sign-in buttons, a provider round trip, a confirm with no
+  replay, the proxy's button, unlinking).
+
+### Security
+- The proxy image applies Alpine's pending updates at build time (`apk
+  upgrade`), as the backend image already does Debian's, so a fix already
+  in Alpine's repository (today `libexpat`'s, flagged by Trivy) ships with
+  it.
 
 ## [0.32.2] - 2026-09-23
 

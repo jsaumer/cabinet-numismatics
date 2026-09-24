@@ -1,0 +1,36 @@
+# CI only (SPEC_0330 section 11): a mock identity provider beside the stack,
+# for scripts/ci/stack-smoke.sh's sso phase and frontend/e2e/sso.spec.ts.
+# The owner's stack never includes this file; CI layers it on with
+#   COMPOSE_FILE=docker-compose.yaml:docker-compose.ci.yml
+# (or `docker compose -f docker-compose.yaml -f docker-compose.ci.yml`).
+#
+# It runs scripts/ci/mock_idp.py in the backend image, which already holds
+# PyJWT and cryptography, so nothing is installed at run time. The backend
+# reaches it by service name (MOCK_IDP_ISSUER); a browser on the runner
+# reaches its authorize page through the published port
+# (MOCK_IDP_PUBLIC_URL). For a Playwright container on the compose network,
+# start it with MOCK_IDP_PUBLIC_URL=http://mock_idp:8555 instead.
+
+services:
+  mock_idp:
+    image: ghcr.io/jsaumer/cabinet-numismatics-backend:${TAG:-latest}
+    # The image `up --build` just built for the backend, never an older one
+    # pulled from GHCR (the released image may predate PyJWT).
+    pull_policy: never
+    entrypoint: ["python", "/mock/mock_idp.py"]
+    command: []
+    user: "1000:1000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MOCK_IDP_PORT=8555
+      - MOCK_IDP_ISSUER=http://mock_idp:8555
+      - MOCK_IDP_PUBLIC_URL=${MOCK_IDP_PUBLIC_URL:-http://localhost:8555}
+      - MOCK_IDP_CLIENT_ID=cabinet-ci
+      - MOCK_IDP_CLIENT_SECRET=cabinet-ci-secret
+      - MOCK_IDP_GITHUB_CLIENT_ID=cabinet-ci-github
+      - MOCK_IDP_GITHUB_CLIENT_SECRET=cabinet-ci-github-secret
+      - MOCK_IDP_TRUSTED_AUDIENCE=cabinet-gateway
+    volumes:
+      - ./scripts/ci:/mock:ro
+    ports:
+      - "8555:8555"

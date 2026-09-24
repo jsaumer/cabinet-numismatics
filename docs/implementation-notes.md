@@ -2527,6 +2527,104 @@ change here has to respect:
   other icon in the file; no brand asset is fetched and the CSP is
   unchanged. No new frontend dependency.
 
+### Stage 5: the CI proof
+
+`scripts/ci/mock_idp.py`, `docker-compose.ci.yml`, the smoke script's
+`sso` phase, `frontend/e2e/sso.spec.ts`, and the CI wiring; no application
+code changed. Rules a later change has to respect:
+
+- **The mock is CI tooling only.** It runs from the backend image (which
+  already carries PyJWT and cryptography) with `python /mock/mock_idp.py`
+  and `./scripts/ci` mounted read-only, so nothing is installed at run
+  time and nothing of it reaches a published image. `docker-compose.ci.yml`
+  adds only that service and is never part of the owner's stack. It sets
+  `pull_policy: never`: the service must use the image `up --build` just
+  built for the backend, not an older `latest` from GHCR (a released image
+  may predate PyJWT). The mock is standard library `http.server` plus
+  `jwt` and `cryptography`, one file, mirroring `tests/fake_idp.py`.
+- **Two hosts, on purpose.** The backend reaches the mock by service name
+  (`MOCK_IDP_ISSUER`, `http://mock_idp:8555`: the issuer, token, JWKS, and
+  end-session endpoints), while the discovery document's
+  `authorization_endpoint` is `MOCK_IDP_PUBLIC_URL`, the address a browser
+  can reach: `http://localhost:8555` on the CI runner, or
+  `http://mock_idp:8555` for a Playwright container on the compose
+  network. That is the same split a real deployment has (a browser-facing
+  authorize host, a backend-facing issuer). The smoke script never depends
+  on which one is set: it sends the authorize URL's query to
+  `MOCK_IDP_URL`, the mock as its own shell reaches it.
+- **The authorize page approves at once, as the current subject.** A
+  browser gets one "Approve" button (Playwright's single click); curl adds
+  `auto=1` and is redirected straight back. `auth_time` is now only when
+  the request carried `prompt=login`, otherwise an hour ago, so a confirm
+  that forgot `prompt=login` fails Cabinet's 120 s rule rather than passing
+  by accident. The callback carries `iss`, since the discovery document
+  advertises RFC 9207.
+- **`POST /control` makes the next answer misbehave, once.** The body sets
+  the subject and email the next authorize issues, and one `misbehave`
+  (`wrong_nonce`, `wrong_aud`, `extra_aud`, `expired`, `no_exp`,
+  `unknown_kid`, `alg_none`, `hs256`, `iss_mismatch` shape the next ID
+  token; `redirect_token` and `too_large` the next token answer;
+  `wrong_issuer_discovery` the next discovery document), used up by the
+  answer it changes. `GET /control` reads it, with the last end-session
+  request's query. `GET /mint` signs a trusted-header assertion (`sub`,
+  `aud`, `iss`, `exp` as seconds from now, any value at or below zero
+  already expired; `kid=ci-unknown` signs with a key the mock never
+  publishes, `alg=HS256` with the client secret).
+- **The GitHub kind is not round-tripped against the mock.** The `github`
+  preset's authorize, token, and profile URLs are fixed to github.com in
+  the backend (`sso_config.PRESETS`), and making them configurable to
+  reach a mock would be a backend change for CI's sake alone, so the smoke
+  phase proves the GitHub preset's configuration only (201,
+  `oauth2_profile`, `dry_run` 422) and its exchange stays pytest's
+  (`tests/fake_idp.py` plays GitHub at the real URLs through
+  `MockTransport`). The mock's GitHub mode (a second client id,
+  form-encoded token answers unless JSON is asked for, `GET /user`) is
+  there for the day that changes, and nothing uses it yet. The linked-
+  provider repointing refusal (R2-13) is proven on the OpenID Connect
+  provider instead, once it is linked.
+- **The `sso` phase switches the header mode on mid-run, and leaves it on.**
+  Its last step exports the four `TRUSTED_ASSERTION_*` variables and runs
+  `docker compose up -d backend proxy`, which recreates both (their
+  environment changed) with the compose files from `COMPOSE_FILE`: CI
+  exports `docker-compose.yaml:docker-compose.ci.yml` into `GITHUB_ENV`,
+  so every call in the job, the teardown included, sees both files with no
+  `-f`. The recreate also clears the backend's memory, the single sign-on
+  throttle included, which matters: the phase causes about 16 failed
+  callbacks from one address before it and 7 refused assertions after, and
+  the per-address map allows 20 in 15 minutes. It ends with the providers,
+  the provider identity, the header identity, and the mode all in place,
+  because Playwright runs next and uses them; so `trusted` (which expects
+  the mode off) fails after `sso` until the backend and proxy are recreated
+  without the variables, which a rerun of `sso` does first (it also
+  deletes the CI providers and header identity an earlier run left). The
+  failed discovery (`wrong_issuer_discovery`, through `dry_run`) is the
+  last provider check before the recreate, since a failed discovery is
+  remembered for a minute and would otherwise refuse the next sign-in.
+- **What stage 3 owed is proven here**: the header sign-in through real
+  nginx against an assertion the mock signs, the rendered include passing
+  exactly one header (`nginx -T` and the generated file), a doubled header
+  refused, a spoofed `X-authentik-meta-jwks` ignored, and `disable-sso`
+  taking effect with no restart. The live values from the owner's
+  Authentik (`alg`, `iss`, `aud`, `exp - iat`) still need the owner's
+  gateway.
+- **`sso.spec.ts` sorts after `smoke.spec.ts`**, whose last two tests
+  change the password and username and put them back, which revokes the
+  suite's shared `storageState` session. So the file uses no stored state
+  at all (`test.use({ storageState: { cookies: [], origins: [] } })`, as
+  `auth.spec.ts` does): the admin's pages sign in through the form, and
+  every sign-in round trip runs in a new `browser.newContext()` with
+  nothing carried over, as `share.spec.ts` opens a share link. The
+  trusted-header test's context sends the minted assertion with
+  `extraHTTPHeaders`, so Playwright needs no `TRUSTED_ASSERTION_*` value,
+  only `MOCK_IDP_URL`; without it the file skips itself. The confirm test
+  proves CR-20 in the browser: the change that opened the dialog is not
+  there when the provider sends the session back, and the same change goes
+  through with no dialog after it.
+- **The proxy image runs `apk upgrade --no-cache`** right after
+  `FROM nginx:1.31-alpine`, as the backend image applies Debian's pending
+  updates, so a CVE already fixed in Alpine's repository (Trivy flagged
+  `libexpat`'s) isn't shipped until the next nginx base image.
+
 ## Releases
 
 
