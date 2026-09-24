@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AppSettings, BackupList, Health } from "../api";
+import { EXPOSURE_GUIDANCE_URL } from "../auth/exposureWarning";
 
 export interface SetupCheck {
   key: string;
@@ -128,6 +129,17 @@ export function setupChecks(
       ),
     });
   }
+  list.push({
+    key: "exposure",
+    text: (
+      <>
+        <a href={EXPOSURE_GUIDANCE_URL} target="_blank" rel="noreferrer">
+          Read the exposure guidance
+        </a>
+        : Cabinet is for private networks.
+      </>
+    ),
+  });
   if (itemCount === 0) {
     list.push({
       key: "empty",

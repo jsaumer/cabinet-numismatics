@@ -1,12 +1,17 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react";
 
-import { api, ApiError, Me, setUnauthorizedHandler } from "../api";
+import { api, ApiError, AuthState, Me, setUnauthorizedHandler } from "../api";
+import { storeFailedNotice } from "./failedNotice";
 
 export type AuthStatus = "loading" | "restoring" | "setup" | "anon" | "authed";
 
 interface AuthContextValue {
   status: AuthStatus;
   me: Me | null;
+  /** The sign-in page's buttons (password, providers, trusted header): set
+   * once the boot check's GET /api/auth/state answers, null before that and
+   * while signed in (the sign-in page is the only reader). */
+  methods: AuthState["methods"] | null;
   /** Re-runs the boot check: after setup, after a successful sign-in, and
    * after anything that could change confirmed_until. */
   refresh: () => Promise<void>;
@@ -30,12 +35,15 @@ const RESTORE_RETRY_MS = 5000;
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [me, setMe] = useState<Me | null>(null);
+  const [methods, setMethods] = useState<AuthState["methods"] | null>(null);
 
   const check = useCallback(async () => {
+    let state: AuthState;
     try {
-      const state = await api.authState();
+      state = await api.authState();
       if (state.setup_required) {
         setMe(null);
+        setMethods(null);
         setStatus("setup");
         return;
       }
@@ -52,10 +60,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const who = await api.me({ raw: true });
       setMe(who);
+      setMethods(null);
       setStatus("authed");
+      // A single sign-on hands the failed-sign-ins notice over once here
+      // (R2-10): a password sign-in already stores it from LoginResult in
+      // pages/Login.tsx, so this only fires for oidc/trusted_header.
+      if (who.failed_since_previous != null && who.failed_since_previous > 0 && who.previous_sign_in_at) {
+        storeFailedNotice({ count: who.failed_since_previous, since: who.previous_sign_in_at });
+      }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         setMe(null);
+        setMethods(state.methods);
         setStatus("anon");
         return;
       }
@@ -84,16 +100,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    let redirect = "/login";
     try {
-      await api.logout();
+      const result = await api.logout();
+      if (result?.redirect) redirect = result.redirect;
     } catch {
       // Sign out locally regardless: the cookie may already be gone.
     }
-    window.location.href = "/login";
+    window.location.href = redirect;
   }, []);
 
   return (
-    <AuthContext.Provider value={{ status, me, refresh: check, signOut }}>
+    <AuthContext.Provider value={{ status, me, methods, refresh: check, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2445,6 +2445,88 @@ Rules a later change has to respect:
   log's live values from the owner's Authentik (`alg`, `iss`, `aud`,
   `exp - iat`), which need the owner's gateway.
 
+### Stage 4: the frontend
+
+No backend change: this stage codes against `GET /api/auth/state`'s
+`methods`, `GET /api/auth/me`'s `auth_method`/`confirm_methods`/
+`failed_since_previous`/`previous_sign_in_at`, and the admin's
+`/api/auth/signin-config`, `/api/auth/providers`, `/api/auth/identities/*`
+routes stages 2 and 3 already shipped (see `docs/api.md`). Rules a later
+change here has to respect:
+
+- **The provider buttons and the trusted-header button sit above the
+  password form, and the password form is always visible.** `pages/Login.tsx`
+  reads `methods` from `useAuth()` (`auth/AuthContext.tsx` exposes it from
+  the boot check's `GET /api/auth/state`, cleared once signed in); nothing
+  on this page ever redirects to a provider automatically, on purpose: the
+  page is where the password lives when a provider is down.
+- **The failed-sign-ins notice comes from two places now.** A password
+  sign-in still stores it from `LoginResult` in `pages/Login.tsx`;
+  `auth/AuthContext.tsx`'s `check()` also stores it from `GET /api/auth/me`'s
+  `failed_since_previous`/`previous_sign_in_at` (R2-10: a single sign-on's
+  redirect has no body to carry it, so the boot check's next `/me` is where
+  the frontend first sees it). Both write through the same
+  `auth/failedNotice.ts`, so `App.tsx`'s `FailedSignInsNotice` needs no
+  change.
+- **The confirm dialog's provider path navigates away and never replays.**
+  `auth/ConfirmDialog.tsx` offers "Confirm at your sign-in provider" only
+  when `GET /api/auth/me`'s `confirm_methods` includes `"provider"`
+  (fetched when the dialog opens), and sends the session back to the
+  provider `me.provider_id` names (added to `me` in this stage so the
+  dialog never has to guess from the admin's identity list). Choosing it
+  calls `GET /api/auth/oidc/start?intent=confirm`, marking `next` with
+  `ConfirmDialog.tsx`'s exported `CONFIRM_MARKER` first (a query parameter
+  the frontend invented, since the backend's `next` redirect on a
+  successful confirm carries no marker of its own): the pending promise
+  from before the navigation is deliberately abandoned (CR-20, R2-20), and
+  `App.tsx`'s `ConfirmReturnNotice`, mounted in the signed-in shell, reads
+  `confirm_error` or the marker once on the next render, shows the mapped
+  sentence or "Confirmed. Repeat the action you started.", and strips both
+  from the address bar. A delete-for-good or a restore is never re-run by
+  this; the owner presses the button again.
+- **One error-message map, three callers.** `auth/ssoErrors.ts`'s
+  `ssoErrorMessage(code)` turns a callback code into a sentence for
+  `pages/Login.tsx`'s `?error=`, `pages/settings/Signin.tsx`'s `?error=`
+  (a failed link), and `App.tsx`'s `ConfirmReturnNotice`'s `confirm_error`;
+  `state`, `cookie`, `expired`, `navigation`, and anything unrecognised
+  collapse into one generic "start again" sentence, since the visitor
+  doesn't need the technical distinction. Each page strips its own query
+  parameters after reading them, so a reload doesn't repeat a stale one.
+- **The exposure warning has one copy of its words.**
+  `auth/exposureWarning.ts`'s `EXPOSURE_WARNING` (SPEC_0330 section 12, Q16,
+  Q17) is read by `pages/settings/Signin.tsx`'s notice at the top of the
+  card and by `pages/settings/Sharing.tsx`'s own description; both link to
+  the same `EXPOSURE_GUIDANCE_URL` anchor in `docs/deployment.md` on GitHub
+  (written in stage 6). `components/setup.tsx`'s `setupChecks` gained one
+  more line linking to the same anchor, always present (it needs no
+  request, and Cabinet can't tell whether it's exposed, so nothing louder),
+  dismissed only with the rest of the setup card.
+- **`pages/settings/Signin.tsx` follows the v0.30.2 section shape**: one
+  `.card`, one h2 `Sign-in`, added to `SETTINGS_SECTIONS`
+  (`pages/settings/shared.tsx`) after `account` and to `SECTION_COMPONENTS`
+  (`pages/Settings.tsx`); the "every Settings section renders" Playwright
+  test (stage 5) will need the eighth h2. It fetches its own
+  `GET /api/auth/signin-config` (not `useSettings()`, which is for
+  `/api/settings`); every write goes through `req()` as usual so the
+  confirm dialog opens itself on a lapsed window.
+- **`auth/FreshLink.tsx`'s `ensureFresh()` is exported**, not just used
+  internally: Settings → Sign-in's "Link {provider}" links call it before
+  navigating to `GET /api/auth/oidc/start?intent=link`, since that route
+  needs a fresh session and would otherwise answer `reauth_required` to a
+  plain navigation that can't retry itself the way `req()` retries a JSON
+  call.
+- **Plain `<a>` links for every route that sets a cookie and redirects**
+  (`oidc/start`, both intents, and the provider buttons on the sign-in
+  page): never `fetch`, so the browser's own navigation carries the
+  redirect and the Set-Cookie through, the same reasoning `FreshLink.tsx`
+  already documented for downloads. `POST /api/auth/trusted` is the one
+  exception (no redirect involved), called through `api.trustedSignIn()`
+  like an ordinary `raw` request.
+- **The four provider icons** (`components/icons.tsx`: `GoogleIcon`,
+  `MicrosoftIcon`, `GitHubIcon`, `KeyIcon`) are drawn inline, matching every
+  other icon in the file; no brand asset is fetched and the CSP is
+  unchanged. No new frontend dependency.
+
 ## Releases
 
 

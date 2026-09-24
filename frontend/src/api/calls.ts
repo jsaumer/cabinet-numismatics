@@ -7,7 +7,7 @@ import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, Che
 import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
-import type { ApiToken, AuditEntry, AuthSession, AuthState, LoginResult, Me, NewApiToken, PasswordChangeResult, TokenScope } from "./types/auth";
+import type { ApiToken, AuditEntry, AuthSession, AuthState, DryRunResult, IdentitySummary, LoginResult, LogoutResult, Me, NewApiToken, PasswordChangeResult, ProviderBody, ProviderPatch, SavedProvider, SigninConfig, SigninConfigPatch, TokenScope } from "./types/auth";
 import type { NewShareLink, ShareChecklistView, ShareItem, ShareItemsPage, ShareLink, ShareLinkCreate, ShareLinkPatch, ShareManifest } from "./types/share";
 
 export const api = {
@@ -20,7 +20,7 @@ export const api = {
     req<Me>("/api/auth/setup", json("POST", payload), { raw: true }),
   login: (payload: { username: string; password: string }) =>
     req<LoginResult>("/api/auth/login", json("POST", payload), { raw: true }),
-  logout: () => req<void>("/api/auth/logout", { method: "POST" }),
+  logout: () => req<LogoutResult>("/api/auth/logout", { method: "POST" }),
   me: (opts?: ReqOptions) => req<Me>("/api/auth/me", undefined, opts),
   confirmPassword: (password: string) =>
     req<void>("/api/auth/confirm", json("POST", { password }), { raw: true }),
@@ -40,6 +40,32 @@ export const api = {
     if (params.before != null) q.set("before", String(params.before));
     q.set("limit", String(params.limit ?? 50));
     return req<AuditEntry[]>(`/api/auth/audit?${q}`);
+  },
+
+  // Single sign-on (v0.33.0): providers, linked identities, and the
+  // trusted-header mode, all under Settings -> Sign-in.
+  signinConfig: () => req<SigninConfig>("/api/auth/signin-config"),
+  putSigninConfig: (payload: SigninConfigPatch) =>
+    req<SigninConfig>("/api/auth/signin-config", json("PUT", payload)),
+  addProvider: (payload: ProviderBody) =>
+    req<DryRunResult | SavedProvider>("/api/auth/providers", json("POST", payload)),
+  changeProvider: (id: number, payload: ProviderPatch) =>
+    req<SavedProvider>(`/api/auth/providers/${id}`, json("PATCH", payload)),
+  deleteProvider: (id: number) => req<void>(`/api/auth/providers/${id}`, { method: "DELETE" }),
+  unlinkIdentity: (id: number) => req<void>(`/api/auth/identities/${id}`, { method: "DELETE" }),
+  linkTrustedHeader: () =>
+    req<IdentitySummary>("/api/auth/identities/trusted_header", { method: "POST" }),
+  /** No JSON body needed; an empty object is accepted. Raw: a 403/404/502
+   * here is shown on the sign-in page itself, not treated as "signed out". */
+  trustedSignIn: () =>
+    req<{ username: string }>("/api/auth/trusted", json("POST", {}), { raw: true }),
+
+  /** GET /api/auth/oidc/start?provider=...&next=...[&intent=...]: a plain
+   * navigation target, never fetched (the route sets a cookie and 302s). */
+  oidcStartUrl: (providerId: number, next: string, intent?: "login" | "link" | "confirm") => {
+    const q = new URLSearchParams({ provider: String(providerId), next });
+    if (intent) q.set("intent", intent);
+    return `/api/auth/oidc/start?${q}`;
   },
 
   listItems: (params: URLSearchParams) => req<ItemPage>(`/api/items?${params}`),

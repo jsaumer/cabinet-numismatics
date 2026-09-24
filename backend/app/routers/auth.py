@@ -257,6 +257,9 @@ class MeOut(BaseModel):
     scope: str | None
     confirmed_until: str | None
     auth_method: str | None = None
+    # The provider an `oidc` session signed in through, so the confirm
+    # dialog can send it back there without guessing (stage 4).
+    provider_id: int | None = None
     confirm_methods: list[str] = []
     # Once after an external sign-in, then null (R2-10).
     failed_since_previous: int | None = None
@@ -273,6 +276,7 @@ def auth_me(request: Request, db: DbSession = Depends(get_db)):
     who = principal(request)
     confirmed_until = None
     auth_method = None
+    provider_id = None
     confirm_methods = []
     failed = previous = None
     if who.kind == "session":
@@ -283,6 +287,8 @@ def auth_me(request: Request, db: DbSession = Depends(get_db)):
             auth_method = row.auth_method
             confirm_methods = ["password"]
             provider = _provider_of(db, row)
+            if provider is not None:
+                provider_id = provider.id
             if provider is not None and provider.enabled and oidc.qualifies_for_confirm(provider):
                 confirm_methods.append("provider")
             if row.notice_failed is not None:
@@ -298,6 +304,7 @@ def auth_me(request: Request, db: DbSession = Depends(get_db)):
         scope=who.scope,
         confirmed_until=confirmed_until,
         auth_method=auth_method,
+        provider_id=provider_id,
         confirm_methods=confirm_methods,
         failed_since_previous=failed,
         previous_sign_in_at=previous,

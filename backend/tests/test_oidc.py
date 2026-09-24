@@ -162,6 +162,7 @@ def test_sign_in_round_trip(provider, idp, sent):
     assert any(c.startswith("__Host-cabinet_oidc=") and "Max-Age=0" in c for c in cookies)
     me = b.get("/api/auth/me").json()
     assert me["auth_method"] == "oidc" and me["via"] == "session"
+    assert me["provider_id"] == provider
     assert me["confirm_methods"] == ["password", "provider"]
     signed = rejected("sign_in")[-1]
     assert signed == {"method": "oidc", "new_browser": True}

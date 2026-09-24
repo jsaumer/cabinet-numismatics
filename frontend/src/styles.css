@@ -1627,6 +1627,18 @@ main {
   margin-top: 0;
   font-size: 1.4rem;
 }
+/* A sign-in provider button (v0.33.0): a plain link styled as .button, icon
+   and name side by side, full width so several stack cleanly above the
+   password form. */
+.provider-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  text-decoration: none;
+}
 /* The confirm-password dialog: a narrower modal-body so it doesn't read as
    a full page over a small form. */
 .confirm-dialog {

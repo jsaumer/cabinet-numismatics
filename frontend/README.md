@@ -204,6 +204,74 @@ frontend's job is to make that unsurprising rather than working around it.
   `FailedSignInsNotice` reads and clears it once, right after the
   navigation that follows sign-in, and is dismissible.
 
+## Single sign-on (v0.33.0)
+
+`GET /api/auth/state`'s `methods` and `GET /api/auth/me`'s `auth_method`/
+`confirm_methods` (SPEC_0330 section 10) drive the sign-in page, the
+confirm dialog, and Settings → Sign-in; no backend change was needed for
+this stage.
+
+- **`pages/Login.tsx`**: reads `methods` off `useAuth()` (exposed by
+  `auth/AuthContext.tsx`, set from the boot check's `GET /api/auth/state`,
+  `null` once signed in). When any provider is enabled or the trusted
+  header is available, one plain `<a className="button provider-button">`
+  per provider (`/api/auth/oidc/start?provider=…&next=…`, a drawn icon per
+  preset from `components/icons.tsx`) and a "Continue with the proxy's
+  sign-in" button (`api.trustedSignIn()`, `POST /api/auth/trusted`) sit
+  **above** the password form; the password form is **always visible** and
+  nothing here ever redirects automatically to a provider. `?error=<code>`
+  is mapped to a sentence by `auth/ssoErrors.ts`'s `ssoErrorMessage` (shared
+  with Settings → Sign-in and the confirm-return notice) and stripped from
+  the address bar once shown.
+- **`auth/AuthContext.tsx`**: `check()` also stores the failed-sign-ins
+  notice from `GET /api/auth/me`'s `failed_since_previous`/
+  `previous_sign_in_at` when a single sign-on produced them (a password
+  sign-in already stores it from `LoginResult` in `Login.tsx`); `signOut()`
+  follows `POST /api/auth/logout`'s `{redirect}` (an `oidc` session with
+  "sign out there too" on) instead of always going to `/login`.
+- **`auth/ConfirmDialog.tsx`**: when `GET /api/auth/me`'s `confirm_methods`
+  includes `"provider"`, offers "Confirm at your sign-in provider", sending
+  the session back to the provider `me.provider_id` names (added to `me`
+  in this stage, so the dialog never guesses). Choosing it **navigates away** to
+  `GET /api/auth/oidc/start?intent=confirm` and marks `next` with
+  `auth/ConfirmDialog.tsx`'s `CONFIRM_MARKER` so the return can be told
+  apart from a plain page load, since a successful confirm's redirect
+  carries no marker of its own from the backend. **The pending action is
+  never replayed**: the promise from before the navigation is gone with
+  the page (CR-20, R2-20). `App.tsx`'s `ConfirmReturnNotice` (mounted in the
+  signed-in shell) reads `confirm_error` or the marker once, shows "Confirmed.
+  Repeat the action you started." or the mapped failure sentence, and strips
+  both from the URL.
+- **`auth/FreshLink.tsx`** exports `ensureFresh()` (previously private): a
+  plain link to a "fresh" route confirms the password first when the
+  5-minute window has lapsed. Settings → Sign-in's "Link {provider}" links
+  call it before navigating to `?intent=link`, since that route needs a
+  fresh session and would otherwise answer `reauth_required`.
+- **`pages/settings/Signin.tsx`** (new; `SETTINGS_SECTIONS` gains `signin`
+  after `account` in `pages/settings/shared.tsx`, and `SECTION_COMPONENTS`
+  in `pages/Settings.tsx`): one `.card`, one h2 `Sign-in`, in the shape
+  every other section follows (the "every Settings section renders" test
+  learns the eighth h2). The exposure notice at the top
+  (`auth/exposureWarning.ts`'s `EXPOSURE_WARNING`, the **one copy** of the
+  words, also used under Settings → Sharing's description) links to
+  `docs/deployment.md`'s exposure section on GitHub. Then a providers table
+  (enable/disable, inline edit, remove, each through `req()` so the
+  password dialog opens itself) and an "Add a provider" form (a preset
+  select, the fields the preset needs, and a "Test" button for OpenID
+  Connect presets that calls `POST /api/auth/providers` with `dry_run:
+  true`), the callback URLs to register at the provider, a linked-identities
+  table with "Link {provider}" per unlinked enabled provider and a
+  "Link the identity this proxy asserts" button when the trusted header is
+  configured and present on the request, and the two switches
+  (`password_sign_in_alerts`, `trusted_header_enabled`) through
+  `useSavedTick()`.
+- **The four provider icons** (`components/icons.tsx`): `GoogleIcon`,
+  `MicrosoftIcon`, `GitHubIcon`, and `KeyIcon` (the generic mark for a
+  custom OpenID Connect provider), drawn the same way as every other icon
+  here; no brand asset is fetched, and the CSP is unchanged.
+- **New files**: `auth/exposureWarning.ts`, `auth/ssoErrors.ts`,
+  `pages/settings/Signin.tsx`. No new dependency.
+
 ## Sharing (v0.32.0)
 
 A share link opens a read-only page for the collection, a set, or a

@@ -48,6 +48,14 @@ Single sign-on (v0.33.0), in progress.
   itself refused. nginx's access log now redacts the sign-in callback's
   query. The `TRUSTED_ASSERTION_*` and `SSO_CA_FILE` variables are in both
   compose files.
+- Stage 4, the frontend: sign-in buttons for every enabled provider and a
+  "Continue with the proxy's sign-in" button above the always-visible
+  password form, never an automatic redirect to a provider; the confirm
+  dialog offers "Confirm at your sign-in provider" when the session can
+  re-authenticate there, and never replays the action it interrupted;
+  Settings → Sign-in (providers, linked identities, the alert switches, and
+  the exposure warning shared with Settings → Sharing); a line in the
+  dashboard setup checklist pointing at the same exposure guidance.
 
 ## [0.32.2] - 2026-09-23
 
