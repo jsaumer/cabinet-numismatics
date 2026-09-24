@@ -2652,6 +2652,14 @@ section 19), no critical or high. Rules the fixes left:
 - **After a suspected compromise, check the linked identities first**
   (SR-05): they survive every command but `unlink-identity`; the docs say
   so, and the `identity_linked` alert is the tripwire.
+- **The CI mock is published on loopback only** (CX-01, Codex's release
+  review): `docker-compose.ci.yml` binds `127.0.0.1:8555:8555`, since the
+  mock approves anyone and signs assertions for whoever asks, and the
+  `sso` phase links its subject and leaves the header mode trusting its
+  keys. A LAN peer of a machine running the CI stack could otherwise sign
+  in to that stack through either flow. `tests/test_ci_tooling.py` pins
+  the binding; a Playwright container keeps reaching the mock by service
+  name over the compose network, which no published port is part of.
 - **The google preset accepts both documented issuer forms**
   (`oidc.accepted_issuers`: `https://accounts.google.com` and
   `accounts.google.com`), from the review's not-verified list; every other

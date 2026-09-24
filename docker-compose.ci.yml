@@ -32,5 +32,9 @@ services:
       - MOCK_IDP_TRUSTED_AUDIENCE=cabinet-gateway
     volumes:
       - ./scripts/ci:/mock:ro
+    # Loopback only (CX-01): the mock approves anyone as its current subject
+    # and signs assertions for whoever asks, so a peer on the host's LAN
+    # must never reach it. The runner's curl and browser use localhost; a
+    # Playwright container reaches it by service name over the network.
     ports:
-      - "8555:8555"
+      - "127.0.0.1:8555:8555"

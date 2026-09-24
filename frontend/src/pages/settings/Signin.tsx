@@ -622,7 +622,7 @@ function SwitchesCard({
         <SettingRow
           label="Trusted-header sign-in"
           htmlFor="sso-trusted-header"
-          help="disable-sso in the container turns this off; only this switch turns it back on."
+          help="Turning this off ends every session that signed in through the proxy, this one included if it did. disable-sso in the container turns it off too; only this switch turns it back on."
         >
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
             <input

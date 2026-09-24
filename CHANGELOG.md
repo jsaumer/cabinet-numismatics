@@ -120,6 +120,9 @@ should not be exposed to the internet**, under any sign-in configuration.
   Microsoft preset is never offered for a provider confirm (Entra issues
   `auth_time` only as an optional claim), and the header sign-in verifies
   before it throttles so a shared edge address can't keep the owner out.
+  A second outside review found the CI mock provider's port published on
+  every host interface; it now binds to loopback only (CI tooling, never
+  part of a published image or the owner's stack).
 - The proxy image now applies Alpine's pending updates at build time (`apk
   upgrade`), as the backend image already does Debian's, so a fix already
   in Alpine's repository (this release, `libexpat`'s, flagged by Trivy)
