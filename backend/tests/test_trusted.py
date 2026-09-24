@@ -356,6 +356,34 @@ def test_signin_config_reports_the_deployment(client, gateway):
     assert r.json()["trusted_header"]["link_ready"] is True
 
 
+def test_switching_header_mode_off_in_settings_ends_its_sessions(client, gateway):
+    """SR-01: the Settings switch ends every trusted_header session, as a
+    provider switched off ends its own; a password session is untouched."""
+    linked(client, gateway)
+    b = signed_in(gateway)
+    assert b.get("/api/auth/me").status_code == 200
+    r = client.put("/api/auth/signin-config", json={"trusted_header_enabled": False})
+    assert r.status_code == 200 and r.json()["trusted_header"]["enabled"] is False
+    assert b.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me").status_code == 200
+    rows = client.get("/api/auth/audit?limit=5").json()
+    row = next(r for r in rows if r["action"] == "sso_configured")
+    assert row["detail"]["sessions_ended"] == 1
+
+
+def test_header_failures_are_throttled_but_a_valid_assertion_is_not(client, gateway):
+    """SR-07: behind one edge address every client shares the failure map,
+    so the header sign-in is verified first and only a failure counts."""
+    from app.auth import throttle
+
+    linked(client, gateway)
+    for _ in range(25):
+        throttle.fail("oidc", "203.0.113.5")
+    anon = browser(**{"X-Real-IP": "203.0.113.5"})
+    assert anon.post(TRUSTED, headers={HEADER: "x.y.z"}).status_code == 429
+    assert anon.post(TRUSTED, headers={HEADER: gateway.assertion()}).status_code == 200
+
+
 def test_disable_sso_switches_header_mode_off(client, gateway):
     linked(client, gateway)
     b = signed_in(gateway)

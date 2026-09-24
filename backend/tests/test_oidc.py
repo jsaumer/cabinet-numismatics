@@ -812,6 +812,11 @@ def test_next_rules():
         "/api/backup.zip",
         "/s/x",
         "/photos/a.jpg",
+        "/./api/backup.zip",
+        "/x/../api/items",
+        "/%2e/api/x",
+        "/%2E%2E/s/x",
+        "/./photos/a",
         "e.x",
         "",
         None,
@@ -1022,6 +1027,48 @@ def test_put_signin_config(client, stale_client):
     r = client.put("/api/auth/signin-config", json={"trusted_header_enabled": False})
     assert r.json()["trusted_header"]["enabled"] is False
     assert client.put("/api/auth/signin-config", json={"other": 1}).status_code == 422
+
+
+def test_callback_inside_a_wait_exchanges_nothing(provider, idp):
+    """SR-02: an address inside its wait gets 429 before any request reaches
+    the provider's token endpoint."""
+    from app.auth import throttle
+
+    b = browser(**{"X-Real-IP": "203.0.113.5"})
+    r = start(b, provider)
+    posts = len([q for q in idp.requests if q.method == "POST"])
+    for _ in range(25):
+        throttle.fail("oidc", "203.0.113.5")
+    r = callback(b, idp.authorize(r.headers["location"]))
+    assert r.status_code == 429 and "retry-after" in r.headers
+    assert len([q for q in idp.requests if q.method == "POST"]) == posts
+
+
+def test_microsoft_preset_never_confirms(client, idp):
+    """SR-04: Entra advertises auth_time but issues it only as an optional
+    claim, so the provider confirm is never offered for that preset."""
+    from app.auth import config as sso_config
+
+    row = type("Row", (), {"kind": "oidc", "preset": "microsoft"})()
+    assert oidc.qualifies_for_confirm(row) is False
+    assert sso_config.PRESETS["microsoft"]["kind"] == "oidc"
+
+
+def test_jwks_failure_is_not_retried_for_a_minute(monkeypatch):
+    """SR-02: a key host that fails is left alone for JWKS_COOLDOWN."""
+    calls = []
+
+    def failing(method, url, **kwargs):
+        calls.append(url)
+        raise oidc.ProviderError("unreachable")
+
+    monkeypatch.setattr(oidc, "_fetch", failing)
+    oidc.reset_memory()
+    keys = oidc._jwks("https://keys.example.invalid/jwks")
+    for _ in range(3):
+        with pytest.raises(oidc.ProviderError):
+            keys.fetch_data()
+    assert len(calls) == 1
 
 
 def test_add_a_provider(client, idp, sent):

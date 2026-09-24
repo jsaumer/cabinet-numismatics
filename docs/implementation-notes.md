@@ -2625,6 +2625,34 @@ code changed. Rules a later change has to respect:
   updates, so a CVE already fixed in Alpine's repository (Trivy flagged
   `libexpat`'s) isn't shipped until the next nginx base image.
 
+### Stage 7: the security review's findings
+
+A fresh-context review found one medium and six low findings (SPEC_0330
+section 19), no critical or high. Rules the fixes left:
+
+- **Switching the trusted-header mode off in Settings ends its sessions**
+  (SR-01), like every other way of removing a way in: `put_signin_config`
+  calls `sessions.revoke_external(db, methods=("trusted_header",))` in the
+  same transaction and audits the count. A new switch that turns a sign-in
+  method off must do the same.
+- **The throttle is the bound on anonymous work** (SR-02): the callback
+  checks `throttle.wait("oidc", address)` after the flow cookie and before
+  the code exchange, answering 429 with nothing sent to the provider; and
+  `oidc._Keys` remembers a failed fetch for `JWKS_COOLDOWN`, so a key host
+  that hangs costs one timeout a minute, not one per request.
+- **The header sign-in verifies first and throttles only a failure**
+  (SR-07): behind an edge proxy every client shares nginx's peer address,
+  so a wait checked before verification would let any gateway user keep
+  the owner's sign-in at 429. The share view and the callback follow the
+  same resolve-first rule.
+- **`safe_next` refuses dot segments** (SR-03), plain or encoded, before
+  the prefix check. **The `microsoft` preset never qualifies for a provider
+  confirm** (SR-04). **The blocklists** gained `Proxy-Connection`, `TE`,
+  `Keep-Alive`, `Expect`, and `User-Agent` (SR-06), both sides at once.
+- **After a suspected compromise, check the linked identities first**
+  (SR-05): they survive every command but `unlink-identity`; the docs say
+  so, and the `identity_linked` alert is the tripwire.
+
 ### Stage 6: documentation and release
 
 - **One source, five verbatim copies.** The exposure advisory's short

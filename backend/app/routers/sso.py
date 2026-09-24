@@ -126,6 +126,12 @@ def _refused(code: str, detail: str) -> JSONResponse:
     return JSONResponse({"detail": detail, "code": code}, 403, headers=NO_STORE)
 
 
+class _Throttled(Exception):
+    def __init__(self, wait: float):
+        super().__init__("throttled")
+        self.wait = wait
+
+
 def _navigation(request: Request) -> bool:
     """A fetch or an image can't complete a sign-in: when the browser says
     what the request is, it must be a top-level document navigation."""
@@ -265,6 +271,10 @@ def oidc_callback(request: Request, db: DbSession = Depends(get_db)):
         provider = sso_config.provider(db, flow["provider_id"])
         if provider is None or not provider.enabled:
             raise oidc.FlowError("provider", "disabled")
+        # Inside a wait nothing is exchanged at the provider (SR-02): the
+        # throttle is the bound on the work an anonymous caller can cause.
+        if (wait := throttle.wait("oidc", client.address or "unknown")) > 0:
+            raise _Throttled(wait)
         try:
             found = oidc.complete(provider, flow, query)
         except oidc.CredentialsRejected:
@@ -277,6 +287,9 @@ def oidc_callback(request: Request, db: DbSession = Depends(get_db)):
             raise
         alerts.recover(db, alert_key(provider.id))
         response = INTENT_HANDLERS[flow["intent"]](db, request, client, provider, found, flow)
+    except _Throttled as exc:
+        db.rollback()
+        response = _too_many(exc.wait)
     except (oidc.FlowError, oidc.ProviderError) as exc:
         response = _failed(db, client, flow, provider, found, exc)
     sessions.clear_flow_cookie(response)
@@ -404,8 +417,11 @@ async def trusted_sign_in(request: Request, db: DbSession = Depends(get_db)):
         if not trusted.on(db, settings):
             db.rollback()
             return _not_found()
-        if (wait := throttle.wait("oidc", client.address or "unknown")) > 0:
-            return _too_many(wait)  # inside a wait, not even the keys are fetched
+        # Verified first, throttled only on failure (SR-07): behind one edge
+        # proxy every client shares nginx's peer address, so a wait checked
+        # before verification would let any gateway user keep the owner's
+        # own sign-in at 429. The key client's cooldown and negative cache
+        # bound the fetch work a failure can cause.
         try:
             found = trusted.verify(headers, settings)
         except trusted.TrustedRefused as exc:
@@ -583,19 +599,25 @@ class SigninConfigBody(BaseModel):
 @permission("admin", fresh=True)
 def put_signin_config(body: SigninConfigBody, request: Request, db: DbSession = Depends(get_db)):
     """The alert switch, and the one way to switch the trusted-header mode
-    back on after `disable-sso` (R2-02)."""
+    back on after `disable-sso` (R2-02). Switching the mode off ends every
+    `trusted_header` session (SR-01): removing a way in ends its sessions,
+    as a provider switched off does."""
     config = sso_config.get_config(db)
     changed = []
+    ended = 0
     for name in ("password_sign_in_alerts", "trusted_header_enabled"):
         value = getattr(body, name)
         if value is not None and getattr(config, name) != value:
             setattr(config, name, value)
             changed.append(name)
+            if name == "trusted_header_enabled" and value is False:
+                ended = sessions.revoke_external(db, methods=("trusted_header",))
     if changed:
         config.updated_at = common.now()
-        audit.record(
-            db, "sso_configured", actor_of(principal(request)), detail={"changed": changed}
-        )
+        detail = {"changed": changed}
+        if ended:
+            detail["sessions_ended"] = ended
+        audit.record(db, "sso_configured", actor_of(principal(request)), detail=detail)
     db.commit()
     if changed:
         notify.send(

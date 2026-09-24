@@ -402,6 +402,7 @@ FORBIDDEN_NAMES = [
     "Sec-Fetch-Site", "Sec-Fetch-Mode", "sec-fetch-dest", "Content-Length", "Content-Type",
     "Transfer-Encoding", "Connection", "Upgrade", "X-Real-IP", "x-real-ip",
     "X-Forwarded-For", "X-Forwarded-Proto", "x-forwarded-host", "Forwarded",
+    "Proxy-Connection", "TE", "Keep-Alive", "Expect", "User-Agent",
 ]  # fmt: skip
 
 

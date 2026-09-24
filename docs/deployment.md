@@ -569,6 +569,19 @@ configured providers, the linked identities, and which sign-in methods are
 currently on. All of the container commands take effect in the running
 backend immediately, with no restart needed.
 
+**After a suspected compromise of a provider account** (or of the gateway),
+check the linked identities before anything else: `status` in the
+container (or Settings → Sign-in) lists every identity, and anyone who held
+the provider account could have linked a second identity at another
+enabled provider, which survives `reset-password`, `sign-out-everywhere`,
+and `disable-sso` (linked identities are kept so the mode can be switched
+back on). Unlink every identity you don't recognise with `unlink-identity
+<id>`, then reset the password. The `identity_linked` alert through the
+webhook is the tripwire for that, so keep the webhook on. Switching the
+trusted-header mode off in Settings, switching a provider off, unlinking,
+and `disable-sso` each end the sessions that came through what was
+removed, at once.
+
 Provider ids and client secrets are **not included in a Cabinet backup**
 (they live in the `cabinet_auth` schema, alongside the admin account
 itself): restoring an archive onto a fresh machine means re-entering every
