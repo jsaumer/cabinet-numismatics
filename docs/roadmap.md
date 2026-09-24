@@ -32,11 +32,13 @@ once, values a toggle off by default, a checklist link showing filled slots
 only) shipped in v0.32.0; single sign-on (P8, A2: OpenID Connect, a GitHub
 button, and a trusted-header mode for a gateway that already
 authenticates, [SPEC_0330](specs/SPEC_0330.md)) shipped in v0.33.0.
-**What's next**: nothing is queued from Phase 7; the road to v1.0.0's
-remaining items (a CI check against breaking OpenAPI changes, "Add a run"
-and the Numista banknote mapping confirmed against a live account, and a
-README and quick-start pass) come next, alongside whatever entering the
-rest of the collection turns up.
+**What's next**: nothing is queued from Phase 7. The road to v1.0.0 is
+what remains, in this order: v0.33.0 validated on the owner's Swarm
+(Authentik, Google, and GitHub sign-in, the trusted-header mode, and an
+OpenVAS scan, per [live-validation.md](live-validation.md)); a CI check
+against a breaking OpenAPI change; "Add a run" and the Numista banknote
+mapping confirmed against a live account; then a README and quick-start
+pass, alongside whatever entering the rest of the collection turns up.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -829,14 +831,28 @@ if that changes.
 same day the owner chose the Phase 7 parity plan, which includes
 authentication, and authentication changes every endpoint, so it has to
 land before the API is declared stable. v1.0.0 therefore follows Phase 7's
-P8 (and the data-entry review, if that finds nothing structural). The
-checklist:
+P8 (and the data-entry review, if that finds nothing structural). With
+P8 complete in v0.33.0, what remains is validation and paperwork, no new
+capability; each unticked item below is a patch or minor release on its
+own, and 1.0.0 is cut when the list is ticked. The checklist:
 
 - ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
   a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single
   sign-on (A2: OpenID Connect, GitHub, and a trusted-header mode) **shipped
   in v0.33.0**, completing the checklist item.
 
+- **v0.33.0 validated live** on the owner's Swarm, the plan in
+  [live-validation.md](live-validation.md): the upgrade itself; sign-in
+  through Authentik, Google, and GitHub (the other presets as instances
+  allow); the trusted-header mode against the Authentik outpost, closing
+  the "owed to the owner's live check" list in SPEC_0330's build log
+  (the assertion's `alg`, `iss`, `aud`, and lifetime; a forged header
+  through and around the gateway; `prompt=login` and `auth_time`
+  behaviour); the recovery commands rehearsed on the local stack; and an
+  OpenVAS scan of the running instance, "Full and fast", from a fixed
+  address, with any Cabinet defect fixed in a patch release. Nothing
+  destructive is run against the live instance. Planned 24 September
+  2026, the day of the release.
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
 - "Add a run" confirmed against live Numista.
@@ -860,7 +876,13 @@ checklist:
   and the policy are in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
   sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
   where a PATCH would read better.
-- A CI check that fails on a breaking change to the OpenAPI schema.
+- A CI check that fails on a breaking change to the OpenAPI schema:
+  the committed `/api/openapi.json` of the last release compared with the
+  build's, failing on a removed path, operation, field, or enum value and
+  on a changed type, passing on additions; the stability policy in
+  `api.md` says which changes count. Small, and the last thing to add
+  before the API is declared stable, since from then on it is what stops
+  1.x from breaking a client by accident.
 - ✔ A CI upgrade test: a database from an old release migrated to head.
   **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
@@ -868,7 +890,13 @@ checklist:
   migration chains (the collection and `cabinet_auth`) reach head with the
   item intact.
 - A README and quick-start pass (the screenshots are current as of
-  v0.30.0).
+  v0.30.0; the sign-in page, Settings → Sign-in, and a share page are
+  new since), read as a stranger installing for the first time: the
+  exposure advisory first, then Compose in one sitting, then the Swarm
+  file. Last, so it describes the 1.0 build.
+- Then v1.0.0 itself: the version bump, a changelog entry that states
+  the API stability promise, a GitHub Release, and the `latest` images.
+  No code change of its own.
 
 In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
 the rest of the app until P8 A1 made it admin-only in v0.30.0. The share
