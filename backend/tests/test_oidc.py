@@ -1111,9 +1111,22 @@ def test_dry_run_saves_nothing(client, idp):
     assert r.json() == {
         "ok": True,
         "issuer": ISSUER,
+        "confirm": True,
         "claims_supported_auth_time": True,
         "prompt_login": True,
     }
+    # Authentik publishes auth_time but no prompt_values_supported at all;
+    # the dry run must answer what the sign-in will do (v0.33.2).
+    idp.discovery_extra = {"prompt_values_supported": None}
+    oidc.reset_memory()
+    r = client.post("/api/auth/providers", json={**body, "dry_run": True})
+    assert r.json()["confirm"] is True and r.json()["prompt_login"] is True
+    idp.discovery_extra = {"claims_supported": ["sub", "iss"]}
+    oidc.reset_memory()
+    r = client.post("/api/auth/providers", json={**body, "dry_run": True})
+    assert r.json()["confirm"] is False and r.json()["claims_supported_auth_time"] is False
+    idp.discovery_extra = {}
+    oidc.reset_memory()
     idp.discovery_issuer = "https://wrong.test"
     r = client.post("/api/auth/providers", json={**body, "dry_run": True})
     assert r.json() == {"ok": False, "issuer": ISSUER, "error": "issuer"}
