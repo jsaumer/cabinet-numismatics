@@ -2167,8 +2167,9 @@ has to respect:
   the one `oauth2_profile` preset, and a preset's fixed issuer and URLs
   come from `PRESETS`, never from a client. `enabled` changes only through
   `enable_provider`, which switches `password_sign_in_alerts` on (audited)
-  when a provider is enabled while none was (R2-17); nothing else ever
-  changes that switch automatically.
+  the first time any provider is ever enabled, remembered in
+  `auth_config.alerts_defaulted_at` so it happens once (R2-17, decision
+  10); nothing else ever changes that switch automatically.
 - **The header-name blocklist is `config.TRUSTED_HEADER_FORBIDDEN`**
   (R2-14): names nginx sets or the gate reads, lowercased, a trailing `-`
   meaning a prefix (`sec-fetch-`, `x-forwarded-`). Stage 3's proxy start

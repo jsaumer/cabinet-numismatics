@@ -127,6 +127,8 @@ def upgrade() -> None:
         sa.Column("id", sa.SmallInteger, primary_key=True, autoincrement=False),
         sa.Column("password_sign_in_alerts", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("trusted_header_enabled", sa.Boolean, nullable=False, server_default=sa.true()),
+        # When the first enabled provider switched the alerts on; set once.
+        _when("alerts_defaulted_at"),
         _when("updated_at", nullable=False, now=True),
         sa.CheckConstraint("id = 1", name="ck_auth_config_singleton"),
         schema=SCHEMA,

@@ -339,6 +339,14 @@ def test_first_provider_switches_alerts_on(db, owner):
     assert sso_config.get_config(db).password_sign_in_alerts is False
     rows = db.scalars(select(AuditEntry).where(AuditEntry.action == "sso_configured")).all()
     assert len(rows) == 1
+    # Every provider off, then one on again: still the owner's setting (once
+    # means once, decision 10).
+    first.enabled = second.enabled = False
+    db.commit()
+    sso_config.enable_provider(db, first, Actor.system())
+    db.commit()
+    assert sso_config.get_config(db).password_sign_in_alerts is False
+    assert sso_config.get_config(db).alerts_defaulted_at is not None
 
 
 def test_configuration_is_read_fresh_every_time(db, fresh):

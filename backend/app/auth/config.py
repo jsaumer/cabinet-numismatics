@@ -225,17 +225,19 @@ def update_provider(db: DbSession, row: AuthProvider, **changes) -> list[str]:
 
 
 def enable_provider(db: DbSession, row: AuthProvider, actor: Actor) -> None:
-    """Switch a provider on. The first one enabled while none was also turns
-    on the password sign-in alerts (R2-17, decision 10), audited; after that
-    the switch is left where the owner puts it. The caller commits."""
+    """Switch a provider on. The first provider ever enabled also turns on
+    the password sign-in alerts (R2-17, decision 10), audited, **once**:
+    `alerts_defaulted_at` remembers it, so the switch is left where the
+    owner puts it afterwards, even if every provider is later disabled and
+    one enabled again. The caller commits."""
     if row.enabled:
         return
     check_preset(row.kind, row.preset)
-    first = not providers(db, enabled_only=True)
     row.enabled = True
     row.updated_at = common.now()
-    if first:
-        config = get_config(db)
+    config = get_config(db)
+    if config.alerts_defaulted_at is None:
+        config.alerts_defaulted_at = common.now()
         if not config.password_sign_in_alerts:
             config.password_sign_in_alerts = True
             config.updated_at = common.now()
