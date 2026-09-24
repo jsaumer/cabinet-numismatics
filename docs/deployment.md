@@ -111,70 +111,6 @@ To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 
 ## 2. Exposure: Cabinet is for private networks
 
-Cabinet is intended for private use on private networks: a home LAN, a
-homelab, or a VPN you control. **Do not expose it to the internet.** That
-holds whatever else sits in front of it: not behind TLS alone, not behind
-single sign-on, not behind an authenticating gateway. None of those change
-the recommendation. No port forward on the router, no public DNS name
-pointing at it, and no "just for a while while I show someone": a port
-left open is a port left open.
-
-**To reach Cabinet from outside your network, use the network's own remote
-access**: a VPN (WireGuard, Tailscale, or your router's own built-in VPN)
-or an identity-aware tunnel that terminates before Cabinet, so that Cabinet
-itself is never reachable from the internet, only from inside the tunnel.
-That is how the owner's own deployment works: Cabinet sits behind Traefik
-and Authentik on the LAN, and the LAN itself is reached over a VPN.
-
-**Why this matters.** Cabinet has one admin account, and by design a
-password sign-in path with a single factor: a provider outage or a lost
-phone must never be able to lock the owner out of their own collection, so
-the password stays a working recovery credential no matter what else is
-configured. Single sign-on adds the identity provider's own multi-factor
-check to the provider's sign-in button; it does not add a second factor to
-that password path, which is the point of keeping it simple enough to
-recover from a shell. The sign-in itself is hardened (Argon2id password
-hashing, per-account and per-address throttles that only grow into a
-delay, a known-device cookie, alerts on a new device or provider), but
-none of that changes what one guessed or leaked password would hand over
-on an internet-facing instance: the whole collection, every item's storage
-location, and every attached document. Cabinet has no way to make a
-guessed password fail; a private network is what makes the guess
-impossible to attempt in the first place. Exposing any self-hosted service
-that holds personal records invites automated credential guessing,
-vulnerability scanning, and exploitation of any future defect, typically
-within hours of the port opening, not months.
-
-**What still applies inside the network.** None of this is a reason to
-skip the rest of the hardening this guide describes: TLS from a local
-certificate authority or your reverse proxy, so traffic on the LAN itself
-isn't plaintext; a long, random password kept in a password manager rather
-than memorised; the alert webhook and the "alert on every password
-sign-in" switch turned on, so a password sign-in becomes a tripwire rather
-than routine; and single sign-on with multi-factor authentication enabled
-at the provider for everyday use, so the password is rarely typed at all.
-
-**Share links are for people on your network or your VPN.** A share link
-(`/s/<token>`) is meant to be opened by someone who can already reach
-Cabinet: a family member on the LAN, or a guest on your VPN. It is never a
-reason to expose Cabinet itself to the internet, and exposing only the
-share paths through a gateway's path-based rule is not a recipe this
-project stands behind: it takes only one path rule written slightly too
-broadly, or one gateway update that changes how it matches paths, for the
-sign-in page to end up reachable as well. The forward-auth exemption
-described below is for a gateway that already sits inside your network,
-guarding an instance that is itself never reachable from the internet.
-
-**If you expose Cabinet to the internet anyway**, this document does not
-offer a "safe" recipe for doing so, because there is none the project
-stands behind. It says only this: the owner of such a deployment carries
-that risk themselves, and the project cannot see or control how Cabinet is
-deployed and takes no responsibility for an exposed instance. The least
-that should then be true is TLS terminated properly at the edge, single
-sign-on with multi-factor authentication enforced at the provider, an
-authenticating gateway in front of Cabinet's own sign-in, the alert
-webhook switched on, and a password no human has memorised.
-
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
 you control), not the open internet. Do not expose it directly to the
@@ -193,6 +129,49 @@ multi-factor authentication enforced at the provider, an authenticating
 gateway in front, the alert webhook switched on, and a password no human
 has memorised.
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+
+That paragraph is the whole recommendation, and it is repeated word for
+word in [security.md](security.md), the README, SECURITY.md, and
+`.env.example`. The rest of this section says why, and what to do
+instead.
+
+**Reaching Cabinet from outside.** Use the network's own remote access: a
+VPN (WireGuard, Tailscale, or the router's built-in one) or an
+identity-aware tunnel that terminates before Cabinet, so Cabinet itself is
+only ever reachable from inside. No port forward, no public DNS name
+pointing at it, and no "just for a while while I show someone": a port
+left open is a port left open. The owner's own deployment works this way:
+Cabinet sits behind Traefik and Authentik on the LAN, and the LAN is
+reached over a VPN.
+
+**Why the password path is the reason.** Cabinet has one admin account
+and, by design, a password sign-in with a single factor: a provider outage
+or a lost phone must never lock the owner out of their own collection, so
+the password stays a working recovery credential whatever else is
+configured. Single sign-on adds the provider's multi-factor check to the
+provider's button, not to that password. The sign-in is hardened (Argon2id
+hashing, per-account and per-address throttles, a known-device cookie,
+alerts on a new device or a password sign-in), but none of that changes
+what one guessed or leaked password hands over on an internet-facing
+instance: the whole collection, every storage location, every attached
+document. A private network is what makes the guess impossible to attempt.
+
+**What still applies inside the network.** TLS from a local certificate
+authority or your reverse proxy, so LAN traffic isn't plaintext; a long,
+random password kept in a password manager; the alert webhook and the
+"alert on every password sign-in" switch turned on, so a password sign-in
+becomes a tripwire rather than routine; and single sign-on with
+multi-factor authentication at the provider for everyday use, so the
+password is rarely typed at all.
+
+**Share links are for people on your network or your VPN.** A share link
+(`/s/<token>`) is meant for someone who can already reach Cabinet: a
+family member on the LAN, a guest on your VPN. Exposing only the share
+paths through a gateway's path-based rule is not a recipe this project
+stands behind: one path rule written slightly too broadly, or one gateway
+update that changes how paths match, and the sign-in page is reachable
+too. The forward-auth exemption described in section 4 is for a gateway
+that already sits inside your network.
 
 ## 3. Storage
 
@@ -757,26 +736,8 @@ exactly what a share link says: anyone holding the link can see what it
 shares, without signing in. Keep the switch off unless you mean to hand a
 link to someone; see [security.md](security.md#accounts-and-permissions)
 for what a link can and can't show. This is not, and is never meant to be,
-a way to expose Cabinet itself: see section 2 above.
+a way to expose Cabinet itself: section 2 applies unchanged.
 
-<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
-Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
-you control), not the open internet. Do not expose it directly to the
-internet, even behind TLS, single sign-on, or an authenticating gateway;
-reach it from outside through your own network's remote access instead,
-such as a VPN (WireGuard, Tailscale, or your router's own) or an
-identity-aware tunnel that terminates before Cabinet. Cabinet has one
-admin account and, by design, a password sign-in path with a single
-factor, so that a provider outage or a lost phone can never lock you out;
-exposing any self-hosted service that holds personal records invites
-automated credential guessing and vulnerability scanning within hours of
-the port opening. The project cannot see or control how Cabinet is
-deployed and takes no responsibility for an exposed instance. If you
-deploy it this way regardless, at minimum use TLS, single sign-on with
-multi-factor authentication enforced at the provider, an authenticating
-gateway in front, the alert webhook switched on, and a password no human
-has memorised.
-<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 ### Other proxies
 
