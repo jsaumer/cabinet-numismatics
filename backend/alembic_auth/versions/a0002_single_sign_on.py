@@ -138,6 +138,9 @@ def upgrade() -> None:
 
     with op.batch_alter_table("sessions", schema=SCHEMA) as batch:
         batch.add_column(sa.Column("identity_id", sa.Integer, nullable=True))
+        # The failed-sign-ins notice of an external sign-in, handed over once.
+        batch.add_column(sa.Column("notice_failed", sa.Integer, nullable=True))
+        batch.add_column(sa.Column("notice_since", sa.DateTime(timezone=True), nullable=True))
         batch.create_foreign_key(
             "fk_sessions_identity_id",
             "identities",
@@ -163,6 +166,8 @@ def downgrade() -> None:
     with op.batch_alter_table("sessions", schema=SCHEMA) as batch:
         batch.drop_index("ix_sessions_identity_id")
         batch.drop_constraint("fk_sessions_identity_id", type_="foreignkey")
+        batch.drop_column("notice_since")
+        batch.drop_column("notice_failed")
         batch.drop_column("identity_id")
 
     op.drop_table("auth_config", schema=SCHEMA)

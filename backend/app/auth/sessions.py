@@ -21,6 +21,8 @@ IDLE = timedelta(days=1)
 CONFIRM_WINDOW = timedelta(minutes=5)
 TOUCH_EVERY = timedelta(minutes=1)
 DEVICE_MAX_AGE = 7 * 24 * 3600
+BROWSER_MAX_AGE = 90 * 24 * 3600
+FLOW_MAX_AGE = 600
 
 
 def create(
@@ -179,6 +181,58 @@ def set_cookies(response, session_secret: str | None, device_secret: str | None)
             httponly=True,
             samesite="strict",
         )
+
+
+def browser_cookie_name() -> str:
+    """The new-browser alert's cookie (v0.33.0, R2-04): Lax, so it rides on a
+    provider's cross-site callback. It authenticates nothing."""
+    if get_settings().auth_insecure_http:
+        return "cabinet_browser"
+    return "__Host-cabinet_browser"
+
+
+def flow_cookie_name() -> str:
+    """The single sign-on flow cookie (v0.33.0): `Path=/`, since a `__Host-`
+    cookie with any other path is ignored by browsers (CR-06)."""
+    if get_settings().auth_insecure_http:
+        return "cabinet_oidc"
+    return "__Host-cabinet_oidc"
+
+
+def set_browser_cookie(response, secret: str | None) -> None:
+    if secret is None:
+        return
+    response.set_cookie(
+        browser_cookie_name(),
+        secret,
+        max_age=BROWSER_MAX_AGE,
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def set_flow_cookie(response, value: str) -> None:
+    response.set_cookie(
+        flow_cookie_name(),
+        value,
+        max_age=FLOW_MAX_AGE,
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def clear_flow_cookie(response) -> None:
+    response.delete_cookie(
+        flow_cookie_name(),
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def clear_cookies(response) -> None:

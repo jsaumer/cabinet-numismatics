@@ -2212,6 +2212,155 @@ has to respect:
 - `users.external_issuer`/`external_subject` and `uq_users_external` are
   gone (Q5): identities live in `identities`.
 
+### Stage 2: the provider backend
+
+`app/auth/oidc.py` (both kinds, by hand on httpx and PyJWT),
+`routers/sso.py` (the two flow routes and the configuration routes, under
+`/api/auth`), the changes to `state`, `me`, and `logout` in
+`routers/auth.py`, `accounts.start_external`, the `oidc` throttle map, and
+`tests/fake_idp.py` with `tests/test_oidc.py`. Rules a later change has to
+respect:
+
+- **The callback passes the gate with no lookup** (CR-01):
+  `gate.NO_LOOKUP` holds `GET /api/auth/oidc/callback` and is checked
+  after maintenance and the share prefix; the principal is `None`, no
+  session is read or touched, and no CSRF decision is made. The provider's
+  redirect back is a cross-site navigation carrying the Lax session cookie,
+  which the CSRF rule would refuse before routing, so link and confirm
+  could never finish. The handler reads the session itself with
+  `sessions.find` (never `touch`) and, for link and confirm, requires
+  `common.digest(cookie).hex()` to equal the `session` recorded in the flow
+  cookie (`_bound_session`). Nothing else may join `NO_LOOKUP` without the
+  same kind of binding. The start route is an ordinary `ANONYMOUS` pair: a
+  session sent with it is looked up, since link and confirm need it.
+- **The flow cookie** (`sessions.flow_cookie_name()`, `__Host-cabinet_oidc`
+  or `cabinet_oidc` under `AUTH_INSECURE_HTTP`) is `Path=/` (a `__Host-`
+  cookie with another path is ignored, CR-06), `HttpOnly`, `Secure`,
+  `SameSite=Lax` (the callback is a cross-site top-level navigation),
+  `Max-Age=600`. It is the app's Fernet (`crypto.get_cipher()`) over JSON:
+  `purpose` (`oidc_flow`, checked), `provider_id`, `state`, `nonce`,
+  `verifier`, `intent`, `next` (already `safe_next`), `session` (hex of the
+  session-secret hash, link and confirm only), `fresh`, `redirect_uri`
+  (so the token request sends exactly what the authorize request did),
+  `issued`. Read back with `ttl=600`; an older one is `expired`, anything
+  unreadable `cookie`. The callback clears it whatever happens.
+- **The mix-up rule**: the provider is the flow cookie's `provider_id`,
+  never a request parameter; `oidc.complete` refuses a provider row that
+  isn't the cookie's, and the code goes only to that provider's token
+  endpoint. A provider disabled or deleted mid-flow is `provider`.
+- **One use, on the server too** (CR-17): `oidc.consume` compares `state`
+  in constant time and keeps a per-process set of consumed state hashes
+  for ten minutes (bounded at `MAX_CONSUMED`, oldest out), so a captured
+  cookie and callback URL replay once at most.
+- **The ID token rules** (`verify_id_token`): the header's `alg` in
+  `ALGORITHMS` (RS256, PS256, ES256, EdDSA; never `none` or HMAC), an `oct`
+  key refused even when its `kid` matches, `exp`, `iat`, `iss`, `aud`, `sub`
+  required (PyJWT checks a claim only when present otherwise), 60 s leeway,
+  then **`aud` checked again by hand**: exactly the client id, or a list
+  holding it and nothing else (CR-14; PyJWT accepts extra audiences), `azp`
+  equal to the client id whenever present, the `nonce`, a non-empty `sub`,
+  and for a confirm an `auth_time` within 120 s (missing fails). `email`
+  and `preferred_username` come from the ID token only, for display; the
+  identity is `(provider_id, iss, sub)`. RFC 9207: when discovery
+  advertises `authorization_response_iss_parameter_supported`, the
+  callback's `iss` must equal the issuer.
+- **The GitHub kind** reads the profile's `id` as an integer (a string,
+  a boolean, or nothing is `profile`), asks the token endpoint for JSON
+  (GitHub answers form-encoded otherwise, which is refused as `not_json`),
+  treats any `error` in a token answer as a failure whatever the status,
+  compares `token_type` to `bearer` case-insensitively, and never confirms
+  (R2-11): `start` answers 403 `not_qualified` and the callback refuses a
+  confirm flow made by hand.
+- **Credentials rejected** (`invalid_client`, `unauthorized_client`, and
+  for `github` `incorrect_client_credentials`) raise
+  `oidc.CredentialsRejected`, which the callback turns into
+  `alerts.fail(db, "sso_provider_<id>", ...)`; the next exchange that gets
+  past the token endpoint calls `alerts.recover`. The key is a dynamic
+  condition: `alerts.is_condition` and `alerts.label` know the
+  `sso_provider_<id>` pattern, the Settings alert list and
+  `cabinet_alert_failing` include it, and deleting the provider drops its
+  state silently (`alerts.forget`).
+- **Outbound calls** go through `oidc._fetch` on `oidc._client()` (10 s, no
+  redirects followed, a redirect or a body over 64 KiB is a
+  `ProviderError`), with `oidc.ssl_context()`: certifi's roots plus
+  `SSO_CA_FILE` added, never in place of them (CR-11). The key client is
+  PyJWT's `PyJWKClient` subclassed so `fetch_data` uses the same `_fetch`
+  (so the same trust, limits, and test transport); an unknown `kid` refetches
+  at most once a minute (`cooldown_duration=60`). Tests replace
+  `oidc._client` with the fake's MockTransport client; nothing reaches the
+  network. No error message, audit detail, or log line carries a token, a
+  code, the client secret, or the flow cookie; the audit row of a failure
+  has `reason` (the redirect's code), `check` (which rule), `intent`, the
+  provider id, and any `sub`.
+- **The one cache**: each issuer's discovery document, in memory for a
+  day (`DISCOVERY_TTL`), a failed one for a minute (`DISCOVERY_RETRY`, so a
+  provider that is down can't hold every `GET /api/auth/me` for the full
+  timeout), and PyJWT's key cache. It is protocol data from the provider;
+  provider rows and `auth_config` are still read from the database on
+  every use (R2-01). `oidc.reset_memory()` clears it (conftest does, per
+  test).
+- **Callback origin** (CR-08): `oidc.callback_origin(Host)` picks the
+  `PUBLIC_ORIGINS` entry whose host is the request's `Host` (a top-level
+  GET carries no `Origin`), else the first https entry, else the first.
+  `POST` and `PATCH /api/auth/providers` refuse (409) while two entries
+  share a host (R2-07); startup only warns.
+- **`next`** (CR-15, R2-16): `oidc.safe_next` allows a path matching
+  `^/(?![/\\])[\x21-\x7e]*$` not beginning with `/api/`, `/photos/`, or
+  `/s/`, else `/`, checked at start before it enters the cookie; every
+  redirect is a `RedirectResponse`. Link outcomes land in
+  `/settings/signin` (`?linked=` or `?error=`), confirm outcomes on `next`
+  (with `confirm_error=` on failure), and only a sign-in uses
+  `/login?error=` (R2-09).
+- **Link rule** (R2-06): `oidc.check_link_subject` refuses a `sub` holding
+  `@` or equal to the token's `email` or `preferred_username` (`subject`).
+  An identity already linked, or a second identity at the same provider for
+  the user, is `already_linked`.
+- **The throttle map** (CR-09): `throttle.oidc_failure(address)` mirrors
+  `share_failure` in `throttle._oidc`, keyed like shares (IPv6 by /64),
+  20 free in 15 minutes, a global `OIDC_GLOBAL_PER_MINUTE` (300) failures,
+  evicting only among itself. The callback resolves first and calls it only
+  for a failed outcome; inside a wait it answers 429 with `Retry-After` and
+  counts nothing. `denied` (the user refused at the provider) is never
+  counted.
+- **Redaction** (CR-12): `main._RedactSecrets` (was `_RedactShareTokens`)
+  runs `share.redact` then `oidc.redact`, which turns any request target
+  beginning with `/api/auth/oidc/callback` (any query, a trailing slash, a
+  `HEAD`) into `/api/auth/oidc/callback?[redacted]`. nginx's `map` is stage
+  3's.
+- **The browser cookie** (R2-04): `browsers.issue` and `browsers.find`
+  (SHA-256 stored, 90 days, `last_seen_at` touched);
+  `sessions.set_browser_cookie` (`__Host-cabinet_browser`, Lax). Setup, a
+  password sign-in, and `accounts.start_external` issue one when the
+  browser brought no valid one; only `start_external` alerts on it (the
+  password sign-in keeps its device-based alert, now naming "with the
+  password"). It is read through `Client.browser` and never reaches
+  `devices`, `throttle`, or `_check_password`.
+- **`accounts.start_external`** is the only way an `oidc` (or, from stage
+  3, `trusted_header`) session starts: it revokes any session the browser
+  held, creates the session with `identity_id`, **issues no device cookie**
+  (CR-03: that cookie lifts the password throttles), sets
+  `identity.last_used_at` and `user.last_login_at`, audits `sign_in` with
+  `detail.method` and `detail.new_browser`, and keeps the failed-sign-ins
+  notice on the session.
+- **The notice columns** (R2-10): `sessions.notice_failed` and
+  `notice_since` (added to the unreleased `a0002`) hold the "N failed
+  sign-ins since your last visit" figures of an external sign-in, since a
+  303 has no body; `GET /api/auth/me` hands them over once and clears
+  them. A password sign-in still answers them in its own body and leaves
+  the columns empty.
+- **`GET /api/auth/me`'s `confirm_methods`** is `["password"]`, plus
+  `"provider"` on an `oidc` session whose provider is enabled and whose
+  discovery lists `auth_time` in `claims_supported` and, if it publishes
+  `prompt_values_supported`, `login` (`oidc.confirm_capable`, Q11).
+- **Logout at the provider** (Q7): an `oidc` session whose provider has
+  `logout_at_provider` and a discovery `end_session_endpoint` gets
+  `200 {"redirect": ...}` with `client_id` and
+  `post_logout_redirect_uri={origin}/login`, no `id_token_hint` (the token
+  isn't kept); anything else stays `204`.
+- **The appendix**: the eight routes are rows under "Single sign-on routes
+  (v0.33.0)" in SPEC_0300 (135 operations); `test_gate.ANONYMOUS` holds the
+  two flow pairs.
+
 ## Releases
 
 

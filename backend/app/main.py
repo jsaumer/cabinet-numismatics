@@ -34,6 +34,7 @@ from app.routers import (
     settings,
     share,
     share_links,
+    sso,
     stack,
     stats,
     trash,
@@ -62,17 +63,25 @@ def _configure_logging() -> None:
             named.addHandler(handler)
             named.setLevel(logging.INFO)
             named.propagate = False
-    # uvicorn's access log prints each path, and a share link's is its token.
-    logging.getLogger("uvicorn.access").addFilter(_RedactShareTokens())
+    # uvicorn's access log prints each path: a share link's is its token, and
+    # a sign-on callback's query holds the code and state.
+    logging.getLogger("uvicorn.access").addFilter(_RedactSecrets())
 
 
-class _RedactShareTokens(logging.Filter):
+def _redact(text: str) -> str:
+    """A share token (v0.32.0) and a sign-on callback's query (v0.33.0,
+    CR-12) taken out of a request target."""
+    from app.auth.oidc import redact as redact_callback
+    from app.services.share import redact as redact_share
+
+    return redact_callback(redact_share(text))
+
+
+class _RedactSecrets(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        from app.services.share import redact
-
         if isinstance(record.args, tuple):
-            record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
-        record.msg = redact(record.msg) if isinstance(record.msg, str) else record.msg
+            record.args = tuple(_redact(a) if isinstance(a, str) else a for a in record.args)
+        record.msg = _redact(record.msg) if isinstance(record.msg, str) else record.msg
         return True
 
 
@@ -266,6 +275,7 @@ app.add_middleware(AuthGate)
 app.add_middleware(MaintenanceMiddleware)
 
 app.include_router(auth.router)
+app.include_router(sso.router)
 
 app.include_router(health.router)
 app.include_router(items.router)

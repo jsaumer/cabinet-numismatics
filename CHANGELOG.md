@@ -20,6 +20,21 @@ Single sign-on (v0.33.0), in progress.
   every password sign-in once a provider is first switched on, and the
   container commands `unlink-identity <id>` and `disable-sso`, with
   `status` listing the providers, identities, and sign-in methods.
+- Stage 2, the provider backend: OpenID Connect sign-in (authorization code
+  with PKCE, `state`, and `nonce`; discovery; the ID token verified against
+  the provider's keys) and the GitHub preset (the numeric profile `id`), by
+  hand on httpx and PyJWT (a new dependency, pinned `>=2.14,<3`);
+  `GET /api/auth/oidc/start` and `/callback` for signing in, linking an
+  identity, and confirming a fresh action at the provider; the admin's
+  provider routes (`/api/auth/signin-config`, `/api/auth/providers`,
+  `/api/auth/identities/{id}`); `methods` on `GET /api/auth/state`, how the
+  session signed in and may confirm on `GET /api/auth/me`, and sign-out at
+  the provider when switched on. A provider rejecting Cabinet's client
+  credentials is an alert condition with recovery. The callback is passed
+  by the gate with no credential lookup, failed callbacks are throttled in
+  a map of their own, the callback's query is redacted from the access
+  log, and a new-browser cookie (no part in authentication or throttling)
+  decides the new-browser alert for every sign-in method. No frontend yet.
 
 ## [0.32.2] - 2026-09-23
 

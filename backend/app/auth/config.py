@@ -48,6 +48,8 @@ PRESETS: dict[str, dict] = {
         "subject_field": "id",  # a number, stable for the account's life
         "display_field": "login",  # can change; shown, never matched
         "scopes": "",  # the public profile needs none (CR-16)
+        # GitHub documents the client id and secret as form fields, not Basic.
+        "token_auth": "client_secret_post",
     },
     "custom": {
         "kind": "oidc",

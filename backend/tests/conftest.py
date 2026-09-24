@@ -65,7 +65,7 @@ def _private_paths(tmp_path_factory, monkeypatch):
 def _fresh_monitoring_state():
     """Alert outcomes, the metrics cache, the sign-in throttles, and the
     sharing switch live in memory, per process."""
-    from app.auth import audit, notify, throttle
+    from app.auth import audit, notify, oidc, throttle
     from app.services import alerts, metrics, restore, share
 
     alerts.reset_memory()
@@ -75,6 +75,7 @@ def _fresh_monitoring_state():
     throttle.clear()
     audit.reset_memory()
     notify.reset_memory()
+    oidc.reset_memory()
     yield
 
 
