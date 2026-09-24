@@ -30,6 +30,7 @@ def create(
     address: str | None = None,
     user_agent: str | None = None,
     method: str = "password",
+    identity_id: int | None = None,
 ) -> tuple[str, Session]:
     secret = common.new_secret()
     at = common.now()
@@ -37,6 +38,7 @@ def create(
         secret_hash=common.digest(secret),
         user_id=user.id,
         auth_method=method,
+        identity_id=identity_id,
         created_at=at,
         last_seen_at=at,
         expires_at=at + LIFETIME,
@@ -104,6 +106,37 @@ def revoke_all(db: DbSession, user_id: int) -> int:
         .values(revoked_at=common.now(), confirmed_until=None)
     )
     return result.rowcount or 0
+
+
+EXTERNAL = ("oidc", "trusted_header")
+
+
+def _revoke_where(db: DbSession, *conditions) -> int:
+    result = db.execute(
+        update(Session)
+        .where(Session.revoked_at.is_(None), *conditions)
+        .values(revoked_at=common.now(), confirmed_until=None)
+        .execution_options(synchronize_session="fetch")
+    )
+    return result.rowcount or 0
+
+
+def revoke_for_identities(db: DbSession, identity_ids) -> int:
+    """Every live session that came through one of these identities: run
+    before the identities are deleted, in the same transaction (CR-04)."""
+    ids = list(identity_ids)
+    if not ids:
+        return 0
+    return _revoke_where(db, Session.identity_id.in_(ids))
+
+
+def revoke_external(db: DbSession, user_id: int | None = None) -> int:
+    """Every live `oidc` and `trusted_header` session (of one account, or of
+    every account when `user_id` is None); password sessions stay."""
+    conditions = [Session.auth_method.in_(EXTERNAL)]
+    if user_id is not None:
+        conditions.append(Session.user_id == user_id)
+    return _revoke_where(db, *conditions)
 
 
 def live(db: DbSession, user_id: int) -> list[Session]:

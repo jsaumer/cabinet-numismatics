@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     # container-local file at start (never the state volume). Not with
     # BACKUP_KEY_FILE.
     backup_key: str = ""
+    # Single sign-on (v0.33.0). The trusted-header mode: the header carrying a
+    # gateway's signed JWT, where its public keys are, and the `iss` and `aud`
+    # it must carry. All four or none; see check_startup.
+    trusted_assertion_header: str = ""
+    trusted_assertion_jwks_url: str = ""
+    trusted_assertion_issuer: str = ""
+    trusted_assertion_audience: str = ""
+    # A PEM file of CA certificates added to the public roots, for a provider
+    # or gateway behind a local CA.
+    sso_ca_file: str = ""
 
     @property
     def sqlalchemy_url(self) -> str:
@@ -165,11 +175,112 @@ def supplied_setup_code(config: Settings) -> str | None:
     return None
 
 
+TRUSTED_HEADER_VARIABLES = {
+    "TRUSTED_ASSERTION_HEADER": "trusted_assertion_header",
+    "TRUSTED_ASSERTION_JWKS_URL": "trusted_assertion_jwks_url",
+    "TRUSTED_ASSERTION_ISSUER": "trusted_assertion_issuer",
+    "TRUSTED_ASSERTION_AUDIENCE": "trusted_assertion_audience",
+}
+TRUSTED_HEADER_NAME = re.compile(r"[A-Za-z][A-Za-z0-9-]{1,60}")
+# Headers nginx sets or the gate reads (R2-14), lowercased; a trailing `-`
+# is a prefix. The proxy's start script refuses the same list.
+TRUSTED_HEADER_FORBIDDEN = (
+    "host",
+    "cookie",
+    "authorization",
+    "origin",
+    "referer",
+    "sec-fetch-",
+    "content-length",
+    "content-type",
+    "transfer-encoding",
+    "connection",
+    "upgrade",
+    "x-real-ip",
+    "x-forwarded-",
+    "forwarded",
+)
+
+
+def forbidden_header(name: str) -> bool:
+    lowered = name.lower()
+    return any(
+        lowered.startswith(entry) if entry.endswith("-") else lowered == entry
+        for entry in TRUSTED_HEADER_FORBIDDEN
+    )
+
+
+def _check_trusted_header(config: Settings) -> None:
+    """All four TRUSTED_ASSERTION_* set, or none (the mode off)."""
+    values = {
+        name: getattr(config, attr).strip() for name, attr in TRUSTED_HEADER_VARIABLES.items()
+    }
+    missing = [name for name, value in values.items() if not value]
+    if len(missing) == len(values):
+        return
+    if missing:
+        raise ConfigError(
+            "The trusted-header mode needs all four TRUSTED_ASSERTION_* variables, or none; "
+            f"missing: {', '.join(missing)}. TRUSTED_ASSERTION_AUDIENCE may never be empty"
+        )
+    header = values["TRUSTED_ASSERTION_HEADER"]
+    if TRUSTED_HEADER_NAME.fullmatch(header) is None:
+        raise ConfigError(
+            f"TRUSTED_ASSERTION_HEADER {header!r} is not a header name: letters, digits, "
+            "and dashes, starting with a letter, at most 61 characters"
+        )
+    if forbidden_header(header):
+        raise ConfigError(
+            f"TRUSTED_ASSERTION_HEADER may not be {header!r}: nginx sets that header or "
+            "Cabinet reads it. Use the header your gateway puts its signed JWT in"
+        )
+    url = values["TRUSTED_ASSERTION_JWKS_URL"].lower()
+    if not (
+        url.startswith("https://") or (config.auth_insecure_http and url.startswith("http://"))
+    ):
+        raise ConfigError(
+            "TRUSTED_ASSERTION_JWKS_URL must be an https:// URL "
+            "(http:// only beside AUTH_INSECURE_HTTP)"
+        )
+
+
+def _check_ca_file(config: Settings) -> None:
+    if not config.sso_ca_file:
+        return
+    path = Path(config.sso_ca_file)
+    try:
+        with path.open("rb") as handle:
+            handle.read(1)
+    except OSError as exc:
+        raise ConfigError(
+            f"SSO_CA_FILE {config.sso_ca_file!r} cannot be read ({type(exc).__name__}); "
+            "it must be a file readable by the app's user"
+        ) from None
+
+
+def _shared_hosts(origins: list[str]) -> list[str]:
+    """Hosts listed more than once, whatever the scheme or port: nginx's
+    `$host` carries no port, and the callback origin is chosen by it (CR-08)."""
+    hosts = Counter(o.split("://", 1)[1].split(":", 1)[0] for o in origins)
+    return sorted(host for host, n in hosts.items() if n > 1)
+
+
 def check_startup(config: Settings) -> list[str]:
     """Validate the deployment settings before anything else starts. Raises
-    ConfigError naming the variable; returns warnings to log on every start."""
+    ConfigError naming the variable; returns warnings to log on every start.
+    Reads the environment and files only, never the database (R2-07), so a
+    setting can't crash-loop the backend out of reach of the recovery
+    commands."""
     origins = public_origins(config)
     warnings = []
+    _check_trusted_header(config)
+    _check_ca_file(config)
+    if shared := _shared_hosts(origins):
+        warnings.append(
+            f"PUBLIC_ORIGINS lists {', '.join(shared)} more than once: a "
+            "single sign-on callback can't tell those origins apart, so a provider can't "
+            "be saved while both are listed."
+        )
     if config.auth_insecure_http:
         if any(o.startswith("https://") for o in origins):
             raise ConfigError(
