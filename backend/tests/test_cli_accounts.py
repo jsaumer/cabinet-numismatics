@@ -65,6 +65,8 @@ COMMANDS = [
     ["revoke-tokens", "--name", "ci"],
     ["backup-key", "show"],
     ["backup-key", "rotate"],
+    ["unlink-identity", "1"],
+    ["disable-sso"],
 ]
 
 
@@ -136,7 +138,7 @@ def test_sign_out_everywhere(db, owner, capsys):
     assert sessions.find(db, owner.session_secret) is None
     tokens.authenticate(db, made)  # tokens have their own command
     (row,) = audited(db, "sessions_revoked_all")
-    assert row.actor_kind == "cli" and row.detail == {"sessions": 1, "devices": 1}
+    assert row.actor_kind == "cli" and row.detail == {"sessions": 1, "devices": 1, "browsers": 1}
 
 
 def test_revoke_tokens(db, owner, capsys):

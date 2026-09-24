@@ -35,7 +35,7 @@ def set_cookies(resp) -> dict[str, str]:
 
 def test_setup_claims_once(unclaimed_client):
     c = unclaimed_client
-    assert c.get("/api/auth/state").json() == {"setup_required": True}
+    assert c.get("/api/auth/state").json()["setup_required"] is True
     code = setup._code
     assert code and len(code) == 32  # 160 bits of base32
     body = {"code": setup.grouped(code).lower(), "username": "Owner", "password": PASSWORD}
@@ -43,7 +43,7 @@ def test_setup_claims_once(unclaimed_client):
     assert resp.status_code == 201 and resp.json() == {"username": "owner"}
     cookies = set_cookies(resp)
     assert SESSION in cookies and DEVICE in cookies
-    assert c.get("/api/auth/state").json() == {"setup_required": False}
+    assert c.get("/api/auth/state").json()["setup_required"] is False
     assert c.get("/api/items").status_code == 200  # signed in by the setup
     again = c.post("/api/auth/setup", json={**body, "username": "second"})
     assert again.status_code == 409 and again.json()["detail"] == "Cabinet is already set up."

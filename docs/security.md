@@ -6,8 +6,8 @@ This document records what that means concretely, what is protected and how,
 and what you must do before exposing the app more widely. Every route
 requires a sign-in or an API token (v0.30.0, roadmap Phase 7, P8 A1): one
 admin, database-backed sessions, scoped API tokens, and a deny-by-default
-gate. Single sign-on and a trusted-header mode (P8 A2) follow as v0.33.0,
-both before v1.0.0. See Authentication & network exposure below.
+gate. Single sign-on and a trusted-header mode (P8 A2) shipped in v0.33.0.
+See Authentication & network exposure below.
 
 ## Secrets at rest
 
@@ -154,10 +154,36 @@ that is an accepted gap.
 
 ## Authentication & network exposure
 
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
+you control), not the open internet. Do not expose it directly to the
+internet, even behind TLS, single sign-on, or an authenticating gateway;
+reach it from outside through your own network's remote access instead,
+such as a VPN (WireGuard, Tailscale, or your router's own) or an
+identity-aware tunnel that terminates before Cabinet. Cabinet has one
+admin account and, by design, a password sign-in path with a single
+factor, so that a provider outage or a lost phone can never lock you out;
+exposing any self-hosted service that holds personal records invites
+automated credential guessing and vulnerability scanning within hours of
+the port opening. The project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. If you
+deploy it this way regardless, at minimum use TLS, single sign-on with
+multi-factor authentication enforced at the provider, an authenticating
+gateway in front, the alert webhook switched on, and a password no human
+has memorised.
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+
+See [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)
+for the full advisory.
+
 **Every route needs a sign-in or an API token** (v0.30.0, roadmap Phase 7,
 P8 A1): one admin, database-backed sessions, scoped API tokens, and a
 deny-by-default gate checked before and after routing. Single sign-on and a
-trusted-header mode (A2) follow as v0.33.0. What shipped, in brief (the full
+trusted-header mode (A2) shipped in v0.33.0: OpenID Connect and a GitHub
+kind, and a gateway's signed assertion, both signing in as the same admin
+through a linked identity, with the local password kept as a working
+recovery credential and the second factor left entirely to the provider.
+What shipped, in brief (the full
 design is under "Accounts and permissions" below;
 [SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) is a
 plain-language walkthrough of setup, sign-in, and the break-glass reset):
@@ -171,7 +197,8 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
   has switched sharing on (see [api.md](api.md#sharing)); while it is off
   they answer the same 401 as any other path, from memory, so a closed
   instance looks like one without the feature. An authenticating
-  reverse proxy kept in front (below) guards everything by default too, so
+  reverse proxy kept in front (optional from v0.33.0, below) guards
+  everything by default too, so
   it needs `/s/`, `/api/share/`, and `/robots.txt` exempted from its own
   check, or it blocks share links Cabinet itself would answer; see
   [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
@@ -216,6 +243,48 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 - **Every archive is encrypted** with a backup key and carries a keyed MAC;
   see "What is *not* encrypted" above and
   [backup-restore.md](backup-restore.md).
+- **Single sign-on (v0.33.0).** OpenID Connect against any provider that
+  speaks it, plus a `github` kind that reads the identity from GitHub's
+  profile endpoint (GitHub has no ID token). The identity is always
+  `(issuer, subject)`, never an email; several providers can be enabled at
+  once, one button each. There is **no first-login claim**: an identity
+  that isn't already linked gets sent back with "sign in with your password
+  and link it in Settings," and an audit row. Linking happens only from a
+  signed-in, fresh session, in Settings → Sign-in. The provider's callback
+  passes the deny-by-default gate with no credential lookup at all (it is a
+  cross-site navigation back from the provider, which the CSRF rule would
+  otherwise refuse before routing), and is instead bound to the one-use
+  flow cookie that started the sign-in, itself Fernet-encrypted with a
+  10-minute lifetime. Provider rows and the sign-in configuration live in
+  `cabinet_auth`, never in a backup, and are re-read from the database on
+  every use, never cached, so a container command that disables a provider
+  takes effect on the very next request.
+- **Trusted header (v0.33.0).** A gateway already sitting in front of
+  Cabinet can assert an identity as a signed JWT in one header; Cabinet
+  verifies it against the gateway's own published keys, issuer, and
+  audience before it means anything, and nginx passes that one header
+  through only when the deployment names it, blanking every other identity
+  header as always. It is never automatic: the sign-in page offers one
+  button, and `GET /api/auth/state` reports only whether the mode is
+  configured, never reading or verifying the header itself. A stored switch
+  (on by default once the four variables are set) lets `disable-sso` in the
+  container turn the mode off without touching the environment.
+- **Second factor.** Cabinet builds no second factor of its own (no
+  passkeys, no TOTP, no recovery codes): the identity provider's own
+  multi-factor check is the second factor for a single sign-on or
+  trusted-header session, and the local password stays a one-factor
+  recovery path on purpose, so a provider outage or a lost phone can never
+  lock the owner out. `password_sign_in_alerts` (off, switched on the first
+  time any provider is enabled) alerts on every password sign-in, not only
+  a new device, as a tripwire on that fallback door.
+- **Recovery is always the container.** `reset-password`,
+  `sign-out-everywhere`, and `revoke-tokens` are unchanged; `unlink-identity
+  <id>` removes one linked identity and ends the sessions that came through
+  it, and `disable-sso` turns every provider and the trusted-header mode
+  off in one step for a configuration that locks the sign-in page itself.
+  The browser never sets a new password without the current one, on any
+  kind of session: a compromised provider account must never become a
+  changed Cabinet password.
 
 ### What this does and doesn't cover
 
@@ -230,16 +299,19 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 | **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |
 | **Supply chain.** A compromised dependency or base image | Hash-pinned lockfiles, `pip-audit`, `npm audit`, and Trivy image scans on every change and weekly (see Dependencies below); no runtime pip in the built image |
 | **Anyone who can read the container's environment or a Docker secret before the claim.** `docker service inspect`, Portainer, and Dozzle show environment variables (not secret contents) | `SETUP_CODE_FILE` (a Docker secret) over `SETUP_CODE` on a Swarm; the code is inert for good once the admin exists, so remove it from the stack file afterwards |
-| **A plain-text `Authorization: Bearer` header on the LAN.** Cabinet does not terminate TLS itself | Terminate TLS at a reverse proxy in front (section 3 of [deployment.md](deployment.md)); a token sent over plain HTTP is as exposed as a password would be |
+| **A plain-text `Authorization: Bearer` header on the LAN.** Cabinet does not terminate TLS itself | Terminate TLS at a reverse proxy in front (section 4 of [deployment.md](deployment.md)); a token sent over plain HTTP is as exposed as a password would be |
 | **A device shared with someone who already has the browser's own session or password manager unlocked** | The recent-password window narrows the blast radius for sensitive actions, but a shared, unlocked device is out of scope by design: use per-person devices, or end sessions from Settings, Account afterwards |
 
 ## Accounts and permissions
 
 **A1 shipped as v0.30.0**: one admin, database-backed sessions, scoped API
-tokens, and a deny-by-default gate. **A2 follows the share view, as v0.33.0**: OpenID
-Connect and a trusted-header mode for that same admin. This section
+tokens, and a deny-by-default gate. **A2 shipped after the share view, as
+v0.33.0**: OpenID Connect and a trusted-header mode for that same admin,
+with the provider's own multi-factor check as the second factor and the
+local password kept as a one-factor recovery credential. This section
 describes what A1 built; the contract, with a verdict on every review
-finding, is [SPEC_0300.md](specs/SPEC_0300.md).
+finding, is [SPEC_0300.md](specs/SPEC_0300.md). A2's contract, with its own
+two rounds of review, is [SPEC_0330.md](specs/SPEC_0330.md).
 
 Decided on 20 September 2026: the first cut is **one admin and nothing
 else**, onboarded when the app is initialised; the setup page asks for a
@@ -272,9 +344,18 @@ Decided on 21 September 2026, the details that shape the code:
 | API docs | The interactive `/api/docs` page is off; `/api/openapi.json` stays, for a signed-in session only |
 | Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
 | API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 7 days (a day by default); creating or revoking one needs the password, and creating one sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
+| Single sign-on (v0.33.0) | OpenID Connect against any provider that speaks it, plus a `github` kind reading GitHub's profile endpoint; identities keyed by `(issuer, subject)`, never by email. One identity per configured provider, linked from Settings on a fresh session only, never claimed on a first sign-in. The callback passes the gate with no credential lookup at all, protected instead by the one-use state held in an encrypted, short-lived flow cookie. Several providers can be enabled at once, one button each |
+| Trusted header (v0.33.0) | A gateway's signed assertion only, verified against a configured key set, issuer, and audience; the header is passed by nginx only when the deployment names it, and never trusted unverified. One click on the sign-in page, never automatic; a stored switch lets the container turn it off without an environment change |
+| Second factor (v0.33.0) | The identity provider's own, for a single sign-on or trusted-header session; Cabinet stores none of its own. The password is one factor and a recovery credential, hardened as above; `password_sign_in_alerts` (off, switched on once any provider is enabled) alerts on every password sign-in as a tripwire |
+| Recovery (v0.33.0) | `unlink-identity <id>` and `disable-sso` join `reset-password`, `sign-out-everywhere`, and `revoke-tokens` in the container. The browser never sets a new password without the current one, whatever kind of session asks: a compromised provider account must never become a changed Cabinet password. Linked identities survive every command but `unlink-identity`, so after a suspected compromise the first step is `status` and unlinking what isn't yours; the `identity_linked` alert is the tripwire. Removing a way in (a provider switched off or deleted, an identity unlinked, the trusted-header mode switched off in Settings, `disable-sso`) ends the sessions that came through it at once |
+| Failed single sign-on throttle (v0.33.0) | Failed callbacks and refused assertions are counted per address in a map of their own, apart from the password throttles. Behind an edge proxy or a Swarm ingress every client shares one address, so that map is in effect one bucket: a sign-in that verifies is therefore never throttled (the header sign-in verifies first and counts only a failure, as the share view resolves first), and a burst of failures from one gateway user slows other failures, not the owner's working sign-in. Inside a wait the callback exchanges nothing at the provider, and a key host that fails is left alone for a minute |
 
-It has to work **both** behind an authenticating proxy and directly exposed,
-because which of those the deployment uses is not decided. The table includes
+It has to work **both** behind an authenticating proxy and directly reachable
+on a private network, because which of those the deployment uses is the
+operator's choice, not Cabinet's; see
+[deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)
+for why "directly reachable" still means a private network, never the
+internet. The table includes
 the changes from four outside reviews on 21 September 2026, the last of them
 Codex's adversarial review; the contract, with a verdict on each finding, is
 [docs/specs/SPEC_0300.md](specs/SPEC_0300.md), and
@@ -524,7 +605,7 @@ Rules that go with the table:
   ask for, all with timeouts, and the price and rate lookups with cached
   fallbacks. The collection is never sent outward: a price source receives
   only the catalogue number, PCGS number or cert number, and grade being
-  looked up; the purchase-day lookup sends only a date and a metal code.
+  looked up; the purchase-day lookup sends only a date and a metal code. From v0.33.0, outbound requests also go to each configured single sign-on provider's discovery document, token endpoint, and key set, and to GitHub's profile endpoint for the `github` kind, and to a trusted-header gateway's key set: nothing beyond the protocol's own parameters (a code, a state value, a key id) ever leaves, and none of it carries collection data either.
 
 ## Containers and the browser
 

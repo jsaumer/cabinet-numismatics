@@ -270,6 +270,7 @@ test("every Settings section renders, with the version", async ({ page }) => {
     ["/settings/alerts", "Alerts & metrics"],
     ["/settings/sharing", "Sharing"],
     ["/settings/account", "Account"],
+    ["/settings/signin", "Sign-in"],
     ["/settings/about", "About"],
   ] as const) {
     await page.goto(path);

@@ -21,6 +21,8 @@ IDLE = timedelta(days=1)
 CONFIRM_WINDOW = timedelta(minutes=5)
 TOUCH_EVERY = timedelta(minutes=1)
 DEVICE_MAX_AGE = 7 * 24 * 3600
+BROWSER_MAX_AGE = 90 * 24 * 3600
+FLOW_MAX_AGE = 600
 
 
 def create(
@@ -30,6 +32,7 @@ def create(
     address: str | None = None,
     user_agent: str | None = None,
     method: str = "password",
+    identity_id: int | None = None,
 ) -> tuple[str, Session]:
     secret = common.new_secret()
     at = common.now()
@@ -37,6 +40,7 @@ def create(
         secret_hash=common.digest(secret),
         user_id=user.id,
         auth_method=method,
+        identity_id=identity_id,
         created_at=at,
         last_seen_at=at,
         expires_at=at + LIFETIME,
@@ -106,6 +110,38 @@ def revoke_all(db: DbSession, user_id: int) -> int:
     return result.rowcount or 0
 
 
+EXTERNAL = ("oidc", "trusted_header")
+
+
+def _revoke_where(db: DbSession, *conditions) -> int:
+    result = db.execute(
+        update(Session)
+        .where(Session.revoked_at.is_(None), *conditions)
+        .values(revoked_at=common.now(), confirmed_until=None)
+        .execution_options(synchronize_session="fetch")
+    )
+    return result.rowcount or 0
+
+
+def revoke_for_identities(db: DbSession, identity_ids) -> int:
+    """Every live session that came through one of these identities: run
+    before the identities are deleted, in the same transaction (CR-04)."""
+    ids = list(identity_ids)
+    if not ids:
+        return 0
+    return _revoke_where(db, Session.identity_id.in_(ids))
+
+
+def revoke_external(db: DbSession, user_id: int | None = None, methods=EXTERNAL) -> int:
+    """Every live `oidc` and `trusted_header` session (of one account, or of
+    every account when `user_id` is None; `methods` narrows it to one kind);
+    password sessions stay."""
+    conditions = [Session.auth_method.in_(tuple(methods))]
+    if user_id is not None:
+        conditions.append(Session.user_id == user_id)
+    return _revoke_where(db, *conditions)
+
+
 def live(db: DbSession, user_id: int) -> list[Session]:
     user = db.get(User, user_id)
     rows = db.scalars(
@@ -146,6 +182,58 @@ def set_cookies(response, session_secret: str | None, device_secret: str | None)
             httponly=True,
             samesite="strict",
         )
+
+
+def browser_cookie_name() -> str:
+    """The new-browser alert's cookie (v0.33.0, R2-04): Lax, so it rides on a
+    provider's cross-site callback. It authenticates nothing."""
+    if get_settings().auth_insecure_http:
+        return "cabinet_browser"
+    return "__Host-cabinet_browser"
+
+
+def flow_cookie_name() -> str:
+    """The single sign-on flow cookie (v0.33.0): `Path=/`, since a `__Host-`
+    cookie with any other path is ignored by browsers (CR-06)."""
+    if get_settings().auth_insecure_http:
+        return "cabinet_oidc"
+    return "__Host-cabinet_oidc"
+
+
+def set_browser_cookie(response, secret: str | None) -> None:
+    if secret is None:
+        return
+    response.set_cookie(
+        browser_cookie_name(),
+        secret,
+        max_age=BROWSER_MAX_AGE,
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def set_flow_cookie(response, value: str) -> None:
+    response.set_cookie(
+        flow_cookie_name(),
+        value,
+        max_age=FLOW_MAX_AGE,
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def clear_flow_cookie(response) -> None:
+    response.delete_cookie(
+        flow_cookie_name(),
+        path="/",
+        secure=not get_settings().auth_insecure_http,
+        httponly=True,
+        samesite="lax",
+    )
 
 
 def clear_cookies(response) -> None:

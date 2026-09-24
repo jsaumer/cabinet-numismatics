@@ -11,10 +11,14 @@ COPY frontend/. .
 RUN npm run build
 
 FROM nginx:1.31-alpine
+# Alpine's pending security updates (as the backend image applies Debian's),
+# so a CVE fixed in the repository (libexpat's, found by Trivy) isn't shipped.
+RUN apk upgrade --no-cache
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY proxy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY proxy/cabinet-proxy.conf proxy/cabinet-headers.conf proxy/cabinet-csp.conf /etc/nginx/cabinet/
 # Run by the image's entrypoint before nginx starts: writes the Host names
-# nginx answers from PUBLIC_ORIGINS and ALLOWED_HOSTS, and stops the
-# container on a bad value.
-COPY --chmod=755 proxy/40-cabinet-hosts.sh /docker-entrypoint.d/
+# nginx answers from PUBLIC_ORIGINS and ALLOWED_HOSTS, and the identity
+# header include (every gateway header blanked, bar the one
+# TRUSTED_ASSERTION_HEADER names), and stops the container on a bad value.
+COPY --chmod=755 proxy/40-cabinet-config.sh /docker-entrypoint.d/

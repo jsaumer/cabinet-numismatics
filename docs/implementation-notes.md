@@ -821,7 +821,8 @@ change must respect:
   through. Forwarded headers are overwritten, never appended; identity
   headers are set to `""` (not passed). The backend runs uvicorn with
   `--no-proxy-headers`, so it never rewrites the client from a header either.
-- **Host names.** `proxy/40-cabinet-hosts.sh` writes `server_name` from the
+- **Host names.** `proxy/40-cabinet-hosts.sh` (`40-cabinet-config.sh` from
+  v0.33.0) writes `server_name` from the
   hosts of `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (a union, so listing an
   internal name can't drop the public one); underscores are allowed
   (`cabinet_proxy`), `_` alone, ports, schemes, and wildcards are not. The
@@ -2125,6 +2126,573 @@ read was trusted once it looked clean. Rules:
   marker (so an upgrade doesn't re-run the pass), else the keys, which the
   route answers with the one 404 whether or not the file would look clean.
   `marker_exists()` still only asks whether the file is there.
+
+## Single sign-on (v0.33.0)
+
+Roadmap Phase 7, P8 A2, built to [SPEC_0330](specs/SPEC_0330.md) on
+`p8-auth-a2`, stage by stage.
+
+### Stage 1: data and configuration
+
+Migration `a0002` (the sign-in chain only; nothing in `public` changes),
+`app/auth/config.py`, `app/auth/browsers.py`, the trusted-header checks in
+`config.check_startup`, and the container commands. Rules a later change
+has to respect:
+
+- **Provider rows and `auth_config` are read from the database on every
+  use, never cached** (R2-01). `app/auth/config.py` is the one reader:
+  `providers`, `provider`, `get_config`, `trusted_header_on`. The container
+  commands write from another process, so a cache (module, `lru_cache`,
+  or app state) would keep a disabled provider's button, or the header
+  mode, alive until a restart. Don't add one.
+- **The trusted-header mode has a stored switch** (R2-02):
+  `trusted_header_on(db, settings)` is the four `TRUSTED_ASSERTION_*`
+  variables set **and** `auth_config.trusted_header_enabled`. Anything
+  that offers or honours the mode asks that function, never the variables
+  alone. `disable-sso` sets the switch false; only Settings (admin, fresh,
+  audited `sso_configured`) sets it back.
+- **Removing a way in revokes before it deletes, in one transaction**
+  (CR-04): `accounts.unlink_identity`, `accounts.delete_provider`, and
+  `accounts.disable_sso` revoke the matching live sessions
+  (`sessions.revoke_for_identities` by `sessions.identity_id`, or
+  `sessions.revoke_external` for every `oidc` and `trusted_header`
+  session), then delete, then audit, then commit; any failure rolls all of
+  it back. Password sessions are never touched. A new path that sets up an
+  `oidc` or `trusted_header` session must pass `identity_id` to
+  `sessions.create`, or these can't find it.
+- **A linked provider can't be repointed** (R2-13):
+  `config.update_provider` raises `ProviderLinked` when `issuer`,
+  `client_id`, `kind`, or `preset` would change on a provider an identity
+  is linked through (stage 2's route answers 409). The preset and kind
+  agree in code (`check_preset`) and in a check constraint; `github` is
+  the one `oauth2_profile` preset, and a preset's fixed issuer and URLs
+  come from `PRESETS`, never from a client. `enabled` changes only through
+  `enable_provider`, which switches `password_sign_in_alerts` on (audited)
+  the first time any provider is ever enabled, remembered in
+  `auth_config.alerts_defaulted_at` so it happens once (R2-17, decision
+  10); nothing else ever changes that switch automatically.
+- **The header-name blocklist is `config.TRUSTED_HEADER_FORBIDDEN`**
+  (R2-14): names nginx sets or the gate reads, lowercased, a trailing `-`
+  meaning a prefix (`sec-fetch-`, `x-forwarded-`). Stage 3's proxy start
+  script refuses the same list; change both together. `check_startup`
+  refuses a partial set of the four variables (naming the missing ones),
+  a bad header name, a JWKS URL that isn't `https://` (or `http://` beside
+  `AUTH_INSECURE_HTTP`), and an unreadable `SSO_CA_FILE`, and only warns
+  about two `PUBLIC_ORIGINS` with one host. **It never reads the database**
+  (R2-07), so no stored state can crash-loop the backend out of reach of
+  the recovery commands; `test_startup_never_reads_database` pins it.
+- **Rejected single sign-ons are capped apart** (R2-05):
+  `audit.REJECTED_SSO` (`sso_sign_in_rejected`) has its own 10,000 rows,
+  like `sign_in_failed`, trimmed as written, and both are left out of the
+  shared 50,000 (`audit._own_caps`); on stdout both are sampled per event
+  and name. `notify.rejected_sso` alerts 20 in 15 minutes, once an hour,
+  counted apart from password failures (`notify._burst`, one deque per
+  kind).
+- **`known_browsers` rows go with every "end everything"** (R2-04): a
+  password change, `reset-password`, and `sign-out-everywhere` delete the
+  account's rows (`browsers.revoke_all`), so the next sign-in from
+  anywhere alerts, and the hourly `accounts.prune` drops expired ones. The
+  cookie and its table have no part in authentication or throttling:
+  nothing in `devices`, `throttle`, or `_check_password` may read them.
+- **`password_sign_in`** is sent by `accounts.sign_in` when
+  `password_sign_in_alerts` is on, unless the new-device alert went out
+  for the same sign-in (it says more). The switch is read before the
+  sign-in's commit.
+- **The migration's portability.** The two checks are written as
+  `(a AND b) OR (NOT a AND NOT b)` rather than a boolean `=`, which SQLite
+  and Postgres would read differently; the two partial unique indexes
+  declare both `postgresql_where` and `sqlite_where` (tests build with
+  `create_all`); `users`' columns go through `op.batch_alter_table`; the
+  `auth_config` row is inserted with a typed `op.bulk_insert`, so
+  `--sql` renders it. The file was run up and down against SQLite with
+  `cabinet_auth` attached, and rendered for Postgres with `--sql`. Like
+  every auth migration, it may not name the collection's schema: the
+  `test_each_chain_stays_in_its_own_schema` grep now matches the word only
+  as a schema name (quoted, `public.x`, `schema=public`), so prose about a
+  public client doesn't trip it.
+- `users.external_issuer`/`external_subject` and `uq_users_external` are
+  gone (Q5): identities live in `identities`.
+
+### Stage 2: the provider backend
+
+`app/auth/oidc.py` (both kinds, by hand on httpx and PyJWT),
+`routers/sso.py` (the two flow routes and the configuration routes, under
+`/api/auth`), the changes to `state`, `me`, and `logout` in
+`routers/auth.py`, `accounts.start_external`, the `oidc` throttle map, and
+`tests/fake_idp.py` with `tests/test_oidc.py`. Rules a later change has to
+respect:
+
+- **The callback passes the gate with no lookup** (CR-01):
+  `gate.NO_LOOKUP` holds `GET /api/auth/oidc/callback` and is checked
+  after maintenance and the share prefix; the principal is `None`, no
+  session is read or touched, and no CSRF decision is made. The provider's
+  redirect back is a cross-site navigation carrying the Lax session cookie,
+  which the CSRF rule would refuse before routing, so link and confirm
+  could never finish. The handler reads the session itself with
+  `sessions.find` (never `touch`) and, for link and confirm, requires
+  `common.digest(cookie).hex()` to equal the `session` recorded in the flow
+  cookie (`_bound_session`). Nothing else may join `NO_LOOKUP` without the
+  same kind of binding. The start route is an ordinary `ANONYMOUS` pair: a
+  session sent with it is looked up, since link and confirm need it.
+- **The flow cookie** (`sessions.flow_cookie_name()`, `__Host-cabinet_oidc`
+  or `cabinet_oidc` under `AUTH_INSECURE_HTTP`) is `Path=/` (a `__Host-`
+  cookie with another path is ignored, CR-06), `HttpOnly`, `Secure`,
+  `SameSite=Lax` (the callback is a cross-site top-level navigation),
+  `Max-Age=600`. It is the app's Fernet (`crypto.get_cipher()`) over JSON:
+  `purpose` (`oidc_flow`, checked), `provider_id`, `state`, `nonce`,
+  `verifier`, `intent`, `next` (already `safe_next`), `session` (hex of the
+  session-secret hash, link and confirm only), `fresh`, `redirect_uri`
+  (so the token request sends exactly what the authorize request did),
+  `issued`. Read back with `ttl=600`; an older one is `expired`, anything
+  unreadable `cookie`. The callback clears it whatever happens.
+- **The mix-up rule**: the provider is the flow cookie's `provider_id`,
+  never a request parameter; `oidc.complete` refuses a provider row that
+  isn't the cookie's, and the code goes only to that provider's token
+  endpoint. A provider disabled or deleted mid-flow is `provider`.
+- **One use, on the server too** (CR-17): `oidc.consume` compares `state`
+  in constant time and keeps a per-process set of consumed state hashes
+  for ten minutes (bounded at `MAX_CONSUMED`, oldest out), so a captured
+  cookie and callback URL replay once at most.
+- **The ID token rules** (`verify_id_token`): the header's `alg` in
+  `ALGORITHMS` (RS256, PS256, ES256, EdDSA; never `none` or HMAC), an `oct`
+  key refused even when its `kid` matches, `exp`, `iat`, `iss`, `aud`, `sub`
+  required (PyJWT checks a claim only when present otherwise), 60 s leeway,
+  then **`aud` checked again by hand**: exactly the client id, or a list
+  holding it and nothing else (CR-14; PyJWT accepts extra audiences), `azp`
+  equal to the client id whenever present, the `nonce`, a non-empty `sub`,
+  and for a confirm an `auth_time` within 120 s (missing fails). `email`
+  and `preferred_username` come from the ID token only, for display; the
+  identity is `(provider_id, iss, sub)`. RFC 9207: when discovery
+  advertises `authorization_response_iss_parameter_supported`, the
+  callback's `iss` must equal the issuer.
+- **The GitHub kind** reads the profile's `id` as an integer (a string,
+  a boolean, or nothing is `profile`), asks the token endpoint for JSON
+  (GitHub answers form-encoded otherwise, which is refused as `not_json`),
+  treats any `error` in a token answer as a failure whatever the status,
+  compares `token_type` to `bearer` case-insensitively, and never confirms
+  (R2-11): `start` answers 403 `not_qualified` and the callback refuses a
+  confirm flow made by hand.
+- **Credentials rejected** (`invalid_client`, `unauthorized_client`, and
+  for `github` `incorrect_client_credentials`) raise
+  `oidc.CredentialsRejected`, which the callback turns into
+  `alerts.fail(db, "sso_provider_<id>", ...)`; the next exchange that gets
+  past the token endpoint calls `alerts.recover`. The key is a dynamic
+  condition: `alerts.is_condition` and `alerts.label` know the
+  `sso_provider_<id>` pattern, the Settings alert list and
+  `cabinet_alert_failing` include it, and deleting the provider drops its
+  state silently (`alerts.forget`).
+- **Outbound calls** go through `oidc._fetch` on `oidc._client()` (10 s, no
+  redirects followed, a redirect or a body over 64 KiB is a
+  `ProviderError`), with `oidc.ssl_context()`: certifi's roots plus
+  `SSO_CA_FILE` added, never in place of them (CR-11). The key client is
+  PyJWT's `PyJWKClient` subclassed so `fetch_data` uses the same `_fetch`
+  (so the same trust, limits, and test transport); an unknown `kid` refetches
+  at most once a minute (`cooldown_duration=60`). Tests replace
+  `oidc._client` with the fake's MockTransport client; nothing reaches the
+  network. No error message, audit detail, or log line carries a token, a
+  code, the client secret, or the flow cookie; the audit row of a failure
+  has `reason` (the redirect's code), `check` (which rule), `intent`, the
+  provider id, and any `sub`.
+- **The one cache**: each issuer's discovery document, in memory for a
+  day (`DISCOVERY_TTL`), a failed one for a minute (`DISCOVERY_RETRY`, so a
+  provider that is down can't hold every `GET /api/auth/me` for the full
+  timeout), and PyJWT's key cache. It is protocol data from the provider;
+  provider rows and `auth_config` are still read from the database on
+  every use (R2-01). `oidc.reset_memory()` clears it (conftest does, per
+  test).
+- **Callback origin** (CR-08): `oidc.callback_origin(Host)` picks the
+  `PUBLIC_ORIGINS` entry whose host is the request's `Host` (a top-level
+  GET carries no `Origin`), else the first https entry, else the first.
+  `POST` and `PATCH /api/auth/providers` refuse (409) while two entries
+  share a host (R2-07); startup only warns.
+- **`next`** (CR-15, R2-16): `oidc.safe_next` allows a path matching
+  `^/(?![/\\])[\x21-\x7e]*$` not beginning with `/api/`, `/photos/`, or
+  `/s/`, else `/`, checked at start before it enters the cookie; every
+  redirect is a `RedirectResponse`. Link outcomes land in
+  `/settings/signin` (`?linked=` or `?error=`), confirm outcomes on `next`
+  (with `confirm_error=` on failure), and only a sign-in uses
+  `/login?error=` (R2-09).
+- **Link rule** (R2-06): `oidc.check_link_subject` refuses a `sub` holding
+  `@` or equal to the token's `email` or `preferred_username` (`subject`).
+  An identity already linked, or a second identity at the same provider for
+  the user, is `already_linked`.
+- **The throttle map** (CR-09): `throttle.oidc_failure(address)` mirrors
+  `share_failure` in `throttle._oidc`, keyed like shares (IPv6 by /64),
+  20 free in 15 minutes, a global `OIDC_GLOBAL_PER_MINUTE` (300) failures,
+  evicting only among itself. The callback resolves first and calls it only
+  for a failed outcome; inside a wait it answers 429 with `Retry-After` and
+  counts nothing. `denied` (the user refused at the provider) is never
+  counted.
+- **Redaction** (CR-12): `main._RedactSecrets` (was `_RedactShareTokens`)
+  runs `share.redact` then `oidc.redact`, which turns any request target
+  beginning with `/api/auth/oidc/callback` (any query, a trailing slash, a
+  `HEAD`) into `/api/auth/oidc/callback?[redacted]`. nginx's `map` is stage
+  3's.
+- **The browser cookie** (R2-04): `browsers.issue` and `browsers.find`
+  (SHA-256 stored, 90 days, `last_seen_at` touched);
+  `sessions.set_browser_cookie` (`__Host-cabinet_browser`, Lax). Setup, a
+  password sign-in, and `accounts.start_external` issue one when the
+  browser brought no valid one; only `start_external` alerts on it (the
+  password sign-in keeps its device-based alert, now naming "with the
+  password"). It is read through `Client.browser` and never reaches
+  `devices`, `throttle`, or `_check_password`.
+- **`accounts.start_external`** is the only way an `oidc` (or, from stage
+  3, `trusted_header`) session starts: it revokes any session the browser
+  held, creates the session with `identity_id`, **issues no device cookie**
+  (CR-03: that cookie lifts the password throttles), sets
+  `identity.last_used_at` and `user.last_login_at`, audits `sign_in` with
+  `detail.method` and `detail.new_browser`, and keeps the failed-sign-ins
+  notice on the session.
+- **The notice columns** (R2-10): `sessions.notice_failed` and
+  `notice_since` (added to the unreleased `a0002`) hold the "N failed
+  sign-ins since your last visit" figures of an external sign-in, since a
+  303 has no body; `GET /api/auth/me` hands them over once and clears
+  them. A password sign-in still answers them in its own body and leaves
+  the columns empty.
+- **`GET /api/auth/me`'s `confirm_methods`** is `["password"]`, plus
+  `"provider"` on an `oidc` session whose provider is enabled and whose
+  discovery lists `auth_time` in `claims_supported` and, if it publishes
+  `prompt_values_supported`, `login` (`oidc.confirm_capable`, Q11).
+- **Logout at the provider** (Q7): an `oidc` session whose provider has
+  `logout_at_provider` and a discovery `end_session_endpoint` gets
+  `200 {"redirect": ...}` with `client_id` and
+  `post_logout_redirect_uri={origin}/login`, no `id_token_hint` (the token
+  isn't kept); anything else stays `204`.
+- **The appendix**: the eight routes are rows under "Single sign-on routes
+  (v0.33.0)" in SPEC_0300 (135 operations); `test_gate.ANONYMOUS` holds the
+  two flow pairs.
+
+### Stage 3: the trusted header and nginx
+
+`app/auth/trusted.py`, the two header routes in `routers/sso.py`
+(`POST /api/auth/trusted` and `POST /api/auth/identities/trusted_header`),
+`state`'s `trusted_header`, `signin-config`'s new fields, the proxy's start
+script renamed `proxy/40-cabinet-config.sh`, the generated
+`cabinet-identity.conf`, and the callback's redaction in nginx's access log.
+Rules a later change has to respect:
+
+- **The identity include is generated, not written.** The list of gateway
+  identity headers lives in `40-cabinet-config.sh` (`identity_headers`,
+  version 2: `X-Goog-IAP-JWT-Assertion` added, CR-18), which writes
+  `/etc/nginx/cabinet/cabinet-identity.conf` at start: every name set to
+  `""`, except the one `TRUSTED_ASSERTION_HEADER` names (compared without
+  case), written as `proxy_set_header <Name> $http_<name>;`. A name not on
+  the list is still passed on, and the script says so. `cabinet-proxy.conf`
+  includes the file, so every proxied location gets it. A new identity
+  header goes into the script's list, never into `cabinet-proxy.conf`.
+  `CABINET_NGINX_DIR` moves the output for the tests and the smoke script.
+- **A grep is not the proof.** nginx drops the inherited
+  `proxy_set_header` lines in any location that sets one of its own, so the
+  proof that a header is blanked is the rendered `nginx -T` and a request
+  through real nginx (the smoke script's `trusted` phase, and during the
+  build a throwaway echo backend behind the built image: with the mode off
+  none of the four spoofed headers arrived; with `X-authentik-jwt` only that
+  one did, and a repeated one arrived joined with `, `).
+- **Two forbidden lists, kept equal by a test.** The script's `forbidden`
+  and `app/config.py`'s `TRUSTED_HEADER_FORBIDDEN` (R2-14) name the same
+  headers (`*` in the script where the backend has a trailing `-`);
+  `test_script_and_backend_forbid_the_same_headers` parses the script. A
+  forbidden, malformed, or oversized name stops the proxy before nginx
+  starts, like a bad host.
+- **`state` never reads the header** (R2-03): `trusted_header:
+  {"available": true}` comes from `config.trusted_header_on` alone. The
+  assertion is read only by `trusted.verify`, called only by the two header
+  routes; `test_state_never_touches_jwks` replaces the key client with one
+  that fails. `signin-config`'s `link_ready` only asks whether the header is
+  present (`trusted.present`).
+- **The keys come only from the variable** (CR-05): `trusted.verify` uses
+  `oidc._jwks(TRUSTED_ASSERTION_JWKS_URL)`, the provider flows' key client
+  (10 s, no redirects, 64 KiB, `SSO_CA_FILE` trust, one refetch a minute),
+  never `X-authentik-meta-jwks` or any other request header.
+- **`iat` is not required** in an assertion, unlike an ID token: some
+  gateways leave it out, and `exp` bounds the replay. `exp`, `iss`, `aud`,
+  and `sub` are, with 60 s leeway; the `alg` must be one of
+  `oidc.ALGORITHMS` and the key never `oct`; `aud` is checked again by hand
+  (exactly the configured audience).
+- **A repeated header fails closed.** nginx joins repeats with `, `; the
+  verifier refuses whitespace, anything but three base64url parts, over
+  8 KiB, and (straight to the backend) more than one header line, each as
+  the one generic `TrustedRefused`, whose `check` word is all that reaches
+  the audit row. No part of an assertion reaches an exception message, a
+  log line, or an audit detail; a verified `sub` does, as for providers.
+- **Failures** are audited `sso_sign_in_rejected` with `reason`
+  (`assertion`, `unlinked`, `subject`), `check`, `intent` (`login` or
+  `link`), and `kind: trusted_header`, alerted in bursts
+  (`notify.rejected_sso`), and throttled per address in the `oidc` map
+  (`throttle.oidc_failure`); inside a wait the sign-in answers 429 before
+  the keys are fetched. Keys that can't be fetched are a 502 telling the
+  owner to use the password.
+- **The switch** (R2-02): both routes are the one 404 unless
+  `trusted_header_on`; `disable-sso` switches it off and revokes the
+  header's sessions; only `PUT /api/auth/signin-config` switches it back.
+  A header session starts through `accounts.start_external` (method
+  `trusted_header`, `identity_id` set, no device cookie, the browser's old
+  session revoked), so unlinking or `disable-sso` ends it.
+- **Linking** reads the assertion on the admin's own request (fresh
+  session), refuses a `sub` holding `@` or equal to its `email` or
+  `preferred_username` (R2-06, `subject`), and allows one header identity
+  per account and one account per `(issuer, subject)` (409
+  `already_linked`, the partial unique indexes backing it).
+- **nginx** has a `location = /api/auth/trusted` with the 8 KiB cap, like
+  sign-in and setup (the gate caps it by `Content-Length` too), and the
+  access log's `map` turns `/api/auth/oidc/callback` with anything after it
+  into `/api/auth/oidc/callback?[redacted]`. nginx's error log still
+  prints a failing request's line, query included; nothing in this stage
+  changes that.
+- **Stage 5 still owes** the header sign-in end to end through real nginx
+  against an assertion the mock provider signs (with
+  `TRUSTED_ASSERTION_HEADER` set on the CI stack), and the stage 3 build
+  log's live values from the owner's Authentik (`alg`, `iss`, `aud`,
+  `exp - iat`), which need the owner's gateway.
+
+### Stage 4: the frontend
+
+No backend change: this stage codes against `GET /api/auth/state`'s
+`methods`, `GET /api/auth/me`'s `auth_method`/`confirm_methods`/
+`failed_since_previous`/`previous_sign_in_at`, and the admin's
+`/api/auth/signin-config`, `/api/auth/providers`, `/api/auth/identities/*`
+routes stages 2 and 3 already shipped (see `docs/api.md`). Rules a later
+change here has to respect:
+
+- **The provider buttons and the trusted-header button sit above the
+  password form, and the password form is always visible.** `pages/Login.tsx`
+  reads `methods` from `useAuth()` (`auth/AuthContext.tsx` exposes it from
+  the boot check's `GET /api/auth/state`, cleared once signed in); nothing
+  on this page ever redirects to a provider automatically, on purpose: the
+  page is where the password lives when a provider is down.
+- **The failed-sign-ins notice comes from two places now.** A password
+  sign-in still stores it from `LoginResult` in `pages/Login.tsx`;
+  `auth/AuthContext.tsx`'s `check()` also stores it from `GET /api/auth/me`'s
+  `failed_since_previous`/`previous_sign_in_at` (R2-10: a single sign-on's
+  redirect has no body to carry it, so the boot check's next `/me` is where
+  the frontend first sees it). Both write through the same
+  `auth/failedNotice.ts`, so `App.tsx`'s `FailedSignInsNotice` needs no
+  change.
+- **The confirm dialog's provider path navigates away and never replays.**
+  `auth/ConfirmDialog.tsx` offers "Confirm at your sign-in provider" only
+  when `GET /api/auth/me`'s `confirm_methods` includes `"provider"`
+  (fetched when the dialog opens), and sends the session back to the
+  provider `me.provider_id` names (added to `me` in this stage so the
+  dialog never has to guess from the admin's identity list). Choosing it
+  calls `GET /api/auth/oidc/start?intent=confirm`, marking `next` with
+  `ConfirmDialog.tsx`'s exported `CONFIRM_MARKER` first (a query parameter
+  the frontend invented, since the backend's `next` redirect on a
+  successful confirm carries no marker of its own): the pending promise
+  from before the navigation is deliberately abandoned (CR-20, R2-20), and
+  `App.tsx`'s `ConfirmReturnNotice`, mounted in the signed-in shell, reads
+  `confirm_error` or the marker once on the next render, shows the mapped
+  sentence or "Confirmed. Repeat the action you started.", and strips both
+  from the address bar. A delete-for-good or a restore is never re-run by
+  this; the owner presses the button again.
+- **One error-message map, three callers.** `auth/ssoErrors.ts`'s
+  `ssoErrorMessage(code)` turns a callback code into a sentence for
+  `pages/Login.tsx`'s `?error=`, `pages/settings/Signin.tsx`'s `?error=`
+  (a failed link), and `App.tsx`'s `ConfirmReturnNotice`'s `confirm_error`;
+  `state`, `cookie`, `expired`, `navigation`, and anything unrecognised
+  collapse into one generic "start again" sentence, since the visitor
+  doesn't need the technical distinction. Each page strips its own query
+  parameters after reading them, so a reload doesn't repeat a stale one.
+- **The exposure warning has one copy of its words.**
+  `auth/exposureWarning.ts`'s `EXPOSURE_WARNING` (SPEC_0330 section 12, Q16,
+  Q17) is read by `pages/settings/Signin.tsx`'s notice at the top of the
+  card and by `pages/settings/Sharing.tsx`'s own description; both link to
+  the same `EXPOSURE_GUIDANCE_URL` anchor in `docs/deployment.md` on GitHub
+  (written in stage 6). `components/setup.tsx`'s `setupChecks` gained one
+  more line linking to the same anchor, always present (it needs no
+  request, and Cabinet can't tell whether it's exposed, so nothing louder),
+  dismissed only with the rest of the setup card.
+- **`pages/settings/Signin.tsx` follows the v0.30.2 section shape**: one
+  `.card`, one h2 `Sign-in`, added to `SETTINGS_SECTIONS`
+  (`pages/settings/shared.tsx`) after `account` and to `SECTION_COMPONENTS`
+  (`pages/Settings.tsx`); the "every Settings section renders" Playwright
+  test (stage 5) will need the eighth h2. It fetches its own
+  `GET /api/auth/signin-config` (not `useSettings()`, which is for
+  `/api/settings`); every write goes through `req()` as usual so the
+  confirm dialog opens itself on a lapsed window.
+- **`auth/FreshLink.tsx`'s `ensureFresh()` is exported**, not just used
+  internally: Settings → Sign-in's "Link {provider}" links call it before
+  navigating to `GET /api/auth/oidc/start?intent=link`, since that route
+  needs a fresh session and would otherwise answer `reauth_required` to a
+  plain navigation that can't retry itself the way `req()` retries a JSON
+  call.
+- **Plain `<a>` links for every route that sets a cookie and redirects**
+  (`oidc/start`, both intents, and the provider buttons on the sign-in
+  page): never `fetch`, so the browser's own navigation carries the
+  redirect and the Set-Cookie through, the same reasoning `FreshLink.tsx`
+  already documented for downloads. `POST /api/auth/trusted` is the one
+  exception (no redirect involved), called through `api.trustedSignIn()`
+  like an ordinary `raw` request.
+- **The four provider icons** (`components/icons.tsx`: `GoogleIcon`,
+  `MicrosoftIcon`, `GitHubIcon`, `KeyIcon`) are drawn inline, matching every
+  other icon in the file; no brand asset is fetched and the CSP is
+  unchanged. No new frontend dependency.
+
+### Stage 5: the CI proof
+
+`scripts/ci/mock_idp.py`, `docker-compose.ci.yml`, the smoke script's
+`sso` phase, `frontend/e2e/sso.spec.ts`, and the CI wiring; no application
+code changed. Rules a later change has to respect:
+
+- **The mock is CI tooling only.** It runs from the backend image (which
+  already carries PyJWT and cryptography) with `python /mock/mock_idp.py`
+  and `./scripts/ci` mounted read-only, so nothing is installed at run
+  time and nothing of it reaches a published image. `docker-compose.ci.yml`
+  adds only that service and is never part of the owner's stack. It sets
+  `pull_policy: never`: the service must use the image `up --build` just
+  built for the backend, not an older `latest` from GHCR (a released image
+  may predate PyJWT). The mock is standard library `http.server` plus
+  `jwt` and `cryptography`, one file, mirroring `tests/fake_idp.py`.
+- **Two hosts, on purpose.** The backend reaches the mock by service name
+  (`MOCK_IDP_ISSUER`, `http://mock_idp:8555`: the issuer, token, JWKS, and
+  end-session endpoints), while the discovery document's
+  `authorization_endpoint` is `MOCK_IDP_PUBLIC_URL`, the address a browser
+  can reach: `http://localhost:8555` on the CI runner, or
+  `http://mock_idp:8555` for a Playwright container on the compose
+  network. That is the same split a real deployment has (a browser-facing
+  authorize host, a backend-facing issuer). The smoke script never depends
+  on which one is set: it sends the authorize URL's query to
+  `MOCK_IDP_URL`, the mock as its own shell reaches it.
+- **The authorize page approves at once, as the current subject.** A
+  browser gets one "Approve" button (Playwright's single click); curl adds
+  `auto=1` and is redirected straight back. `auth_time` is now only when
+  the request carried `prompt=login`, otherwise an hour ago, so a confirm
+  that forgot `prompt=login` fails Cabinet's 120 s rule rather than passing
+  by accident. The callback carries `iss`, since the discovery document
+  advertises RFC 9207.
+- **`POST /control` makes the next answer misbehave, once.** The body sets
+  the subject and email the next authorize issues, and one `misbehave`
+  (`wrong_nonce`, `wrong_aud`, `extra_aud`, `expired`, `no_exp`,
+  `unknown_kid`, `alg_none`, `hs256`, `iss_mismatch` shape the next ID
+  token; `redirect_token` and `too_large` the next token answer;
+  `wrong_issuer_discovery` the next discovery document), used up by the
+  answer it changes. `GET /control` reads it, with the last end-session
+  request's query. `GET /mint` signs a trusted-header assertion (`sub`,
+  `aud`, `iss`, `exp` as seconds from now, any value at or below zero
+  already expired; `kid=ci-unknown` signs with a key the mock never
+  publishes, `alg=HS256` with the client secret).
+- **The GitHub kind is not round-tripped against the mock.** The `github`
+  preset's authorize, token, and profile URLs are fixed to github.com in
+  the backend (`sso_config.PRESETS`), and making them configurable to
+  reach a mock would be a backend change for CI's sake alone, so the smoke
+  phase proves the GitHub preset's configuration only (201,
+  `oauth2_profile`, `dry_run` 422) and its exchange stays pytest's
+  (`tests/fake_idp.py` plays GitHub at the real URLs through
+  `MockTransport`). The mock's GitHub mode (a second client id,
+  form-encoded token answers unless JSON is asked for, `GET /user`) is
+  there for the day that changes, and nothing uses it yet. The linked-
+  provider repointing refusal (R2-13) is proven on the OpenID Connect
+  provider instead, once it is linked.
+- **The `sso` phase switches the header mode on mid-run, and leaves it on.**
+  Its last step exports the four `TRUSTED_ASSERTION_*` variables and runs
+  `docker compose up -d backend proxy`, which recreates both (their
+  environment changed) with the compose files from `COMPOSE_FILE`: CI
+  exports `docker-compose.yaml:docker-compose.ci.yml` into `GITHUB_ENV`,
+  so every call in the job, the teardown included, sees both files with no
+  `-f`. The recreate also clears the backend's memory, the single sign-on
+  throttle included, which matters: the phase causes about 16 failed
+  callbacks from one address before it and 7 refused assertions after, and
+  the per-address map allows 20 in 15 minutes. It ends with the providers,
+  the provider identity, the header identity, and the mode all in place,
+  because Playwright runs next and uses them; so `trusted` (which expects
+  the mode off) fails after `sso` until the backend and proxy are recreated
+  without the variables, which a rerun of `sso` does first (it also
+  deletes the CI providers and header identity an earlier run left). The
+  failed discovery (`wrong_issuer_discovery`, through `dry_run`) is the
+  last provider check before the recreate, since a failed discovery is
+  remembered for a minute and would otherwise refuse the next sign-in.
+- **What stage 3 owed is proven here**: the header sign-in through real
+  nginx against an assertion the mock signs, the rendered include passing
+  exactly one header (`nginx -T` and the generated file), a doubled header
+  refused, a spoofed `X-authentik-meta-jwks` ignored, and `disable-sso`
+  taking effect with no restart. The live values from the owner's
+  Authentik (`alg`, `iss`, `aud`, `exp - iat`) still need the owner's
+  gateway.
+- **`sso.spec.ts` sorts after `smoke.spec.ts`**, whose last two tests
+  change the password and username and put them back, which revokes the
+  suite's shared `storageState` session. So the file uses no stored state
+  at all (`test.use({ storageState: { cookies: [], origins: [] } })`, as
+  `auth.spec.ts` does): the admin's pages sign in through the form, and
+  every sign-in round trip runs in a new `browser.newContext()` with
+  nothing carried over, as `share.spec.ts` opens a share link. The
+  trusted-header test's context sends the minted assertion with
+  `extraHTTPHeaders`, so Playwright needs no `TRUSTED_ASSERTION_*` value,
+  only `MOCK_IDP_URL`; without it the file skips itself. The confirm test
+  proves CR-20 in the browser: the change that opened the dialog is not
+  there when the provider sends the session back, and the same change goes
+  through with no dialog after it.
+- **The proxy image runs `apk upgrade --no-cache`** right after
+  `FROM nginx:1.31-alpine`, as the backend image applies Debian's pending
+  updates, so a CVE already fixed in Alpine's repository (Trivy flagged
+  `libexpat`'s) isn't shipped until the next nginx base image.
+
+### Stage 7: the security review's findings
+
+A fresh-context review found one medium and six low findings (SPEC_0330
+section 19), no critical or high. Rules the fixes left:
+
+- **Switching the trusted-header mode off in Settings ends its sessions**
+  (SR-01), like every other way of removing a way in: `put_signin_config`
+  calls `sessions.revoke_external(db, methods=("trusted_header",))` in the
+  same transaction and audits the count. A new switch that turns a sign-in
+  method off must do the same.
+- **The throttle is the bound on anonymous work** (SR-02): the callback
+  checks `throttle.wait("oidc", address)` after the flow cookie and before
+  the code exchange, answering 429 with nothing sent to the provider; and
+  `oidc._Keys` remembers a failed fetch for `JWKS_COOLDOWN`, so a key host
+  that hangs costs one timeout a minute, not one per request.
+- **The header sign-in verifies first and throttles only a failure**
+  (SR-07): behind an edge proxy every client shares nginx's peer address,
+  so a wait checked before verification would let any gateway user keep
+  the owner's sign-in at 429. The share view and the callback follow the
+  same resolve-first rule.
+- **`safe_next` refuses dot segments** (SR-03), plain or encoded, before
+  the prefix check. **The `microsoft` preset never qualifies for a provider
+  confirm** (SR-04). **The blocklists** gained `Proxy-Connection`, `TE`,
+  `Keep-Alive`, `Expect`, and `User-Agent` (SR-06), both sides at once.
+- **After a suspected compromise, check the linked identities first**
+  (SR-05): they survive every command but `unlink-identity`; the docs say
+  so, and the `identity_linked` alert is the tripwire.
+- **The CI mock is published on loopback only** (CX-01, Codex's release
+  review): `docker-compose.ci.yml` binds `127.0.0.1:8555:8555`, since the
+  mock approves anyone and signs assertions for whoever asks, and the
+  `sso` phase links its subject and leaves the header mode trusting its
+  keys. A LAN peer of a machine running the CI stack could otherwise sign
+  in to that stack through either flow. `tests/test_ci_tooling.py` pins
+  the binding; a Playwright container keeps reaching the mock by service
+  name over the compose network, which no published port is part of.
+- **The google preset accepts both documented issuer forms**
+  (`oidc.accepted_issuers`: `https://accounts.google.com` and
+  `accounts.google.com`), from the review's not-verified list; every other
+  provider's `iss` must equal its configured issuer exactly.
+
+### Stage 6: documentation and release
+
+- **One source, five verbatim copies.** The exposure advisory's short
+  "standard warning" paragraph lives once, in `docs/deployment.md`'s new
+  section 2, and is copied byte-for-byte (never paraphrased or shortened)
+  into `docs/security.md`, `README.md`, `SECURITY.md`, and `.env.example`,
+  each copy marked with the same `exposure-warning: copied verbatim`
+  comment before and after it (a `#` comment in `.env.example`, since HTML
+  comments don't apply there). A later change to the wording edits
+  `docs/deployment.md` and then re-copies it into the other four; a stage
+  6 style grep (`directly exposed`, `exposed`, `internet`, `WAN`,
+  `reachable from`, `until single sign-on`, `until v0.33.0`, `second door`)
+  over `docs/`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `.env.example`,
+  and `frontend/README.md` is what to rerun to catch a sentence that still
+  implies an exposed deployment is supported.
+- **Section 2 pushed every later `deployment.md` heading down by one**, so
+  every anchor link into a numbered heading (not a `###` subheading, whose
+  anchor is unaffected) had to be checked, not just the two that actually
+  changed number (`#2-storage` to `#3-storage`, and the TLS section's
+  anchor, which also changed text along with its number).
+- **The per-platform provider subsections are written "as of September
+  2026" and by intent**, not by exact console menu path: a provider's own
+  UI changes faster than this document does. Each says plainly what this
+  build actually verified against a live account (only the mock provider
+  and pytest's fake, for every platform except GitHub's kind, which was
+  also exercised against the mock's GitHub mode) and what still needs the
+  owner's own gateway or a real account, rather than presenting researched
+  quirks as confirmed behaviour.
 
 ## Releases
 

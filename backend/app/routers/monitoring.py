@@ -31,9 +31,9 @@ class AlertStatus(BaseModel):
 def alert_statuses(db: Session) -> list[AlertStatus]:
     """Every condition that has ever alerted, failing ones first."""
     rows = [
-        AlertStatus(key=key, label=alerts.CONDITIONS.get(key, key), **state)
+        AlertStatus(key=key, label=alerts.label(key), **state)
         for key, state in alerts.states(db).items()
-        if key in alerts.CONDITIONS
+        if alerts.is_condition(key)
     ]
     return sorted(rows, key=lambda r: (not r.failing, r.label))
 

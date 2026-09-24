@@ -12,8 +12,8 @@ Contributions that keep it simple are very welcome.
   scope, what's built, and what's deliberately deferred are all recorded
   there. Opening an issue before a large PR saves everyone time. Cabinet now
   has its own sign-in (one admin, scoped API tokens; roadmap Phase 7, P8
-  A1); single sign-on (P8 A2) is next. Talk to us before starting on
-  authentication work.
+  A1) and single sign-on (OpenID Connect, GitHub, and a trusted-header
+  mode; P8 A2, v0.33.0). Talk to us before starting on authentication work.
 - **Questions**: open a discussion or issue; there's no separate forum.
 
 ## Development setup
@@ -144,9 +144,11 @@ and data migrations.
   3.10 (the floor in `pyproject.toml`) and 3.14 (what the image runs).
 - **frontend**: `npm ci` and `npm run build` (typecheck and build) on
   Node 22.
-- **stack**: builds and starts the compose stack, then runs
-  `scripts/ci/stack-smoke.sh` (`bootstrap`, `smoke`, `outside-in`,
-  `backup-restore`, `restore-drill`, `photos`, in that order) through the
+- **stack**: builds and starts the compose stack with the CI-only mock
+  identity provider beside it (`COMPOSE_FILE=docker-compose.yaml:docker-compose.ci.yml`),
+  then runs `scripts/ci/stack-smoke.sh` (`bootstrap`, `smoke`, `outside-in`,
+  `backup-restore`, `restore-drill`, `photos`, `share`, `trusted`, `sso`,
+  in that order) through the
   proxy: bootstrap signs in and mints tokens; smoke covers create, trash,
   restore, permanent delete, settings, metrics, the test alert; outside-in
   checks every anonymous route is refused, each token's scope holds (read,
@@ -155,7 +157,18 @@ and data migrations.
   audit log; backup-restore and restore-drill rehearse an in-app backup,
   `scripts/restore.sh`, and an in-app restore, each checking the admin
   password and the write token still work afterwards; photos checks nginx's
-  `auth_request` gate. Then Playwright runs against the same stack. The
+  `auth_request` gate; share checks the public share view; trusted checks,
+  with the trusted-header mode off, that its routes answer 404, that no
+  gateway identity header reaches the backend, that the proxy's start
+  script renders the identity include (and refuses a header nginx sets),
+  and that a sign-in callback's code never reaches a log; sso signs in
+  through the mock provider (`scripts/ci/mock_idp.py`): configure, link,
+  sign in, a refused unlinked identity, nine kinds of broken ID token, a
+  replayed callback, a confirm at the provider, sign-out there, and the
+  credentials alert, then switches the trusted-header mode on (recreating
+  the backend and proxy) and signs in with an assertion sent through real
+  nginx, and leaves the mode on. Then Playwright runs against the same
+  stack, `e2e/sso.spec.ts` last, using what the sso phase configured. The
   script runs the same way locally, and locally it also has a `race` phase
   (two concurrent `POST /api/auth/setup` calls on a fresh stack must leave
   exactly one `201` and one `409`; it skips itself with a message on a stack
@@ -195,6 +208,29 @@ BASE=http://localhost:8081 STACK_SMOKE_STATE=/tmp/cabinet-ci-smoke \
   scripts/ci/stack-smoke.sh all
 docker compose -p cabinet-ci down -v
 ```
+
+The `sso` phase needs the mock provider, so start that stack with both
+compose files (`COMPOSE_FILE` is read by every `docker compose` call, the
+script's own included, so export it rather than passing `-f`; on Windows
+the separator is `;`). The mock publishes port 8555, which must be free.
+Without it, `sso` skips itself with a message. It leaves the trusted-header
+mode on, so run it last: `trusted` expects the mode off, and a rerun of
+`sso` switches it off first.
+
+```bash
+export COMPOSE_PROJECT_NAME=cabinet-ci
+export COMPOSE_FILE=docker-compose.yaml:docker-compose.ci.yml
+docker compose up --build -d          # plus the exports above
+BASE=http://localhost:8081 STACK_SMOKE_STATE=/tmp/cabinet-ci-smoke \
+  scripts/ci/stack-smoke.sh sso       # after bootstrap
+```
+
+To run `e2e/sso.spec.ts`, set `MOCK_IDP_URL` to where the test runner
+reaches the mock (`http://localhost:8555` from the host); it skips itself
+when that is unset. For Playwright in a container on the compose network
+(`BASE_URL=http://proxy`, `MOCK_IDP_URL=http://mock_idp:8555`), start the
+stack with `MOCK_IDP_PUBLIC_URL=http://mock_idp:8555` exported too, since
+that is the authorize page's address the browser is sent to.
 
 ```bash
 COMPOSE_PROJECT_NAME=cabinet-upgrade CABINET_PORT=8082 scripts/ci/upgrade-test.sh

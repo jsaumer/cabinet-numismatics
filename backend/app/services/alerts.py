@@ -10,6 +10,7 @@ and heartbeat outcomes are kept in memory for Settings and /api/metrics.
 """
 
 import logging
+import re
 import threading
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -35,11 +36,27 @@ CONDITIONS = {
     "refresh_pcgs": "Scheduled PCGS refresh",
 }
 
+# A sign-in provider rejecting Cabinet's client credentials (v0.33.0, Q13):
+# one condition per provider row, `sso_provider_<id>`.
+SSO_PROVIDER = re.compile(r"sso_provider_[0-9]{1,9}")
+
 TIMEOUT = 10.0
 
 # In-memory outcomes of the last webhook delivery and heartbeat ping.
 _status: dict[str, dict | None] = {"delivery": None, "heartbeat": None}
 _lock = threading.Lock()
+
+
+def is_condition(key: str) -> bool:
+    return key in CONDITIONS or SSO_PROVIDER.fullmatch(key) is not None
+
+
+def label(key: str) -> str:
+    if key in CONDITIONS:
+        return CONDITIONS[key]
+    if SSO_PROVIDER.fullmatch(key):
+        return f"Sign-in provider {key.rsplit('_', 1)[1]} credentials"
+    return key
 
 
 def _now() -> str:
@@ -93,7 +110,7 @@ def fail(db: Session, key: str, message: str) -> None:
     store.set_setting(db, "alert_state", state)
     db.commit()
     if changed:
-        logger.warning("Alert: %s failing: %s", CONDITIONS[key], message)
+        logger.warning("Alert: %s failing: %s", label(key), message)
         _notify(db, key, "failing", message)
 
 
@@ -106,8 +123,17 @@ def recover(db: Session, key: str) -> None:
     state[key] = {"failing": False, "since": _now(), "message": current.get("message")}
     store.set_setting(db, "alert_state", state)
     db.commit()
-    logger.info("Alert: %s recovered", CONDITIONS[key])
+    logger.info("Alert: %s recovered", label(key))
     _notify(db, key, "recovered", f"Working again (was: {current.get('message')})")
+
+
+def forget(db: Session, key: str) -> None:
+    """Drop a condition that no longer exists (a deleted provider) without a
+    recovery message. Commits when it removed something."""
+    state = states(db)
+    if state.pop(key, None) is not None:
+        store.set_setting(db, "alert_state", state)
+        db.commit()
 
 
 def source_failed(db: Session, source: str, kind: str, message: str) -> None:
@@ -125,16 +151,16 @@ def source_ok(db: Session, source: str) -> None:
 
 
 def _title(key: str, status: str) -> str:
-    label = CONDITIONS.get(key, key)
+    name = label(key)
     if status == "test":
         return "Cabinet: test alert"
-    return f"Cabinet: {label} {'failing' if status == 'failing' else 'recovered'}"
+    return f"Cabinet: {name} {'failing' if status == 'failing' else 'recovered'}"
 
 
 def build_request(fmt: str, key: str, status: str, message: str, title: str | None = None) -> dict:
     """The keyword arguments for httpx.post for one alert in `fmt`. An event
     (status "event") brings its own `title`."""
-    label = CONDITIONS.get(key) or title or "Test"
+    name = (label(key) if is_condition(key) else None) or title or "Test"
     title = f"Cabinet: {title}" if title else _title(key, status)
     if fmt == "ntfy":
         # Plain text to the topic URL; titles are ASCII so they fit a header.
@@ -168,7 +194,7 @@ def build_request(fmt: str, key: str, status: str, message: str, title: str | No
         "json": {
             "app": "cabinet",
             "alert": key,
-            "label": label,
+            "label": name,
             "status": status,
             "title": title,
             "message": message,
@@ -249,9 +275,7 @@ def ping_heartbeat(db: Session, test: bool = False) -> dict | None:
     problems = failing(db)
     up = not problems
     message = (
-        "OK"
-        if up
-        else "; ".join(f"{CONDITIONS.get(k, k)}: {s.get('message')}" for k, s in problems.items())
+        "OK" if up else "; ".join(f"{label(k)}: {s.get('message')}" for k, s in problems.items())
     )
     if test:
         message = f"Test from Cabinet: {message}"

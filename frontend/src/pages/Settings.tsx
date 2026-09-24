@@ -8,6 +8,7 @@ import BackupsSection from "./settings/Backups";
 import GeneralSection from "./settings/General";
 import PricingSection from "./settings/Pricing";
 import SharingSection from "./settings/Sharing";
+import SigninSection from "./settings/Signin";
 import { SETTINGS_SECTIONS, useSettings } from "./settings/shared";
 
 const SECTION_KEYS = new Set(SETTINGS_SECTIONS.map((s) => s.key));
@@ -19,6 +20,7 @@ const SECTION_COMPONENTS: Record<string, ComponentType> = {
   alerts: AlertsSection,
   sharing: SharingSection,
   account: AccountSection,
+  signin: SigninSection,
   about: AboutSection,
 };
 

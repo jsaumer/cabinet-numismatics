@@ -6,30 +6,50 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.32.2-informational)
+![Version](https://img.shields.io/badge/version-0.33.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.32.2 released (the share view; sign-in and encrypted backups since v0.30.0).**
+**Status: v0.33.0 released (single sign-on; the share view since v0.32.0;
+sign-in and encrypted backups since v0.30.0).**
 Pre-1.0 signals that the HTTP API may still change; the data model and
 migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
 requires signing in: one admin, created with a one-time setup code, plus
-scoped API tokens for scripts and dashboards. The share view (a read-only
-link, off by default) is in v0.32.0; single sign-on follows in v0.33.0,
-before 1.0. What's next is the roadmap's Phase 7, a parity
-plan drawn from a survey of other collection tools, alongside what entering
-a real collection turns up rather than by a schedule. See the
+scoped API tokens for scripts and dashboards, and, from v0.33.0, sign-in
+through an OpenID Connect provider, GitHub, or a trusted-header gateway,
+with the provider's own multi-factor check as the second factor. The share
+view (a read-only link, off by default) is in v0.32.0. What's next is the
+road to v1.0.0, alongside what entering a real collection turns up rather
+than by a schedule. See the
 [roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
 
-> **Deploying it?** Cabinet has its own sign-in (one admin, claimed with a
-> setup code on first start), but still benefits from an authenticating
-> reverse proxy as a second door until single sign-on ships in v0.33.0. If
-> you keep one and turn sharing on, exempt `/s/`, `/api/share/`, and
-> `/robots.txt` from it, or a forward-auth proxy blocks your own share
-> links too. See [docs/deployment.md](docs/deployment.md).
+> **Deploying it?**
+
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
+you control), not the open internet. Do not expose it directly to the
+internet, even behind TLS, single sign-on, or an authenticating gateway;
+reach it from outside through your own network's remote access instead,
+such as a VPN (WireGuard, Tailscale, or your router's own) or an
+identity-aware tunnel that terminates before Cabinet. Cabinet has one
+admin account and, by design, a password sign-in path with a single
+factor, so that a provider outage or a lost phone can never lock you out;
+exposing any self-hosted service that holds personal records invites
+automated credential guessing and vulnerability scanning within hours of
+the port opening. The project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. If you
+deploy it this way regardless, at minimum use TLS, single sign-on with
+multi-factor authentication enforced at the provider, an authenticating
+gateway in front, the alert webhook switched on, and a password no human
+has memorised.
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+
+If you turn sharing on, exempt `/s/`, `/api/share/`, and `/robots.txt`
+from any gateway kept in front, or a forward-auth proxy blocks your own
+share links too. See [docs/deployment.md](docs/deployment.md).
 
 ## Screenshots
 
@@ -244,6 +264,15 @@ Dark is the default; the header toggle switches to light and remembers it.
   interactive API docs page; the OpenAPI schema stays at
   `/api/openapi.json` for a signed-in session. See
   [docs/security.md](docs/security.md).
+- **Single sign-on**: sign in as the same admin through an OpenID Connect
+  provider (Authentik, Keycloak, Authelia, Entra ID, Google, and more), a
+  GitHub button, or a gateway's signed assertion (a trusted-header mode for
+  Authentik, Cloudflare Access, Pomerium, or Google IAP), one button per
+  configured provider. The identity provider's own multi-factor check is
+  the second factor; the local password stays as a one-factor recovery
+  credential the container can always reset. See
+  [docs/deployment.md](docs/deployment.md) for provider setup and
+  [docs/security.md](docs/security.md) for the model.
 - **Share and showcase view**: a read-only link to the collection, a set, or
   a checklist, opened without signing in. Off by default; while off, no
   link can be made and every link answers not found. Each link chooses what
@@ -335,6 +364,11 @@ from `.env.example`).
 | `IMPORT_DIR`      | Optional: where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 | `RESTORE_ENABLED` | Optional, default `true`: restore from Settings → Backups. `false` switches it off (the endpoints answer 404; `scripts/restore.sh` is then the only way) |
 | `RESTORE_MAX_GB`  | Optional, default `20`: the largest archive that may be uploaded for a restore, in GB (nginx allows 20) |
+| `TRUSTED_ASSERTION_HEADER` | Optional: the header carrying a gateway's signed JWT for the trusted-header mode (e.g. `X-authentik-jwt`), set on both the backend and the proxy. All four `TRUSTED_ASSERTION_*` variables or none |
+| `TRUSTED_ASSERTION_JWKS_URL` | Optional: where the gateway's public keys are; `https://` required unless `AUTH_INSECURE_HTTP` |
+| `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
+| `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
+| `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and
@@ -361,7 +395,7 @@ Run from Git Bash on Windows. Copy backups off the machine. See
 
 ## Documentation
 
-- [Deployment](docs/deployment.md): a durable install (secrets, reverse proxy + auth, backups, upgrades)
+- [Deployment](docs/deployment.md): a durable install (secrets, TLS, single sign-on, an optional gateway, backups, upgrades); read the [exposure section](docs/deployment.md#2-exposure-cabinet-is-for-private-networks) first
 - [Swarm stack file](deploy/docker-stack.yaml): `docker stack deploy` with the published images
 - [Architecture](docs/architecture.md): services, data flow, configuration
 - [Data model](docs/data-model.md): database schema and relationships

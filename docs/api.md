@@ -16,9 +16,11 @@ All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
 document files, and metrics answer files or text).
 
-**Every endpoint needs a credential** (v0.30.0) except four: `GET
+**Every endpoint needs a credential** (v0.30.0) except these: `GET
 /api/health` (just `{"status": ...}` for anonymous callers), `GET
-/api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`; and
+/api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`; the
+single sign-on routes (v0.33.0) `GET /api/auth/oidc/start`,
+`GET /api/auth/oidc/callback`, and `POST /api/auth/trusted`; and
 the share view's `GET /api/share/...` routes (v0.32.0), which need a share
 link's token instead, and only while sharing is on (see
 [Sharing](#sharing)). A
@@ -56,7 +58,15 @@ no expiry of its own), or `cabinet_session` without `Secure` when the
 deployment sets `AUTH_INSECURE_HTTP`. It ends a day after its last use and
 seven days after sign-in. A known-device cookie
 (`__Host-cabinet_device`, `SameSite=Strict`, 7 days) lets a browser that
-signed in before past the sign-in delays; it authenticates nothing. An API
+signed in before past the sign-in delays; it authenticates nothing, and
+only a password sign-in or confirm issues one. A browser cookie
+(`__Host-cabinet_browser`, `SameSite=Lax`, 90 days, v0.33.0), issued on
+every sign-in of any method when absent, decides only whether a sign-in
+alerts as a new browser; it lifts no throttle and authenticates nothing.
+A single sign-on flow cookie (`__Host-cabinet_oidc`, `SameSite=Lax`,
+`Path=/`, 10 minutes, encrypted) lives from the start route to the
+callback. Each has the bare name without `Secure` under
+`AUTH_INSECURE_HTTP`. An API
 token is `cabinet_<10 characters>_<43 characters>`, sent only as
 `Authorization: Bearer ...`, never in a query string or a cookie. A Cabinet
 token that isn't valid is `401` with no fall back to the cookie; any other
@@ -102,8 +112,12 @@ They are: both exports, `GET /api/backup.zip`, `GET /api/backups/{name}`,
 deleted), `DELETE /api/documents/{id}`, `DELETE
 /api/items/{id}/documents/{id}` when this item is the document's last
 holder (the file goes with it), creating or revoking a token, creating,
-changing, regenerating, or revoking a share link, ending another session,
-and signing out everywhere. Changing the password or the
+changing, regenerating, or revoking a share link, changing the sign-in
+settings, adding, changing, or removing a sign-in provider, unlinking an
+identity, ending another session, and signing out everywhere. On a session
+that signed in through a provider that can re-authenticate (see
+`confirm_methods` below), the window can also be opened at the provider
+with `GET /api/auth/oidc/start?intent=confirm`. Changing the password or the
 username takes the current password in the body instead.
 
 A `read` or `metrics` token is refused on any `POST`, `PUT`, `PATCH`, or
@@ -119,19 +133,19 @@ header and an `Origin` (or a `Referer`) exactly matching an entry of
 Scripts that use the cookie send `Origin`.
 
 **Paths.** A path containing `%` is `400` before anything else, and
-anonymous callers get `401` for every path but the four above (unknown ones
-included), and, while sharing is on, a `GET` or `HEAD` under
+anonymous callers get `401` for every path but the public ones below
+(unknown ones included), and, while sharing is on, a `GET` or `HEAD` under
 `/api/share/`, which passes with no credential looked up (see
 [Sharing](#sharing)); signed in, an unknown path is `404`. Responses without their
 own `Cache-Control` get `private, no-store`.
 
 | Method | Path | Class | Purpose |
 |--------|------|-------|---------|
-| `GET` | `/api/auth/state` | public | `{"setup_required": bool}` |
+| `GET` | `/api/auth/state` | public | `{"setup_required": bool, "methods": {"password": true, "providers": [{id, name, preset}], "trusted_header": {"available": true} or null}}`: one entry per enabled provider, read from the database on every call; `trusted_header` is `{"available": true}` when the four `TRUSTED_ASSERTION_*` variables are set and the mode is switched on, else `null`. This route never reads or verifies the request's assertion (v0.33.0) |
 | `POST` | `/api/auth/setup` | public | `{code, username, password}`: create the admin; `201` and both cookies, `403` wrong code, `409` already set up, `413` over 8 KiB, `422` a rule broken, `429` too many wrong codes |
-| `POST` | `/api/auth/login` | public | `{username, password}`: `200 {username, previous_sign_in_at, failed_since_previous}` and both cookies; `401`, `413`, `429` and `503` with `Retry-After` |
-| `POST` | `/api/auth/logout` | admin | End this session; `204`, cookies cleared, `Clear-Site-Data: "cache"` |
-| `GET` | `/api/auth/me` | read | `username`, `role`, `via` (`session` or `token`), `scope`, `confirmed_until` |
+| `POST` | `/api/auth/login` | public | `{username, password}`: `200 {username, previous_sign_in_at, failed_since_previous}`, the session and device cookies, and the browser cookie when absent; `401`, `413`, `429` and `503` with `Retry-After` |
+| `POST` | `/api/auth/logout` | admin | End this session; `204`, cookies cleared, `Clear-Site-Data: "cache"`. A session from a provider with "sign out there too" on, whose discovery names an end-session endpoint, gets `200 {"redirect": <that URL with client_id and post_logout_redirect_uri={origin}/login>}` for the browser to follow |
+| `GET` | `/api/auth/me` | read | `username`, `role`, `via` (`session` or `token`), `scope`, `confirmed_until`, `auth_method` (`password`, `oidc`, `trusted_header`; null for a token), `provider_id` (the provider an `oidc` session signed in through, else null), `confirm_methods` (`["password"]`, plus `"provider"` on an `oidc` session whose provider can re-authenticate), and, once after a single sign-on and then null, `failed_since_previous` and `previous_sign_in_at` |
 | `POST` | `/api/auth/confirm` | admin | `{password}`: open the 5-minute window (`204`); a wrong password is `403` |
 | `POST` | `/api/auth/password` | admin | `{current_password, new_password}`: ends every other session, every known device, and every token; `200 {revoked_tokens}` and a new cookie |
 | `POST` | `/api/auth/username` | admin | `{current_password, username}`; `204` |
@@ -143,6 +157,16 @@ own `Cache-Control` get `private, no-store`.
 | `DELETE` | `/api/auth/tokens/{id}` | admin, recent password | Revoke |
 | `GET` | `/api/auth/audit` | admin | The audit log, newest first: `?before=<id>&limit=` (at most 200) |
 | `GET` | `/api/auth/photo` | read | `204`: nginx asks this before serving a photo (a `metrics` token and `Sec-Fetch-Site: cross-site` get `403`) |
+| `GET` | `/api/auth/oidc/start` | public | `?provider=<id>&next=<path>&intent=login\|link\|confirm`: `302` to the provider with the flow cookie. `404` for an unknown or disabled provider; `link` needs a session inside its recent-password window (`401`, or the `reauth_required` `403`); `confirm` needs a live `oidc` session that signed in through this provider, which must be able to re-authenticate (`403` with `code` `confirm_identity` or `not_qualified`). `next` is a path on this origin, never `/api/`, `/photos/`, or `/s/` (anything else becomes `/`). A provider that can't be reached is a `303` to the failure page below with `provider` |
+| `GET` | `/api/auth/oidc/callback` | public | The provider's redirect back; the gate looks up no credential for it. Always clears the flow cookie and answers `303`: a sign-in to `next` with the session and browser cookies (never a device cookie), or `/login?error=<code>`; a link to `/settings/signin?linked=<provider id>` or `/settings/signin?error=<code>`; a confirm to `next`, with `confirm_error=<code>` added on failure. Codes: `cookie`, `expired`, `state`, `navigation`, `provider`, `denied`, `token`, `profile`, `unlinked`, `session`, `already_linked`, `subject`, `confirm_identity`, `not_qualified`. Failures are audited (`sso_sign_in_rejected`, with the reason and any `sub`, never a token or code) and slowed per address in a map of their own (`429` with `Retry-After` past 20 in 15 minutes, or 300 a minute from all addresses); a refusal at the provider (`denied`) is not counted |
+| `GET` | `/api/auth/signin-config` | admin | `providers` (`id`, `preset`, `kind`, `display_name`, `enabled`, `issuer`, `client_id`, `scopes`, `logout_at_provider`, `has_secret`, `credentials_failing`, `linked`; never a secret), `identities`, `trusted_header` (`configured`, `enabled`, `header_name` and `issuer` as the deployment sets them or null, and `link_ready`: the header is present on this very request, checked without reading or verifying it), `password_sign_in_alerts`, `presets` (`name`, `kind`, `issuer` or null, `needs_tenant`, `needs_issuer`, `scopes`), and `callback_urls` (one per `PUBLIC_ORIGINS` entry) |
+| `PUT` | `/api/auth/signin-config` | admin, recent password | `{password_sign_in_alerts?, trusted_header_enabled?}`: the answer is the new configuration; switching the trusted-header mode back on after `disable-sso` is only done here |
+| `POST` | `/api/auth/providers` | admin, recent password | `{preset, display_name, client_id, client_secret?, issuer?, tenant?, scopes?, logout_at_provider?, enabled?, dry_run?}`: `201` with the provider and `callback_urls`. `issuer` only for `custom` (https), `tenant` only for `microsoft`; `422` otherwise. `dry_run: true` fetches the discovery document only and saves nothing: `{ok, issuer, claims_supported_auth_time, prompt_login}`, or `{ok: false, issuer, error}`. `409` for an issuer and client id already configured, a ninth provider, or two `PUBLIC_ORIGINS` entries on one host |
+| `PATCH` | `/api/auth/providers/{id}` | admin, recent password | Any of the same fields but `dry_run`; a `client_secret` replaces the old one and is never read back. `issuer`, `client_id`, `preset` (and so the kind) are `409` while an identity is linked through it. `enabled: false` ends the sessions that came through it |
+| `DELETE` | `/api/auth/providers/{id}` | admin, recent password | `204`: the provider and its linked identities go, after the sessions that came through them end |
+| `DELETE` | `/api/auth/identities/{id}` | admin, recent password | `204`: unlink; the sessions that came through it end |
+| `POST` | `/api/auth/trusted` | public | Sign in with the gateway's assertion (the trusted-header mode, v0.33.0). No body (an empty JSON object is fine; at most 8 KiB); refused from another site (`Sec-Fetch-Site` `cross-site` or `same-site`). `404 {"detail": "Not found"}` unless the four `TRUSTED_ASSERTION_*` variables are set and the mode is switched on. The header `TRUSTED_ASSERTION_HEADER` names must carry one JWT signed by a key at `TRUSTED_ASSERTION_JWKS_URL` (never a URL the request names), with that `iss`, exactly that `aud`, an `exp` (60 s leeway), and a `sub`; `RS256`, `PS256`, `ES256`, or `EdDSA` only. `200 {"username"}` with the session and browser cookies (never a device cookie), ending any session the browser held; `403 {"detail", "code": "assertion"}` for an assertion that doesn't verify (a repeated header included) or `"unlinked"` for an identity nobody linked, both audited (`sso_sign_in_rejected`) and slowed per address with the provider callbacks (`429` with `Retry-After`); `502 {"code": "provider"}` when the gateway's keys can't be fetched (sign in with the password) |
+| `POST` | `/api/auth/identities/trusted_header` | admin, recent password | Link the identity the current request's assertion names (verified as above) to the signed-in account: `201` with the identity (`id`, `kind` `trusted_header`, `issuer`, `subject`, `display`); `404` while the mode is off; `403` with `code` `assertion`, or `subject` for a `sub` holding `@` or equal to the assertion's `email` or `preferred_username`; `409` `already_linked` when the account already has one or another account holds it. Audited and alerted (`identity_linked`) |
 
 Photos themselves (`/photos/{file_key}`, `/photos/{thumb_key}`) are files
 nginx serves after that check: the same credentials as a `read` route, the

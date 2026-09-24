@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { api, ChecklistSummary, NewShareLink, SetInfo, ShareKind, ShareLink } from "../../api";
+import { EXPOSURE_GUIDANCE_URL, EXPOSURE_WARNING } from "../../auth/exposureWarning";
 import { Section, SettingRow, useSettings } from "./shared";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "–");
@@ -380,6 +381,13 @@ export default function SharingSection() {
 
   return (
     <Section title="Sharing">
+      <p className="muted" style={{ marginTop: 0 }}>
+        {EXPOSURE_WARNING}{" "}
+        <a href={EXPOSURE_GUIDANCE_URL} target="_blank" rel="noreferrer">
+          Read the exposure guidance
+        </a>
+        .
+      </p>
       <SettingRow
         label="Turn on sharing"
         htmlFor="share-enabled"

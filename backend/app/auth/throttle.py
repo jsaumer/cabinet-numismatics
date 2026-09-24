@@ -8,13 +8,17 @@
 | `setup:<ip>`  | 5 wrong codes         | 429 until 15 minutes after the last              |
 | `share:<ip>`  | 20 failed lookups     | the same curve as `addr`                         |
 | share, global | 300 failed lookups a minute, all addresses | 429                     |
+| `oidc:<ip>`   | 20 failed sign-on callbacks | the same curve as `addr`                   |
+| oidc, global  | 300 failed callbacks a minute, all addresses | 429                    |
 
 Never a lock-out. A bucket forgets its failures 15 minutes after the last
 one, and on a success. One bounded map of at most MAX_KEYS entries, oldest
 dropped first; a restart clears everything. Failed share lookups (v0.32.0)
 have a bounded map of their own, so a flood of them from many addresses can
 never push a sign-in, address, or setup bucket out; an IPv6 address is
-counted by its /64, which is what one client usually holds. A sign-in attempt is counted
+counted by its /64, which is what one client usually holds. Failed single
+sign-on callbacks (v0.33.0, CR-09) get a third map, keyed the same way, for
+the same reason. A sign-in attempt is counted
 by `attempt` before its password is checked, so parallel requests can't all
 pass on the count as it was. A known-device cookie lifts the user, address,
 and global limits (the caller skips `attempt` and `check_global`), never the
@@ -37,10 +41,11 @@ from app.auth import common
 WINDOW = 15 * 60
 MAX_KEYS = 10_000
 CAP = 60
-FREE = {"user": 5, "addr": 20, "share": 20}
+FREE = {"user": 5, "addr": 20, "share": 20, "oidc": 20}
 SETUP_FREE = 5
 GLOBAL_PER_MINUTE = 60
 SHARE_GLOBAL_PER_MINUTE = 300
+OIDC_GLOBAL_PER_MINUTE = 300
 RESET_FLAG = "throttle_reset"
 
 
@@ -63,6 +68,11 @@ _flag_seen: tuple[bool, float | None] | None = None
 # Failed share lookups: their own map and their own global count.
 _shares: OrderedDict[str, _Entry] = OrderedDict()
 _share_failures: deque[float] = deque()
+# Failed single sign-on callbacks: the same again, apart from both.
+_oidc: OrderedDict[str, _Entry] = OrderedDict()
+_oidc_failures: deque[float] = deque()
+# The kinds whose buckets live in a map of their own, keyed by address.
+_APART = {"share": (_shares, _share_failures), "oidc": (_oidc, _oidc_failures)}
 
 
 def _key(kind: str, value: str) -> str:
@@ -70,7 +80,8 @@ def _key(kind: str, value: str) -> str:
 
 
 def _map(key: str) -> OrderedDict[str, _Entry]:
-    return _shares if key.startswith("share:") else _entries
+    kind = key.split(":", 1)[0]
+    return _APART[kind][0] if kind in _APART else _entries
 
 
 def share_address(address: str) -> str:
@@ -88,7 +99,7 @@ def share_address(address: str) -> str:
 
 
 def _value(kind: str, value: str) -> str:
-    return share_address(value) if kind == "share" else value
+    return share_address(value) if kind in _APART else value
 
 
 def _live(key: str, t: float) -> _Entry | None:
@@ -182,6 +193,24 @@ def fail(kind: str, value: str) -> None:
         _count(_key(kind, _value(kind, value)), t)
 
 
+def _address_failure(kind: str, address: str, cap: int) -> float:
+    t = common.monotonic()
+    key = _key(kind, share_address(address))
+    failures = _APART[kind][1]
+    with _lock:
+        entry = _live(key, t)
+        waiting = max(0.0, _wait(kind, entry, t)) if entry else 0.0
+        while failures and t - failures[0] >= 60:
+            failures.popleft()
+        if len(failures) >= cap:
+            waiting = max(waiting, failures[0] + 60 - t)
+        if waiting > 0:
+            return waiting
+        _count(key, t)
+        failures.append(t)
+        return 0.0
+
+
 def share_failure(address: str) -> float:
     """A failed share lookup from this address. Inside the address's wait,
     or past SHARE_GLOBAL_PER_MINUTE failures across every address, nothing is
@@ -189,20 +218,15 @@ def share_failure(address: str) -> float:
     otherwise the failure is counted and 0 comes back (the caller answers
     404). A lookup that succeeds never comes here, so a live link is never
     throttled."""
-    t = common.monotonic()
-    key = _key("share", share_address(address))
-    with _lock:
-        entry = _live(key, t)
-        waiting = max(0.0, _wait("share", entry, t)) if entry else 0.0
-        while _share_failures and t - _share_failures[0] >= 60:
-            _share_failures.popleft()
-        if len(_share_failures) >= SHARE_GLOBAL_PER_MINUTE:
-            waiting = max(waiting, _share_failures[0] + 60 - t)
-        if waiting > 0:
-            return waiting
-        _count(key, t)
-        _share_failures.append(t)
-        return 0.0
+    return _address_failure("share", address, SHARE_GLOBAL_PER_MINUTE)
+
+
+def oidc_failure(address: str) -> float:
+    """A failed single sign-on callback from this address (v0.33.0, CR-09),
+    the same way as `share_failure`, in its own map and with its own global
+    count (OIDC_GLOBAL_PER_MINUTE): a callback that succeeds never comes
+    here, and a flood of failures can never push a sign-in bucket out."""
+    return _address_failure("oidc", address, OIDC_GLOBAL_PER_MINUTE)
 
 
 def succeed(kind: str, value: str) -> None:
@@ -218,16 +242,23 @@ def clear() -> None:
         _checks.clear()
         _shares.clear()
         _share_failures.clear()
+        _oidc.clear()
+        _oidc_failures.clear()
         _flag_seen = None
 
 
 def size() -> int:
-    """Sign-in, address, and setup buckets; share buckets are `share_size`."""
+    """Sign-in, address, and setup buckets; share and single sign-on buckets
+    are `share_size` and `oidc_size`."""
     return len(_entries)
 
 
 def share_size() -> int:
     return len(_shares)
+
+
+def oidc_size() -> int:
+    return len(_oidc)
 
 
 def _flag_path() -> Path:

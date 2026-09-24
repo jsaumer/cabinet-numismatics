@@ -169,7 +169,8 @@ def collect(db: Session) -> list:
     alert = _gauge(
         "cabinet_alert_failing", "1 while an alert condition is failing", labels=("alert",)
     )
-    for key in alerts.CONDITIONS:
+    providers = sorted(k for k in alerts.states(db) if alerts.SSO_PROVIDER.fullmatch(k))
+    for key in [*alerts.CONDITIONS, *providers]:
         alert.add_metric([key], 1.0 if key in failing else 0.0)
     families.append(alert)
     for name, outcome in (

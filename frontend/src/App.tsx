@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { MoonIcon, SettingsIcon, SunIcon, TrashIcon } from "./components/icons";
 import { applyTheme, initialTheme } from "./components/theme";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AuthBrand } from "./auth/Brand";
-import { ConfirmDialogHost } from "./auth/ConfirmDialog";
+import { CONFIRM_MARKER, ConfirmDialogHost } from "./auth/ConfirmDialog";
 import { FailedNotice, takeFailedNotice } from "./auth/failedNotice";
+import { ssoErrorMessage } from "./auth/ssoErrors";
 import Checklists from "./pages/Checklists";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
@@ -69,6 +70,49 @@ function FailedSignInsNotice() {
   );
 }
 
+/** A return from the confirm dialog's "Confirm at your sign-in provider"
+ * path (auth/ConfirmDialog.tsx): the pending action is never replayed
+ * automatically (CR-20, R2-20), so this only tells the owner what happened
+ * and lets them repeat what they started. confirm_error carries a code on
+ * failure; success carries only the marker ConfirmDialog.tsx appended to
+ * `next` before navigating away, since the backend's own redirect on
+ * success has no marker of its own. Both are stripped from the address bar
+ * so a reload doesn't repeat the note. */
+function ConfirmReturnNotice() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [note, setNote] = useState<{ text: string; failed: boolean } | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const confirmError = params.get("confirm_error");
+    const confirmed = params.get(CONFIRM_MARKER);
+    if (!confirmError && !confirmed) return;
+    setNote(
+      confirmError
+        ? { text: ssoErrorMessage(confirmError), failed: true }
+        : { text: "Confirmed. Repeat the action you started.", failed: false },
+    );
+    params.delete("confirm_error");
+    params.delete(CONFIRM_MARKER);
+    navigate(
+      { pathname: location.pathname, search: params.toString() },
+      { replace: true },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!note) return null;
+  return (
+    <p className={`${note.failed ? "error" : "muted"} notice-bar no-print`}>
+      {note.text}{" "}
+      <button type="button" className="link-button" onClick={() => setNote(null)}>
+        Dismiss
+      </button>
+    </p>
+  );
+}
+
 function AuthedApp({
   theme,
   setTheme,
@@ -120,6 +164,7 @@ function AuthedApp({
       </header>
       <main>
         <FailedSignInsNotice />
+        <ConfirmReturnNotice />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collection" element={<ItemList />} />

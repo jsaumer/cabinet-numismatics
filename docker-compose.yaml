@@ -29,6 +29,15 @@ services:
       # The backup key; unset, one is generated on the state volume.
       - BACKUP_KEY_FILE=${BACKUP_KEY_FILE:-}
       - BACKUP_KEY=${BACKUP_KEY:-}
+      # Single sign-on's trusted-header mode (v0.33.0): all four or none. The
+      # header also goes to the proxy below, which passes only that header on.
+      - TRUSTED_ASSERTION_HEADER=${TRUSTED_ASSERTION_HEADER:-}
+      - TRUSTED_ASSERTION_JWKS_URL=${TRUSTED_ASSERTION_JWKS_URL:-}
+      - TRUSTED_ASSERTION_ISSUER=${TRUSTED_ASSERTION_ISSUER:-}
+      - TRUSTED_ASSERTION_AUDIENCE=${TRUSTED_ASSERTION_AUDIENCE:-}
+      # CA certificates added to the public roots, for a provider or gateway
+      # behind a local CA (a path inside the container).
+      - SSO_CA_FILE=${SSO_CA_FILE:-}
     volumes:
       - photo_data:/data/photos
       # Private backend state (encryption key fallback). Deliberately NOT the
@@ -75,6 +84,10 @@ services:
       # internal names in ALLOWED_HOSTS. Anything else gets no response.
       - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:-}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      # The trusted-header mode's header (v0.33.0), the same value as the
+      # backend's: the one identity header nginx passes on; unset, all are
+      # blanked.
+      - TRUSTED_ASSERTION_HEADER=${TRUSTED_ASSERTION_HEADER:-}
     volumes:
       - photo_data:/usr/share/nginx/photos:ro
     depends_on:

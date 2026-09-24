@@ -19,12 +19,35 @@ personal project, so please allow a few days.
 
 Cabinet is a **single-user, self-hosted** application. Every route needs a
 sign-in or an API token (v0.30.0): one admin, database-backed sessions,
-scoped API tokens, and a deny-by-default gate. It is still designed to run
-on a trusted network, or behind an authenticating reverse proxy as a second
-door until single sign-on (v0.33.0) ships; see
-[docs/security.md](docs/security.md). Reports that amount to "the API is
-reachable without a login when exposed directly to the internet" describe a
-real bug now, not the documented deployment model, since v0.30.0.
+scoped API tokens, and a deny-by-default gate. From v0.33.0 that sign-in
+can also be through an OpenID Connect provider, GitHub, or a gateway's
+signed assertion (single sign-on), with the provider's own multi-factor
+check as the second factor and the local password kept as a one-factor
+recovery credential. See [docs/security.md](docs/security.md) for the full
+model.
+
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
+you control), not the open internet. Do not expose it directly to the
+internet, even behind TLS, single sign-on, or an authenticating gateway;
+reach it from outside through your own network's remote access instead,
+such as a VPN (WireGuard, Tailscale, or your router's own) or an
+identity-aware tunnel that terminates before Cabinet. Cabinet has one
+admin account and, by design, a password sign-in path with a single
+factor, so that a provider outage or a lost phone can never lock you out;
+exposing any self-hosted service that holds personal records invites
+automated credential guessing and vulnerability scanning within hours of
+the port opening. The project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. If you
+deploy it this way regardless, at minimum use TLS, single sign-on with
+multi-factor authentication enforced at the provider, an authenticating
+gateway in front, the alert webhook switched on, and a password no human
+has memorised.
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+
+Reports that amount to "the API is reachable without a login when exposed
+directly to the internet" describe a real bug now, not the documented
+deployment model, since v0.30.0.
 
 Things that *are* in scope and worth reporting:
 
