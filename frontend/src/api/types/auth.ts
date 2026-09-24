@@ -198,7 +198,13 @@ export interface ProviderPatch {
 
 /** POST /api/auth/providers with dry_run: true fetches discovery only. */
 export type DryRunResult =
-  | { ok: true; issuer: string; claims_supported_auth_time: boolean; prompt_login: boolean }
+  | {
+      ok: true;
+      issuer: string;
+      confirm: boolean; // the rule the sign-in applies; the two flags are the detail
+      claims_supported_auth_time: boolean;
+      prompt_login: boolean;
+    }
   | { ok: false; issuer: string; error: string };
 
 /** A saved provider (POST/PATCH), with the callback URLs to register at

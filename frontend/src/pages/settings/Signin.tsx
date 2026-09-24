@@ -246,7 +246,7 @@ function AddProviderForm({
         <p className={testResult.ok ? "muted" : "error"} style={{ margin: 0 }}>
           {testResult.ok
             ? `Discovery answered for ${testResult.issuer}. Can re-authenticate for confirm: ${
-                testResult.claims_supported_auth_time && testResult.prompt_login ? "yes" : "no"
+                testResult.confirm ? "yes" : "no"
               }.`
             : `Discovery failed: ${testResult.error}`}
         </p>
