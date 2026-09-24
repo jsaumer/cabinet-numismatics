@@ -16,19 +16,26 @@ Reads only the method, the raw path, and headers, never the body. In order:
    (anonymous is 401), with no database read and no throttle work, since
    the switch is held in memory (`share.enabled`). Other methods always go
    on as below.
-4. The credential: `Authorization: Bearer cabinet_...` is a token (an invalid
+4. `GET /api/auth/oidc/callback` (NO_LOOKUP, v0.33.0, CR-01) passes with no
+   credential looked up: a provider's redirect back is a cross-site
+   top-level navigation that a Lax session cookie rides along on, which
+   step 8 would refuse before routing. No session is read or touched and
+   no CSRF decision is made; the handler binds a link or confirm to the
+   session that started it through the flow cookie, whose `state` is the
+   route's CSRF protection.
+5. The credential: `Authorization: Bearer cabinet_...` is a token (an invalid
    one is 401, never a fall back to the cookie); any other Authorization is
    ignored; otherwise the session cookie.
-5. Anonymous callers reach only the four ANONYMOUS pairs; everything else,
+6. Anonymous callers reach only the ANONYMOUS pairs; everything else,
    unknown paths included, is 401. A read or metrics token is refused on
    any unsafe method (every such route is write or admin) before a body is
    read.
-6. `/api/openapi.json` (the one framework route, never seen by layer 2): a
+7. `/api/openapi.json` (the one framework route, never seen by layer 2): a
    session only, a token 403.
-7. CSRF for a cookie request: `Sec-Fetch-Site: same-origin`, or no such
+8. CSRF for a cookie request: `Sec-Fetch-Site: same-origin`, or no such
    header and an Origin (or Referer's origin) in PUBLIC_ORIGINS.
-8. The principal goes on `scope["state"]["principal"]` for layer 2.
-9. On the way out, a response with no Cache-Control gets `private, no-store`.
+9. The principal goes on `scope["state"]["principal"]` for layer 2.
+10. On the way out, a response with no Cache-Control gets `private, no-store`.
 
 Database work runs in a worker thread, never on the event loop.
 """
@@ -52,7 +59,11 @@ ANONYMOUS = {
     (b"GET", b"/api/auth/state"),
     (b"POST", b"/api/auth/setup"),
     (b"POST", b"/api/auth/login"),
+    (b"GET", b"/api/auth/oidc/start"),  # v0.33.0; a session is looked up if sent
+    (b"GET", b"/api/auth/oidc/callback"),
 }
+# Passed with no credential lookup at all (step 4).
+NO_LOOKUP = {(b"GET", b"/api/auth/oidc/callback")}
 # Anonymous GET and HEAD by prefix: the share view, whose token is in the
 # path. Every route under it declares the `share` class.
 ANONYMOUS_PREFIXES = (b"/api/share/",)
@@ -247,6 +258,11 @@ class AuthGate:
             and path.startswith(ANONYMOUS_PREFIXES)
             and await _sharing_on(scope)
         ):
+            scope.setdefault("state", {})["principal"] = None
+            await self.app(scope, receive, send)
+            return
+
+        if (method, path) in NO_LOOKUP:
             scope.setdefault("state", {})["principal"] = None
             await self.app(scope, receive, send)
             return

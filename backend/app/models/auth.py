@@ -93,6 +93,11 @@ class Session(AuthBase):
     identity_id: Mapped[int | None] = mapped_column(
         _fk("identities.id", ondelete="SET NULL"), index=True
     )
+    # An external sign-in's "failed since your last visit" notice, handed over
+    # once by `GET /api/auth/me` and then cleared (v0.33.0, R2-10): a 303 has
+    # no body to carry it.
+    notice_failed: Mapped[int | None] = mapped_column(Integer)
+    notice_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ApiToken(AuthBase):

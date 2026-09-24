@@ -16,11 +16,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session as DbSession
 
-from app.auth import accounts, audit, sessions, setup, throttle, tokens
+from app.auth import accounts, audit, oidc, sessions, setup, throttle, tokens
+from app.auth import config as sso_config
 from app.auth.events import actor_of
 from app.auth.permissions import Principal, permission, principal, require
 from app.db import get_db
-from app.models.auth import ApiToken, Session, User
+from app.models.auth import ApiToken, AuthProvider, Identity, Session, User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -34,12 +35,13 @@ WRONG_CODE = "That setup code is not right."
 
 def client_of(request: Request) -> accounts.Client:
     """The address nginx saw (it overwrites X-Real-IP on every request), the
-    browser, and the known-device cookie."""
+    browser, the known-device cookie, and the new-browser alert cookie."""
     _, device_name = sessions.cookie_names()
     return accounts.Client(
         address=(request.headers.get("x-real-ip") or "")[:45] or None,
         user_agent=(request.headers.get("user-agent") or "")[:256] or None,
         device=request.cookies.get(device_name),
+        browser=request.cookies.get(sessions.browser_cookie_name()),
     )
 
 
@@ -111,8 +113,21 @@ class LoginBody(BaseModel):
 @router.get("/state")
 @permission("public")
 def auth_state(db: DbSession = Depends(get_db)):
+    """Whether setup is needed, and the ways to sign in: the password always,
+    one button per enabled provider (read from the database, never cached,
+    R2-01). `trusted_header` is filled by stage 3."""
     setup.ensure_prepared(db)
-    return JSONResponse({"setup_required": not accounts.claimed(db)}, headers=NO_STORE)
+    providers = [
+        {"id": row.id, "name": row.display_name, "preset": row.preset}
+        for row in sso_config.providers(db, enabled_only=True)
+    ]
+    return JSONResponse(
+        {
+            "setup_required": not accounts.claimed(db),
+            "methods": {"password": True, "providers": providers, "trusted_header": None},
+        },
+        headers=NO_STORE,
+    )
 
 
 @router.post("/setup", status_code=201, openapi_extra=_body_schema(SetupBody))
@@ -150,6 +165,7 @@ async def auth_setup(request: Request, db: DbSession = Depends(get_db)):
     started = await run_in_threadpool(work)
     response = JSONResponse({"username": started.user.username}, 201, headers=NO_STORE)
     sessions.set_cookies(response, started.session_secret, started.device_secret)
+    sessions.set_browser_cookie(response, started.browser_secret)
     return response
 
 
@@ -186,15 +202,38 @@ async def auth_login(request: Request, db: DbSession = Depends(get_db)):
         headers=NO_STORE,
     )
     sessions.set_cookies(response, started.session_secret, started.device_secret)
+    sessions.set_browser_cookie(response, started.browser_secret)
     return response
+
+
+def _provider_of(db: DbSession, row: Session) -> AuthProvider | None:
+    """The provider an `oidc` session signed in through, if it still exists."""
+    if row.auth_method != "oidc" or row.identity_id is None:
+        return None
+    identity = db.get(Identity, row.identity_id)
+    if identity is None or identity.provider_id is None:
+        return None
+    return db.get(AuthProvider, identity.provider_id)
 
 
 @router.post("/logout", status_code=204)
 @permission("admin")
 def auth_logout(request: Request, db: DbSession = Depends(get_db)):
+    """End this session: 204, or, for an `oidc` session whose provider has
+    "sign out there too" on and publishes an end-session endpoint, 200
+    `{"redirect": ...}` for the browser to follow (Q7)."""
     row, user = _current(db, principal(request))
+    provider = _provider_of(db, row)
+    redirect = None
+    if provider is not None:
+        origin = oidc.callback_origin(request.headers.get("host"))
+        redirect = oidc.logout_url(provider, origin)
     accounts.sign_out(db, row, user, client_of(request))
-    response = Response(status_code=204, headers={**NO_STORE, "Clear-Site-Data": '"cache"'})
+    headers = {**NO_STORE, "Clear-Site-Data": '"cache"'}
+    if redirect is not None:
+        response = JSONResponse({"redirect": redirect}, headers=headers)
+    else:
+        response = Response(status_code=204, headers=headers)
     sessions.clear_cookies(response)
     return response
 
@@ -208,17 +247,40 @@ class MeOut(BaseModel):
     via: str
     scope: str | None
     confirmed_until: str | None
+    auth_method: str | None = None
+    confirm_methods: list[str] = []
+    # Once after an external sign-in, then null (R2-10).
+    failed_since_previous: int | None = None
+    previous_sign_in_at: str | None = None
 
 
 @router.get("/me", response_model=MeOut)
 @permission("read")
 def auth_me(request: Request, db: DbSession = Depends(get_db)):
+    """Who is calling. For a session: how it signed in, how it may confirm
+    (the password always; `provider` too on an `oidc` session whose provider
+    can do it, Q11), and, the first time only after a single sign-on, the
+    failed-sign-ins notice a password sign-in answers with."""
     who = principal(request)
     confirmed_until = None
+    auth_method = None
+    confirm_methods = []
+    failed = previous = None
     if who.kind == "session":
         row = db.get(Session, who.session_id)
-        if row is not None and sessions.confirmed(row):
-            confirmed_until = _iso(row.confirmed_until)
+        if row is not None:
+            if sessions.confirmed(row):
+                confirmed_until = _iso(row.confirmed_until)
+            auth_method = row.auth_method
+            confirm_methods = ["password"]
+            provider = _provider_of(db, row)
+            if provider is not None and provider.enabled and oidc.qualifies_for_confirm(provider):
+                confirm_methods.append("provider")
+            if row.notice_failed is not None:
+                failed, previous = row.notice_failed, _iso(row.notice_since)
+                row.notice_failed = None
+                row.notice_since = None
+                db.commit()
     user = db.get(User, who.user_id)
     return MeOut(
         username=who.username,
@@ -226,6 +288,10 @@ def auth_me(request: Request, db: DbSession = Depends(get_db)):
         via=who.kind,
         scope=who.scope,
         confirmed_until=confirmed_until,
+        auth_method=auth_method,
+        confirm_methods=confirm_methods,
+        failed_since_previous=failed,
+        previous_sign_in_at=previous,
     )
 
 

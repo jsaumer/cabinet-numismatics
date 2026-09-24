@@ -62,11 +62,13 @@ class NotFound(Exception):
 @dataclass(frozen=True)
 class Client:
     """What a request says about who is asking: the address nginx saw
-    (`X-Real-IP`), the browser, and its known-device cookie, if any."""
+    (`X-Real-IP`), the browser, its known-device cookie, and its
+    new-browser alert cookie (v0.33.0), if any."""
 
     address: str | None = None
     user_agent: str | None = None
     device: str | None = None
+    browser: str | None = None
 
     def actor(self, kind: str = "anonymous", user: User | None = None, label=None) -> Actor:
         return Actor(
@@ -80,16 +82,19 @@ class Client:
 
 @dataclass
 class Started:
-    """A session just opened: the two cookie values to set, and for a
-    sign-in, what the notice after it says."""
+    """A session just opened: the cookie values to set (a device secret only
+    for a password sign-in, a browser secret only when the browser brought
+    no valid one), and for a sign-in, what the notice after it says."""
 
     user: User
     session: Session
     session_secret: str
-    device_secret: str
+    device_secret: str | None
     previous_sign_in_at: datetime | None = None
     failed_since_previous: int = 0
     new_device: bool = True
+    browser_secret: str | None = None
+    new_browser: bool = False
 
 
 @dataclass
@@ -132,6 +137,14 @@ def _start(db: DbSession, user: User, client: Client) -> Started:
     return Started(user, row, session_secret, devices.issue(db, user.id))
 
 
+def _remember_browser(db: DbSession, user: User, client: Client, started: Started) -> None:
+    """The new-browser alert's cookie (R2-04): kept when this browser brought
+    a valid one, issued when it didn't. Nothing but the alert reads it."""
+    if browsers.find(db, client.browser, user.id) is None:
+        started.browser_secret = browsers.issue(db, user.id)
+        started.new_browser = True
+
+
 def create_admin(db: DbSession, username: str, password: str, client: Client) -> Started:
     """The claim: the admin and `claim(id=1)` in one transaction, so of two
     at once exactly one wins (the other is AlreadyClaimed). The setup code is
@@ -160,6 +173,7 @@ def create_admin(db: DbSession, username: str, password: str, client: Client) ->
         db.rollback()
         raise AlreadyClaimed() from None
     started = _start(db, user, client)
+    _remember_browser(db, user, client, started)
     audit.record(db, "setup", client.actor("session", user))
     db.commit()
     return started
@@ -238,12 +252,16 @@ def sign_in(db: DbSession, username: str, password: str, client: Client) -> Star
     if device is not None:
         devices.forget(db, device)  # a success replaces row and cookie
     started = _start(db, user, client)
+    _remember_browser(db, user, client, started)
     started.previous_sign_in_at = previous
     started.failed_since_previous = failed
     started.new_device = device is None
     user.last_login_at = common.now()
     audit.record(
-        db, "sign_in", client.actor("session", user), detail={"new_device": device is None}
+        db,
+        "sign_in",
+        client.actor("session", user),
+        detail={"method": "password", "new_device": device is None},
     )
     alert_every = sso_config.get_config(db).password_sign_in_alerts
     db.commit()
@@ -251,7 +269,7 @@ def sign_in(db: DbSession, username: str, password: str, client: Client) -> Star
         notify.send(
             db,
             "sign_in_new_device",
-            f"Signed in as {user.username} from {_address(client)} "
+            f"Signed in as {user.username} with the password from {_address(client)} "
             "on a browser Cabinet had not seen before.",
         )
     elif alert_every:
@@ -260,6 +278,74 @@ def sign_in(db: DbSession, username: str, password: str, client: Client) -> Star
             db,
             "password_sign_in",
             f"Signed in as {user.username} with the password from {_address(client)}.",
+        )
+    return started
+
+
+METHOD_NAMES = {"oidc": "a sign-in provider", "trusted_header": "the trusted header"}
+
+
+def start_external(
+    db: DbSession,
+    user: User,
+    identity: Identity,
+    client: Client,
+    *,
+    method: str,
+    browser_secret: str | None,
+    presented: str | None = None,
+    how: str | None = None,
+) -> Started:
+    """A session from a provider or the trusted header (v0.33.0). Any session
+    this browser held (`presented`) ends, as a password sign-in rotates. No
+    known-device cookie is issued (CR-03): that cookie lifts the password
+    throttles, and a provider account must never buy unthrottled guesses at
+    the recovery password. The browser cookie decides the new-browser alert
+    and nothing else. The failed-sign-ins notice is kept on the session for
+    `GET /api/auth/me` to hand over once (R2-10). Commits."""
+    if method not in sessions.EXTERNAL:
+        raise ValueError(f"not an external sign-in method: {method!r}")
+    if (old := sessions.find(db, presented)) is not None:
+        sessions.revoke(old[0])
+    previous = common.aware(user.last_login_at)
+    failed = audit.count(db, audit.FAILED, label=user.username, since=previous)
+    session_secret, row = sessions.create(
+        db,
+        user,
+        address=client.address,
+        user_agent=client.user_agent,
+        method=method,
+        identity_id=identity.id,
+    )
+    row.notice_failed = failed
+    row.notice_since = previous
+    started = Started(
+        user,
+        row,
+        session_secret,
+        None,
+        previous_sign_in_at=previous,
+        failed_since_previous=failed,
+        new_device=False,
+    )
+    _remember_browser(db, user, Client(browser=browser_secret), started)
+    at = common.now()
+    identity.last_used_at = at
+    user.last_login_at = at
+    audit.record(
+        db,
+        "sign_in",
+        client.actor("session", user),
+        detail={"method": method, "new_browser": started.new_browser},
+    )
+    db.commit()
+    if started.new_browser:
+        through = how or METHOD_NAMES[method]
+        notify.send(
+            db,
+            "sign_in_new_device",
+            f"Signed in as {user.username} through {through} from {_address(client)} "
+            "on a browser Cabinet had not seen before.",
         )
     return started
 
