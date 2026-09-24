@@ -8,4 +8,4 @@ export const EXPOSURE_WARNING =
   "expose Cabinet to the internet; reach it over a VPN or an identity-aware tunnel.";
 
 export const EXPOSURE_GUIDANCE_URL =
-  "https://github.com/jsaumer/cabinet-numismatics/blob/main/docs/deployment.md#exposure-cabinet-is-for-private-networks";
+  "https://github.com/jsaumer/cabinet-numismatics/blob/main/docs/deployment.md#2-exposure-cabinet-is-for-private-networks";

@@ -7,7 +7,7 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): v0.32.2 (the share and showcase view) is the
+**Status (September 2026): v0.33.0 (single sign-on) is the
 latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
@@ -29,9 +29,14 @@ and rounds as a third item type (P11, [SPEC_0310](specs/SPEC_0310.md))
 shipped in v0.31.0; the share and showcase view (P9,
 [SPEC_0320](specs/SPEC_0320.md): a read-only link, tokens hashed and shown
 once, values a toggle off by default, a checklist link showing filled slots
-only) shipped in v0.32.0.
-**What's next**: A2, single sign-on (OpenID Connect and a trusted-header
-mode), as v0.33.0.
+only) shipped in v0.32.0; single sign-on (P8, A2: OpenID Connect, a GitHub
+button, and a trusted-header mode for a gateway that already
+authenticates, [SPEC_0330](specs/SPEC_0330.md)) shipped in v0.33.0.
+**What's next**: nothing is queued from Phase 7; the road to v1.0.0's
+remaining items (a CI check against breaking OpenAPI changes, "Add a run"
+and the Numista banknote mapping confirmed against a live account, and a
+README and quick-start pass) come next, alongside whatever entering the
+rest of the collection turns up.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -299,10 +304,17 @@ Cross-cutting concerns that make the tool trustworthy and pleasant to run.
   database-backed sessions, and scoped API tokens, then single sign-on
   (OpenID Connect and a trusted-header mode). **Phase 7, P8, A1 shipped for
   v0.30.0**: one admin, sessions, and scoped API tokens, with every route
-  denied by default. A2, single sign-on, follows as v0.33.0, both before
-  v1.0.0. Until A2 ships, an authenticating reverse proxy (e.g. Traefik +
-  Authentik forward-auth) in front is recommended as a second door. A
-  decision on 20 September 2026 to ship v1.0.0 without login was reversed
+  denied by default. **A2, single sign-on, shipped in v0.33.0**: OpenID
+  Connect against any provider, a GitHub button, and a trusted-header mode
+  for a gateway that already authenticates, with the provider's own
+  multi-factor check as the second factor and the local password kept as a
+  one-factor recovery credential; see [SPEC_0330](specs/SPEC_0330.md). An
+  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth) in
+  front is now optional, kept for a door before the sign-in page or for the
+  trusted-header mode; Cabinet is still designed for private networks and
+  should not be exposed to the internet, whatever sits in front of it (see
+  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)).
+  A decision on 20 September 2026 to ship v1.0.0 without login was reversed
   the same day, when the owner chose feature parity and a share view, which
   needs the rest of the app closed first; the design was settled on 20 and
   21 September 2026 and is in
@@ -822,7 +834,8 @@ checklist:
 
 - ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
   a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single
-  sign-on (A2) follows as v0.33.0.
+  sign-on (A2: OpenID Connect, GitHub, and a trusted-header mode) **shipped
+  in v0.33.0**, completing the checklist item.
 
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
@@ -991,14 +1004,17 @@ v0.26.0.
   ounce is 31.1035 g) in the same migration.
 - ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
   decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
-  v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 follows as
+  v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 shipped in
   v0.33.0**, after P11 and P9. A session lasts one
   day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
   Origin check, not a token; photos go through nginx `auth_request` rather
   than signed URLs; passwords use Argon2id (`argon2-cffi`, a new
   dependency); nginx believes no forwarded header and Cabinet pins no
   network ranges (addressing is the operator's), because it must work both
-  behind an authenticating proxy and directly exposed; and the session that
+  behind an authenticating proxy and directly reachable on a private
+  network (never the internet: see
+  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks));
+  and the session that
   starts a restore keeps an in-memory grant so its progress page still
   answers. The full design and the permission table are in
   [security.md](security.md#accounts-and-permissions), and the build
@@ -1040,22 +1056,50 @@ v0.26.0.
     repeated failures, new tokens, downloads, and restores; and **every
     backup archive is encrypted** with a backup key the owner keeps,
     because an archive on a backup share was a readable copy of the whole
-    collection outside the login. Until v0.33.0, the recommended
-    deployment also keeps an authenticating proxy (any forward-auth or
+    collection outside the login. Before v0.33.0, the recommended
+    deployment also kept an authenticating proxy (any forward-auth or
     SSO gateway) in front, as a second door rather than a replacement for
-    Cabinet's own sign-in. The contract, with a walkthrough of setup,
+    Cabinet's own sign-in; from v0.33.0 that proxy is optional, since
+    Cabinet's own sign-in can use the same identity provider directly (see
+    P8, A2, below). The contract, with a walkthrough of setup,
     password changes, and the break-glass reset, is in
     [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
-    - **A2: Single sign-on. As v0.33.0, after P11 and P9.** OpenID Connect against any
-    provider (Authentik, Keycloak, Authelia, Google), signing in as the
-    admin through an identity linked to that account, and a trusted-header
-    mode for a forward-auth proxy that already authenticates, with a
-    shared secret or signed assertion rather than trust in an address.
-    Planned from the start so A1's user table and sessions carry an
-    external identity. The local admin password stays, so a provider
-    outage can't lock anyone out. **Two-factor sign-in** comes with it:
-    passkeys (WebAuthn) for the local password, or the identity provider's
-    own second factor.
+    - ✔ **A2: Single sign-on.** OpenID Connect against any
+    provider (Authentik, Keycloak, Authelia, Entra ID, Google, and any
+    other standards-compliant issuer), signing in as the
+    admin through an identity linked to that account, a GitHub button
+    (GitHub has no ID token, so it reads the identity from GitHub's
+    profile endpoint instead), and a trusted-header
+    mode for a gateway that already authenticates, verifying a **signed
+    assertion** the gateway publishes rather than trusting a shared secret
+    or a bare address. **Shipped in v0.33.0**
+    ([SPEC_0330](specs/SPEC_0330.md), reviewed twice before any code, as
+    A1 and P9 were). As built: the owner decided against building any
+    second factor inside Cabinet, so **the identity provider's own
+    multi-factor check is the second factor**, and the local admin
+    password stays as a deliberately one-factor recovery credential a
+    provider outage or a lost phone can never lock out (no passkeys, TOTP,
+    or recovery codes in Cabinet itself; passkeys stay a possible later
+    item). Linking never happens on a first sign-in: an identity that
+    isn't already linked is sent back to sign in with the password and
+    link it from a fresh Settings session. Provider configuration lives in
+    `cabinet_auth`, never in a backup, so a restore onto a fresh machine
+    means re-entering every provider's client id and secret and relinking.
+    Recovery is always the container: `unlink-identity <id>` and
+    `disable-sso` join `reset-password`, `sign-out-everywhere`, and
+    `revoke-tokens`, all taking effect in the running backend at once, with
+    no restart. **The deployment guidance changed alongside it**: an
+    authenticating gateway in front is now optional rather than a
+    recommended second door, and deployment.md gained a hard exposure
+    advisory (Cabinet is for private networks; do not expose it to the
+    internet under any configuration, single sign-on included) that the
+    docs repeat verbatim wherever reaching Cabinet from outside comes up.
+    CI proves the OpenID Connect and GitHub flows, the trusted-header mode
+    through real nginx, and a long list of deliberately broken tokens and
+    replays, against a mock provider built for this release; only the
+    owner's own Authentik, and a live GitHub, Google, or Microsoft
+    account, prove the parts a mock can't (see the build log in
+    [SPEC_0330](specs/SPEC_0330.md#18-build-log)).
   - ◆ **More accounts are optional** (see the optional list below), not
     part of this item: Cabinet stays single-user unless that is wanted.
   - Authentication changes every endpoint, so it lands **before
@@ -1159,8 +1203,10 @@ v0.26.0.
 
 **The order from here** (P10 the customisable dashboard shipped in v0.27.0,
 P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
-P8 A1 for v0.30.0, P11 bars and rounds for v0.31.0, and P9 the share view
-for v0.32.0): P8 A2, single sign-on, as v0.33.0, next.
+P8 A1 for v0.30.0, P11 bars and rounds for v0.31.0, P9 the share view for
+v0.32.0, and P8 A2, single sign-on, for v0.33.0): Phase 7 is complete.
+What's left is the road to v1.0.0's remaining items (below) and whatever
+entering the rest of the collection turns up.
 
 Optional, after the above and only if still wanted:
 
@@ -1191,14 +1237,18 @@ handing them the keys.*
 
 ## Notes on sequencing
 
-- **Auth was deliberately late, and shipped as P8 A1.** For homelab
-  deployment an authenticating reverse proxy (Traefik + Authentik
+- **Auth was deliberately late, and shipped as P8 A1, then A2.** For
+  homelab deployment an authenticating reverse proxy (Traefik + Authentik
   forward-auth) covered private networked use with zero application code
-  until it did, and stays recommended as a second door until A2 (single
-  sign-on) ships. Login became Phase 7, P8 because a share view needs the
-  rest of the app closed first, and it landed before v1.0.0 because it
-  changes every endpoint. It is built to work both behind such a proxy and
-  directly exposed, since which one a deployment uses is its own choice.
+  until A1 shipped, and single sign-on (A2, v0.33.0) then let that same
+  proxy's identity, or an OpenID Connect provider directly, sign in as the
+  admin. Login became Phase 7, P8 because a share view needs the rest of
+  the app closed first, and it landed before v1.0.0 because it changes
+  every endpoint. It is built to work both behind such a proxy and
+  directly reachable on a private network, since which one a deployment
+  uses is its own choice; neither is a reason to expose Cabinet to the
+  internet, which the deployment guide says plainly (see
+  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)).
 - **Schema-complete before data-complete.** Phase 2 front-loaded every field
   the collection would need (status, composition, certification, provenance)
   because adding columns is cheap before the full collection is entered and

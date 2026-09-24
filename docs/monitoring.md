@@ -23,6 +23,7 @@ reads the same statistics the dashboard does.
 | PCGS API token            | PCGS answers 401, or 500 (PCGS's way of saying the token is bad) | PCGS next answers a request        |
 | PCGS request quota        | PCGS answers 429                                             | PCGS next answers a request            |
 | Scheduled melt / Numista / PCGS refresh | a scheduled refresh run has any failed item    | a run finishes with none               |
+| A single sign-on provider (v0.33.0) | it rejects Cabinet's client credentials (a bad or expired client secret) | a sign-in through it next succeeds |
 
 An alert is sent **on the change only**: once when a check starts failing,
 once when it recovers. A rejected key that stays rejected doesn't alert again
@@ -74,6 +75,24 @@ found other share links or another sharing switch in the archive says so
 in its own finish message (the live links and switch are kept; the audit
 event is `restore_sharing`). Opening a link sends nothing; its count is in
 Settings and in the metrics below.
+
+**Single sign-on (v0.33.0).** Linking or unlinking an identity sends
+`identity_linked` or `identity_unlinked` (title `Cabinet account linked to
+a sign-in provider` / `... unlinked from ...`), naming the provider, never
+the identity's own subject. Adding, changing, or removing a provider, or
+switching the alert on password sign-ins, sends `sso_configured` (title
+`Cabinet single sign-on settings changed`), naming which fields changed,
+never their values. Running `disable-sso` in the container sends
+`sso_disabled` (title `Cabinet single sign-on switched off from the
+container`). With `password_sign_in_alerts` on (Settings → Sign-in, off by
+default, switched on the first time any provider is enabled), every
+password sign-in sends `password_sign_in` (title `Password sign-in to
+Cabinet`), a tripwire on the fallback door. Repeated rejected single
+sign-ons (an unlinked identity trying to sign in, a forged or expired
+token) are not sent one at a time: a burst of 20 in 15 minutes sends
+`sso_sign_in_failures` (title `Repeated rejected single sign-ons to
+Cabinet`), at most once an hour, the same shape as repeated failed
+password sign-ins.
 
 ### Formats
 

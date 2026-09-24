@@ -12,8 +12,8 @@ Contributions that keep it simple are very welcome.
   scope, what's built, and what's deliberately deferred are all recorded
   there. Opening an issue before a large PR saves everyone time. Cabinet now
   has its own sign-in (one admin, scoped API tokens; roadmap Phase 7, P8
-  A1); single sign-on (P8 A2) is next. Talk to us before starting on
-  authentication work.
+  A1) and single sign-on (OpenID Connect, GitHub, and a trusted-header
+  mode; P8 A2, v0.33.0). Talk to us before starting on authentication work.
 - **Questions**: open a discussion or issue; there's no separate forum.
 
 ## Development setup
