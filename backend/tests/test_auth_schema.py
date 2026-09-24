@@ -1,5 +1,6 @@
-"""The sign-in schema (v0.30.0): cabinet_auth apart from the collection, its
-own migration chain, and backups and restores that never touch it."""
+"""The sign-in schema (v0.30.0, single sign-on's a0002 in v0.33.0):
+cabinet_auth apart from the collection, its own migration chain, and
+backups and restores that never touch it."""
 
 import io
 import json
@@ -34,8 +35,13 @@ def test_no_foreign_key_crosses_between_the_schemas():
 def test_the_auth_tables_are_the_spec_s():
     assert {t.name for t in AuthBase.metadata.tables.values()} == {
         "claim", "users", "sessions", "api_tokens", "known_devices", "audit_log",
-        "backup_ledger",
+        "backup_ledger", "auth_providers", "identities", "known_browsers", "auth_config",
     }  # fmt: skip
+
+
+# `public` as a schema name: quoted, qualifying a table, or a schema= value.
+# Prose (a comment about a public client) is not a schema reference (R2-15).
+PUBLIC_SCHEMA = re.compile(r"[\"']public[\"']|\bpublic\.\w|schema\s*=\s*[\"']?public\b")
 
 
 def test_each_chain_stays_in_its_own_schema():
@@ -44,19 +50,37 @@ def test_each_chain_stays_in_its_own_schema():
     auth_versions = list((BACKEND / "alembic_auth" / "versions").glob("*.py"))
     assert auth_versions
     for path in auth_versions:
-        assert not re.search(r"\bpublic\b", path.read_text(encoding="utf-8")), path.name
+        assert not PUBLIC_SCHEMA.search(path.read_text(encoding="utf-8")), path.name
+
+
+@pytest.mark.parametrize(
+    "text, found",
+    [
+        ('op.create_table("x", schema="public")', True),
+        ("schema='public'", True),
+        ("schema=public", True),
+        ("SELECT * FROM public.items", True),
+        ('"public"', True),
+        ("# a public client has no secret", False),
+        ("the public profile needs no scope", False),
+    ],
+)
+def test_the_public_check_matches_the_schema_name_only(text, found):
+    assert bool(PUBLIC_SCHEMA.search(text)) is found
 
 
 def test_the_auth_migration_creates_every_table_the_model_has():
-    text = (BACKEND / "alembic_auth" / "versions" / "a0001_initial.py").read_text("utf-8")
-    created = set(re.findall(r'op\.create_table\(\s*"(\w+)"', text))
+    created = set()
+    for path in (BACKEND / "alembic_auth" / "versions").glob("*.py"):
+        text = path.read_text("utf-8")
+        created |= set(re.findall(r'op\.create_table\(\s*"(\w+)"', text))
     assert created == {t.name for t in AuthBase.metadata.tables.values()}
 
 
 def test_two_chains_with_their_own_heads():
     assert schema.script_revisions()[0] == "0022"
     head, known = schema.auth_script_revisions()
-    assert head == "a0001" and known == frozenset({"a0001"})
+    assert head == "a0002" and known == frozenset({"a0001", "a0002"})
 
 
 def test_startup_migrates_both_chains_in_order_and_a_restore_only_one(monkeypatch):
@@ -75,7 +99,7 @@ def test_startup_migrates_both_chains_in_order_and_a_restore_only_one(monkeypatc
 
 def test_health_reports_the_auth_schema(client):
     body = client.get("/api/health").json()
-    assert body["auth_schema"]["expected"] == "a0001"
+    assert body["auth_schema"]["expected"] == "a0002"
     assert body["auth_schema"]["status"] in ("ok", "pending", "unknown")
 
 

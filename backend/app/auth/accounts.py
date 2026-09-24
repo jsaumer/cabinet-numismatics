@@ -15,12 +15,24 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from app.auth import audit, common, devices, notify, passwords, sessions, throttle, tokens
+from app.auth import (
+    audit,
+    browsers,
+    common,
+    devices,
+    notify,
+    passwords,
+    sessions,
+    throttle,
+    tokens,
+)
+from app.auth import config as sso_config
 from app.auth.audit import Actor
 from app.auth.passwords import Busy, PasswordRejected  # noqa: F401 (re-exported)
 from app.auth.throttle import Throttled  # noqa: F401 (re-exported)
 from app.auth.tokens import TokenRejected  # noqa: F401 (re-exported)
-from app.models.auth import ApiToken, Claim, KnownDevice, Session, User
+from app.config import get_settings
+from app.models.auth import ApiToken, AuthProvider, Claim, Identity, KnownDevice, Session, User
 
 WRONG_CREDENTIALS = "Wrong username or password."
 WRONG_PASSWORD = "Wrong password."
@@ -233,6 +245,7 @@ def sign_in(db: DbSession, username: str, password: str, client: Client) -> Star
     audit.record(
         db, "sign_in", client.actor("session", user), detail={"new_device": device is None}
     )
+    alert_every = sso_config.get_config(db).password_sign_in_alerts
     db.commit()
     if device is None:
         notify.send(
@@ -240,6 +253,13 @@ def sign_in(db: DbSession, username: str, password: str, client: Client) -> Star
             "sign_in_new_device",
             f"Signed in as {user.username} from {_address(client)} "
             "on a browser Cabinet had not seen before.",
+        )
+    elif alert_every:
+        # The new-device alert says more, so this one only when it wasn't sent.
+        notify.send(
+            db,
+            "password_sign_in",
+            f"Signed in as {user.username} with the password from {_address(client)}.",
         )
     return started
 
@@ -264,9 +284,11 @@ def _verify_current(db: DbSession, user: User, password: str, client: Client, du
 
 
 def _end_everything(db: DbSession, user: User) -> list[ApiToken]:
-    """Every session, every known device, every token of every scope."""
+    """Every session, every known device and browser, every token of every
+    scope."""
     sessions.revoke_all(db, user.id)
     devices.revoke_all(db, user.id)
+    browsers.revoke_all(db, user.id)
     return tokens.revoke_all(db, user.id)
 
 
@@ -360,10 +382,164 @@ def sign_out_everywhere(db: DbSession, user: User, actor: Actor) -> dict:
     ended = {
         "sessions": sessions.revoke_all(db, user.id),
         "devices": devices.revoke_all(db, user.id),
+        "browsers": browsers.revoke_all(db, user.id),
     }
     audit.record(db, "sessions_revoked_all", actor, detail=ended)
     db.commit()
     return ended
+
+
+# --- single sign-on (v0.33.0) ------------------------------------------------------
+
+
+def unlink_identity(db: DbSession, user: User, identity_id: int, actor: Actor) -> dict:
+    """Remove one way in: its live sessions are revoked, then the identity is
+    deleted, in one transaction (CR-04), so a failure leaves both as they
+    were. Password sessions are untouched."""
+    row = db.get(Identity, identity_id)
+    if row is None or row.user_id != user.id:
+        raise NotFound()
+    summary = identity_summary(db, row)
+    try:
+        ended = sessions.revoke_for_identities(db, [row.id])
+        db.delete(row)
+        db.flush()
+        audit.record(
+            db,
+            "identity_unlinked",
+            actor,
+            target=f"identity {identity_id}",
+            detail={
+                "kind": summary["kind"],
+                "provider_id": summary["provider_id"],
+                "issuer": summary["issuer"],
+                "subject": summary["subject"],
+                "sessions_ended": ended,
+            },
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    how = summary["provider"] or "the trusted header"
+    notify.send(
+        db,
+        "identity_unlinked",
+        f"An identity linked through {how} was unlinked from {user.username}; "
+        f"{ended} session(s) that came through it were ended.",
+    )
+    return {**summary, "sessions_ended": ended}
+
+
+def delete_provider(db: DbSession, provider_id: int, actor: Actor) -> dict:
+    """Remove a provider and the identities linked through it, after
+    revoking their sessions, in one transaction. Header sessions stay."""
+    row = db.get(AuthProvider, provider_id)
+    if row is None:
+        raise NotFound()
+    name = row.display_name
+    try:
+        ids = list(db.scalars(select(Identity.id).where(Identity.provider_id == row.id)))
+        ended = sessions.revoke_for_identities(db, ids)
+        db.execute(
+            delete(Identity).where(Identity.id.in_(ids)),
+            execution_options={"synchronize_session": "fetch"},
+        )
+        db.delete(row)
+        db.flush()
+        audit.record(
+            db,
+            "sso_configured",
+            actor,
+            target=f"provider {provider_id}",
+            detail={"removed": True, "identities_removed": len(ids), "sessions_ended": ended},
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    notify.send(
+        db,
+        "sso_configured",
+        f"The sign-in provider {name!r} was removed, with {len(ids)} linked identity(ies); "
+        f"{ended} session(s) that came through it were ended.",
+    )
+    return {"identities_removed": len(ids), "sessions_ended": ended}
+
+
+def disable_sso(db: DbSession, actor: Actor) -> dict:
+    """The container's switch-off: every provider disabled, the trusted-header
+    mode switched off, and every `oidc` and `trusted_header` session revoked,
+    in one transaction. Linked identities stay, for when it is switched back
+    on. The running backend sees it on its next request (nothing is cached)."""
+    try:
+        rows = sso_config.providers(db, enabled_only=True)
+        at = common.now()
+        for row in rows:
+            row.enabled = False
+            row.updated_at = at
+        config = sso_config.get_config(db)
+        header_was_on = config.trusted_header_enabled
+        config.trusted_header_enabled = False
+        config.updated_at = at
+        ended = sessions.revoke_external(db)
+        db.flush()
+        done = {
+            "providers_disabled": len(rows),
+            "trusted_header_switched_off": header_was_on,
+            "sessions_ended": ended,
+        }
+        audit.record(db, "sso_disabled", actor, detail=done)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    notify.send(
+        db,
+        "sso_disabled",
+        f"Single sign-on was switched off from the container: {len(rows)} provider(s) "
+        f"disabled, the trusted-header mode off, {ended} session(s) ended. "
+        "Password sign-in is unchanged.",
+    )
+    return done
+
+
+def identity_summary(db: DbSession, row: Identity) -> dict:
+    provider = db.get(AuthProvider, row.provider_id) if row.provider_id is not None else None
+    return {
+        "id": row.id,
+        "kind": row.kind,
+        "provider_id": row.provider_id,
+        "provider": provider.display_name if provider is not None else None,
+        "issuer": row.issuer,
+        "subject": row.subject,
+        "display": row.display,
+    }
+
+
+def _sign_in_methods(db: DbSession, user: User) -> dict:
+    config = sso_config.get_config(db)
+    identities = db.scalars(
+        select(Identity).where(Identity.user_id == user.id).order_by(Identity.id)
+    ).all()
+    return {
+        "providers": [
+            {
+                "id": row.id,
+                "display_name": row.display_name,
+                "preset": row.preset,
+                "kind": row.kind,
+                "enabled": row.enabled,
+            }
+            for row in sso_config.providers(db)
+        ],
+        "identities": [identity_summary(db, row) for row in identities],
+        "trusted_header": {
+            "configured": sso_config.trusted_header_configured(get_settings()),
+            "enabled": config.trusted_header_enabled,
+        },
+        "password_sign_in_alerts": config.password_sign_in_alerts,
+    }
 
 
 # --- tokens -----------------------------------------------------------------------
@@ -446,6 +622,7 @@ def status(db: DbSession) -> dict:
             }
             for row in tokens.live(db, user.id)
         ],
+        **_sign_in_methods(db, user),
     }
 
 
@@ -468,6 +645,7 @@ def prune(db: DbSession) -> None:
         execution_options=fetch,
     )
     db.execute(delete(KnownDevice).where(KnownDevice.expires_at < at), execution_options=fetch)
+    browsers.prune(db)
     old = at - timedelta(days=30)
     db.execute(
         delete(ApiToken).where(or_(ApiToken.revoked_at < old, ApiToken.expires_at < old)),

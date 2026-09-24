@@ -2126,6 +2126,91 @@ read was trusted once it looked clean. Rules:
   route answers with the one 404 whether or not the file would look clean.
   `marker_exists()` still only asks whether the file is there.
 
+## Single sign-on (v0.33.0)
+
+Roadmap Phase 7, P8 A2, built to [SPEC_0330](specs/SPEC_0330.md) on
+`p8-auth-a2`, stage by stage.
+
+### Stage 1: data and configuration
+
+Migration `a0002` (the sign-in chain only; nothing in `public` changes),
+`app/auth/config.py`, `app/auth/browsers.py`, the trusted-header checks in
+`config.check_startup`, and the container commands. Rules a later change
+has to respect:
+
+- **Provider rows and `auth_config` are read from the database on every
+  use, never cached** (R2-01). `app/auth/config.py` is the one reader:
+  `providers`, `provider`, `get_config`, `trusted_header_on`. The container
+  commands write from another process, so a cache (module, `lru_cache`,
+  or app state) would keep a disabled provider's button, or the header
+  mode, alive until a restart. Don't add one.
+- **The trusted-header mode has a stored switch** (R2-02):
+  `trusted_header_on(db, settings)` is the four `TRUSTED_ASSERTION_*`
+  variables set **and** `auth_config.trusted_header_enabled`. Anything
+  that offers or honours the mode asks that function, never the variables
+  alone. `disable-sso` sets the switch false; only Settings (admin, fresh,
+  audited `sso_configured`) sets it back.
+- **Removing a way in revokes before it deletes, in one transaction**
+  (CR-04): `accounts.unlink_identity`, `accounts.delete_provider`, and
+  `accounts.disable_sso` revoke the matching live sessions
+  (`sessions.revoke_for_identities` by `sessions.identity_id`, or
+  `sessions.revoke_external` for every `oidc` and `trusted_header`
+  session), then delete, then audit, then commit; any failure rolls all of
+  it back. Password sessions are never touched. A new path that sets up an
+  `oidc` or `trusted_header` session must pass `identity_id` to
+  `sessions.create`, or these can't find it.
+- **A linked provider can't be repointed** (R2-13):
+  `config.update_provider` raises `ProviderLinked` when `issuer`,
+  `client_id`, `kind`, or `preset` would change on a provider an identity
+  is linked through (stage 2's route answers 409). The preset and kind
+  agree in code (`check_preset`) and in a check constraint; `github` is
+  the one `oauth2_profile` preset, and a preset's fixed issuer and URLs
+  come from `PRESETS`, never from a client. `enabled` changes only through
+  `enable_provider`, which switches `password_sign_in_alerts` on (audited)
+  when a provider is enabled while none was (R2-17); nothing else ever
+  changes that switch automatically.
+- **The header-name blocklist is `config.TRUSTED_HEADER_FORBIDDEN`**
+  (R2-14): names nginx sets or the gate reads, lowercased, a trailing `-`
+  meaning a prefix (`sec-fetch-`, `x-forwarded-`). Stage 3's proxy start
+  script refuses the same list; change both together. `check_startup`
+  refuses a partial set of the four variables (naming the missing ones),
+  a bad header name, a JWKS URL that isn't `https://` (or `http://` beside
+  `AUTH_INSECURE_HTTP`), and an unreadable `SSO_CA_FILE`, and only warns
+  about two `PUBLIC_ORIGINS` with one host. **It never reads the database**
+  (R2-07), so no stored state can crash-loop the backend out of reach of
+  the recovery commands; `test_startup_never_reads_database` pins it.
+- **Rejected single sign-ons are capped apart** (R2-05):
+  `audit.REJECTED_SSO` (`sso_sign_in_rejected`) has its own 10,000 rows,
+  like `sign_in_failed`, trimmed as written, and both are left out of the
+  shared 50,000 (`audit._own_caps`); on stdout both are sampled per event
+  and name. `notify.rejected_sso` alerts 20 in 15 minutes, once an hour,
+  counted apart from password failures (`notify._burst`, one deque per
+  kind).
+- **`known_browsers` rows go with every "end everything"** (R2-04): a
+  password change, `reset-password`, and `sign-out-everywhere` delete the
+  account's rows (`browsers.revoke_all`), so the next sign-in from
+  anywhere alerts, and the hourly `accounts.prune` drops expired ones. The
+  cookie and its table have no part in authentication or throttling:
+  nothing in `devices`, `throttle`, or `_check_password` may read them.
+- **`password_sign_in`** is sent by `accounts.sign_in` when
+  `password_sign_in_alerts` is on, unless the new-device alert went out
+  for the same sign-in (it says more). The switch is read before the
+  sign-in's commit.
+- **The migration's portability.** The two checks are written as
+  `(a AND b) OR (NOT a AND NOT b)` rather than a boolean `=`, which SQLite
+  and Postgres would read differently; the two partial unique indexes
+  declare both `postgresql_where` and `sqlite_where` (tests build with
+  `create_all`); `users`' columns go through `op.batch_alter_table`; the
+  `auth_config` row is inserted with a typed `op.bulk_insert`, so
+  `--sql` renders it. The file was run up and down against SQLite with
+  `cabinet_auth` attached, and rendered for Postgres with `--sql`. Like
+  every auth migration, it may not name the collection's schema: the
+  `test_each_chain_stays_in_its_own_schema` grep now matches the word only
+  as a schema name (quoted, `public.x`, `schema=public`), so prose about a
+  public client doesn't trip it.
+- `users.external_issuer`/`external_subject` and `uq_users_external` are
+  gone (Q5): identities live in `identities`.
+
 ## Releases
 
 

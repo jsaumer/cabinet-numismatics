@@ -481,8 +481,15 @@ docker compose build --pull && docker compose up -d
   history); it ends every session and known device, revokes every API token
   and names them, and clears the running backend's sign-in delays.
   `sign-out-everywhere` ends every session and known device (a lost laptop),
-  and `revoke-tokens [--name NAME]` revokes every token or one. There is
-  deliberately no command that undoes the setup or deletes the admin.
+  and `revoke-tokens [--name NAME]` revokes every token or one. From v0.33.0
+  `status` also lists the sign-in providers, the linked identities, and which
+  sign-in methods are on. `unlink-identity <id>` unlinks one single sign-on
+  identity (its id is in `status`) and ends the sessions that came through
+  it. `disable-sso` switches every provider and the trusted-header mode off
+  and ends their sessions, for a configuration that keeps you from the
+  sign-in page; the password still works, and the linked identities stay.
+  Both take effect in the running backend at once, with no restart. There
+  is deliberately no command that undoes the setup or deletes the admin.
   `strip-photo-metadata` (v0.32.0) re-encodes every stored photo and
   thumbnail without EXIF, GPS, and the rest, the pass the backend runs once
   by itself; `restore.sh` runs it after putting back an archive's photos,

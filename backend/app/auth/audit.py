@@ -1,11 +1,13 @@
 """The audit log: one row per event in `cabinet_auth.audit_log`, and one JSON
 line on stdout (logger `cabinet.audit`).
 
-Failed sign-ins have a cap of their own (FAILED_CAP rows), so a flood of
-them can never push out the evidence of anything else; every other event is
-kept 180 days or KEEP_ROWS rows. Both caps are enforced as rows are written.
-On stdout, failures are sampled: at most one line per name (or `unknown`)
-per 15 minutes, carrying how many there were.
+Failed sign-ins have a cap of their own (FAILED_CAP rows), and so do
+rejected single sign-ons (REJECTED_SSO_CAP, v0.33.0: anyone with a Google
+or GitHub account can finish the flow as an unlinked identity), so a flood
+of either can never push out the evidence of anything else; every other
+event is kept 180 days or KEEP_ROWS rows. The caps are enforced as rows
+are written. On stdout, both kinds are sampled: at most one line per event
+and name (or `unknown`) per 15 minutes, carrying how many there were.
 
 Nothing from the collection (item names, locations, documents) and no
 secret ever goes into a row, a line, or a webhook.
@@ -57,10 +59,17 @@ EVENTS = frozenset(
         "share_link_revoked",
         "share_link_changed",
         "restore_sharing",
+        "identity_linked",
+        "identity_unlinked",
+        "sso_configured",
+        "sso_disabled",
+        "sso_sign_in_rejected",
     }
 )
 FAILED = "sign_in_failed"
 FAILED_CAP = 10_000
+REJECTED_SSO = "sso_sign_in_rejected"
+REJECTED_SSO_CAP = 10_000
 KEEP = timedelta(days=180)
 KEEP_ROWS = 50_000
 SAMPLE_WINDOW = 15 * 60
@@ -136,11 +145,17 @@ def _trim(db: DbSession, where, keep: int) -> None:
         )
 
 
+def _own_caps() -> dict[str, int]:
+    """The events capped apart from the rest, read at call time."""
+    return {FAILED: FAILED_CAP, REJECTED_SSO: REJECTED_SSO_CAP}
+
+
 def _enforce_caps(db: DbSession, action: str) -> None:
-    if action == FAILED:
-        _trim(db, AuditEntry.action == FAILED, FAILED_CAP)
+    caps = _own_caps()
+    if action in caps:
+        _trim(db, AuditEntry.action == action, caps[action])
         return
-    others = AuditEntry.action != FAILED
+    others = AuditEntry.action.not_in(list(caps))
     db.execute(
         delete(AuditEntry).where(others, AuditEntry.at < common.now() - KEEP),
         execution_options=FETCH,
@@ -156,7 +171,7 @@ def prune(db: DbSession) -> None:
 # --- stdout -----------------------------------------------------------------------
 
 _sample_lock = threading.Lock()
-_sampled: OrderedDict[str, list] = OrderedDict()  # label -> [printed_at, since]
+_sampled: OrderedDict[str, list] = OrderedDict()  # event:label -> [printed_at, since]
 
 
 def _print(row: AuditEntry) -> None:
@@ -169,8 +184,8 @@ def _print(row: AuditEntry) -> None:
         "address": row.address,
         "detail": row.detail,
     }
-    if row.action == FAILED:
-        label = row.actor_label or "unknown"
+    if row.action in _own_caps():
+        label = f"{row.action}:{row.actor_label or 'unknown'}"
         t = common.monotonic()
         with _sample_lock:
             entry = _sampled.get(label)

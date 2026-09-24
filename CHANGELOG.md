@@ -10,6 +10,17 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+Single sign-on (v0.33.0), in progress.
+
+### Added
+- Stage 1, data and configuration: migration `a0002` (sign-in providers,
+  linked identities, the new-browser alert's rows, the sign-in switches,
+  and each session's identity; the unused external columns on `users`
+  removed), the trusted-header variables checked at startup, alerts on
+  every password sign-in once a provider is first switched on, and the
+  container commands `unlink-identity <id>` and `disable-sso`, with
+  `status` listing the providers, identities, and sign-in methods.
+
 ## [0.32.2] - 2026-09-23
 
 An adversarial review of v0.32.1 found four edges in the share photo path
