@@ -2652,6 +2652,10 @@ section 19), no critical or high. Rules the fixes left:
 - **After a suspected compromise, check the linked identities first**
   (SR-05): they survive every command but `unlink-identity`; the docs say
   so, and the `identity_linked` alert is the tripwire.
+- **The google preset accepts both documented issuer forms**
+  (`oidc.accepted_issuers`: `https://accounts.google.com` and
+  `accounts.google.com`), from the review's not-verified list; every other
+  provider's `iss` must equal its configured issuer exactly.
 
 ### Stage 6: documentation and release
 

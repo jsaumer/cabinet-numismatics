@@ -513,6 +513,21 @@ def _text(value, length: int) -> str | None:
     return value[:length] if isinstance(value, str) and value else None
 
 
+# Google documents its ID token issuer as either form; the discovery
+# document's `issuer` is the https one, so only the token's `iss` varies.
+GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
+
+
+def accepted_issuers(provider) -> tuple[str, ...]:
+    """The `iss` values an ID token from this provider may carry: the
+    configured issuer, and for the `google` preset the scheme-less form
+    Google also documents (a fail-closed gap the review's not-verified list
+    named)."""
+    if provider.preset == "google" and provider.issuer == GOOGLE_ISSUERS[0]:
+        return GOOGLE_ISSUERS
+    return (provider.issuer,)
+
+
 def verify_id_token(provider, doc: dict, id_token: str, nonce: str, *, confirm: bool) -> dict:
     """The ID token's claims, verified (section 5, CR-13, CR-14)."""
     try:
@@ -527,7 +542,7 @@ def verify_id_token(provider, doc: dict, id_token: str, nonce: str, *, confirm: 
             key,
             algorithms=ALGORITHMS,
             audience=provider.client_id,
-            issuer=provider.issuer,
+            issuer=accepted_issuers(provider),
             leeway=LEEWAY,
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
         )
