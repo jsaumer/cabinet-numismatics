@@ -8,6 +8,17 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Documentation
+
+- `docs/live-validation.md`: the plan for validating v0.33.0 on a real
+  deployment (the upgrade, sign-in through Authentik, Google, and GitHub,
+  the trusted-header mode against an Authentik outpost, the recovery
+  commands on the local stack, and an OpenVAS scan of the running
+  instance), and the roadmap's road to v1.0.0 spelled out item by item
+  now that Phase 7 is complete.
+
 ## [0.33.0] - 2026-09-24
 
 Roadmap Phase 7, P8, A2: single sign-on

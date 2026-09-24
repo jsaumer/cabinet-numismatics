@@ -404,6 +404,7 @@ Run from Git Bash on Windows. Copy backups off the machine. See
 - [Backup & restore](docs/backup-restore.md): what a backup contains and how to drill it
 - [Monitoring](docs/monitoring.md): alert webhooks, the heartbeat, and Prometheus metrics
 - [Security](docs/security.md): secrets at rest, key management, exposure guidance
+- [Live validation](docs/live-validation.md): checking a release against real sign-in providers and a vulnerability scanner, non-destructively
 - [Roadmap](docs/roadmap.md): full feature list, what's done, what remains
 - [Implementation notes](docs/implementation-notes.md): what each release added and the rules it left behind
 - [Backend](backend/README.md) and [frontend](frontend/README.md): layout and commands for each half

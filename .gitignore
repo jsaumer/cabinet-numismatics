@@ -36,3 +36,6 @@ docs/specs/*-codex-review*.md
 docs/specs/*-review-opus*.md
 docs/specs/*-review-*-codex*.md
 docs/specs/*-claude-review*.md
+# Raw results of the live validation plan (docs/live-validation.md): scan
+# reports and anything naming a deployment stay local.
+docs/live-validation-results/
