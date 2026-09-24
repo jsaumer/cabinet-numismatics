@@ -1190,3 +1190,27 @@ def test_configuration_routes_need_a_fresh_admin(stale_client, token_client):
         assert getattr(token_client("write"), method)(path, **kwargs).status_code == 403
     assert token_client("write").get("/api/auth/signin-config").status_code == 403
     assert stale_client.get("/api/auth/signin-config").status_code == 200
+
+
+def test_google_accepts_both_documented_issuer_forms(idp, monkeypatch):
+    """Google documents `iss` as either `https://accounts.google.com` or
+    `accounts.google.com`; only the google preset accepts the second."""
+    from tests.fake_idp import ISSUER
+
+    class Row:
+        kind = "oidc"
+        client_id = idp.client_id
+        preset = "google"
+        issuer = "https://accounts.google.com"
+
+    doc = {"jwks_uri": f"{ISSUER}/jwks"}
+    oidc.reset_memory()
+    idp.claims = {"iss": "accounts.google.com"}
+    token = idp.id_token({"sub": "g-1", "nonce": "n", "auth_time": int(time.time())})
+    claims = oidc.verify_id_token(Row(), doc, token, "n", confirm=False)
+    assert claims["sub"] == "g-1"
+    Row.preset = "custom"
+    Row.issuer = ISSUER
+    with pytest.raises(oidc.FlowError):
+        oidc.verify_id_token(Row(), doc, token, "n", confirm=False)
+    assert oidc.accepted_issuers(Row()) == (ISSUER,)

@@ -402,7 +402,10 @@ section 3).
 
 Create an **OAuth client ID** of type **Web application** in the Google
 Cloud console, with the redirect URI above, and configure the consent
-screen. Cabinet preset: **Google**; no tenant to enter. "Confirm at your
+screen. Cabinet preset: **Google**; no tenant to enter. Google documents
+its ID token issuer as either `https://accounts.google.com` or
+`accounts.google.com`; the Google preset accepts both, so neither form
+fails the issuer check. "Confirm at your
 sign-in provider" falls back to the password: Google supports neither
 `prompt=login` nor `auth_time`. Turn on 2-Step Verification on the Google
 account you link.
