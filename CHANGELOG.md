@@ -35,6 +35,19 @@ Single sign-on (v0.33.0), in progress.
   a map of their own, the callback's query is redacted from the access
   log, and a new-browser cookie (no part in authentication or throttling)
   decides the new-browser alert for every sign-in method. No frontend yet.
+- Stage 3, the trusted-header mode: `POST /api/auth/trusted` signs in with
+  a gateway's signed assertion (Authentik's proxy outpost, Cloudflare
+  Access, Pomerium, Google IAP), verified against
+  `TRUSTED_ASSERTION_JWKS_URL` with the configured issuer and audience, and
+  `POST /api/auth/identities/trusted_header` links the identity it names;
+  `GET /api/auth/state` offers the mode from deployment state only, never
+  reading the header. The proxy's start script is now
+  `40-cabinet-config.sh` and also writes nginx's identity include: every
+  gateway header blanked, bar the one `TRUSTED_ASSERTION_HEADER` names
+  (`X-Goog-IAP-JWT-Assertion` joins the list), and a header nginx sets
+  itself refused. nginx's access log now redacts the sign-in callback's
+  query. The `TRUSTED_ASSERTION_*` and `SSO_CA_FILE` variables are in both
+  compose files.
 
 ## [0.32.2] - 2026-09-23
 

@@ -31,9 +31,12 @@ a single-user collection manager has modest performance needs.
 ### proxy (nginx, built image)
 The single public entry point. It answers only the Host names of
 `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (written into `server_name` by
-`proxy/40-cabinet-hosts.sh` when the container starts, which stops the
+`proxy/40-cabinet-config.sh` when the container starts, which stops the
 container on a bad value); a default server closes the connection on any
-other Host (444). Every proxied location includes `cabinet-proxy.conf`,
+other Host (444). The same script writes `cabinet-identity.conf`, which
+blanks every forward-auth identity header except the one
+`TRUSTED_ASSERTION_HEADER` names (the trusted-header mode, v0.33.0). Every
+proxied location includes `cabinet-proxy.conf` (and through it that file),
 which overwrites `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto`
 with nginx's own peer and scheme and drops forward-auth identity headers,
 so the backend never trusts a client's claim; sign-in and setup take at most

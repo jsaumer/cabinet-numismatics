@@ -821,7 +821,8 @@ change must respect:
   through. Forwarded headers are overwritten, never appended; identity
   headers are set to `""` (not passed). The backend runs uvicorn with
   `--no-proxy-headers`, so it never rewrites the client from a header either.
-- **Host names.** `proxy/40-cabinet-hosts.sh` writes `server_name` from the
+- **Host names.** `proxy/40-cabinet-hosts.sh` (`40-cabinet-config.sh` from
+  v0.33.0) writes `server_name` from the
   hosts of `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (a union, so listing an
   internal name can't drop the public one); underscores are allowed
   (`cabinet_proxy`), `_` alone, ports, schemes, and wildcards are not. The
@@ -2360,6 +2361,89 @@ respect:
 - **The appendix**: the eight routes are rows under "Single sign-on routes
   (v0.33.0)" in SPEC_0300 (135 operations); `test_gate.ANONYMOUS` holds the
   two flow pairs.
+
+### Stage 3: the trusted header and nginx
+
+`app/auth/trusted.py`, the two header routes in `routers/sso.py`
+(`POST /api/auth/trusted` and `POST /api/auth/identities/trusted_header`),
+`state`'s `trusted_header`, `signin-config`'s new fields, the proxy's start
+script renamed `proxy/40-cabinet-config.sh`, the generated
+`cabinet-identity.conf`, and the callback's redaction in nginx's access log.
+Rules a later change has to respect:
+
+- **The identity include is generated, not written.** The list of gateway
+  identity headers lives in `40-cabinet-config.sh` (`identity_headers`,
+  version 2: `X-Goog-IAP-JWT-Assertion` added, CR-18), which writes
+  `/etc/nginx/cabinet/cabinet-identity.conf` at start: every name set to
+  `""`, except the one `TRUSTED_ASSERTION_HEADER` names (compared without
+  case), written as `proxy_set_header <Name> $http_<name>;`. A name not on
+  the list is still passed on, and the script says so. `cabinet-proxy.conf`
+  includes the file, so every proxied location gets it. A new identity
+  header goes into the script's list, never into `cabinet-proxy.conf`.
+  `CABINET_NGINX_DIR` moves the output for the tests and the smoke script.
+- **A grep is not the proof.** nginx drops the inherited
+  `proxy_set_header` lines in any location that sets one of its own, so the
+  proof that a header is blanked is the rendered `nginx -T` and a request
+  through real nginx (the smoke script's `trusted` phase, and during the
+  build a throwaway echo backend behind the built image: with the mode off
+  none of the four spoofed headers arrived; with `X-authentik-jwt` only that
+  one did, and a repeated one arrived joined with `, `).
+- **Two forbidden lists, kept equal by a test.** The script's `forbidden`
+  and `app/config.py`'s `TRUSTED_HEADER_FORBIDDEN` (R2-14) name the same
+  headers (`*` in the script where the backend has a trailing `-`);
+  `test_script_and_backend_forbid_the_same_headers` parses the script. A
+  forbidden, malformed, or oversized name stops the proxy before nginx
+  starts, like a bad host.
+- **`state` never reads the header** (R2-03): `trusted_header:
+  {"available": true}` comes from `config.trusted_header_on` alone. The
+  assertion is read only by `trusted.verify`, called only by the two header
+  routes; `test_state_never_touches_jwks` replaces the key client with one
+  that fails. `signin-config`'s `link_ready` only asks whether the header is
+  present (`trusted.present`).
+- **The keys come only from the variable** (CR-05): `trusted.verify` uses
+  `oidc._jwks(TRUSTED_ASSERTION_JWKS_URL)`, the provider flows' key client
+  (10 s, no redirects, 64 KiB, `SSO_CA_FILE` trust, one refetch a minute),
+  never `X-authentik-meta-jwks` or any other request header.
+- **`iat` is not required** in an assertion, unlike an ID token: some
+  gateways leave it out, and `exp` bounds the replay. `exp`, `iss`, `aud`,
+  and `sub` are, with 60 s leeway; the `alg` must be one of
+  `oidc.ALGORITHMS` and the key never `oct`; `aud` is checked again by hand
+  (exactly the configured audience).
+- **A repeated header fails closed.** nginx joins repeats with `, `; the
+  verifier refuses whitespace, anything but three base64url parts, over
+  8 KiB, and (straight to the backend) more than one header line, each as
+  the one generic `TrustedRefused`, whose `check` word is all that reaches
+  the audit row. No part of an assertion reaches an exception message, a
+  log line, or an audit detail; a verified `sub` does, as for providers.
+- **Failures** are audited `sso_sign_in_rejected` with `reason`
+  (`assertion`, `unlinked`, `subject`), `check`, `intent` (`login` or
+  `link`), and `kind: trusted_header`, alerted in bursts
+  (`notify.rejected_sso`), and throttled per address in the `oidc` map
+  (`throttle.oidc_failure`); inside a wait the sign-in answers 429 before
+  the keys are fetched. Keys that can't be fetched are a 502 telling the
+  owner to use the password.
+- **The switch** (R2-02): both routes are the one 404 unless
+  `trusted_header_on`; `disable-sso` switches it off and revokes the
+  header's sessions; only `PUT /api/auth/signin-config` switches it back.
+  A header session starts through `accounts.start_external` (method
+  `trusted_header`, `identity_id` set, no device cookie, the browser's old
+  session revoked), so unlinking or `disable-sso` ends it.
+- **Linking** reads the assertion on the admin's own request (fresh
+  session), refuses a `sub` holding `@` or equal to its `email` or
+  `preferred_username` (R2-06, `subject`), and allows one header identity
+  per account and one account per `(issuer, subject)` (409
+  `already_linked`, the partial unique indexes backing it).
+- **nginx** has a `location = /api/auth/trusted` with the 8 KiB cap, like
+  sign-in and setup (the gate caps it by `Content-Length` too), and the
+  access log's `map` turns `/api/auth/oidc/callback` with anything after it
+  into `/api/auth/oidc/callback?[redacted]`. nginx's error log still
+  prints a failing request's line, query included; nothing in this stage
+  changes that.
+- **Stage 5 still owes** the header sign-in end to end through real nginx
+  against an assertion the mock provider signs (with
+  `TRUSTED_ASSERTION_HEADER` set on the CI stack), and the stage 3 build
+  log's live values from the owner's Authentik (`alg`, `iss`, `aud`,
+  `exp - iat`), which need the owner's gateway.
 
 ## Releases
 

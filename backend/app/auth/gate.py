@@ -61,13 +61,18 @@ ANONYMOUS = {
     (b"POST", b"/api/auth/login"),
     (b"GET", b"/api/auth/oidc/start"),  # v0.33.0; a session is looked up if sent
     (b"GET", b"/api/auth/oidc/callback"),
+    (b"POST", b"/api/auth/trusted"),  # the gateway's assertion; no body
 }
 # Passed with no credential lookup at all (step 4).
 NO_LOOKUP = {(b"GET", b"/api/auth/oidc/callback")}
 # Anonymous GET and HEAD by prefix: the share view, whose token is in the
 # path. Every route under it declares the `share` class.
 ANONYMOUS_PREFIXES = (b"/api/share/",)
-SMALL_BODY = {(b"POST", b"/api/auth/setup"), (b"POST", b"/api/auth/login")}
+SMALL_BODY = {
+    (b"POST", b"/api/auth/setup"),
+    (b"POST", b"/api/auth/login"),
+    (b"POST", b"/api/auth/trusted"),
+}
 SMALL_BODY_LIMIT = 8 * 1024
 OPENAPI = b"/api/openapi.json"
 RESTORE_STATUS = (b"GET", b"/api/restore/status")

@@ -5,14 +5,14 @@
 # job; it moved here so it can also run against the local stack before any
 # push (docs/specs/SPEC_0300.md section 9, stage 7 of section 10).
 #
-# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]
+# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|trusted|all]
 #   (no argument, or "all", runs every phase in order)
 #
 # race must run before bootstrap, on a fresh, unclaimed stack (it skips
 # itself with a message on one already claimed, so "all" still works
 # against a stack that's already been signed into, such as the owner's main
 # one). outside-in runs after bootstrap; it is independent of smoke,
-# backup-restore, restore-drill, photos, and share.
+# backup-restore, restore-drill, photos, share, and trusted.
 #
 # Run from the repository root, with the stack already up
 # (docker compose up -d) and PUBLIC_ORIGINS/ALLOWED_HOSTS/AUTH_INSECURE_HTTP
@@ -728,6 +728,91 @@ print("failed sign-in recorded from", row["address"], "not the spoofed address")
   echo "outside-in checks passed"
 }
 
+trusted() {
+  load_tokens
+  echo "== trusted =="
+  # The trusted-header mode (v0.33.0) against a stack with it OFF (CI's): the
+  # routes answer 404, no gateway header ever reaches the backend, the
+  # generated include blanks every name, and a callback's code and state
+  # never reach an access log. The full header sign-in through real nginx
+  # against a signed assertion is stage 5's: the mock provider hosts the
+  # JWKS it needs.
+
+  # (a) The sign-in page is told the mode isn't there.
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+state = json.load(sys.stdin)
+assert state["methods"]["trusted_header"] is None, state
+'
+
+  # (b) The sign-in route is 404, anonymous and signed in alike.
+  test "$(status_of -X POST "$BASE/api/auth/trusted")" = 404
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" -X POST "$BASE/api/auth/trusted")" = 404
+
+  # (c) Every gateway header a client sends is blanked by nginx: a wrong
+  # password carrying all of them answers exactly as one without, and none
+  # of their values reaches the audit log.
+  local plain spoofed
+  plain=$(status_of -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"not the password, trusted check\"}")
+  spoofed=$(status_of -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -H 'X-authentik-jwt: spoofed-marker-jwt' -H 'Remote-User: spoofed-marker-user' \
+    -H 'X-Goog-IAP-JWT-Assertion: spoofed-marker-iap' \
+    -H 'Cf-Access-Jwt-Assertion: spoofed-marker-cf' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"not the password, trusted check\"}")
+  test "$plain" = "$spoofed"
+  adminf "$BASE/api/auth/audit?limit=20" | "$PY" -c '
+import json, sys
+rows = json.load(sys.stdin)
+assert "spoofed-marker" not in json.dumps(rows), "a spoofed gateway header reached the audit log"
+assert not any(r["action"] == "sso_sign_in_rejected" for r in rows), rows
+print("spoofed gateway headers left no trace")
+'
+
+  # (d) The include nginx is running with blanks every name. (MSYS_NO_PATHCONV
+  # keeps Git Bash on Windows from rewriting the container paths; no effect
+  # elsewhere.)
+  local include
+  include=$(MSYS_NO_PATHCONV=1 docker compose exec -T proxy cat /etc/nginx/cabinet/cabinet-identity.conf)
+  if printf '%s\n' "$include" | grep -q '\$http_'; then
+    echo "the identity include passes a header through with the mode off" >&2
+    exit 1
+  fi
+  for name in X-authentik-jwt Remote-User Cf-Access-Jwt-Assertion X-Pomerium-Jwt-Assertion \
+    X-Goog-IAP-JWT-Assertion; do
+    printf '%s\n' "$include" | grep -qx "proxy_set_header $name \"\";"
+  done
+
+  # (e) The start script, rendered inside the proxy container for each
+  # supported assertion header, passes exactly that one; a header nginx sets
+  # itself stops it.
+  local rendered
+  for name in X-authentik-jwt Cf-Access-Jwt-Assertion X-Pomerium-Jwt-Assertion \
+    X-Goog-IAP-JWT-Assertion; do
+    rendered=$(MSYS_NO_PATHCONV=1 docker compose exec -T -e TRUSTED_ASSERTION_HEADER="$name" proxy sh -c \
+      'CABINET_NGINX_DIR=/tmp/cabinet-render /docker-entrypoint.d/40-cabinet-config.sh >/dev/null && cat /tmp/cabinet-render/cabinet-identity.conf && rm -rf /tmp/cabinet-render')
+    test "$(printf '%s\n' "$rendered" | grep -c '\$http_')" = 1
+    printf '%s\n' "$rendered" | grep -q "^proxy_set_header $name \$http_"
+  done
+  if MSYS_NO_PATHCONV=1 docker compose exec -T -e TRUSTED_ASSERTION_HEADER=Host proxy sh -c \
+    'CABINET_NGINX_DIR=/tmp/cabinet-render /docker-entrypoint.d/40-cabinet-config.sh' >/dev/null 2>&1; then
+    echo "the start script accepted TRUSTED_ASSERTION_HEADER=Host" >&2
+    exit 1
+  fi
+
+  # (f) A callback's code and state never reach either access log.
+  curl -s -o /dev/null "$BASE/api/auth/oidc/callback?code=smokecodeabc&state=smokestatedef"
+  curl -s -o /dev/null "$BASE/api/auth/oidc/callback/?code=smokecodeabc"
+  local logs
+  logs=$(docker compose logs --no-log-prefix --tail 200 proxy backend 2>&1)
+  printf '%s\n' "$logs" | grep -q 'oidc/callback?\[redacted\]'
+  if printf '%s\n' "$logs" | grep -q 'smokecode\|smokestate'; then
+    echo "a callback's code or state reached a log" >&2
+    exit 1
+  fi
+  echo "trusted checks passed"
+}
+
 case "$phase" in
   race) race ;;
   bootstrap) bootstrap ;;
@@ -737,6 +822,7 @@ case "$phase" in
   restore-drill) restore_drill ;;
   photos) photos ;;
   share) share ;;
+  trusted) trusted ;;
   all)
     race
     bootstrap
@@ -746,9 +832,10 @@ case "$phase" in
     restore_drill
     photos
     share
+    trusted
     ;;
   *)
-    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]" >&2
+    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|trusted|all]" >&2
     exit 2
     ;;
 esac

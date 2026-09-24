@@ -997,7 +997,13 @@ def test_signin_config_shape(client, idp):
     assert CLIENT_SECRET not in json.dumps(body)
     assert row["credentials_failing"] is False and row["linked"] is True
     assert body["identities"][0]["subject"] == "owner-sub"
-    assert body["trusted_header"] == {"configured": False, "enabled": True}
+    assert body["trusted_header"] == {
+        "configured": False,
+        "enabled": True,
+        "header_name": None,
+        "issuer": None,
+        "link_ready": False,
+    }
     assert body["password_sign_in_alerts"] is True  # the first provider switched it on
     assert body["callback_urls"] == ["https://testserver/api/auth/oidc/callback"]
     presets = {p["name"]: p for p in body["presets"]}
