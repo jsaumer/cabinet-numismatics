@@ -713,12 +713,18 @@ def add_provider(body: ProviderBody, request: Request, db: DbSession = Depends(g
             )
         claims = doc.get("claims_supported")
         prompts = doc.get("prompt_values_supported")
+        # `confirm` is the one answer that matters, from the same rule the
+        # sign-in applies (oidc.confirm_capable): a provider that publishes
+        # no prompt_values_supported at all, as Authentik doesn't, still
+        # qualifies. The two flags stay for the detail.
         return JSONResponse(
             {
                 "ok": True,
                 "issuer": issuer,
+                "confirm": oidc.confirm_capable(doc),
                 "claims_supported_auth_time": isinstance(claims, list) and "auth_time" in claims,
-                "prompt_login": isinstance(prompts, list) and "login" in prompts,
+                "prompt_login": prompts is None
+                or (isinstance(prompts, list) and "login" in prompts),
             },
             headers=NO_STORE,
         )

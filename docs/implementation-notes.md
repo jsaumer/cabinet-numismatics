@@ -2715,6 +2715,18 @@ The owner's first look at v0.33.0 live. Rules:
   count, already fetched for the table; the list itself stays on the Stack
   page.
 
+## v0.33.2
+
+- **The dry run and the sign-in share one confirm rule.** `POST
+  /api/auth/providers` with `dry_run` answers `confirm` from
+  `oidc.confirm_capable(doc)`, the function `qualifies_for_confirm` calls at
+  sign-in; the two detail flags (`claims_supported_auth_time`,
+  `prompt_login`) stay, and `prompt_login` is true when the provider
+  publishes no `prompt_values_supported`, as Authentik doesn't. A new
+  condition on a provider confirm goes into `confirm_capable` only. Found
+  live: the first Test against the owner's Authentik said "no" while the
+  confirm would have been offered.
+
 ## Releases
 
 
