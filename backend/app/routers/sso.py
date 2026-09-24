@@ -16,20 +16,21 @@ import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from app.auth import accounts, audit, common, notify, oidc, sessions, throttle
+from app.auth import accounts, audit, common, notify, oidc, sessions, throttle, trusted
 from app.auth import config as sso_config
 from app.auth.events import actor_of
 from app.auth.permissions import ReauthRequired, permission, principal
 from app.config import _shared_hosts, get_settings, public_origins
 from app.db import get_db
 from app.models.auth import AuthProvider, Identity, Session, User
-from app.routers.auth import NO_STORE, client_of
+from app.routers.auth import BODY_LIMIT, NO_STORE, client_of
 from app.services import alerts
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -305,6 +306,201 @@ def _failed(db, client, flow, provider, found, exc) -> Response:
     return _redirect(destination(intent, flow["next"] if flow else "/", code))
 
 
+# --- the trusted header --------------------------------------------------------------
+
+NOT_FOUND = {"detail": "Not found"}
+UNAVAILABLE = (
+    "Cabinet could not reach the gateway's keys to check who is signed in. "
+    "Sign in with the password instead."
+)
+REFUSALS = {
+    "assertion": "The gateway's assertion was not accepted.",
+    "unlinked": "No Cabinet account is linked to the identity the gateway asserts.",
+    "subject": "That identity looks like an email address or a username, which the "
+    "gateway may let someone else claim; link a stable id instead.",
+}
+
+
+def _not_found() -> JSONResponse:
+    return JSONResponse(NOT_FOUND, 404, headers=NO_STORE)
+
+
+def _too_many(wait: float) -> JSONResponse:
+    return JSONResponse(
+        {"detail": "Too many attempts. Try again shortly."},
+        429,
+        headers={**NO_STORE, "Retry-After": str(max(1, int(wait) + 1))},
+    )
+
+
+async def _drain_small(request: Request) -> None:
+    """No body is needed; anything sent is read and dropped, at most 8 KiB
+    (the gate and nginx cap it by its length too)."""
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > BODY_LIMIT:
+            raise HTTPException(413, "Too large.")
+
+
+def _header_refused(
+    db: DbSession,
+    client,
+    code: str,
+    check: str,
+    intent: str,
+    subject: str | None = None,
+    actor=None,
+) -> JSONResponse:
+    """A refused assertion: throttled per address in the `oidc` map (inside a
+    wait, 429 and nothing counted or audited), else audited as a rejected
+    single sign-on and alerted in bursts. Nothing from the assertion is
+    recorded but a verified subject."""
+    db.rollback()
+    wait = throttle.oidc_failure(client.address or "unknown")
+    if wait > 0:
+        return _too_many(wait)
+    detail = {"reason": code, "check": check, "intent": intent, "kind": "trusted_header"}
+    if subject is not None:
+        detail["subject"] = subject
+    # A refused link is the signed-in admin's doing; a refused sign-in is nobody's.
+    audit.record(
+        db,
+        audit.REJECTED_SSO,
+        actor or client.actor("anonymous", label="unknown"),
+        detail=detail,
+    )
+    db.commit()
+    notify.rejected_sso(db)
+    if check.startswith("jwks_"):
+        return JSONResponse({"detail": UNAVAILABLE, "code": "provider"}, 502, headers=NO_STORE)
+    return JSONResponse({"detail": REFUSALS[code], "code": code}, 403, headers=NO_STORE)
+
+
+def _header_identity(db: DbSession, found: trusted.Assertion) -> Identity | None:
+    return db.scalar(
+        select(Identity).where(
+            Identity.kind == "trusted_header",
+            Identity.issuer == found.issuer,
+            Identity.subject == found.subject,
+        )
+    )
+
+
+@router.post("/trusted")
+@permission("public")
+async def trusted_sign_in(request: Request, db: DbSession = Depends(get_db)):
+    """Sign in with the gateway's assertion (SPEC_0330 section 7). 404 while
+    the mode isn't configured or is switched off (R2-02); 403 for an
+    assertion that doesn't verify or an identity nobody linked; 502 when the
+    gateway's keys can't be fetched. Never a device cookie (CR-03)."""
+    await _drain_small(request)
+    client = client_of(request)
+    presented = request.cookies.get(sessions.cookie_names()[0])
+    headers = request.headers
+
+    def work() -> Response:
+        settings = get_settings()
+        if not trusted.on(db, settings):
+            db.rollback()
+            return _not_found()
+        if (wait := throttle.wait("oidc", client.address or "unknown")) > 0:
+            return _too_many(wait)  # inside a wait, not even the keys are fetched
+        try:
+            found = trusted.verify(headers, settings)
+        except trusted.TrustedRefused as exc:
+            return _header_refused(db, client, "assertion", exc.check, "login")
+        identity = _header_identity(db, found)
+        user = db.get(User, identity.user_id) if identity is not None else None
+        if user is None or not user.is_active:
+            return _header_refused(db, client, "unlinked", "unlinked", "login", found.subject)
+        started = accounts.start_external(
+            db,
+            user,
+            identity,
+            client,
+            method="trusted_header",
+            browser_secret=client.browser,
+            presented=presented,
+            how="the trusted header",
+        )
+        response = JSONResponse({"username": started.user.username}, headers=NO_STORE)
+        sessions.set_cookies(response, started.session_secret, None)
+        sessions.set_browser_cookie(response, started.browser_secret)
+        return response
+
+    return await run_in_threadpool(work)
+
+
+@router.post("/identities/trusted_header", status_code=201)
+@permission("admin", fresh=True)
+def link_trusted_header(request: Request, db: DbSession = Depends(get_db)):
+    """Link the identity the gateway asserts on this very request to the
+    signed-in account. One header identity per account; its subject may not
+    look like an email or a username (R2-06)."""
+    settings = get_settings()
+    if not trusted.on(db, settings):
+        db.rollback()
+        return _not_found()
+    client = client_of(request)
+    who = principal(request)
+    user = db.get(User, who.user_id)
+    try:
+        found = trusted.verify(request.headers, settings)
+    except trusted.TrustedRefused as exc:
+        return _header_refused(db, client, "assertion", exc.check, "link", actor=actor_of(who))
+    try:
+        trusted.check_link_subject(found)
+    except trusted.TrustedRefused:
+        return _header_refused(
+            db, client, "subject", "subject", "link", found.subject, actor=actor_of(who)
+        )
+    conflict = JSONResponse(
+        {
+            "detail": "An identity from the trusted header is already linked.",
+            "code": "already_linked",
+        },
+        409,
+        headers=NO_STORE,
+    )
+    taken = _header_identity(db, found) is not None or db.scalar(
+        select(Identity.id).where(Identity.user_id == user.id, Identity.kind == "trusted_header")
+    )
+    if taken:
+        db.rollback()
+        return conflict
+    identity = Identity(
+        user_id=user.id,
+        kind="trusted_header",
+        provider_id=None,
+        issuer=found.issuer,
+        subject=found.subject,
+        display=found.display,
+        linked_at=common.now(),
+    )
+    try:
+        db.add(identity)
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        return conflict
+    audit.record(
+        db,
+        "identity_linked",
+        actor_of(who),
+        target=f"identity {identity.id}",
+        detail={"kind": "trusted_header", "issuer": found.issuer, "subject": found.subject},
+    )
+    db.commit()
+    notify.send(
+        db,
+        "identity_linked",
+        f"The identity the trusted header asserts was linked to {user.username}: "
+        "it can now sign in to Cabinet through the gateway.",
+    )
+    return JSONResponse(accounts.identity_summary(db, identity), 201, headers=NO_STORE)
+
+
 # --- configuration ------------------------------------------------------------------
 
 
@@ -348,16 +544,25 @@ def _presets() -> list[dict]:
 
 @router.get("/signin-config")
 @permission("admin")
-def signin_config(db: DbSession = Depends(get_db)):
+def signin_config(request: Request, db: DbSession = Depends(get_db)):
     config = sso_config.get_config(db)
+    settings = get_settings()
+    configured = sso_config.trusted_header_configured(settings)
     failing = alerts.failing(db)
     identities = db.scalars(select(Identity).order_by(Identity.id)).all()
     body = {
         "providers": [_provider_out(db, row, failing) for row in sso_config.providers(db)],
         "identities": [accounts.identity_summary(db, row) for row in identities],
         "trusted_header": {
-            "configured": sso_config.trusted_header_configured(get_settings()),
+            "configured": configured,
             "enabled": config.trusted_header_enabled,
+            "header_name": settings.trusted_assertion_header.strip() or None,
+            "issuer": settings.trusted_assertion_issuer.strip() or None,
+            # The header is on this request; nothing in it is read or
+            # verified here (that is the link route's job).
+            "link_ready": configured
+            and config.trusted_header_enabled
+            and trusted.present(request.headers, settings),
         },
         "password_sign_in_alerts": config.password_sign_in_alerts,
         "presets": _presets(),
@@ -398,7 +603,7 @@ def put_signin_config(body: SigninConfigBody, request: Request, db: DbSession = 
             "sso_configured",
             f"Sign-in settings changed in Settings: {', '.join(changed)}.",
         )
-    return signin_config(db)
+    return signin_config(request, db)
 
 
 class ProviderBody(BaseModel):

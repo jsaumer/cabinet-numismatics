@@ -26,6 +26,11 @@ CLIENT_ID = "cabinet-client"
 CLIENT_SECRET = "fake client secret value, 32 bytes or more"
 GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
 GITHUB_PROFILE = "https://api.github.com/user"
+# The same keys play a trusted-header gateway's (stage 3): its JWKS is this
+# provider's, and `assertion` signs what the gateway would send.
+JWKS_URL = f"{ISSUER}/jwks"
+GATEWAY_ISSUER = "https://gateway.test/application/o/cabinet/"
+GATEWAY_AUDIENCE = "cabinet-gateway"
 
 
 def _b64(raw: bytes) -> str:
@@ -113,6 +118,40 @@ class FakeIdP:
         if self.sign == "ec":
             return jwt.encode(claims, self.ec, "ES256", headers={"kid": self.kid or "ec-1"})
         return jwt.encode(claims, self.rsa, "RS256", headers={"kid": self.kid or "rsa-1"})
+
+    def assertion(
+        self,
+        sub: str = "gateway-sub",
+        *,
+        alg: str = "RS256",
+        kid: str | None = None,
+        key=None,
+        **claims,
+    ) -> str:
+        """A gateway's signed assertion for `sub`. `claims` override or add
+        (`iss`, `aud`, `exp`, ...); a claim given as None is left out.
+        `alg` may be `none` or `HS256` (signed with `key`, a string)."""
+        now = int(time.time())
+        body = {
+            "iss": GATEWAY_ISSUER,
+            "aud": GATEWAY_AUDIENCE,
+            "sub": sub,
+            "iat": now,
+            "exp": now + 300,
+            "email": "owner@example.com",
+            "preferred_username": "owner",
+        }
+        body.update(claims)
+        body = {k: v for k, v in body.items() if v is not None}
+        if alg == "none":
+            head = _b64(json.dumps({"alg": "none", "kid": kid or "rsa-1"}).encode())
+            return f"{head}.{_b64(json.dumps(body).encode())}."
+        if alg.startswith("HS"):
+            secret = key or "a gateway HMAC secret, 32 bytes or more"
+            return jwt.encode(body, secret, alg, headers={"kid": kid or "rsa-1"})
+        if alg == "ES256":
+            return jwt.encode(body, key or self.ec, alg, headers={"kid": kid or "ec-1"})
+        return jwt.encode(body, key or self.rsa, alg, headers={"kid": kid or "rsa-1"})
 
     def discovery(self) -> dict:
         doc = {

@@ -124,6 +124,9 @@ jobs:
       - name: Share links (public, no sign-in)
         run: scripts/ci/stack-smoke.sh share
 
+      - name: Trusted header off (nginx include, redaction)
+        run: scripts/ci/stack-smoke.sh trusted
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"

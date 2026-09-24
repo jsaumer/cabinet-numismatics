@@ -146,7 +146,8 @@ and data migrations.
   Node 22.
 - **stack**: builds and starts the compose stack, then runs
   `scripts/ci/stack-smoke.sh` (`bootstrap`, `smoke`, `outside-in`,
-  `backup-restore`, `restore-drill`, `photos`, in that order) through the
+  `backup-restore`, `restore-drill`, `photos`, `share`, `trusted`, in that
+  order) through the
   proxy: bootstrap signs in and mints tokens; smoke covers create, trash,
   restore, permanent delete, settings, metrics, the test alert; outside-in
   checks every anonymous route is refused, each token's scope holds (read,
@@ -155,7 +156,12 @@ and data migrations.
   audit log; backup-restore and restore-drill rehearse an in-app backup,
   `scripts/restore.sh`, and an in-app restore, each checking the admin
   password and the write token still work afterwards; photos checks nginx's
-  `auth_request` gate. Then Playwright runs against the same stack. The
+  `auth_request` gate; share checks the public share view; trusted checks,
+  with the trusted-header mode off, that its routes answer 404, that no
+  gateway identity header reaches the backend, that the proxy's start
+  script renders the identity include (and refuses a header nginx sets),
+  and that a sign-in callback's code never reaches a log. Then Playwright
+  runs against the same stack. The
   script runs the same way locally, and locally it also has a `race` phase
   (two concurrent `POST /api/auth/setup` calls on a fresh stack must leave
   exactly one `201` and one `409`; it skips itself with a message on a stack

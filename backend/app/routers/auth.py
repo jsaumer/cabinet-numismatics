@@ -20,6 +20,7 @@ from app.auth import accounts, audit, oidc, sessions, setup, throttle, tokens
 from app.auth import config as sso_config
 from app.auth.events import actor_of
 from app.auth.permissions import Principal, permission, principal, require
+from app.config import get_settings
 from app.db import get_db
 from app.models.auth import ApiToken, AuthProvider, Identity, Session, User
 
@@ -115,16 +116,24 @@ class LoginBody(BaseModel):
 def auth_state(db: DbSession = Depends(get_db)):
     """Whether setup is needed, and the ways to sign in: the password always,
     one button per enabled provider (read from the database, never cached,
-    R2-01). `trusted_header` is filled by stage 3."""
+    R2-01), and whether the trusted-header mode is offered. That comes from
+    deployment state only (the variables and the stored switch): this route
+    never reads or verifies the request's assertion (R2-03), so a gateway
+    whose keys can't be fetched never stalls the sign-in page."""
     setup.ensure_prepared(db)
     providers = [
         {"id": row.id, "name": row.display_name, "preset": row.preset}
         for row in sso_config.providers(db, enabled_only=True)
     ]
+    header = sso_config.trusted_header_on(db, get_settings())
     return JSONResponse(
         {
             "setup_required": not accounts.claimed(db),
-            "methods": {"password": True, "providers": providers, "trusted_header": None},
+            "methods": {
+                "password": True,
+                "providers": providers,
+                "trusted_header": {"available": True} if header else None,
+            },
         },
         headers=NO_STORE,
     )
