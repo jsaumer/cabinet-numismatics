@@ -163,6 +163,38 @@ export const EyeIcon = () => (
   </Icon>
 );
 
+/** Sign-in provider glyphs (v0.33.0): simple monochrome marks, drawn the
+ * same way as every other icon here (no external brand asset is fetched;
+ * the CSP allows none). A custom OpenID Connect provider gets the generic
+ * key. */
+export const GoogleIcon = () => (
+  <Icon>
+    <path d="M4 12a8 8 0 0 1 8-8c2.1 0 3.9.75 5.3 2.05l-2.25 2.2A5 5 0 0 0 12 7.5a4.5 4.5 0 0 0 0 9 4.6 4.6 0 0 0 4.7-3.6h-4.7v-3h7.9c.1.5.15 1 .15 1.6 0 4.6-3.1 7.9-8 7.9A8 8 0 0 1 4 12z" />
+  </Icon>
+);
+
+export const MicrosoftIcon = () => (
+  <Icon>
+    <rect x="3.5" y="3.5" width="7.7" height="7.7" />
+    <rect x="12.8" y="3.5" width="7.7" height="7.7" />
+    <rect x="3.5" y="12.8" width="7.7" height="7.7" />
+    <rect x="12.8" y="12.8" width="7.7" height="7.7" />
+  </Icon>
+);
+
+export const GitHubIcon = () => (
+  <Icon>
+    <path d="M12 3a9 9 0 0 0-2.85 17.54c.45.08.6-.2.6-.43v-1.68c-2.5.55-3.03-1.08-3.03-1.08-.4-1.05-1-1.32-1-1.32-.83-.56.06-.55.06-.55.9.06 1.38.93 1.38.93.8 1.38 2.1.98 2.6.75.08-.58.32-.98.57-1.2-2-.23-4.1-1-4.1-4.45 0-.98.35-1.79.92-2.42-.1-.23-.4-1.14.1-2.38 0 0 .76-.24 2.5.92a8.6 8.6 0 0 1 4.5 0c1.73-1.16 2.5-.92 2.5-.92.5 1.24.2 2.15.1 2.38.57.63.92 1.44.92 2.42 0 3.46-2.1 4.22-4.1 4.44.33.28.62.85.62 1.7v2.5c0 .24.15.52.6.43A9 9 0 0 0 12 3z" />
+  </Icon>
+);
+
+export const KeyIcon = () => (
+  <Icon>
+    <circle cx="8" cy="15" r="3.5" />
+    <path d="M10.5 12.5L18 5M15.5 7.5l2 2M18.5 4.5l2 2" />
+  </Icon>
+);
+
 export const EyeOffIcon = () => (
   <Icon>
     <path d="M3 3l18 18M9.9 5.1A10.6 10.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a15.6 15.6 0 0 1-3.1 3.9M6.3 6.9C3.8 8.7 2.5 12 2.5 12S6 18.5 12 18.5a9.6 9.6 0 0 0 3.4-.6" />

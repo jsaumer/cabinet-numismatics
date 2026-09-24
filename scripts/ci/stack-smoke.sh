@@ -5,14 +5,17 @@
 # job; it moved here so it can also run against the local stack before any
 # push (docs/specs/SPEC_0300.md section 9, stage 7 of section 10).
 #
-# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]
+# Usage: scripts/ci/stack-smoke.sh [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|trusted|sso|all]
 #   (no argument, or "all", runs every phase in order)
 #
 # race must run before bootstrap, on a fresh, unclaimed stack (it skips
 # itself with a message on one already claimed, so "all" still works
 # against a stack that's already been signed into, such as the owner's main
 # one). outside-in runs after bootstrap; it is independent of smoke,
-# backup-restore, restore-drill, photos, and share.
+# backup-restore, restore-drill, photos, share, and trusted. sso runs last:
+# it needs the mock provider (docker-compose.ci.yml; it skips itself without
+# one) and leaves the trusted-header mode on, so trusted fails after it
+# until the stack is recreated without the TRUSTED_ASSERTION_* variables.
 #
 # Run from the repository root, with the stack already up
 # (docker compose up -d) and PUBLIC_ORIGINS/ALLOWED_HOSTS/AUTH_INSECURE_HTTP
@@ -26,6 +29,12 @@
 #   STACK_SMOKE_STATE  Where the cookie jar and minted tokens are kept between
 #                       phases, so bootstrap/smoke/backup-restore/restore-drill
 #                       can run as separate steps (default a temp folder)
+#   MOCK_IDP_URL       The mock provider as this shell reaches it (sso only;
+#                       default http://localhost:8555)
+#   MOCK_IDP_ISSUER    The mock provider as the backend reaches it, its issuer
+#                       (sso only; default http://mock_idp:8555)
+#   COMPOSE_FILE       The stack's compose files, for sso's recreate of the
+#                       backend and proxy (CI: docker-compose.yaml:docker-compose.ci.yml)
 #
 # The `docker compose exec` calls below (a document's PDF, a photo, decrypting
 # an archive) take no -p: they rely on COMPOSE_PROJECT_NAME (export it) to
@@ -728,6 +737,444 @@ print("failed sign-in recorded from", row["address"], "not the spoofed address")
   echo "outside-in checks passed"
 }
 
+trusted() {
+  load_tokens
+  echo "== trusted =="
+  # The trusted-header mode (v0.33.0) against a stack with it OFF (CI's): the
+  # routes answer 404, no gateway header ever reaches the backend, the
+  # generated include blanks every name, and a callback's code and state
+  # never reach an access log. The full header sign-in through real nginx
+  # against a signed assertion is stage 5's: the mock provider hosts the
+  # JWKS it needs.
+
+  # (a) The sign-in page is told the mode isn't there.
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+state = json.load(sys.stdin)
+assert state["methods"]["trusted_header"] is None, state
+'
+
+  # (b) The sign-in route is 404, anonymous and signed in alike.
+  test "$(status_of -X POST "$BASE/api/auth/trusted")" = 404
+  test "$(status_of -b "$COOKIES" -H "Origin: $BASE" -X POST "$BASE/api/auth/trusted")" = 404
+
+  # (c) Every gateway header a client sends is blanked by nginx: a wrong
+  # password carrying all of them answers exactly as one without, and none
+  # of their values reaches the audit log.
+  local plain spoofed
+  plain=$(status_of -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"not the password, trusted check\"}")
+  spoofed=$(status_of -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' \
+    -H 'X-authentik-jwt: spoofed-marker-jwt' -H 'Remote-User: spoofed-marker-user' \
+    -H 'X-Goog-IAP-JWT-Assertion: spoofed-marker-iap' \
+    -H 'Cf-Access-Jwt-Assertion: spoofed-marker-cf' \
+    -d "{\"username\":\"$CABINET_USER\",\"password\":\"not the password, trusted check\"}")
+  test "$plain" = "$spoofed"
+  adminf "$BASE/api/auth/audit?limit=20" | "$PY" -c '
+import json, sys
+rows = json.load(sys.stdin)
+assert "spoofed-marker" not in json.dumps(rows), "a spoofed gateway header reached the audit log"
+assert not any(r["action"] == "sso_sign_in_rejected" for r in rows), rows
+print("spoofed gateway headers left no trace")
+'
+
+  # (d) The include nginx is running with blanks every name. (MSYS_NO_PATHCONV
+  # keeps Git Bash on Windows from rewriting the container paths; no effect
+  # elsewhere.)
+  local include
+  include=$(MSYS_NO_PATHCONV=1 docker compose exec -T proxy cat /etc/nginx/cabinet/cabinet-identity.conf)
+  if printf '%s\n' "$include" | grep -q '\$http_'; then
+    echo "the identity include passes a header through with the mode off" >&2
+    exit 1
+  fi
+  for name in X-authentik-jwt Remote-User Cf-Access-Jwt-Assertion X-Pomerium-Jwt-Assertion \
+    X-Goog-IAP-JWT-Assertion; do
+    printf '%s\n' "$include" | grep -qx "proxy_set_header $name \"\";"
+  done
+
+  # (e) The start script, rendered inside the proxy container for each
+  # supported assertion header, passes exactly that one; a header nginx sets
+  # itself stops it.
+  local rendered
+  for name in X-authentik-jwt Cf-Access-Jwt-Assertion X-Pomerium-Jwt-Assertion \
+    X-Goog-IAP-JWT-Assertion; do
+    rendered=$(MSYS_NO_PATHCONV=1 docker compose exec -T -e TRUSTED_ASSERTION_HEADER="$name" proxy sh -c \
+      'CABINET_NGINX_DIR=/tmp/cabinet-render /docker-entrypoint.d/40-cabinet-config.sh >/dev/null && cat /tmp/cabinet-render/cabinet-identity.conf && rm -rf /tmp/cabinet-render')
+    test "$(printf '%s\n' "$rendered" | grep -c '\$http_')" = 1
+    printf '%s\n' "$rendered" | grep -q "^proxy_set_header $name \$http_"
+  done
+  if MSYS_NO_PATHCONV=1 docker compose exec -T -e TRUSTED_ASSERTION_HEADER=Host proxy sh -c \
+    'CABINET_NGINX_DIR=/tmp/cabinet-render /docker-entrypoint.d/40-cabinet-config.sh' >/dev/null 2>&1; then
+    echo "the start script accepted TRUSTED_ASSERTION_HEADER=Host" >&2
+    exit 1
+  fi
+
+  # (f) A callback's code and state never reach either access log.
+  curl -s -o /dev/null "$BASE/api/auth/oidc/callback?code=smokecodeabc&state=smokestatedef"
+  curl -s -o /dev/null "$BASE/api/auth/oidc/callback/?code=smokecodeabc"
+  local logs
+  logs=$(docker compose logs --no-log-prefix --tail 200 proxy backend 2>&1)
+  printf '%s\n' "$logs" | grep -q 'oidc/callback?\[redacted\]'
+  if printf '%s\n' "$logs" | grep -q 'smokecode\|smokestate'; then
+    echo "a callback's code or state reached a log" >&2
+    exit 1
+  fi
+  echo "trusted checks passed"
+}
+
+# --- single sign-on through the mock provider ----------------------------------
+
+# A header's value from a `curl -D` dump (empty when it isn't there).
+header_value() {
+  tr -d '\r' < "$1" | grep -i "^$2:" | head -n1 | sed 's/^[^:]*: *//' || true
+}
+
+# Set what the mock's next token (or discovery document) does.
+mock_control() {
+  curl -fsS -X POST "$MOCK_IDP_URL/control" -H 'Content-Type: application/json' -d "$1" -o /dev/null
+}
+
+# One pass through the code flow with curl: Cabinet's start route, the mock's
+# authorize page (auto-approved; sent to the mock's host-side address, since
+# the authorize URL names the browser-facing one), then Cabinet's callback.
+# Sets SSO_START (the start's status), SSO_AUTHORIZE, SSO_CALLBACK (the URL
+# the mock sent back), SSO_FLOW (the flow cookie, read before the callback
+# clears it), SSO_STATUS and SSO_LOCATION (the callback's answer); the
+# callback's headers are left in $STATE_DIR/sso-callback.hdr.
+sso_trip() {
+  local jar="$1" intent="$2" next="$3"
+  SSO_AUTHORIZE="" SSO_CALLBACK="" SSO_FLOW="" SSO_STATUS="" SSO_LOCATION=""
+  SSO_START=$(curl -s -o /dev/null -D "$STATE_DIR/sso-start.hdr" -w '%{http_code}' \
+    -b "$jar" -c "$jar" -H "Origin: $BASE" \
+    "$BASE/api/auth/oidc/start?provider=$SSO_PROVIDER&intent=$intent&next=$next")
+  [ "$SSO_START" = 302 ] || return 0
+  SSO_AUTHORIZE=$(header_value "$STATE_DIR/sso-start.hdr" location)
+  curl -s -o /dev/null -D "$STATE_DIR/sso-authorize.hdr" \
+    "$MOCK_IDP_URL/authorize?${SSO_AUTHORIZE#*\?}&auto=1"
+  SSO_CALLBACK=$(header_value "$STATE_DIR/sso-authorize.hdr" location)
+  SSO_FLOW=$(awk '$6 == "cabinet_oidc" { print $7 }' "$jar")
+  SSO_STATUS=$(curl -s -o /dev/null -D "$STATE_DIR/sso-callback.hdr" -w '%{http_code}' \
+    -b "$jar" -c "$jar" "$SSO_CALLBACK")
+  SSO_LOCATION=$(header_value "$STATE_DIR/sso-callback.hdr" location)
+}
+
+# A sign-in, in a new jar $1, that must land on $2.
+sso_expect() {
+  : > "$1"
+  sso_trip "$1" login /collection
+  if [ "$SSO_STATUS" != 303 ] || [ "$SSO_LOCATION" != "$2" ]; then
+    echo "sso: wanted 303 to $2, got ${SSO_START}/${SSO_STATUS} to '$SSO_LOCATION'" >&2
+    exit 1
+  fi
+}
+
+me_of() { curl -fsS -b "$1" -c "$1" -H "Origin: $BASE" "$BASE/api/auth/me"; }
+signin_config() { adminf "$BASE/api/auth/signin-config"; }
+trusted_status() { curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/trusted" "$@"; }
+
+sso() {
+  load_tokens
+  echo "== sso =="
+  MOCK_IDP_URL="${MOCK_IDP_URL:-http://localhost:8555}"
+  MOCK_IDP_ISSUER="${MOCK_IDP_ISSUER:-http://mock_idp:8555}"
+  if ! curl -fsS -o /dev/null "$MOCK_IDP_URL/health" 2>/dev/null; then
+    echo "no mock provider at $MOCK_IDP_URL (start the stack with docker-compose.ci.yml too); skipping sso"
+    return 0
+  fi
+  # Single sign-on end to end against scripts/ci/mock_idp.py, then the
+  # trusted-header mode through real nginx, which this phase leaves ON:
+  # Playwright's sso.spec.ts follows it in CI and uses both the providers
+  # configured here and the header mode. So `trusted` (which expects the
+  # mode off) fails after this phase until the backend and proxy are
+  # recreated without the TRUSTED_ASSERTION_* variables, which is what a
+  # rerun of this phase does first. The `docker compose` calls below take
+  # the stack's compose files from COMPOSE_FILE (docker compose reads it
+  # itself), so export it as the stack was started.
+
+  # Start clean: the mode off (a rerun finds it on; recreating the backend
+  # also clears the single sign-on throttle an earlier run filled), and no
+  # provider or header identity from an earlier run.
+  if signin_config | "$PY" -c 'import json,sys; sys.exit(0 if json.load(sys.stdin)["trusted_header"]["configured"] else 1)'; then
+    env -u TRUSTED_ASSERTION_HEADER -u TRUSTED_ASSERTION_JWKS_URL \
+      -u TRUSTED_ASSERTION_ISSUER -u TRUSTED_ASSERTION_AUDIENCE \
+      docker compose up -d backend proxy
+    wait_for_health
+  fi
+  mock_control '{"subject": "ci-user-1", "misbehave": null}'
+  local stale
+  for stale in $(signin_config | "$PY" -c '
+import json, sys
+c = json.load(sys.stdin)
+for p in c["providers"]:
+    if p["client_id"] in ("cabinet-ci", "cabinet-ci-github"):
+        print("providers/%d" % p["id"])
+for i in c["identities"]:
+    if i["kind"] == "trusted_header":
+        print("identities/%d" % i["id"])
+' | tr -d '\r'); do
+    fresh -X DELETE "$BASE/api/auth/$stale" -o /dev/null
+  done
+
+  # (1) Configure: a custom OpenID Connect provider at the mock (tried with
+  # dry_run first) and a GitHub one. The GitHub preset's URLs are fixed to
+  # github.com in the backend, so its exchange can't be round-tripped
+  # against the mock from here: pytest's fake proves it (tests/test_oidc.py),
+  # and the mock's GitHub mode waits for a way to reach it that needs no
+  # backend change. Here the GitHub preset proves its configuration only.
+  local oidc_body created
+  oidc_body="{\"preset\":\"custom\",\"issuer\":\"$MOCK_IDP_ISSUER\",\"client_id\":\"cabinet-ci\",\"client_secret\":\"cabinet-ci-secret\",\"display_name\":\"CI provider\",\"enabled\":true"
+  fresh -X POST "$BASE/api/auth/providers" -H 'Content-Type: application/json' \
+    -d "$oidc_body,\"dry_run\":true}" | "$PY" -c '
+import json, sys
+r = json.load(sys.stdin)
+assert r["ok"] is True and r["claims_supported_auth_time"] is True and r["prompt_login"] is True, r
+'
+  created=$(fresh -X POST "$BASE/api/auth/providers" -H 'Content-Type: application/json' \
+    -d "$oidc_body}" -w '\n%{http_code}')
+  test "$(printf '%s\n' "$created" | tail -n1)" = 201
+  SSO_PROVIDER=$(printf '%s\n' "$created" | head -n1 | field id)
+  created=$(fresh -X POST "$BASE/api/auth/providers" -H 'Content-Type: application/json' \
+    -d '{"preset":"github","client_id":"cabinet-ci-github","client_secret":"cabinet-ci-github-secret","display_name":"GitHub","enabled":true}' \
+    -w '\n%{http_code}')
+  test "$(printf '%s\n' "$created" | tail -n1)" = 201
+  printf '%s\n' "$created" | head -n1 | "$PY" -c '
+import json, sys
+p = json.load(sys.stdin)
+assert p["kind"] == "oauth2_profile" and p["linked"] is False and p["enabled"] is True, p
+'
+  GITHUB_PROVIDER=$(printf '%s\n' "$created" | head -n1 | field id)
+  test "$(fresh_status -X POST "$BASE/api/auth/providers" -H 'Content-Type: application/json' \
+    -d '{"preset":"github","client_id":"cabinet-ci-github","display_name":"GitHub","dry_run":true}')" = 422
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+names = [p["name"] for p in json.load(sys.stdin)["methods"]["providers"]]
+assert "CI provider" in names and "GitHub" in names, names
+'
+
+  local jar_anon="$STATE_DIR/sso-anon.txt" jar_sso="$STATE_DIR/sso-session.txt"
+  local jar_x="$STATE_DIR/sso-x.txt" jar_header="$STATE_DIR/sso-header.txt"
+
+  # (2) An identity nobody linked is refused, and audited with its subject.
+  sso_expect "$jar_anon" "/login?error=unlinked"
+  adminf "$BASE/api/auth/audit?limit=20" | "$PY" -c '
+import json, sys
+rows = [r for r in json.load(sys.stdin) if r["action"] == "sso_sign_in_rejected"]
+assert rows, "no sso_sign_in_rejected row"
+d = rows[0]["detail"]
+assert d["reason"] == "unlinked" and d["subject"] == "ci-user-1", d
+'
+
+  # (3) Link it from the admin's own session (fresh): lands in Settings.
+  confirm_now
+  sso_trip "$COOKIES" link /settings/signin
+  test "$SSO_START" = 302
+  test "$SSO_STATUS" = 303
+  test "$SSO_LOCATION" = "/settings/signin?linked=$SSO_PROVIDER"
+  signin_config | "$PY" -c '
+import json, sys
+pid = int(sys.argv[1])
+ids = [i for i in json.load(sys.stdin)["identities"] if i["kind"] == "provider"]
+assert any(i["provider_id"] == pid and i["subject"] == "ci-user-1" for i in ids), ids
+' "$SSO_PROVIDER"
+  # A linked provider can't be repointed (R2-13).
+  test "$(fresh_status -X PATCH "$BASE/api/auth/providers/$SSO_PROVIDER" \
+    -H 'Content-Type: application/json' -d '{"client_id":"cabinet-ci-other"}')" = 409
+
+  # (4) Sign in through it: a session and a browser cookie, never a device
+  # cookie (CR-03); the failed-sign-ins notice is handed over once.
+  sso_expect "$jar_sso" "/collection"
+  local login_callback="$SSO_CALLBACK" login_flow="$SSO_FLOW" cookies
+  test -n "$login_flow"
+  cookies=$(tr -d '\r' < "$STATE_DIR/sso-callback.hdr" | grep -i '^set-cookie:' || true)
+  printf '%s\n' "$cookies" | grep -q 'cabinet_session='
+  printf '%s\n' "$cookies" | grep -q 'cabinet_browser='
+  if printf '%s\n' "$cookies" | grep -q 'cabinet_device='; then
+    echo "sso: a single sign-on set a device cookie" >&2
+    exit 1
+  fi
+  me_of "$jar_sso" | "$PY" -c '
+import json, sys
+me = json.load(sys.stdin)
+assert me["auth_method"] == "oidc" and me["provider_id"] == int(sys.argv[1]), me
+assert me["confirm_methods"] == ["password", "provider"], me
+assert isinstance(me["failed_since_previous"], int), me
+assert me["confirmed_until"] is None, me
+' "$SSO_PROVIDER"
+  me_of "$jar_sso" | "$PY" -c '
+import json, sys
+assert json.load(sys.stdin)["failed_since_previous"] is None
+'
+
+  # (5) Every broken ID token lands on /login?error=token.
+  local bad
+  for bad in wrong_nonce wrong_aud extra_aud expired no_exp alg_none hs256 unknown_kid iss_mismatch; do
+    mock_control "{\"misbehave\": \"$bad\"}"
+    sso_expect "$jar_x" "/login?error=token"
+    echo "refused as it should be: $bad"
+  done
+  # The same callback twice: its state is used up (CR-17).
+  test "$(curl -s -o /dev/null -D "$STATE_DIR/sso-replay.hdr" -w '%{http_code}' \
+    -H "Cookie: cabinet_oidc=$login_flow" "$login_callback")" = 303
+  test "$(header_value "$STATE_DIR/sso-replay.hdr" location)" = "/login?error=state"
+  # No flow cookie at all.
+  curl -s -o /dev/null -D "$STATE_DIR/sso-nocookie.hdr" "$login_callback"
+  header_value "$STATE_DIR/sso-nocookie.hdr" location | grep -q '^/login?error=[a-z_]*$'
+  # The code and state reached neither log.
+  local code state
+  code=$(printf '%s' "$login_callback" | sed 's/.*[?&]code=\([^&]*\).*/\1/')
+  state=$(printf '%s' "$login_callback" | sed 's/.*[?&]state=\([^&]*\).*/\1/')
+  test -n "$code" && test -n "$state"
+  if docker compose logs --no-log-prefix proxy backend 2>&1 | grep -qF -e "$code" -e "$state"; then
+    echo "sso: a callback's code or state reached a log" >&2
+    exit 1
+  fi
+
+  # (6) Confirm at the provider from the single sign-on session, which never
+  # typed a password: prompt=login goes to the provider, and the window
+  # opens. Then the same as someone else: refused, the window unchanged.
+  sso_trip "$jar_sso" confirm /collection
+  test "$SSO_START" = 302
+  printf '%s' "$SSO_AUTHORIZE" | grep -q '[?&]prompt=login'
+  test "$SSO_STATUS" = 303
+  test "$SSO_LOCATION" = "/collection"
+  local until
+  until=$(me_of "$jar_sso" | field confirmed_until)
+  test "$until" != None
+  mock_control '{"subject": "someone-else"}'
+  sso_trip "$jar_sso" confirm /collection
+  mock_control '{"subject": "ci-user-1"}'
+  test "$SSO_LOCATION" = "/collection?confirm_error=confirm_identity"
+  test "$(me_of "$jar_sso" | field confirmed_until)" = "$until"
+
+  # (7) Sign out there too: the logout answer names the mock's end-session
+  # endpoint, which is then followed (on its host-side address).
+  fresh -X PATCH "$BASE/api/auth/providers/$SSO_PROVIDER" -H 'Content-Type: application/json' \
+    -d '{"logout_at_provider": true}' -o /dev/null
+  local redirect
+  redirect=$(curl -fsS -b "$jar_sso" -c "$jar_sso" -H "Origin: $BASE" -X POST "$BASE/api/auth/logout" \
+    | field redirect)
+  case "$redirect" in
+    "$MOCK_IDP_ISSUER/end_session?client_id="*) ;;
+    *) echo "sso: logout redirect was '$redirect'" >&2; exit 1 ;;
+  esac
+  curl -fsS -o /dev/null "$MOCK_IDP_URL/end_session?${redirect#*\?}"
+  curl -fsS "$MOCK_IDP_URL/control" | "$PY" -c '
+import json, sys
+seen = json.load(sys.stdin)["end_session"]
+assert seen["client_id"] == "cabinet-ci", seen
+assert seen["post_logout_redirect_uri"] == sys.argv[1] + "/login", seen
+' "$BASE"
+  test "$(status_of -b "$jar_sso" -H "Origin: $BASE" "$BASE/api/auth/me")" = 401
+  fresh -X PATCH "$BASE/api/auth/providers/$SSO_PROVIDER" -H 'Content-Type: application/json' \
+    -d '{"logout_at_provider": false}' -o /dev/null
+
+  # (8) Credentials the provider rejects: the sign-in fails and the alert
+  # condition shows in Settings; the right secret clears it.
+  fresh -X PATCH "$BASE/api/auth/providers/$SSO_PROVIDER" -H 'Content-Type: application/json' \
+    -d '{"client_secret": "not the secret"}' -o /dev/null
+  sso_expect "$jar_x" "/login?error=provider"
+  signin_config | "$PY" -c '
+import json, sys
+p = [p for p in json.load(sys.stdin)["providers"] if p["id"] == int(sys.argv[1])][0]
+assert p["credentials_failing"] is True, p
+' "$SSO_PROVIDER"
+  fresh -X PATCH "$BASE/api/auth/providers/$SSO_PROVIDER" -H 'Content-Type: application/json' \
+    -d '{"client_secret": "cabinet-ci-secret"}' -o /dev/null
+  sso_expect "$jar_sso" "/collection"
+  signin_config | "$PY" -c '
+import json, sys
+p = [p for p in json.load(sys.stdin)["providers"] if p["id"] == int(sys.argv[1])][0]
+assert p["credentials_failing"] is False, p
+' "$SSO_PROVIDER"
+  # A discovery document naming another issuer is refused. Last before the
+  # recreate below, which forgets it: a failed discovery is remembered for
+  # a minute.
+  mock_control '{"misbehave": "wrong_issuer_discovery"}'
+  fresh -X POST "$BASE/api/auth/providers" -H 'Content-Type: application/json' \
+    -d "$oidc_body,\"dry_run\":true}" | "$PY" -c '
+import json, sys
+r = json.load(sys.stdin)
+assert r["ok"] is False and r["error"] == "issuer", r
+'
+
+  # (9) The trusted-header mode, end to end through real nginx (stage 3 owed
+  # it), the mock playing the gateway: its JWKS and its signed assertions.
+  export TRUSTED_ASSERTION_HEADER=X-authentik-jwt
+  export TRUSTED_ASSERTION_JWKS_URL="$MOCK_IDP_ISSUER/jwks"
+  export TRUSTED_ASSERTION_ISSUER="$MOCK_IDP_ISSUER"
+  export TRUSTED_ASSERTION_AUDIENCE=cabinet-gateway
+  docker compose up -d backend proxy
+  wait_for_health
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+assert json.load(sys.stdin)["methods"]["trusted_header"] == {"available": True}
+'
+  # The include nginx runs with passes exactly the one header.
+  test "$(MSYS_NO_PATHCONV=1 docker compose exec -T proxy cat /etc/nginx/cabinet/cabinet-identity.conf \
+    | grep -c '\$http_')" = 1
+  MSYS_NO_PATHCONV=1 docker compose exec -T proxy nginx -T 2>/dev/null \
+    | grep -q '^proxy_set_header X-authentik-jwt \$http_x_authentik_jwt;'
+
+  local assertion
+  assertion=$(curl -fsS "$MOCK_IDP_URL/mint")
+  test "$(curl -s -X POST "$BASE/api/auth/trusted" | field code)" = assertion
+  test "$(curl -s -X POST "$BASE/api/auth/trusted" -H "X-authentik-jwt: $assertion" | field code)" = unlinked
+  test "$(fresh_status -X POST "$BASE/api/auth/identities/trusted_header" \
+    -H "X-authentik-jwt: $assertion")" = 201
+  : > "$jar_header"
+  test "$(curl -s -o "$STATE_DIR/sso-trusted.json" -D "$STATE_DIR/sso-trusted.hdr" -w '%{http_code}' \
+    -b "$jar_header" -c "$jar_header" -X POST "$BASE/api/auth/trusted" \
+    -H "X-authentik-jwt: $assertion")" = 200
+  test "$(field username < "$STATE_DIR/sso-trusted.json")" = "$CABINET_USER"
+  cookies=$(tr -d '\r' < "$STATE_DIR/sso-trusted.hdr" | grep -i '^set-cookie:' || true)
+  printf '%s\n' "$cookies" | grep -q 'cabinet_session='
+  printf '%s\n' "$cookies" | grep -q 'cabinet_browser='
+  if printf '%s\n' "$cookies" | grep -q 'cabinet_device='; then
+    echo "sso: a header sign-in set a device cookie" >&2
+    exit 1
+  fi
+  test "$(me_of "$jar_header" | field auth_method)" = trusted_header
+  # Refused: the header twice (nginx joins them with ", "), another
+  # audience, expired, HMAC-signed, a key the gateway never published.
+  test "$(trusted_status -H "X-authentik-jwt: $assertion" -H "X-authentik-jwt: $assertion")" = 403
+  local query
+  for query in "aud=other" "exp=-1" "alg=HS256" "kid=ci-unknown"; do
+    test "$(trusted_status -H "X-authentik-jwt: $(curl -fsS "$MOCK_IDP_URL/mint?$query")")" = 403
+    echo "refused as it should be: $query"
+  done
+  # A JWKS URL in a request header is never used (CR-05).
+  test "$(trusted_status -H "X-authentik-jwt: $assertion" \
+    -H 'X-authentik-meta-jwks: http://elsewhere.invalid/jwks')" = 200
+
+  # disable-sso from the container: no provider, no header mode, their
+  # sessions ended, with no restart; Settings switches it all back on.
+  MSYS_NO_PATHCONV=1 docker compose exec -T backend python -m app.cli disable-sso
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+m = json.load(sys.stdin)["methods"]
+assert m["trusted_header"] is None and m["providers"] == [], m
+'
+  test "$(trusted_status -H "X-authentik-jwt: $assertion")" = 404
+  test "$(status_of -b "$jar_sso" -H "Origin: $BASE" "$BASE/api/auth/me")" = 401
+  test "$(status_of -b "$jar_header" -H "Origin: $BASE" "$BASE/api/auth/me")" = 401
+  fresh -X PUT "$BASE/api/auth/signin-config" -H 'Content-Type: application/json' \
+    -d '{"trusted_header_enabled": true}' -o /dev/null
+  local id
+  for id in "$SSO_PROVIDER" "$GITHUB_PROVIDER"; do
+    fresh -X PATCH "$BASE/api/auth/providers/$id" -H 'Content-Type: application/json' \
+      -d '{"enabled": true}' -o /dev/null
+  done
+  curl -fsS "$BASE/api/auth/state" | "$PY" -c '
+import json, sys
+m = json.load(sys.stdin)["methods"]
+assert m["trusted_header"] == {"available": True} and len(m["providers"]) == 2, m
+'
+  # (10) Nothing else is cleaned up: the providers, both identities, and the
+  # header mode stay for Playwright.
+  rm -f "$jar_anon" "$jar_sso" "$jar_x" "$jar_header" "$STATE_DIR"/sso-*.hdr "$STATE_DIR/sso-trusted.json"
+  echo "sso checks passed (the trusted-header mode is left on)"
+}
+
 case "$phase" in
   race) race ;;
   bootstrap) bootstrap ;;
@@ -737,6 +1184,8 @@ case "$phase" in
   restore-drill) restore_drill ;;
   photos) photos ;;
   share) share ;;
+  trusted) trusted ;;
+  sso) sso ;;
   all)
     race
     bootstrap
@@ -746,9 +1195,11 @@ case "$phase" in
     restore_drill
     photos
     share
+    trusted
+    sso
     ;;
   *)
-    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|all]" >&2
+    echo "Usage: $0 [race|bootstrap|smoke|outside-in|backup-restore|restore-drill|photos|share|trusted|sso|all]" >&2
     exit 2
     ;;
 esac

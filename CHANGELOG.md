@@ -8,7 +8,133 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.33.0] - 2026-09-24
+
+Roadmap Phase 7, P8, A2: single sign-on
+([SPEC_0330](docs/specs/SPEC_0330.md)). The same one admin can now sign in
+through an OpenID Connect provider (Authentik, Keycloak, Authelia, Entra ID,
+Google, or any other standards-compliant issuer), a GitHub button, or a
+gateway that has already authenticated the browser and can present a
+signed assertion (Authentik's proxy outpost, Cloudflare Access, Pomerium,
+Google IAP). Cabinet builds no second factor of its own: the identity
+provider's own multi-factor check is the second factor, and the local
+admin password stays as a deliberately one-factor recovery credential, so
+a provider outage or a lost phone can never lock the owner out. An
+authenticating reverse proxy in front is now optional rather than a
+recommended second door. This release also adds a hard exposure advisory
+to the deployment guide: **Cabinet is designed for private networks and
+should not be exposed to the internet**, under any sign-in configuration.
+
+### Added
+- **OpenID Connect sign-in**: authorization code flow with PKCE, `state`,
+  and `nonce`; discovery; the ID token verified against the provider's own
+  published keys. Presets for Google, Microsoft (Entra ID), and any custom
+  OpenID Connect issuer, configured in a new Settings → Sign-in section
+  (`GET`/`PUT /api/auth/signin-config`, `GET`/`POST /api/auth/providers`,
+  `PATCH`/`DELETE /api/auth/providers/{id}`), each shown as its own
+  sign-in button. Linking never happens on a first sign-in: an identity
+  that isn't already linked is sent back to sign in with the password and
+  link it from Settings on a fresh session.
+- **A GitHub sign-in button**, through a new `oauth2_profile` provider
+  kind that reads the identity from GitHub's profile endpoint instead of
+  an ID token, since GitHub speaks OAuth 2.0 without one.
+- **The trusted-header mode**: `POST /api/auth/trusted` signs in from a
+  gateway's signed JWT assertion, verified against
+  `TRUSTED_ASSERTION_JWKS_URL` with the configured issuer and audience;
+  never a plain-text header or a shared secret. One button on the sign-in
+  page, "Continue with the proxy's sign-in," never automatic. Four new
+  environment variables (`TRUSTED_ASSERTION_HEADER`,
+  `TRUSTED_ASSERTION_JWKS_URL`, `TRUSTED_ASSERTION_ISSUER`,
+  `TRUSTED_ASSERTION_AUDIENCE`, all four or none) plus `SSO_CA_FILE` for a
+  provider or gateway behind a local certificate authority. nginx's start
+  script (renamed `40-cabinet-config.sh`) now also writes an identity
+  include that blanks every gateway header except the one
+  `TRUSTED_ASSERTION_HEADER` names.
+- **Recovery from the container**: `unlink-identity <id>` removes one
+  linked identity and ends its sessions; `disable-sso` turns every
+  provider and the trusted-header mode off in one step, for a
+  configuration that locks the sign-in page itself; `status` now lists the
+  configured providers, linked identities, and which sign-in methods are
+  on. Every command takes effect in the running backend at once, with no
+  restart, since provider rows and the sign-in configuration are read from
+  the database on every use, never cached.
+- **`password_sign_in_alerts`** (off, switched on automatically the first
+  time any provider is enabled), a Settings switch that alerts on every
+  password sign-in, not only a new device, as a tripwire on the recovery
+  path once single sign-on is the everyday door.
+- **Confirming a fresh action at the provider**: the password-again dialog
+  offers "Confirm at your sign-in provider" for a session that signed in
+  through a provider that supports it, so a sensitive action doesn't
+  always need the password typed by hand; a GitHub or trusted-header
+  session always confirms with the password instead.
+- A mock identity provider (`scripts/ci/mock_idp.py`, CI only) and a new
+  `sso` phase in the smoke script and `frontend/e2e/sso.spec.ts`, proving
+  both flows, a long list of deliberately broken tokens and a replayed
+  callback, the credentials-rejected alert, and the trusted-header mode
+  through real nginx.
+- Migration `a0002` (the `cabinet_auth` chain only): sign-in providers,
+  linked identities, the new-browser alert's rows, the sign-in switches,
+  and each session's identity; the unused, always-empty external-identity
+  columns on `users` are dropped.
+
+### Changed
+- **An authenticating reverse proxy in front is now optional.**
+  Cabinet's own sign-in no longer needs a second door: what such a proxy
+  still offers is a door before the sign-in page is shown, and the
+  trusted-header mode's one-click sign-in. `docs/deployment.md` section 4
+  is rewritten with worked setup for Authentik, Keycloak, Authelia, Entra
+  ID, Google, and GitHub, and the trusted-header contract for Authentik,
+  Cloudflare Access, Pomerium, and Google IAP.
+- **A new-browser cookie**, with no role in authentication or throttling,
+  decides the new-device alert for every sign-in method, single sign-on
+  and the trusted-header mode included; only a password sign-in or
+  password confirm still issues the known-device cookie that lifts the
+  password throttles.
+
+### Security
+- **A hard exposure advisory.** `docs/deployment.md` gains a section
+  stating plainly that Cabinet is designed for private networks and
+  should not be exposed to the internet under any configuration, TLS and
+  single sign-on included; the same paragraph is copied verbatim into
+  `docs/security.md`, `README.md`, `SECURITY.md`, and `.env.example`.
+- The provider callback passes the deny-by-default gate with no
+  credential lookup at all (it is a cross-site navigation back from the
+  provider), bound instead to the one-use state in an encrypted,
+  short-lived flow cookie; no other route joins that anonymous allowance
+  without the same binding.
+- A provider rejecting Cabinet's client credentials (an expired or wrong
+  client secret) is a new alert condition with recovery, shown on the
+  provider's row in Settings.
+- Repeated rejected single sign-ons are throttled and audited apart from
+  password failures, so a flood of them can't push real events out of the
+  audit log or exhaust the sign-in throttle's shared map.
+- The trusted-header mode's header name is checked against the same
+  blocklist on the backend and the proxy's start script, so it can never
+  be set to a header nginx or the gate already relies on (hop-by-hop
+  headers nginx sets itself included).
+- A fresh-context security review before the release found no critical or
+  high issue; its one medium and six low findings are fixed: switching the
+  trusted-header mode off in Settings now ends its sessions, a callback
+  inside its throttle wait exchanges nothing at the provider, a failed key
+  fetch is not retried for a minute, `next` refuses dot segments, the
+  Microsoft preset is never offered for a provider confirm (Entra issues
+  `auth_time` only as an optional claim), and the header sign-in verifies
+  before it throttles so a shared edge address can't keep the owner out.
+  A second outside review found the CI mock provider's port published on
+  every host interface; it now binds to loopback only (CI tooling, never
+  part of a published image or the owner's stack).
+- The proxy image now applies Alpine's pending updates at build time (`apk
+  upgrade`), as the backend image already does Debian's, so a fix already
+  in Alpine's repository (this release, `libexpat`'s, flagged by Trivy)
+  ships with it.
+
+**Upgrading**: nothing changes for an existing deployment until a provider
+is configured in Settings → Sign-in; the password sign-in path is
+untouched. On an https deployment the new flow and browser cookies are
+`__Host-` prefixed, like the session cookie. An authenticating reverse
+proxy kept in front is optional from this release; if you keep one,
+continue to exempt `/s/`, `/api/share/`, and `/robots.txt` from its
+authentication check, as before.
 
 ## [0.32.2] - 2026-09-23
 

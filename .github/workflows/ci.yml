@@ -91,8 +91,17 @@ jobs:
             echo "SETUP_CODE=$SETUP_CODE"
           } > .env
           echo "SETUP_CODE=$SETUP_CODE" >> "$GITHUB_ENV"
+          # Every docker compose call in this job (up, exec, logs, the
+          # teardown) sees the stack plus the CI-only mock provider
+          # (docker-compose.ci.yml), with no -f. The mock answers the runner
+          # at localhost:8555 and the backend at its service name.
+          {
+            echo "COMPOSE_FILE=docker-compose.yaml:docker-compose.ci.yml"
+            echo "MOCK_IDP_URL=http://localhost:8555"
+            echo "MOCK_IDP_ISSUER=http://mock_idp:8555"
+          } >> "$GITHUB_ENV"
 
-      - name: Build and start
+      - name: Build and start (with the mock provider)
         run: docker compose up --build -d
 
       - name: Two concurrent setup calls leave exactly one winner
@@ -124,6 +133,15 @@ jobs:
       - name: Share links (public, no sign-in)
         run: scripts/ci/stack-smoke.sh share
 
+      - name: Trusted header off (nginx include, redaction)
+        run: scripts/ci/stack-smoke.sh trusted
+
+      - name: Single sign-on through the mock provider (then the trusted header on)
+        # Last of the smoke phases: it leaves the providers, a linked
+        # identity, and the trusted-header mode ON (it recreates the backend
+        # and proxy with TRUSTED_ASSERTION_*), which e2e/sso.spec.ts uses.
+        run: scripts/ci/stack-smoke.sh sso
+
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -139,6 +157,9 @@ jobs:
         env:
           BASE_URL: http://localhost
           SETUP_CODE: ${{ env.SETUP_CODE }}
+          # e2e/sso.spec.ts mints assertions and signs in through the mock;
+          # it sends the trusted header itself, so needs no TRUSTED_* value.
+          MOCK_IDP_URL: http://localhost:8555
         run: |
           npm ci
           npx playwright install --with-deps chromium

@@ -24,6 +24,9 @@ ANONYMOUS = {
     ("GET", "/api/auth/state"),
     ("POST", "/api/auth/setup"),
     ("POST", "/api/auth/login"),
+    ("GET", "/api/auth/oidc/start"),  # v0.33.0
+    ("GET", "/api/auth/oidc/callback"),
+    ("POST", "/api/auth/trusted"),
 }
 SPEC = Path(__file__).resolve().parents[2] / "docs" / "specs" / "SPEC_0300.md"
 SHARE_PREFIX = "/api/share/"  # anonymous GET and HEAD, the share class (v0.32.0)
@@ -101,7 +104,7 @@ BODY_CONFIRMED = {("POST", "/api/auth/password"), ("POST", "/api/auth/username")
 def test_every_operation_declares_what_the_spec_says():
     table = spec_table()
     ops = operations()
-    assert len(ops) == 127 == len(table)
+    assert len(ops) == 137 == len(table)
     for method, path in ops:
         found = declared(endpoint_for(method, path))
         assert found is not None, f"{method} {path} declares no @permission"
@@ -118,8 +121,10 @@ def test_class_counts():
         counts[cls] = counts.get(cls, 0) + 1
     # 99 existing (public 1, read 33, write 42, admin 23: photo delete and
     # replace and document delete moved to admin in stage 12) and 18 new;
-    # then v0.32.0's share view: 5 public share routes and 5 admin ones.
-    assert counts == {"public": 4, "read": 35, "write": 42, "admin": 41, "share": 5}
+    # then v0.32.0's share view: 5 public share routes and 5 admin ones; then
+    # v0.33.0's single sign-on: the 2 public flow routes and 6 admin ones,
+    # then the trusted header's public sign-in and its admin link route.
+    assert counts == {"public": 7, "read": 35, "write": 42, "admin": 48, "share": 5}
 
 
 def test_completeness_every_operation_reaches_layer_two(client, dry_run):
@@ -274,8 +279,10 @@ def test_fresh_matrix(client, stale_client, token_client, dry_run):
     ops = fresh_operations()
     # The spec's 15, less the two confirmed by their body, plus the three
     # photo and document deletions (section 16), plus making, changing,
-    # regenerating, and revoking a share link (v0.32.0).
-    assert len(ops) == 20
+    # regenerating, and revoking a share link (v0.32.0), plus changing the
+    # sign-in settings and adding, changing, or removing a provider or a
+    # linked identity (v0.33.0), plus linking the trusted header's identity.
+    assert len(ops) == 26
     tokens = [token_client(scope) for scope in ("read", "write", "metrics")]
     for method, path in ops:
         stale = call(stale_client, method, path)
@@ -430,7 +437,7 @@ def test_api_answers_default_to_no_store(client):
 
 def test_small_bodies_on_the_anonymous_writes(anon_client):
     big = "x" * (9 * 1024)
-    for path in ("/api/auth/login", "/api/auth/setup"):
+    for path in ("/api/auth/login", "/api/auth/setup", "/api/auth/trusted"):
         resp = anon_client.post(path, content=big, headers={"Content-Type": "application/json"})
         assert resp.status_code == 413, path
 
@@ -540,7 +547,7 @@ def test_a_refused_cross_site_request_never_keeps_a_session_alive(client):
 @pytest.mark.parametrize("site", ["cross-site", "same-site"])
 def test_sign_in_and_setup_refuse_other_sites(unclaimed_client, site):
     body = {"username": "owner", "password": "correct horse battery", "code": "x" * 32}
-    for path in ("/api/auth/login", "/api/auth/setup"):
+    for path in ("/api/auth/login", "/api/auth/setup", "/api/auth/trusted"):
         resp = unclaimed_client.post(path, json=body, headers={"Sec-Fetch-Site": site})
         assert resp.status_code == 403, path
 

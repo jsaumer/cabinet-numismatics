@@ -15,7 +15,12 @@ import { requestConfirm } from "./ConfirmDialog";
 
 const FRESH_MARGIN_MS = 30_000;
 
-async function ensureFresh(): Promise<void> {
+/** Confirms the password first when the recent-password window has lapsed;
+ * a no-op otherwise. Exported for anything that navigates to a "fresh"
+ * route by a plain link rather than a JSON call: FreshLink itself, and
+ * Settings -> Sign-in's "Link {provider}" links, which need a fresh session
+ * before GET /api/auth/oidc/start?intent=link will accept them. */
+export async function ensureFresh(): Promise<void> {
   const me = await api.me();
   const until = me.confirmed_until ? new Date(me.confirmed_until).getTime() : 0;
   if (until - Date.now() > FRESH_MARGIN_MS) return;

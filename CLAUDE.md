@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.32.2, and deployed on the owner's
+are "Cabinet." **Public on GitHub under MIT, released as v0.33.0, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -26,8 +26,8 @@ changelog entry when releasing.
   scoped API tokens, deny by default) **shipped in v0.30.0**. Every route
   needs a session or a token; setup asks for a one-time code on first
   start. v0.31.0 shipped bars and rounds (P11); v0.32.0 shipped the share
-  view (P9); v0.33.0 (OIDC single sign-on and a trusted-header mode) is
-  next. Every design decision was
+  view (P9); v0.33.0 shipped single sign-on (P8 A2: OpenID Connect, GitHub,
+  and a trusted-header mode). Every design decision was
   settled on 20 and 21 September 2026: see "Accounts and permissions" in
   docs/security.md, and don't re-open them. It stays one shared collection.
   The build contract, `docs/specs/SPEC_0300.md`, was approved by the owner
@@ -117,8 +117,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.32.2: roadmap Phases 0–5.8 are complete, migrations
-`0001`–`0022` and `a0001`. v0.27.1 fixed two bugs found entering real pieces: a year is
+Released as v0.33.0: roadmap Phase 7 is complete, migrations
+`0001`–`0022` and `a0001`–`a0002`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
@@ -297,11 +297,40 @@ exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
 blocks the app's own share links; see "Share and showcase view" in the
 implementation notes and
 [deployment.md](docs/deployment.md#sharing-and-the-forward-auth-exemption).
-**Next, in order:** P8 A2, single sign-on (OpenID
-Connect and a trusted-header mode for the same admin, plus two-factor
-sign-in) as v0.33.0; labels, a phone app, and more accounts are optional. Research
-and propose each before building, as always. v1.0.0 follows P8 and the
-checklist under "The road to v1.0.0". Before that, the roadmap's Phase 5.9
+P8 A2, single sign-on, shipped in v0.33.0 (`docs/specs/SPEC_0330.md`,
+reviewed twice before any code, as A1 and P9 were): OpenID Connect against
+any provider, a GitHub button (GitHub has no ID token, so its identity
+comes from a profile-endpoint call instead), and a trusted-header mode
+verifying a gateway's **signed** assertion, never a shared secret. The
+rules that bite: provider rows and the sign-in configuration live in
+`cabinet_auth` and are read from the database on every use, never cached,
+so a container command takes effect on the next request with no restart;
+the provider's callback passes the gate with no credential lookup at all
+and is bound instead to the one-use state in an encrypted, short-lived flow
+cookie, and no other route may join that anonymous list without the same
+binding; a session's `identity_id` is set so revoking a provider or an
+identity ends exactly the sessions that came through it, before the row is
+deleted, in one transaction; the trusted-header mode's header name is
+checked against two identical blocklists (the backend and the proxy's start
+script) so it can never be set to a header nginx or the gate already uses;
+`GET /api/auth/state` never reads or verifies the header itself, only
+whether the mode is configured, so a slow or wrong JWKS host can't stall
+the sign-in page for everyone; and the keys for a signed assertion come
+only from `TRUSTED_ASSERTION_JWKS_URL`, never from a header the gateway
+also sends. **Cabinet builds no second factor of its own**: the identity
+provider's own multi-factor check is the second factor, and the local
+password is a deliberately one-factor recovery credential the container can
+always reset. **The exposure advisory in `docs/deployment.md` is a hard
+recommendation, not a formality**: Cabinet is for private networks, never
+the internet, whatever sign-in method or gateway sits in front, and the
+same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
+and `.env.example`. Review briefs and reviews stay local (gitignored), as
+they have since v0.33.0's spec was reviewed.
+**Next, in order:** the road to v1.0.0's remaining items (a CI check
+against a breaking OpenAPI change, "Add a run" and the Numista banknote
+mapping confirmed against a live account, and a README and quick-start
+pass); labels, a phone app, and more accounts are optional. Research
+and propose each before building, as always. Before that, the roadmap's Phase 5.9
 was demoted
 on 19 September 2026 from a release train to one next item plus unordered
 **candidates** and **parked** items: the owner is entering 100–500 pieces by

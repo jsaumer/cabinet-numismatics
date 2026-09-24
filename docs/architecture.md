@@ -31,9 +31,12 @@ a single-user collection manager has modest performance needs.
 ### proxy (nginx, built image)
 The single public entry point. It answers only the Host names of
 `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (written into `server_name` by
-`proxy/40-cabinet-hosts.sh` when the container starts, which stops the
+`proxy/40-cabinet-config.sh` when the container starts, which stops the
 container on a bad value); a default server closes the connection on any
-other Host (444). Every proxied location includes `cabinet-proxy.conf`,
+other Host (444). The same script writes `cabinet-identity.conf`, which
+blanks every forward-auth identity header except the one
+`TRUSTED_ASSERTION_HEADER` names (the trusted-header mode, v0.33.0). Every
+proxied location includes `cabinet-proxy.conf` (and through it that file),
 which overwrites `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto`
 with nginx's own peer and scheme and drops forward-auth identity headers,
 so the backend never trusts a client's claim; sign-in and setup take at most
@@ -190,6 +193,11 @@ app's Settings page and stored in the database.
 | `BACKUP_KEY_FILE` | The backup key (age identities, one a line, the first encrypting), typically a Docker secret, never modified by Cabinet; unreadable or unparsable stops startup. Unset, one is generated into `backup.key` on the state volume |
 | `BACKUP_KEY`      | The same key as a variable (identities separated by commas or newlines), for a secret manager that sets variables; written to a container-local file at start; not with `BACKUP_KEY_FILE` |
 | `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file) |
+| `TRUSTED_ASSERTION_HEADER` | The header carrying a gateway's signed assertion for the trusted-header mode (v0.33.0), e.g. `X-authentik-jwt`; read by both the backend (to verify it) and the proxy (to pass only that one identity header through, blanking the rest). All four `TRUSTED_ASSERTION_*` variables or none |
+| `TRUSTED_ASSERTION_JWKS_URL` | Where the gateway's public keys are; `https://` required unless `AUTH_INSECURE_HTTP` |
+| `TRUSTED_ASSERTION_ISSUER` | The `iss` the gateway's assertion must carry |
+| `TRUSTED_ASSERTION_AUDIENCE` | The `aud` the gateway's assertion must carry; never empty |
+| `SSO_CA_FILE`     | Extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
 
 `docker-compose.yaml` builds the backend's `DATABASE_URL` from the `DB_*`
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
@@ -226,12 +234,17 @@ rotation.
   start; see [backup-restore.md](backup-restore.md).
 - Sign-in is always on (v0.30.0): one admin, claimed on the first visit
   with a setup code from the backend's log (or `SETUP_CODE_FILE`), and API
-  tokens for scripts. It works both directly exposed and behind an
-  authenticating reverse proxy; until single sign-on (v0.33.0) the
-  recommended deployment keeps such a proxy in front. Nothing but nginx
-  should reach the backend: the audit log's addresses and the address-based
-  sign-in delay come from the `X-Real-IP` nginx writes. See
-  [security.md](security.md).
+  tokens for scripts. From v0.33.0 the same admin can also sign in through
+  an OpenID Connect provider, GitHub, or a gateway's signed assertion
+  (single sign-on); an authenticating reverse proxy in front is now
+  optional, kept for a door before the sign-in page or for the
+  trusted-header mode, never a replacement for Cabinet's own sign-in.
+  **Cabinet is designed for private networks and should not be exposed to
+  the internet**; see
+  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks).
+  Nothing but nginx should reach the backend: the audit log's addresses and
+  the address-based sign-in delay come from the `X-Real-IP` nginx writes.
+  See [security.md](security.md).
 - The stack can be reduced to two services by letting FastAPI serve the static
   frontend itself and dropping nginx; nginx is kept for efficient static/photo
   serving and as a clean place to terminate TLS later.

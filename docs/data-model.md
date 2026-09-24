@@ -97,7 +97,8 @@ match.
 ## Sign-in data: the cabinet_auth schema (v0.30.0)
 
 Credentials live in a Postgres schema of their own, `cabinet_auth`, with
-their own Alembic chain (`backend/alembic_auth/`, revision `a0001`, version
+their own Alembic chain (`backend/alembic_auth/`, revisions `a0001` and
+`a0002` (single sign-on, v0.33.0), version
 table `cabinet_auth.alembic_version`) and their own declarative base
 (`AuthBase` in `app/models/auth.py`). **No foreign key crosses between it
 and the collection in either direction**, and the collection never stores a
@@ -109,12 +110,16 @@ transaction; by hand, `alembic -c alembic_auth.ini upgrade head`.
 
 | Table | Holds |
 |-------|-------|
-| `users` | The admin (`username` unique, lowercased; `password_hash` Argon2id, null for a provider-only account later; `role` `admin` / `editor` / `viewer`; `is_active`; `external_issuer` + `external_subject`, unique together, for single sign-on in v0.31.0; `created_at`, `last_login_at`, `password_changed_at`) |
+| `users` | The admin (`username` unique, lowercased; `password_hash` Argon2id, null for a provider-only account later; `role` `admin` / `editor` / `viewer`; `is_active`; `created_at`, `last_login_at`, `password_changed_at`) |
 | `claim` | One row (`id` is always 1) once the admin exists: its insert is the atomic claim of the instance (`claimed_at`, `user_id`) |
-| `sessions` | Signed-in browsers: the secret's SHA-256 (never the secret), `user_id`, `auth_method`, `created_at`, `last_seen_at`, `expires_at` (7 days at most), `confirmed_until` (the recent-password window), `user_agent`, `address`, `revoked_at` |
+| `sessions` | Signed-in browsers: the secret's SHA-256 (never the secret), `user_id`, `auth_method`, `created_at`, `last_seen_at`, `expires_at` (7 days at most), `confirmed_until` (the recent-password window), `user_agent`, `address`, `revoked_at`, `identity_id` (v0.33.0: the linked identity an `oidc` or `trusted_header` session came through, set null if it goes) |
 | `api_tokens` | `public_id` (unique), the secret's SHA-256, `user_id`, `name`, `scope` (`read` / `write` / `metrics`, one each), `created_at`, `last_used_at`, `expires_at`, `revoked_at` |
 | `known_devices` | Browsers that signed in successfully: the cookie's SHA-256, `user_id`, `created_at`, `expires_at`, `failures` |
 | `audit_log` | One row per event: `at`, the actor (`actor_user_id`, set null if the user goes; `actor_label`; `actor_kind` `session` / `token` / `anonymous` / `cli` / `system`), `action`, `target`, `detail` (JSON), `address`, `user_agent`. Never anything from the collection |
+| `auth_providers` | v0.33.0. Sign-in providers, at most 8: `kind` (`oidc` / `oauth2_profile`), `preset` (`google` / `microsoft` / `github` / `custom`; `github` is the one `oauth2_profile`, a check), `display_name`, `enabled`, `issuer`, `client_id` (unique with `issuer`), `client_secret` (Fernet ciphertext, write-only), `scopes`, `logout_at_provider`, `created_at`, `updated_at` |
+| `identities` | v0.33.0. An outside identity linked to an account, `(issuer, subject)`, never an email: `user_id`, `kind` (`provider` / `trusted_header`), `provider_id` (set exactly for `provider`, a check), `display` (for the Settings list), `linked_at`, `last_used_at`. One per provider per account; one `trusted_header` row per account and per `(issuer, subject)` (partial unique indexes) |
+| `known_browsers` | v0.33.0. The new-browser alert's cookie: its SHA-256, `user_id`, `created_at`, `last_seen_at`, `expires_at`. No role in authentication or throttling |
+| `auth_config` | v0.33.0. One row (`id` is always 1): `password_sign_in_alerts`, `trusted_header_enabled` (with the four `TRUSTED_ASSERTION_*` variables, what turns header mode on), `alerts_defaulted_at` (when the first enabled provider switched the alerts on, once), `updated_at`. Read on every use, never cached |
 | `backup_ledger` | Every archive this Cabinet writes: `name`, `kind`, `created_at`, `mac_recipient`, `mac_digest`, `size`. Here, not in `public`, so no restore can rewrite the record of what came before it |
 
 The tables exist from v0.30.0's first start; the code that fills them

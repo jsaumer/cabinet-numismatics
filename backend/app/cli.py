@@ -5,9 +5,12 @@ the machine running Cabinet is the proof of ownership.
 
 Commands (v0.30.0):
 
-    status                    the account, sessions, tokens, sharing, the backup key
+    status                    the account, sessions, tokens, sign-in methods,
+                              sharing, the backup key
     reset-password            set a new password (asked twice, never an argument)
     sign-out-everywhere       end every session and known device (a lost laptop)
+    unlink-identity ID        unlink one single sign-on identity and end its sessions
+    disable-sso               switch every provider and the trusted-header mode off
     revoke-tokens [--name N]  revoke every API token, or the one named N
     backup-key new            print a fresh backup key, for a secret or BACKUP_KEY
     backup-key show           print the backup key, to keep outside Cabinet
@@ -123,6 +126,7 @@ def status(_args) -> int:
     for row in found["tokens"]:
         expires = _when(row["expires_at"]) if row["expires_at"] else "never"
         print(f"  {_token_line(row)}, last used {_when(row['last_used_at'])}, expires {expires}")
+    _print_sign_in(found)
     print(f"Sharing:       {'on' if sharing else 'off'}, {links} link{'' if links == 1 else 's'}")
     try:
         primary = archive_keys.primary()
@@ -135,6 +139,28 @@ def status(_args) -> int:
     print(f"  saved outside Cabinet: {'yes' if saved == primary.recipient else 'not confirmed'}")
     print(f"  stored: {where}" + (f" ({message})" if message else ""))
     return 0
+
+
+def _print_sign_in(found: dict) -> None:
+    """Which ways in are on, the providers, and the linked identities."""
+    enabled = [p for p in found["providers"] if p["enabled"]]
+    header = found["trusted_header"]
+    methods = ["password"] + [f"{p['display_name']} (provider #{p['id']})" for p in enabled]
+    print(f"Sign-in methods: {', '.join(methods)}")
+    configured = "configured" if header["configured"] else "not configured"
+    switch = "on" if header["enabled"] else "switched off"
+    print(f"  trusted header: {configured}, {switch}")
+    alerts = "on" if found["password_sign_in_alerts"] else "off"
+    print(f"  alert on every password sign-in: {alerts}")
+    print(f"Providers ({len(found['providers'])}):")
+    for p in found["providers"]:
+        state = "enabled" if p["enabled"] else "disabled"
+        print(f"  #{p['id']} {p['display_name']}, {p['preset']} ({p['kind']}), {state}")
+    print(f"Linked identities ({len(found['identities'])}):")
+    for i in found["identities"]:
+        how = f"provider #{i['provider_id']} {i['provider']}" if i["provider_id"] else "header"
+        shown = f", {i['display']}" if i["display"] else ""
+        print(f"  #{i['id']} {i['kind']} via {how}, issuer {i['issuer']}{shown}")
 
 
 def _ask_new_password() -> str:
@@ -175,8 +201,50 @@ def sign_out_everywhere(_args) -> int:
         except Refused as exc:
             return _fail(str(exc))
         ended = accounts.sign_out_everywhere(db, user, Actor.cli(user))
-    print(f"Ended {ended['sessions']} session(s) and forgot {ended['devices']} known device(s).")
+    print(
+        f"Ended {ended['sessions']} session(s) and forgot {ended['devices']} known device(s) "
+        f"and {ended['browsers']} known browser(s)."
+    )
     print("API tokens are unchanged: revoke-tokens ends those.")
+    return 0
+
+
+def unlink_identity(args) -> int:
+    """Nothing is cached, so the running backend refuses the identity from
+    its next request, with no restart."""
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    with _database() as db:
+        try:
+            user = _admin(db)
+            done = accounts.unlink_identity(db, user, args.id, Actor.cli(user))
+        except Refused as exc:
+            return _fail(str(exc))
+        except accounts.NotFound:
+            return _fail(f"no linked identity has the id {args.id}; status lists them")
+    how = done["provider"] or "the trusted header"
+    print(f"Unlinked identity #{done['id']} ({done['kind']}, via {how}).")
+    print(f"Ended {done['sessions_ended']} session(s) that came through it.")
+    return 0
+
+
+def disable_sso(_args) -> int:
+    """Nothing is cached, so the running backend stops offering single
+    sign-on from its next request, with no restart."""
+    from app.auth import accounts
+    from app.auth.audit import Actor
+
+    with _database() as db:
+        try:
+            user = _admin(db)
+        except Refused as exc:
+            return _fail(str(exc))
+        done = accounts.disable_sso(db, Actor.cli(user))
+    print(f"Disabled {done['providers_disabled']} provider(s); the trusted-header mode is off.")
+    print(f"Ended {done['sessions_ended']} single sign-on session(s).")
+    print("Password sign-in is unchanged. Linked identities stay: switch sign-in")
+    print("methods back on in Settings, Sign-in, once the problem is fixed.")
     return 0
 
 
@@ -361,7 +429,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     commands.add_parser(
-        "status", help="the account, sessions, tokens, sharing, backup key"
+        "status", help="the account, sessions, tokens, sign-in methods, sharing, backup key"
     ).set_defaults(run=status)
     commands.add_parser("reset-password", help="asked twice, never an argument").set_defaults(
         run=reset_password
@@ -369,6 +437,18 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser(
         "sign-out-everywhere", help="end every session and known device"
     ).set_defaults(run=sign_out_everywhere)
+    unlink = commands.add_parser(
+        "unlink-identity",
+        help="unlink one single sign-on identity and end its sessions; "
+        "the running backend sees it at once, no restart",
+    )
+    unlink.add_argument("id", type=int, help="the identity's id, as status prints it")
+    unlink.set_defaults(run=unlink_identity)
+    commands.add_parser(
+        "disable-sso",
+        help="switch every provider and the trusted-header mode off and end their sessions; "
+        "the running backend sees it at once, no restart",
+    ).set_defaults(run=disable_sso)
     revoke = commands.add_parser("revoke-tokens", help="every API token, or one by name")
     revoke.add_argument("--name", help="only the live token with this name")
     revoke.set_defaults(run=revoke_tokens)
