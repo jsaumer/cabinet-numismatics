@@ -270,4 +270,7 @@ class AuthConfig(AuthBase):
     password_sign_in_alerts: Mapped[bool] = mapped_column(Boolean, default=False)
     # The trusted-header mode also needs its four variables (R2-02).
     trusted_header_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # When enabling the first provider switched `password_sign_in_alerts` on:
+    # once, and never again (decision 10, R2-17).
+    alerts_defaulted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
