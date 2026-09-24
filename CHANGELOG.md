@@ -8,10 +8,34 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.33.1] - 2026-09-24
+
+The owner's first look at v0.33.0 on the live instance.
+
+### Fixed
+
+- Settings → Sign-in: the client secret field sat far below its label with
+  an empty gap above it (the masked field's row sizing applied to its
+  height inside the column layout).
+
+### Changed
+
+- Header: Settings now comes before the trash among the icons, and the
+  divider between the theme toggle and the account name is spaced evenly.
+- Dashboard: a new `signin_status` widget ("Sign-in and access", under
+  Operations, not in the default layout) shows how the current session
+  signed in, live sessions and API tokens, which providers and the proxy
+  sign-in are on, linked identities, the password sign-in alert switch, and
+  whether sharing is on and with how many links. The `stack` widget's table
+  now says how many pieces the stack leaves out for want of a weight or
+  fineness, linking to the Stack page's list.
 
 ### Documentation
 
+- `docs/deployment.md`'s exposure section leads with the one standard
+  warning paragraph and no longer repeats it in the sharing subsection or
+  restates it in prose; the rest of the section is shorter and says only
+  what the paragraph doesn't.
 - `docs/live-validation.md`: the plan for validating v0.33.0 on a real
   deployment (the upgrade, sign-in through Authentik, Google, and GitHub,
   the trusted-header mode against an Authentik outpost, the recovery

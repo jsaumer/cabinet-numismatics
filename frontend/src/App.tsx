@@ -138,11 +138,11 @@ function AuthedApp({
           <NavLink to="/stack">Stack</NavLink>
           <NavLink to="/checklists">Checklists</NavLink>
           <NavLink to="/import">Import</NavLink>
-          <NavLink className="nav-icon" to="/trash" title="Trash" aria-label="Trash">
-            <TrashIcon />
-          </NavLink>
           <NavLink className="nav-icon" to="/settings" title="Settings" aria-label="Settings">
             <SettingsIcon />
+          </NavLink>
+          <NavLink className="nav-icon" to="/trash" title="Trash" aria-label="Trash">
+            <TrashIcon />
           </NavLink>
           <button
             className="theme-toggle nav-icon"
