@@ -290,7 +290,8 @@ each file on the fly); an in-app restore keeps the live `share_links` and
 `pending_sharing.json` on the state volume, applied after migrations); and the token is hashed (never stored plain) and redacted from
 both logs (the backend's `uvicorn.access` filter and nginx's own
 `access_log` rewrite the path to `[token]`). The security review that set
-those rules is `docs/specs/SPEC_0320-review-opus.md`. An authenticating
+those rules is kept outside the repository (reviews are local from
+v0.33.0; SPEC_0320 summarises its findings). An authenticating
 reverse proxy kept in front must
 exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
 blocks the app's own share links; see "Share and showcase view" in the
