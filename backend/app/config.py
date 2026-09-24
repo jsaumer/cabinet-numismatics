@@ -199,6 +199,13 @@ TRUSTED_HEADER_FORBIDDEN = (
     "x-real-ip",
     "x-forwarded-",
     "forwarded",
+    # Hop-by-hop headers nginx's proxy module sets itself (SR-06), and the
+    # one more header the audit log reads.
+    "proxy-connection",
+    "te",
+    "keep-alive",
+    "expect",
+    "user-agent",
 )
 
 

@@ -69,7 +69,7 @@ X-Goog-IAP-JWT-Assertion
 # one of these would override nginx's own. A trailing * is a prefix. The
 # backend refuses the same list (app/config.py, TRUSTED_HEADER_FORBIDDEN; a
 # test keeps the two equal).
-forbidden="host cookie authorization origin referer sec-fetch-* content-length content-type transfer-encoding connection upgrade x-real-ip x-forwarded-* forwarded"
+forbidden="host cookie authorization origin referer sec-fetch-* content-length content-type transfer-encoding connection upgrade x-real-ip x-forwarded-* forwarded proxy-connection te keep-alive expect user-agent"
 
 lower() { printf '%s' "$1" | tr 'A-Z' 'a-z'; }
 

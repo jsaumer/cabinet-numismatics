@@ -135,6 +135,12 @@ def safe_next(value) -> str:
     never another host, never the API, a photo, or a share page."""
     if not isinstance(value, str) or NEXT_RE.fullmatch(value) is None:
         return "/"
+    # A dot segment, plain or encoded, would let the browser normalise the
+    # path past the prefix check below (SR-03): refused outright.
+    path = value.split("?", 1)[0].split("#", 1)[0]
+    for segment in path.split("/"):
+        if segment in (".", "..") or "%2e" in segment.lower():
+            return "/"
     if value.startswith(NEXT_BLOCKED):
         return "/"
     return value
@@ -282,8 +288,12 @@ def confirm_capable(doc: dict) -> bool:
 
 def qualifies_for_confirm(provider) -> bool:
     """Whether "Confirm at the provider" is offered for a session from this
-    provider. An `oauth2_profile` provider never is (R2-11)."""
-    if provider.kind != "oidc":
+    provider. An `oauth2_profile` provider never is (R2-11), and neither is
+    the `microsoft` preset (SR-04): Entra lists `auth_time` among its
+    supported claims but puts it in an ID token only as an optional claim
+    the tenant has to configure, so the confirm would fail closed every
+    time."""
+    if provider.kind != "oidc" or provider.preset == "microsoft":
         return False
     try:
         return confirm_capable(discover(provider))
@@ -293,13 +303,25 @@ def qualifies_for_confirm(provider) -> bool:
 
 class _Keys(PyJWKClient):
     """PyJWT's key client, fetching through the same client as everything
-    else (10 s, no redirects, 64 KiB, the same trust as `ssl_context`)."""
+    else (10 s, no redirects, 64 KiB, the same trust as `ssl_context`). A
+    fetch that failed is not tried again for JWKS_COOLDOWN (SR-02): a key
+    host that hangs would otherwise cost every verification the full
+    timeout, serialised on the client's lock."""
+
+    _failed_at: float | None = None
 
     def fetch_data(self):
-        status, body = _fetch("GET", self.uri, headers={"Accept": "application/json"})
-        if status != 200:
-            raise ProviderError("jwks")
-        data = self._as_jwk_set_payload(_json(body, ProviderError("jwks")))
+        if self._failed_at is not None and time.monotonic() - self._failed_at < JWKS_COOLDOWN:
+            raise ProviderError("jwks_cooldown")
+        try:
+            status, body = _fetch("GET", self.uri, headers={"Accept": "application/json"})
+            if status != 200:
+                raise ProviderError("jwks")
+            data = self._as_jwk_set_payload(_json(body, ProviderError("jwks")))
+        except ProviderError:
+            self._failed_at = time.monotonic()
+            raise
+        self._failed_at = None
         if self.jwk_set_cache is not None:
             self.jwk_set_cache.put(data)
         self._last_successful_fetch = time.monotonic()

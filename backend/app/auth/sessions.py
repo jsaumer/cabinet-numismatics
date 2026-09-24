@@ -132,10 +132,11 @@ def revoke_for_identities(db: DbSession, identity_ids) -> int:
     return _revoke_where(db, Session.identity_id.in_(ids))
 
 
-def revoke_external(db: DbSession, user_id: int | None = None) -> int:
+def revoke_external(db: DbSession, user_id: int | None = None, methods=EXTERNAL) -> int:
     """Every live `oidc` and `trusted_header` session (of one account, or of
-    every account when `user_id` is None); password sessions stay."""
-    conditions = [Session.auth_method.in_(EXTERNAL)]
+    every account when `user_id` is None; `methods` narrows it to one kind);
+    password sessions stay."""
+    conditions = [Session.auth_method.in_(tuple(methods))]
     if user_id is not None:
         conditions.append(Session.user_id == user_id)
     return _revoke_where(db, *conditions)

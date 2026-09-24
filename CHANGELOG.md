@@ -110,7 +110,16 @@ should not be exposed to the internet**, under any sign-in configuration.
   audit log or exhaust the sign-in throttle's shared map.
 - The trusted-header mode's header name is checked against the same
   blocklist on the backend and the proxy's start script, so it can never
-  be set to a header nginx or the gate already relies on.
+  be set to a header nginx or the gate already relies on (hop-by-hop
+  headers nginx sets itself included).
+- A fresh-context security review before the release found no critical or
+  high issue; its one medium and six low findings are fixed: switching the
+  trusted-header mode off in Settings now ends its sessions, a callback
+  inside its throttle wait exchanges nothing at the provider, a failed key
+  fetch is not retried for a minute, `next` refuses dot segments, the
+  Microsoft preset is never offered for a provider confirm (Entra issues
+  `auth_time` only as an optional claim), and the header sign-in verifies
+  before it throttles so a shared edge address can't keep the owner out.
 - The proxy image now applies Alpine's pending updates at build time (`apk
   upgrade`), as the backend image already does Debian's, so a fix already
   in Alpine's repository (this release, `libexpat`'s, flagged by Trivy)
