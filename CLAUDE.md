@@ -45,7 +45,7 @@ deploy/docker-stack.yaml Swarm stack (pulled images)
 README.md, CLAUDE.md (this file), CHANGELOG.md
 docs/                    architecture, data-model, api, price-sources,
                          monitoring, roadmap, implementation-notes, claude-code;
-                         specs/ holds build contracts and their reviews
+                         specs/ holds build contracts; review briefs and reviews stay local (gitignored) from v0.33.0
 proxy/nginx.conf
 backend/                 FastAPI app, Alembic migrations, pytest suite
 frontend/                React + Vite app; e2e/ holds the Playwright tests,
