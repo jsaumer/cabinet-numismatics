@@ -8,6 +8,21 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.33.2] - 2026-09-24
+
+Found on the first live run of `docs/live-validation.md` against the
+owner's Authentik.
+
+### Fixed
+
+- Settings → Sign-in's **Test** button said "Can re-authenticate for
+  confirm: no" for Authentik, although the confirm is offered once signed
+  in. Authentik lists `auth_time` among its supported claims and publishes
+  no `prompt_values_supported` at all; the sign-in's rule reads a missing
+  list as fine, the Test read it as no. The dry run now answers a
+  `confirm` field from the same rule the sign-in applies, and the page
+  reads that.
+
 ## [0.33.1] - 2026-09-24
 
 The owner's first look at v0.33.0 on the live instance.
