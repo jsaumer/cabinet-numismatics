@@ -13,7 +13,7 @@ export interface SettingsSection {
   label: string;
 }
 
-// The seven routed sections, in nav order. A path under /settings/ that
+// The eight routed sections, in nav order. A path under /settings/ that
 // isn't one of these falls back to "general" (see pages/Settings.tsx).
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   { key: "general", path: "/settings/general", label: "General" },
@@ -22,6 +22,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { key: "alerts", path: "/settings/alerts", label: "Alerts & metrics" },
   { key: "sharing", path: "/settings/sharing", label: "Sharing" },
   { key: "account", path: "/settings/account", label: "Account" },
+  { key: "signin", path: "/settings/signin", label: "Sign-in" },
   { key: "about", path: "/settings/about", label: "About" },
 ];
 
