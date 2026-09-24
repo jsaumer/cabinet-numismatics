@@ -2694,6 +2694,27 @@ section 19), no critical or high. Rules the fixes left:
   owner's own gateway or a real account, rather than presenting researched
   quirks as confirmed behaviour.
 
+## v0.33.1
+
+The owner's first look at v0.33.0 live. Rules:
+
+- **`.key-field` is a row; inside a column `.field` it needs `flex: none`.**
+  `.key-field` carries `flex: 1 1 20rem` for the Backups page, where it sits
+  in a row; in Settings → Sign-in's `label.field` (a column) that basis
+  became its height, and the input floated 20rem below its label.
+  `.field > .key-field` resets it. A new masked field inside a `.field`
+  gets the fix for free; one outside a `.field` keeps the row sizing.
+- **`signin_status` reads only what Settings already reads** (`/api/auth/me`,
+  `/sessions`, `/tokens`, `/signin-config`, `/api/settings`, and
+  `/api/share-links` only while sharing is on): a dashboard widget must
+  never need a new admin route for a summary the Settings pages compute
+  client-side. Registered on both sides like every widget (`REGISTRY`,
+  `WIDGET_OPTIONS`/`DEFAULT_SIZES`, the docs/api.md row); not in the
+  default layout.
+- The `stack` widget's left-out line reads `GET /api/stack`'s `skipped`
+  count, already fetched for the table; the list itself stays on the Stack
+  page.
+
 ## Releases
 
 

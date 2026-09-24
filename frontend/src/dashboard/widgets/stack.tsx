@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import { api, METAL_LABELS, money } from "../../api";
 import { delta } from "./value";
 import { optionOrNull, optionText } from "../options";
@@ -72,6 +74,12 @@ export function StackWidget({ options }: WidgetProps) {
           ))}
         </tbody>
       </table>
+      {data.skipped > 0 && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          {data.skipped} {data.skipped === 1 ? "piece is" : "pieces are"} left out for want of a weight
+          or fineness: see <Link to="/stack">the Stack page</Link>.
+        </p>
+      )}
     </div>
   );
 }

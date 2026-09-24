@@ -26,6 +26,7 @@ import {
   BackupStatusWidget,
   DataHealthWidget,
   MarketDataWidget,
+  SigninStatusWidget,
   TrashWidget,
 } from "./widgets/operations";
 import {
@@ -443,6 +444,15 @@ export const REGISTRY: Record<string, WidgetSpec> = {
     defaultOptions: {},
     title: "Alerts",
     Component: AlertsStatusWidget,
+  },
+  signin_status: {
+    name: "Sign-in and access",
+    description: "How you signed in, live sessions and tokens, which sign-in methods and sharing are on.",
+    group: "Operations",
+    defaultSize: "third",
+    defaultOptions: {},
+    title: "Sign-in and access",
+    Component: SigninStatusWidget,
   },
   market_data: {
     name: "Cached market data",

@@ -1658,8 +1658,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding-left: 0.5rem;
-  margin-left: 0.25rem;
+  padding-left: 1rem;
   border-left: 1px solid var(--header-muted);
 }
 .account-name {
@@ -1784,6 +1783,12 @@ main {
   flex: 1;
   font-family: monospace;
   font-size: 0.85rem;
+}
+/* Inside a column .field (the client secret in Settings -> Sign-in) the
+   row's flex-basis would apply to its height; let the field size it. */
+.field > .key-field {
+  flex: none;
+  max-width: none;
 }
 
 /* The share view (v0.32.0): a read-only page outside the sign-in gate, at

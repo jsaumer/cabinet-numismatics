@@ -52,6 +52,100 @@ export function BackupStatusWidget() {
   );
 }
 
+/** The account's doors, at a glance: how this session signed in, live
+ * sessions and tokens, which sign-in methods are on, and whether sharing is.
+ * Every request is one the Settings pages already make; nothing new is
+ * exposed. */
+export function SigninStatusWidget() {
+  const me = useWidgetData("me", () => api.me());
+  const sessions = useWidgetData("sessions", () => api.listSessions());
+  const tokens = useWidgetData("tokens", () => api.listTokens());
+  const config = useWidgetData("signin-config", () => api.signinConfig());
+  const settings = useWidgetData("settings", () => api.getSettings());
+  const links = useWidgetData("share-links", () => api.listShareLinks(), settings.data?.share_enabled === true);
+  if (!me.data || !config.data) return me.data ? config.pending : me.pending;
+
+  const who = me.data;
+  const cfg = config.data;
+  const enabledProviders = cfg.providers.filter((p) => p.enabled);
+  const provider = cfg.providers.find((p) => p.id === who.provider_id);
+  const method =
+    who.auth_method === "oidc"
+      ? (provider?.display_name ?? "a provider")
+      : who.auth_method === "trusted_header"
+        ? "the proxy's sign-in"
+        : who.auth_method === "password"
+          ? "the password"
+          : "an API token";
+  const headerMode = cfg.trusted_header.configured
+    ? cfg.trusted_header.enabled
+      ? "on"
+      : "off"
+    : null;
+  const anyProvider = enabledProviders.length > 0 || cfg.trusted_header.enabled;
+  const failing = cfg.providers.filter((p) => p.credentials_failing);
+  const sharing = settings.data?.share_enabled;
+
+  return (
+    <>
+      <dl className="facts">
+        <div>
+          <dt>Signed in with</dt>
+          <dd>{method}</dd>
+        </div>
+        <div>
+          <dt>Sessions</dt>
+          <dd>{sessions.data ? sessions.data.length : "–"}</dd>
+        </div>
+        <div>
+          <dt>API tokens</dt>
+          <dd>{tokens.data ? tokens.data.length : "–"}</dd>
+        </div>
+        <div>
+          <dt>Sign-in providers</dt>
+          <dd className={failing.length ? "error" : undefined}>
+            {enabledProviders.length
+              ? enabledProviders.map((p) => p.display_name).join(", ")
+              : cfg.providers.length
+                ? "none on"
+                : "none"}
+            {failing.length ? ` (${failing.length} rejected)` : ""}
+          </dd>
+        </div>
+        {headerMode && (
+          <div>
+            <dt>Proxy sign-in</dt>
+            <dd>{headerMode}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Linked identities</dt>
+          <dd>{cfg.identities.length}</dd>
+        </div>
+        <div>
+          <dt>Password sign-in alerts</dt>
+          <dd className={anyProvider && !cfg.password_sign_in_alerts ? "error" : undefined}>
+            {cfg.password_sign_in_alerts ? "on" : "off"}
+          </dd>
+        </div>
+        <div>
+          <dt>Sharing</dt>
+          <dd>
+            {sharing == null
+              ? "–"
+              : sharing
+                ? `on${links.data ? `, ${links.data.length} link${links.data.length === 1 ? "" : "s"}` : ""}`
+                : "off"}
+          </dd>
+        </div>
+      </dl>
+      <p className="muted" style={{ marginBottom: 0 }}>
+        <Link to="/settings/signin">Sign-in settings</Link> · <Link to="/settings/account">Account</Link>
+      </p>
+    </>
+  );
+}
+
 /** What is failing, and when the scheduled refreshes last ran. */
 export function AlertsStatusWidget() {
   const { data, pending } = useWidgetData("settings", () => api.getSettings());
