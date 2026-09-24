@@ -639,6 +639,7 @@ parentheses):
 | `estimate_accuracy` | none | half |
 | `backup_status` | none | third |
 | `alerts_status` | none | third |
+| `signin_status` | none | third |
 | `market_data` | none | third |
 | `trash` | `count`: 3-20 (5) | third |
 | `most_valuable` | `count`: 3-20 (5) | half |

@@ -76,6 +76,7 @@ WIDGET_OPTIONS: dict[str, dict[str, dict]] = {
     "estimate_accuracy": {},
     "backup_status": {},
     "alerts_status": {},
+    "signin_status": {},
     "market_data": {},
     "trash": {
         "count": {"kind": "int", "min": 3, "max": 20, "default": 5},
@@ -119,6 +120,7 @@ DEFAULT_SIZES: dict[str, str] = {
     "estimate_accuracy": "half",
     "backup_status": "third",
     "alerts_status": "third",
+    "signin_status": "third",
     "market_data": "third",
     "trash": "third",
     "most_valuable": "half",
