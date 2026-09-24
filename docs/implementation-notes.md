@@ -1794,8 +1794,9 @@ pass that closed out this release. Rules this stage left:
   are checked, not just the UI.
 
 Stage 4, the security review's findings (23 September 2026,
-[SPEC_0320](specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026)
-and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
+[SPEC_0320](specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026),
+which summarises the review; the review itself is kept outside the
+repository). Rules it left:
 
 - **No photo is stored with its metadata.** `photos.save_photo` writes
   `photos.clean_bytes(img, fmt)`, never the bytes that arrived: the image
@@ -1905,8 +1906,8 @@ and [the review](specs/SPEC_0320-review-opus.md)). Rules it left:
   `MAX_OFFSET` (1,000,000; 422 past it), since a value past bigint range
   was a Postgres error.
 
-Stage 5, the second review's findings (23 September 2026,
-[the review](specs/SPEC_0320-review-opus-2.md), and SPEC_0320's build log).
+Stage 5, the second review's findings (23 September 2026, summarised in
+SPEC_0320's build log; the review itself is kept outside the repository).
 Rules it left:
 
 - **The startup pass doesn't wait for migrations.** `main.lifespan` calls
