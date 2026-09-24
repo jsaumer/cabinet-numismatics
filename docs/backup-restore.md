@@ -45,7 +45,7 @@ machines, not a full backup.
 Pick **Daily** or **Weekly** and how many archives to keep. Archives are
 written to the backend's backup directory, `/data/backups` (`BACKUP_DIR`).
 Compose mounts the `backup_data` volume there; to get archives off the host,
-bind-mount a NAS path instead (see [deployment.md](deployment.md#2-storage)).
+bind-mount a NAS path instead (see [deployment.md](deployment.md#3-storage)).
 
 - The schedule counts from the last run. The backend checks hourly (first a
   few minutes after it starts), so a daily backup runs about 24 hours after
@@ -287,11 +287,22 @@ by Cabinet's own backup."). `restore.sh` makes the same check before it
 changes anything. So your sign-in, sessions, API tokens, and audit log are
 kept through any restore, which the summary says, and an archive from
 before v0.30.0 (which has no `cabinet_auth` at all) restores as before.
+From v0.33.0 the same `cabinet_auth` schema also holds the single
+sign-on providers, the linked identities, and the sign-in switches, so a
+restore leaves those exactly as they were on this machine too.
 
 The summary also names, by name only, the stored secrets the archive would
 set (price-source keys, the alert webhook, the heartbeat URL), and any it
 holds that this deployment would clear because they aren't encrypted with
 its key.
+
+**Provider client ids and secrets are not in any Cabinet backup**, since
+they live in `cabinet_auth` alongside the admin account and are never
+dumped: keep them in your password manager the same way you keep the
+backup key and the setup code. Restoring onto a fresh machine means
+re-entering each provider's client id and secret in Settings → Sign-in and
+relinking every identity, the same way the admin password itself has to be
+set up again there.
 
 ### Share links are kept too
 
@@ -437,7 +448,7 @@ To go back after a restore you regret, restore the `-prerestore` archive.
 
 A reverse proxy in front of the stack needs the same allowance for large
 bodies and long requests; see
-[deployment.md](deployment.md#3-tls-and-an-authenticating-proxy-in-front).
+[deployment.md](deployment.md#4-tls-single-sign-on-and-an-optional-gateway-in-front).
 
 ### What to know before relying on it
 

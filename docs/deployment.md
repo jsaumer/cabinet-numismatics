@@ -109,7 +109,92 @@ Settings → About shows the same.
 To run migrations by hand instead, set `AUTO_MIGRATE=false` in `.env` and run
 `docker compose exec backend alembic upgrade head` after each deploy.
 
-## 2. Storage
+## 2. Exposure: Cabinet is for private networks
+
+Cabinet is intended for private use on private networks: a home LAN, a
+homelab, or a VPN you control. **Do not expose it to the internet.** That
+holds whatever else sits in front of it: not behind TLS alone, not behind
+single sign-on, not behind an authenticating gateway. None of those change
+the recommendation. No port forward on the router, no public DNS name
+pointing at it, and no "just for a while while I show someone": a port
+left open is a port left open.
+
+**To reach Cabinet from outside your network, use the network's own remote
+access**: a VPN (WireGuard, Tailscale, or your router's own built-in VPN)
+or an identity-aware tunnel that terminates before Cabinet, so that Cabinet
+itself is never reachable from the internet, only from inside the tunnel.
+That is how the owner's own deployment works: Cabinet sits behind Traefik
+and Authentik on the LAN, and the LAN itself is reached over a VPN.
+
+**Why this matters.** Cabinet has one admin account, and by design a
+password sign-in path with a single factor: a provider outage or a lost
+phone must never be able to lock the owner out of their own collection, so
+the password stays a working recovery credential no matter what else is
+configured. Single sign-on adds the identity provider's own multi-factor
+check to the provider's sign-in button; it does not add a second factor to
+that password path, which is the point of keeping it simple enough to
+recover from a shell. The sign-in itself is hardened (Argon2id password
+hashing, per-account and per-address throttles that only grow into a
+delay, a known-device cookie, alerts on a new device or provider), but
+none of that changes what one guessed or leaked password would hand over
+on an internet-facing instance: the whole collection, every item's storage
+location, and every attached document. Cabinet has no way to make a
+guessed password fail; a private network is what makes the guess
+impossible to attempt in the first place. Exposing any self-hosted service
+that holds personal records invites automated credential guessing,
+vulnerability scanning, and exploitation of any future defect, typically
+within hours of the port opening, not months.
+
+**What still applies inside the network.** None of this is a reason to
+skip the rest of the hardening this guide describes: TLS from a local
+certificate authority or your reverse proxy, so traffic on the LAN itself
+isn't plaintext; a long, random password kept in a password manager rather
+than memorised; the alert webhook and the "alert on every password
+sign-in" switch turned on, so a password sign-in becomes a tripwire rather
+than routine; and single sign-on with multi-factor authentication enabled
+at the provider for everyday use, so the password is rarely typed at all.
+
+**Share links are for people on your network or your VPN.** A share link
+(`/s/<token>`) is meant to be opened by someone who can already reach
+Cabinet: a family member on the LAN, or a guest on your VPN. It is never a
+reason to expose Cabinet itself to the internet, and exposing only the
+share paths through a gateway's path-based rule is not a recipe this
+project stands behind: it takes only one path rule written slightly too
+broadly, or one gateway update that changes how it matches paths, for the
+sign-in page to end up reachable as well. The forward-auth exemption
+described below is for a gateway that already sits inside your network,
+guarding an instance that is itself never reachable from the internet.
+
+**If you expose Cabinet to the internet anyway**, this document does not
+offer a "safe" recipe for doing so, because there is none the project
+stands behind. It says only this: the owner of such a deployment carries
+that risk themselves, and the project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. The least
+that should then be true is TLS terminated properly at the edge, single
+sign-on with multi-factor authentication enforced at the provider, an
+authenticating gateway in front of Cabinet's own sign-in, the alert
+webhook switched on, and a password no human has memorised.
+
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
+you control), not the open internet. Do not expose it directly to the
+internet, even behind TLS, single sign-on, or an authenticating gateway;
+reach it from outside through your own network's remote access instead,
+such as a VPN (WireGuard, Tailscale, or your router's own) or an
+identity-aware tunnel that terminates before Cabinet. Cabinet has one
+admin account and, by design, a password sign-in path with a single
+factor, so that a provider outage or a lost phone can never lock you out;
+exposing any self-hosted service that holds personal records invites
+automated credential guessing and vulnerability scanning within hours of
+the port opening. The project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. If you
+deploy it this way regardless, at minimum use TLS, single sign-on with
+multi-factor authentication enforced at the provider, an authenticating
+gateway in front, the alert webhook switched on, and a password no human
+has memorised.
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+
+## 3. Storage
 
 Data lives in six named Docker volumes:
 
@@ -146,7 +231,7 @@ Keep the photo mount consistent between `backend` and `proxy`: the backend
 writes the files and nginx serves them. The backup mount must not sit inside
 the photo mount; the backend refuses to write archives where nginx would
 serve them. On first start the backend hands these directories to its
-unprivileged user (`PUID`:`PGID`); see section 6 if the log says it is
+unprivileged user (`PUID`:`PGID`); see section 7 if the log says it is
 "staying root".
 
 **Documents need their own mount** (from v0.19.0). The backend refuses
@@ -163,35 +248,42 @@ Don't mount it inside the photo directory, and don't give it to the proxy:
 documents are served only by the backend. `REQUIRE_DOCUMENT_MOUNT=false`
 turns the check off, for local development only.
 
-## 3. TLS and an authenticating proxy in front
+## 4. TLS, single sign-on, and an optional gateway in front
 
 Cabinet has its own sign-in (section 1: one admin, sessions, and scoped API
-tokens), so it no longer depends on a reverse proxy for authentication. Two
-things still call for one:
+tokens), and from v0.33.0 that sign-in can be through an OpenID Connect
+provider or GitHub, or through a gateway that has already authenticated the
+browser. Two things still call for a reverse proxy in front:
 
 - **TLS.** nginx serves plain HTTP; terminate TLS at a reverse proxy in
   front (the nginx config is baked into the proxy image, so terminating TLS
   there instead means building your own image with a certificate and a
   `443` server block).
-- **A second door, until single sign-on.** Until v0.33.0 adds OpenID Connect
-  and a trusted-header mode, keep an authenticating reverse proxy (any
-  forward-auth or SSO gateway: Traefik + Authentik, Authelia, oauth2-proxy,
-  Pomerium, Cloudflare Access) in front as well. It brings its own second
-  factor today; Cabinet's own sign-in stays a second, independent check
-  behind it, never a replacement for it and never trusted in its place (the
-  gate ignores whatever identity a proxy asserts and always asks for its own
-  credential).
+- **An authenticating gateway is now optional.** With single sign-on built,
+  an authenticating reverse proxy (Traefik + Authentik, Authelia,
+  oauth2-proxy, Pomerium, Cloudflare Access) in front is no longer required
+  as a second door; Cabinet's own sign-in is the door. What such a gateway
+  still gives you: a door before the sign-in page is ever shown (useful if
+  you'd rather a stranger not even see that Cabinet exists), and, if it can
+  assert a signed identity, the trusted-header mode below for a one-click
+  sign-in through it. Cabinet's own sign-in is never replaced by a gateway
+  in front: the gate ignores whatever identity a proxy asserts unless the
+  trusted-header mode is explicitly configured for it, and even then it is
+  one click, never automatic.
 
-Cabinet is built to work both ways, directly exposed behind TLS or behind
-such a proxy, because which one a deployment uses is its own choice. Either
-way, don't port-forward the stack to the internet without TLS in front of it.
+**Read the exposure warning above (section 2) before deciding how to reach
+Cabinet from outside your network.** Neither TLS nor single sign-on nor a
+gateway in front is a substitute for keeping Cabinet off the internet.
 
 **`PUBLIC_ORIGINS` is what the browser must match to sign in**, not just a
 CSRF setting: a plain-http address on the LAN (`http://192.168.1.5`) can't
 sign in once `PUBLIC_ORIGINS` names an `https` domain, because the session
 cookie is `Secure`-only and the CSRF check compares the `Origin` against
 that exact entry. Reach Cabinet by the domain in `PUBLIC_ORIGINS`, not a
-bare LAN address, once it's set to `https`.
+bare LAN address, once it's set to `https`. It is also where a single
+sign-on redirect URI comes from: Settings → Sign-in shows one callback URL
+per `PUBLIC_ORIGINS` entry, and each has to be registered at the provider
+exactly as shown.
 
 **The Host header and forwarded headers.** Cabinet's nginx answers only the
 Host names from `PUBLIC_ORIGINS` and `ALLOWED_HOSTS`, so set
@@ -201,8 +293,11 @@ from anyone: `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto` are
 overwritten with what nginx itself saw (the edge proxy's address, and
 `http`), and the identity headers forward-auth gateways add (`Remote-User`,
 `X-authentik-*`, `X-Auth-Request-*`, and the like) are dropped before the
-backend sees them, so an edge proxy's login is a door in front of Cabinet,
-never a way into it. **Nothing but Cabinet's nginx should be able to reach
+backend sees them, except for the one header named by
+`TRUSTED_ASSERTION_HEADER`, passed through only when the trusted-header mode
+is configured (below). So an edge proxy's login is a door in front of
+Cabinet, never a way into it, unless you deliberately wire up the
+trusted-header mode. **Nothing but Cabinet's nginx should be able to reach
 the backend**: keep the backend off any network other services share.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:
@@ -217,10 +312,304 @@ networks:
     external: true
 ```
 
+### Setting up a single sign-on provider
+
+Any of the platforms below can be configured at once; the sign-in page
+shows one button per provider you enable in Settings → Sign-in. Each
+subsection is self-contained: read only the one for your provider. The
+redirect URI (callback URL) is always `https://<your PUBLIC_ORIGIN>/api/auth/oidc/callback`,
+one per `PUBLIC_ORIGINS` entry; Settings → Sign-in shows the exact value(s)
+under the Add form. After creating a provider, sign in with your password,
+open Settings → Sign-in, and use **Link** next to the provider: you're sent
+to the provider, and back in Settings you should see "Linked." **No
+identity is ever trusted on its first sign-in**: an identity that isn't
+already linked gets "This account is not linked to Cabinet. Sign in with
+your password and link it in Settings," never a new account. Console steps
+below are as of September 2026 and described by intent (what to create,
+which fields matter), since exact menu paths change over time; what was
+actually verified in this build is noted at the end of each subsection.
+
+Keep the provider's client id and client secret in your password manager:
+**they are never included in a Cabinet backup** (section 5, and
+[backup-restore.md](backup-restore.md)), so restoring onto a fresh machine
+means re-entering them and relinking.
+
+#### 1. Authentik (OpenID Connect)
+
+Create an **OAuth2/OpenID provider** with client type **Confidential**, the
+redirect URI above, and an **asymmetric signing key selected** (leaving it
+unset makes Authentik sign with HS256 by the client secret, which Cabinet
+refuses). Leave subject mode at Authentik's default (a stable hashed user
+id): Cabinet refuses to link an identity whose subject looks like an email
+address. Bind the provider to an **Application**. The issuer to paste into
+Cabinet's Custom preset is the provider's OpenID configuration issuer,
+typically `https://<authentik>/application/o/<slug>/`.
+
+Cabinet preset: **Custom OpenID Connect**. "Confirm at your sign-in
+provider" (the fresh-action dialog's provider option) works with
+Authentik, since it supports `prompt=login` and reports `auth_time`.
+
+*Verified in this build*: against `tests/fake_idp.py` and CI's
+`scripts/ci/mock_idp.py` only. The owner's own Authentik is the live check
+recorded in [SPEC_0330](specs/SPEC_0330.md)'s build log.
+
+#### 2. Keycloak
+
+Create a client with **client authentication on** and the **standard
+flow** enabled, and set the redirect URI above. The issuer is
+`https://<keycloak>/realms/<realm>`. Cabinet preset: **Custom OpenID
+Connect**. "Confirm at your sign-in provider" works with Keycloak.
+
+*Verified in this build*: not against a live Keycloak; the protocol is
+identical to Authentik's, and Cabinet's client requires nothing
+Keycloak-specific.
+
+#### 3. Authelia
+
+Add a client under `identity_providers.oidc.clients`: a client id, a
+secret hashed the way Authelia's own documentation requires, the redirect
+URI above under `redirect_uris`, `scopes: [openid, profile, email]`,
+`token_endpoint_auth_method: client_secret_basic`, and whatever consent
+mode you prefer. The issuer is Authelia's own base URL. Cabinet preset:
+**Custom OpenID Connect**. "Confirm at your sign-in provider" works.
+
+Authelia also offers forward-auth, the way Traefik + Authentik does, but
+its forward-auth response does not include a signed assertion Cabinet can
+verify the way Authentik's outpost does, so **use OpenID Connect with
+Authelia, not the trusted-header mode** (SPEC_0330 Q4).
+
+*Verified in this build*: not against a live Authelia.
+
+#### 4. Microsoft Entra ID
+
+Create an **App registration** with a **Web** platform and the redirect
+URI above, then a **client secret** (note that it expires, at most 24
+months; when it does, Cabinet shows "credentials rejected" on the
+provider's row in Settings and sends an alert). Cabinet's **Microsoft**
+preset asks for your **tenant id** and pins the issuer to
+`https://login.microsoftonline.com/<tenant>/v2.0`; the shared `common`
+endpoint does not work, since its issuer varies per sign-in and fails
+Cabinet's discovery check. Entra's `sub` is pairwise per application and
+stable across sign-ins; the free tier is enough. "Confirm at your sign-in
+provider" falls back to the password with Entra: it returns `auth_time`
+only as an optional claim, which Cabinet doesn't rely on being present.
+
+*Verified in this build*: not against a live Entra tenant; the tenant
+pinning rule was carried over from the researched quirk table (SPEC_0330
+section 3).
+
+#### 5. Google
+
+Create an **OAuth client ID** of type **Web application** in the Google
+Cloud console, with the redirect URI above, and configure the consent
+screen. Cabinet preset: **Google**; no tenant to enter. "Confirm at your
+sign-in provider" falls back to the password: Google supports neither
+`prompt=login` nor `auth_time`. Turn on 2-Step Verification on the Google
+account you link.
+
+*Verified in this build*: not against a live Google account.
+
+#### 6. GitHub
+
+GitHub speaks OAuth 2.0, not OpenID Connect (no ID token, no discovery),
+so Cabinet reads the identity from GitHub's profile endpoint instead
+(SPEC_0330 section 5a). Under **Settings → Developer settings → OAuth
+Apps**, create a new app with the **Authorization callback URL** set to
+the redirect URI above (one app per origin: a second `PUBLIC_ORIGINS`
+entry needs a second GitHub app, since GitHub takes one callback URL per
+app). Cabinet's **GitHub** preset asks only for the client id and secret;
+no scope is requested, since GitHub's public profile already includes the
+numeric `id` Cabinet links by (a renamed GitHub account stays linked,
+since the id never changes). Turn on two-factor authentication on the
+GitHub account before linking it, or don't link it: the button is only as
+safe as the GitHub account behind it. "Confirm at your sign-in provider"
+never works with GitHub (there is no ID token to re-verify); a GitHub
+session always confirms with the password. Cabinet reads GitHub's token
+response as JSON and sends the client credentials as form fields, which is
+GitHub's documented shape.
+
+*Verified in this build*: the GitHub kind was exercised against
+`tests/fake_idp.py`'s GitHub mode in pytest (form-encoded and JSON token
+answers, the numeric `id`), not against the real `github.com` endpoints
+and not through the compose stack (the preset's URLs are fixed to
+github.com); see the build log.
+
+#### 7. Any other OpenID Connect provider
+
+Zitadel, Kanidm, PocketID, Dex, Okta, Auth0, GitLab, Forgejo, Synology SSO
+Server, Nextcloud's OIDC app, and Amazon Cognito all work with Cabinet's
+**Custom OpenID Connect** preset: enter the issuer, and Cabinet does the
+rest through discovery. What Cabinet requires of any such provider: a
+discovery document at `{issuer}/.well-known/openid-configuration` whose
+own `issuer` field equals exactly what you typed, the `code` response
+type, `response_mode=query`, PKCE with `S256` (Cabinet always sends it,
+which is why Kanidm, which requires PKCE, works with no extra
+configuration), an ID token signed RS256, PS256, ES256, or EdDSA, and
+HTTPS (plain HTTP is accepted only beside `AUTH_INSECURE_HTTP`, for the
+local stack and CI). The "Test" button on the Add form in Settings →
+Sign-in runs discovery against the issuer you typed and reports whether "Confirm at your sign-in
+provider" will be available. Amazon Cognito's issuer is the user-pool URL,
+not the hosted UI domain. Kanidm requires PKCE, already covered.
+
+**What does not work, and why**: Apple (requires `response_mode=form_post`,
+a cross-site POST Cabinet's gate refuses by design, unless you omit the
+`email`/`name` scopes, in which case its client secret is also a signed,
+rotating JWT that needs its own maintenance, not supported in v0.33.0);
+any OAuth 2.0-only provider besides GitHub, such as Discord, X, or
+Facebook (no ID token or discovery; federate them through Authentik or
+Keycloak, then use OpenID Connect to reach Cabinet); SAML 2.0 identity
+providers, older ADFS setups, or Shibboleth (not planned; ADFS 2016 and
+later speak OpenID Connect directly); LDAP, Active Directory, or FreeIPA
+used directly (they are a directory, not a web sign-in; put Authentik,
+Keycloak, or Authelia in front of the directory); and Tailscale's identity
+headers (plain text, not a signed assertion Cabinet can verify: see the
+trusted-header mode below).
+
+### The trusted-header mode
+
+The trusted-header mode is for a gateway that has already authenticated
+the browser and can assert the identity to Cabinet as a **signed JWT** in
+one header, never a plain-text header and a shared secret (SPEC_0330's
+owner decision: a shared secret is just a second password on the wire).
+Cabinet verifies the JWT's signature against the gateway's own published
+keys, its issuer, and its audience, and offers a single button on the
+sign-in page, "Continue with the proxy's sign-in", never automatic, so
+signing out of Cabinet still means something while the gateway's own
+session lives on.
+
+Four environment variables configure it, all four or none:
+
+| Variable | Meaning |
+|---|---|
+| `TRUSTED_ASSERTION_HEADER` | The header carrying the gateway's signed JWT (e.g. `X-authentik-jwt`). Set on **both** the backend and the proxy; unset, the mode is off and nginx blanks every identity header as always |
+| `TRUSTED_ASSERTION_JWKS_URL` | Where the gateway's public keys are; must be `https://` unless `AUTH_INSECURE_HTTP` is set |
+| `TRUSTED_ASSERTION_ISSUER` | The `iss` the assertion must carry |
+| `TRUSTED_ASSERTION_AUDIENCE` | The `aud` the assertion must carry; never empty |
+
+`SSO_CA_FILE` (a PEM file of extra CA certificates) is for a gateway or
+provider behind a certificate from a local, private certificate authority.
+
+The mode also has a **stored switch**, on by default once the four
+variables are set: `disable-sso` in the container turns it off (along with
+every provider), and only Settings → Sign-in turns it back on. Linking is
+"Link the identity this proxy asserts" in Settings, enabled only when the
+current request actually came through the gateway.
+
+Per gateway:
+
+- **Authentik proxy provider with Traefik forward-auth** (the owner's own
+  deployment). Create a **proxy provider dedicated to Cabinet alone**, in
+  single-application mode: a domain-level provider shared across several
+  apps would give every co-hosted app an assertion carrying Cabinet's own
+  `iss` and `aud`, and a compromised or merely curious co-hosted app could
+  then present a working Cabinet assertion. Select an **asymmetric signing
+  key** on the provider (an unset key makes Authentik sign with HS256 by
+  the client secret, which Cabinet refuses, so the mode would simply never
+  see a valid assertion). Make sure Traefik's forward-auth middleware lists
+  `X-authentik-jwt` in `authResponseHeaders`, or Traefik never forwards it.
+  Set `TRUSTED_ASSERTION_HEADER=X-authentik-jwt`,
+  `TRUSTED_ASSERTION_JWKS_URL` to the provider's `jwks/` endpoint
+  (`https://<authentik>/application/o/<slug>/jwks/`),
+  `TRUSTED_ASSERTION_ISSUER` to the provider's issuer URL, and
+  `TRUSTED_ASSERTION_AUDIENCE` to the provider's client id. The assertion
+  is valid for the outpost session's whole lifetime, not minutes, so with
+  this mode on **the proxy port must be reachable only from the gateway**
+  (on a Swarm, don't publish it; under Compose, put it only on the
+  gateway's network): the mode's whole safety rests on nothing but the
+  gateway being able to present the header. The exact claims in Authentik's
+  assertion aren't in its released documentation; confirm them against your
+  own Authentik and see the build log in
+  [SPEC_0330](specs/SPEC_0330.md#18-build-log) for what the owner recorded.
+  The forward-auth exemption for the share paths (below) still applies.
+- **Cloudflare Access.** Header `Cf-Access-Jwt-Assertion`, JWKS
+  `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, issuer the
+  team domain (`https://<team>.cloudflareaccess.com`), audience the
+  application's AUD tag. Documented from Cloudflare's own reference, not
+  exercised against a live Cloudflare Access application in this build.
+- **Pomerium.** Header `X-Pomerium-Jwt-Assertion`, JWKS
+  `https://<authenticate-service>/.well-known/pomerium/jwks.json`, issuer
+  and audience per Pomerium's own documentation (typically the protected
+  route's host as the audience). Documented, not exercised live.
+- **Google Identity-Aware Proxy.** Header `X-Goog-IAP-JWT-Assertion`, JWKS
+  `https://www.gstatic.com/iap/verify/public_key-jwk`, issuer
+  `https://cloud.google.com/iap`, audience the backend service's
+  `/projects/<number>/global/backendServices/<id>` string. Documented, not
+  exercised live. IAP is a public-cloud product: the exposure warning above
+  still applies in full: put a private network in front of the workload
+  IAP protects, the same as any other deployment.
+
+**When the gateway itself is down.** With a gateway in front, its sign-in
+page sits in front of Cabinet's own, so if the gateway is unreachable you
+need a way around it. "Just hit the proxy port from a LAN host" does not
+work on an https deployment: Cabinet's nginx only ever speaks plain HTTP,
+and the session cookie is `Secure`, which a browser only stores from a
+plain-http page on `localhost`. Two things do work: an SSH port forward to
+the proxy (`ssh -L 8080:<proxy host>:80 <a LAN host>`, with `localhost`
+added to `ALLOWED_HOSTS` and `http://localhost:8080` added to
+`PUBLIC_ORIGINS`, then browsing to `http://localhost:8080`, where browsers
+do accept a `Secure` cookie set over `localhost`); or a second HTTPS route
+at the edge proxy that skips the gateway entirely, reachable only from the
+LAN. Either is the documented recovery for a gateway outage; for every
+other kind of lockout, `reset-password` in the container is the recovery
+(next subsection).
+
+### Recovery
+
+The **password always works**, on any kind of session, and is the
+recovery credential: a forgotten password is `python -m app.cli
+reset-password` in the container, whether or not single sign-on is
+configured, by design: a provider account must never by itself be enough
+to change the Cabinet password, so the browser never sets a new one
+without the current one. `unlink-identity <id>` removes one linked
+identity and ends the sessions that came through it; `disable-sso` turns
+every provider and the trusted-header mode off in one step, for a
+configuration that locks you out of the sign-in page itself (a
+misconfigured redirect, a gateway stuck in a loop); `status` prints the
+configured providers, the linked identities, and which sign-in methods are
+currently on. All of the container commands take effect in the running
+backend immediately, with no restart needed.
+
+Provider ids and client secrets are **not included in a Cabinet backup**
+(they live in the `cabinet_auth` schema, alongside the admin account
+itself): restoring an archive onto a fresh machine means re-entering every
+provider's client id and secret and relinking each identity, the same way
+the password itself has to be re-set up. Renaming the domain
+(`PUBLIC_ORIGINS`) means re-registering the redirect URI at every provider.
+A user recreated at the provider (a new account, even with the same email)
+is a new identity to Cabinet; sign in with the password and relink it.
+
+### The operator acceptance checklist
+
+Before relying on single sign-on or the trusted-header mode, confirm:
+
+- The redirect URI is registered at the provider **exactly** as Settings →
+  Sign-in shows it (scheme, host, and path).
+- No wildcard callback URL is registered at GitHub (GitHub allows it; don't
+  use it).
+- The machine's clock is within 60 seconds of real time (Cabinet's
+  allowed leeway on token timestamps).
+- Multi-factor authentication is switched on at the provider for the
+  account you link.
+- The local admin password is saved in a password manager, not only
+  remembered.
+- `disable-sso` has been run once from the container, and the mode
+  switched back on afterwards from Settings, so you know both directions
+  work.
+- The gateway-down bypass above has been exercised once, before you need
+  it for real.
+- A successful sign-in through each configured provider has been recorded
+  (Settings → Sign-in, or the audit log).
+- For the trusted-header mode: the live assertion's `alg`, `iss`, `aud`,
+  and lifetime have been noted somewhere (the build log in
+  [SPEC_0330](specs/SPEC_0330.md#18-build-log) asks for the same values from
+  the owner's own gateway).
+
 ### Traefik + Authentik (forward-auth)
 
-This is the intended path for a private network: Authentik provides SSO, and
-Cabinet needs no code changes. With a Traefik file provider:
+An authenticating gateway in front is now optional (above), but remains a
+reasonable choice if you want a door before Cabinet's sign-in page is ever
+shown, or if you want the trusted-header mode's one-click sign-in. With a
+Traefik file provider:
 
 ```yaml
 http:
@@ -279,6 +668,11 @@ the app answers 503 to everything but `/api/health` and
 `/api/restore/status`; that is expected, not an outage.
 
 ### Sharing, and the forward-auth exemption
+
+Sharing is meant only for people who can already reach Cabinet over your
+own network or VPN (section 2); a forward-auth gateway kept inside that
+network still has to be told not to guard the share paths, or it blocks
+your own share links along with everything else.
 
 Turning sharing on (Settings → Sharing, off by default) means a share link
 (`/s/<token>`) and its API (`/api/share/...`) are meant to open for anyone
@@ -346,7 +740,27 @@ Sharing on, and the instance reachable from outside your network, means
 exactly what a share link says: anyone holding the link can see what it
 shares, without signing in. Keep the switch off unless you mean to hand a
 link to someone; see [security.md](security.md#accounts-and-permissions)
-for what a link can and can't show.
+for what a link can and can't show. This is not, and is never meant to be,
+a way to expose Cabinet itself: see section 2 above.
+
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
+Cabinet is designed for private networks (a home LAN, a homelab, or a VPN
+you control), not the open internet. Do not expose it directly to the
+internet, even behind TLS, single sign-on, or an authenticating gateway;
+reach it from outside through your own network's remote access instead,
+such as a VPN (WireGuard, Tailscale, or your router's own) or an
+identity-aware tunnel that terminates before Cabinet. Cabinet has one
+admin account and, by design, a password sign-in path with a single
+factor, so that a provider outage or a lost phone can never lock you out;
+exposing any self-hosted service that holds personal records invites
+automated credential guessing and vulnerability scanning within hours of
+the port opening. The project cannot see or control how Cabinet is
+deployed and takes no responsibility for an exposed instance. If you
+deploy it this way regardless, at minimum use TLS, single sign-on with
+multi-factor authentication enforced at the provider, an authenticating
+gateway in front, the alert webhook switched on, and a password no human
+has memorised.
+<!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 ### Other proxies
 
@@ -358,8 +772,8 @@ Cabinet's nginx sets the other security headers itself
 
 ### Checking a gateway is wired up correctly
 
-Whichever gateway you put in front, confirm each of these before relying on
-it:
+If you keep an authenticating gateway in front, confirm each of these
+before relying on it:
 
 - The public origin the browser actually uses matches `PUBLIC_ORIGINS`
   exactly (scheme, host, and port).
@@ -374,13 +788,16 @@ it:
 - A `metrics`-token client (Homepage, Prometheus) still reaches Cabinet on
   the internal name in `ALLOWED_HOSTS`, around the gateway, since those
   aren't signed in through it.
+- If you configured the trusted-header mode, "Continue with the proxy's
+  sign-in" appears on the sign-in page only when the request actually came
+  through the gateway.
 
-## 4. Scheduled backups
+## 5. Scheduled backups
 
 A backup is only real once it's automatic. The simplest way: Settings →
 Backups → **Schedule** daily or weekly, set how many to keep, and mount the
 backup directory (`/data/backups`) on storage that isn't this host's disk
-(see section 2). Click **Back up now** once to confirm the directory is
+(see section 3). Click **Back up now** once to confirm the directory is
 writable; the last run's outcome stays visible there.
 
 To drive backups from the host instead, `scripts/backup.sh` captures the
@@ -400,7 +817,7 @@ So a failed backup doesn't go unnoticed, add an alert webhook and an Uptime
 Kuma heartbeat in Settings → Alerts & metrics, and optionally scrape
 `/api/metrics` with Prometheus (see [monitoring.md](monitoring.md)).
 
-## 5. Upgrades
+## 6. Upgrades
 
 ```bash
 git pull
@@ -435,7 +852,7 @@ change, rebuild periodically:
 docker compose build --pull && docker compose up -d
 ```
 
-## 6. Operational notes
+## 7. Operational notes
 
 - **Run one backend replica.** The price-refresh and backup schedulers run
   in-process; additional replicas would duplicate refreshes and backups.
@@ -496,9 +913,9 @@ docker compose build --pull && docker compose up -d
   and the Swarm steps in backup-restore.md include it.
   On a Swarm, `docker exec -it` into the backend task instead.
 
-## 7. Swarm / multi-host deployment
+## 8. Swarm / multi-host deployment
 
-A single host running `docker compose up` (sections 1–5) is the primary,
+A single host running `docker compose up` (sections 1–6) is the primary,
 best-tested path. To run Cabinet as a Swarm stack instead, use
 [`deploy/docker-stack.yaml`](../deploy/docker-stack.yaml):
 
@@ -553,7 +970,7 @@ What that file does differently from `docker-compose.yaml`, and why:
   way out. **Nothing but nginx should reach the backend**, so don't replace
   `cabinet-egress` with a network other services share. Behind Traefik,
   put only the proxy on Traefik's network (a commented example is in the
-  file), drop its `ports:` for Traefik's labels (see section 3), and keep
+  file), drop its `ports:` for Traefik's labels (see section 4), and keep
   Traefik in ingress mode or not as you prefer: Cabinet reads no forwarded
   client address either way. `/api/metrics` is easiest scraped over the
   internal network rather than exempted from the auth proxy

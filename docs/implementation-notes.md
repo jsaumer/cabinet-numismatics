@@ -2625,6 +2625,35 @@ code changed. Rules a later change has to respect:
   updates, so a CVE already fixed in Alpine's repository (Trivy flagged
   `libexpat`'s) isn't shipped until the next nginx base image.
 
+### Stage 6: documentation and release
+
+- **One source, five verbatim copies.** The exposure advisory's short
+  "standard warning" paragraph lives once, in `docs/deployment.md`'s new
+  section 2, and is copied byte-for-byte (never paraphrased or shortened)
+  into `docs/security.md`, `README.md`, `SECURITY.md`, and `.env.example`,
+  each copy marked with the same `exposure-warning: copied verbatim`
+  comment before and after it (a `#` comment in `.env.example`, since HTML
+  comments don't apply there). A later change to the wording edits
+  `docs/deployment.md` and then re-copies it into the other four; a stage
+  6 style grep (`directly exposed`, `exposed`, `internet`, `WAN`,
+  `reachable from`, `until single sign-on`, `until v0.33.0`, `second door`)
+  over `docs/`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `.env.example`,
+  and `frontend/README.md` is what to rerun to catch a sentence that still
+  implies an exposed deployment is supported.
+- **Section 2 pushed every later `deployment.md` heading down by one**, so
+  every anchor link into a numbered heading (not a `###` subheading, whose
+  anchor is unaffected) had to be checked, not just the two that actually
+  changed number (`#2-storage` to `#3-storage`, and the TLS section's
+  anchor, which also changed text along with its number).
+- **The per-platform provider subsections are written "as of September
+  2026" and by intent**, not by exact console menu path: a provider's own
+  UI changes faster than this document does. Each says plainly what this
+  build actually verified against a live account (only the mock provider
+  and pytest's fake, for every platform except GitHub's kind, which was
+  also exercised against the mock's GitHub mode) and what still needs the
+  owner's own gateway or a real account, rather than presenting researched
+  quirks as confirmed behaviour.
+
 ## Releases
 
 
