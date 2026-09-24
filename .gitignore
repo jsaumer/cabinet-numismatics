@@ -28,3 +28,10 @@ backups/
 
 # Claude Code personal (machine-local) notes
 CLAUDE.local.md
+
+# Review exchanges (briefs for and reviews from an outside reviewer) stay
+# local from v0.33.0; the approved spec itself is tracked.
+docs/specs/*-review-brief*.md
+docs/specs/*-codex-review*.md
+docs/specs/*-review-opus*.md
+docs/specs/*-review-*-codex*.md
