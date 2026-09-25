@@ -841,7 +841,7 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   sign-on (A2: OpenID Connect, GitHub, and a trusted-header mode) **shipped
   in v0.33.0**, completing the checklist item.
 
-- **v0.33.0 validated live** on the owner's Swarm, the plan in
+- ✔ **v0.33.0 validated live** on the owner's Swarm, the plan in
   [live-validation.md](live-validation.md): the upgrade itself; sign-in
   through Authentik, Google, and GitHub (the other presets as instances
   allow); the trusted-header mode against the Authentik outpost, closing
@@ -855,7 +855,11 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   2026, the day of the release. **Parts A and B ran that day**: the
   upgrade and all three providers passed, three defects became 0.33.2 to
   0.33.4, and the trusted-header items turned out not to apply (no
-  gateway in front). **Part C, the OpenVAS scan, is what remains.**
+  gateway in front). **Part C ran the same evening**: two Full and fast
+  scans (the hostname through Traefik, and every Swarm node on every TCP
+  port) found nothing against a Cabinet component; every severity was the
+  nodes' own SSH configuration, the operator's to tune. The item is
+  closed; see live-validation.md's "The first run".
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
 - "Add a run" confirmed against live Numista.
