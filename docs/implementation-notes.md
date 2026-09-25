@@ -2715,6 +2715,12 @@ The owner's first look at v0.33.0 live. Rules:
   count, already fetched for the table; the list itself stays on the Stack
   page.
 
+## v0.33.4
+
+- The identities table follows the provider table's shape (v0.33.3):
+  three columns, details as `.provider-detail` lines under the name, the
+  subject wrapping anywhere, inside `.table-scroll`.
+
 ## v0.33.3
 
 - **Settings → Sign-in's provider table is four columns.** Provider (with

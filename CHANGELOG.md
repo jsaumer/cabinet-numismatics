@@ -8,6 +8,15 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.33.4] - 2026-09-24
+
+### Fixed
+
+- Settings → Sign-in: the linked identities table overflowed its card the
+  same way the provider table did (an issuer URL, a 64-character subject,
+  and an email side by side). It is three columns now: the identity (with
+  its display name and issuer underneath), the subject, and Unlink.
+
 ## [0.33.3] - 2026-09-24
 
 More from the live run against the owner's Authentik.

@@ -515,34 +515,34 @@ function IdentitiesCard({
       {config.identities.length === 0 ? (
         <p className="muted">Nothing linked yet.</p>
       ) : (
-        <table className="estimates">
-          <thead>
-            <tr>
-              <th>Kind</th>
-              <th>Provider</th>
-              <th>Issuer</th>
-              <th>Subject</th>
-              <th>Display</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {config.identities.map((identity) => (
-              <tr key={identity.id}>
-                <td className="muted">{identity.kind === "provider" ? "Provider" : "Trusted header"}</td>
-                <td>{identity.provider ?? "–"}</td>
-                <td className="muted">{identity.issuer}</td>
-                <td className="muted">{identity.subject}</td>
-                <td className="muted">{identity.display ?? "–"}</td>
-                <td className="provenance-toggle">
-                  <button disabled={busy} onClick={() => unlink(identity)}>
-                    Unlink
-                  </button>
-                </td>
+        <div className="table-scroll">
+          <table className="estimates">
+            <thead>
+              <tr>
+                <th>Identity</th>
+                <th>Subject</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {config.identities.map((identity) => (
+                <tr key={identity.id}>
+                  <td>
+                    {identity.kind === "provider" ? (identity.provider ?? "Provider") : "Trusted header"}
+                    {identity.display && <div className="muted provider-detail">{identity.display}</div>}
+                    <div className="muted provider-detail">{identity.issuer}</div>
+                  </td>
+                  <td className="muted provider-detail">{identity.subject}</td>
+                  <td className="provenance-toggle provider-actions">
+                    <button disabled={busy} onClick={() => unlink(identity)}>
+                      Unlink
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {unlinkedProviders.length > 0 && (
         <div className="estimate-form" style={{ marginTop: "0.5rem" }}>
