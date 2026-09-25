@@ -6,8 +6,8 @@ of them (the list of what is owed is in
 [SPEC_0330](specs/SPEC_0330.md#owed-to-the-owners-live-check)). This is the
 plan for closing that on the owner's own Swarm once the release is live,
 plus a vulnerability scan of the running instance with the homelab's
-OpenVAS (Greenbone) server. It is written for the owner, but any operator
-can run the same plan against their own instance.
+OpenVAS (Greenbone) server. It was run on 24 September 2026 (see "The
+first run" below); any operator can run it against their own instance.
 
 ## Rules
 
@@ -18,17 +18,17 @@ can run the same plan against their own instance.
   stopped) run on the local compose stack, not the Swarm; the plan says
   which is which.
 - **Take a backup first** (Settings → Backups → Back up now) and confirm
-  `GET /api/health` reports version `0.33.0` with `schema` and
+  `GET /api/health` reports the version you deployed with `schema` and
   `auth_schema` both `ok` before anything else.
 - **No secret leaves the console it was made in.** A client secret goes
   from the provider's console into Settings → Sign-in and nowhere else;
   none is pasted into a chat, a commit, an issue, or this document's
-  results. `.env` is never read by a tool or an assistant.
+  results. `.env` is never read.
 - **Results stay out of the repository except as a summary.** The
   summary (pass or fail per row, and the assertion's `alg`, `iss` form,
   `aud` form, and lifetime) goes into SPEC_0330's build log under "Owed to
   the owner's live check" and ticks the roadmap; raw scan reports, screen
-  captures, and anything naming the homelab's addresses stay in
+  captures, and addresses and port numbers stay in
   `docs/live-validation-results/`, which is gitignored.
 - **Expect alerts.** Failed sign-ins, rejected assertions, new browsers,
   new identities, and the scan's probing all fire the webhook and fill the
@@ -42,14 +42,12 @@ Run in order after bumping the Swarm's image tags to `0.33.0`.
 | # | Check | Expected |
 |---|---|---|
 | A1 | `docker service logs` of the backend during the first start | Both migration chains apply (`a0002` is the new one), no `ConfigError`, no critical line from the backup self-test |
-| A2 | `GET /api/health` (signed in) | `version: 0.33.0`, `schema.status: ok`, `auth_schema.status: ok` |
+| A2 | `GET /api/health` (signed in) | `version:` the version you deployed, `schema.status: ok`, `auth_schema.status: ok` |
 | A3 | Sign in with the password | Works; the sign-in page shows the password form and no provider button yet |
 | A4 | `python -m app.cli status` in the backend container | Prints the admin, no providers, no identities, the trusted-header mode off (the variables aren't set yet) |
 | A5 | Settings → Sign-in | Opens, shows the exact redirect URI per `PUBLIC_ORIGINS` entry, the Add form, and no providers |
 | A6 | The existing forward-auth gateway (Traefik + Authentik) still in front | A photo loads on an item page; the password dialog appears and succeeds on a settings change; the Homepage tile still reads its `metrics` token on the internal name; a share link still opens without signing in (the `/s/`, `/api/share/`, `/robots.txt` exemption held) |
 | A7 | One of the alert events from the release (a new browser on the first sign-in from a fresh profile) | Arrives at the webhook |
-
-A7 is the smoke test of the alert path the rest of the plan relies on.
 
 ## Part B: the sign-in providers
 
@@ -77,9 +75,6 @@ concrete.
 | B12 | Re-enable it; sign in again through it; then **Unlink** in Settings | The session ends at once; `identity_unlinked` audit row; the button remains but leads to B5's refusal |
 | B13 | Link again with a **different** account at the provider than the one B6 used, if you have one | Refused as unlinked on sign-in; a second identity at the same provider for the admin is refused as `already_linked` when linking |
 | B14 | Wrong-credential check: change the client secret in Settings to a wrong value, press the button | `/login?error=` with a provider error; the `sso_provider_<id>` alert condition goes failing (Settings → Alerts lists it); fix the secret, sign in once, the condition recovers |
-
-B11 and B12 are where the revoke-before-delete rule is proven live; B9 is
-the one step that can't be checked without a real provider.
 
 ### Authentik (OpenID Connect, Custom preset)
 
@@ -314,9 +309,7 @@ Not OpenVAS, but cheap and answering questions it can't:
 ## The first run (24 September 2026)
 
 Parts A and B ran the day of the release, against the owner's Swarm, in
-the order above, with Claude reading the audit log and Settings from a
-browser pane the owner had signed in with the password. Part A passed
-(A6 not applicable: no gateway in front). Authentik, Google, and GitHub
+the order above. Part A passed (A6 not applicable: no gateway in front). Authentik, Google, and GitHub
 passed every step; B13 and the trusted-header mode were skipped (one user
 per provider, no forward-auth gateway). Three Cabinet defects surfaced
 and shipped as 0.33.2, 0.33.3, and 0.33.4 the same day; the details are in
@@ -330,8 +323,7 @@ the plan didn't say that the run taught:
   embedded or automated browser may not show; do those two from an
   ordinary browser.
 
-Part C ran the same evening from the homelab's Greenbone (26.7.0), driven
-through the browser pane against a Greenbone the owner had signed in.
+Part C ran the same evening from the homelab's Greenbone (26.7.0).
 C-2 did not exist (the proxy port is published to nobody; only Traefik
 reaches it), which is the result the plan hoped for. C-1
 (`cabinet.saumer.cloud`, All IANA assigned TCP, Consider Alive, Full and

@@ -6,25 +6,16 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.33.0-informational)
+![Version](https://img.shields.io/badge/version-0.33.4-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.33.0 released (single sign-on; the share view since v0.32.0;
-sign-in and encrypted backups since v0.30.0).**
-Pre-1.0 signals that the HTTP API may still change; the data model and
-migration path are stable. 1.0 will mean a stable HTTP API. Cabinet now
-requires signing in: one admin, created with a one-time setup code, plus
-scoped API tokens for scripts and dashboards, and, from v0.33.0, sign-in
-through an OpenID Connect provider, GitHub, or a trusted-header gateway,
-with the provider's own multi-factor check as the second factor. The share
-view (a read-only link, off by default) is in v0.32.0. What's next is the
-road to v1.0.0, alongside what entering a real collection turns up rather
-than by a schedule. See the
-[roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
+**Status: v0.33.4 released.** 1.0 will mean a stable HTTP API; until then
+the API may still change. See the [roadmap](docs/roadmap.md) for what's
+built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
 > **Deploying it?**
 
@@ -201,7 +192,7 @@ Dark is the default; the header toggle switches to light and remembers it.
   webhook.
 
 ### Insights & reporting
-- Customisable dashboard (the home page): 31 widgets (value, breakdowns by
+- Customisable dashboard (the home page): 32 widgets (value, breakdowns by
   country/decade/grade/tag/metal or one tag/set, acquisitions by year,
   top-movers tables, owned notes by series and signature pair, wish list,
   fancy serials, checklists, the bullion stack, pricing coverage, operations
@@ -227,8 +218,8 @@ Dark is the default; the header toggle switches to light and remembers it.
 
 ### Platform
 - Three-container Compose stack, also published as versioned images on GHCR
-  with a [Swarm stack file](deploy/docker-stack.yaml); auto-generated
-  OpenAPI docs. The backend applies its own migrations on startup.
+  with a [Swarm stack file](deploy/docker-stack.yaml); an OpenAPI schema at
+  `/api/openapi.json`. The backend applies its own migrations on startup.
 - Responsive UI for phone/tablet, **dark by default** with a light theme on
   the header toggle. System fonts and inline SVG icons only: the page loads
   nothing from outside the app.
@@ -369,6 +360,7 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.33.4` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and

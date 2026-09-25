@@ -50,7 +50,7 @@ python scripts/seed_demo.py --token cabinet_...
 ```bash
 cd backend
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Windows: .venv\Scripts\pip
-pytest                 # about 280 tests, no database required
+pytest                 # about 1,270 tests, no database required
 ruff check .           # lint
 ruff format .          # format
 ```
@@ -146,35 +146,16 @@ and data migrations.
   Node 22.
 - **stack**: builds and starts the compose stack with the CI-only mock
   identity provider beside it (`COMPOSE_FILE=docker-compose.yaml:docker-compose.ci.yml`),
-  then runs `scripts/ci/stack-smoke.sh` (`bootstrap`, `smoke`, `outside-in`,
-  `backup-restore`, `restore-drill`, `photos`, `share`, `trusted`, `sso`,
-  in that order) through the
-  proxy: bootstrap signs in and mints tokens; smoke covers create, trash,
-  restore, permanent delete, settings, metrics, the test alert; outside-in
-  checks every anonymous route is refused, each token's scope holds (read,
-  write, metrics, and the session, one route per class), a revoked token is
-  refused, and a spoofed `X-Forwarded-For`/`X-Real-IP` never reaches the
-  audit log; backup-restore and restore-drill rehearse an in-app backup,
-  `scripts/restore.sh`, and an in-app restore, each checking the admin
-  password and the write token still work afterwards; photos checks nginx's
-  `auth_request` gate; share checks the public share view; trusted checks,
-  with the trusted-header mode off, that its routes answer 404, that no
-  gateway identity header reaches the backend, that the proxy's start
-  script renders the identity include (and refuses a header nginx sets),
-  and that a sign-in callback's code never reaches a log; sso signs in
-  through the mock provider (`scripts/ci/mock_idp.py`): configure, link,
-  sign in, a refused unlinked identity, nine kinds of broken ID token, a
-  replayed callback, a confirm at the provider, sign-out there, and the
-  credentials alert, then switches the trusted-header mode on (recreating
-  the backend and proxy) and signs in with an assertion sent through real
-  nginx, and leaves the mode on. Then Playwright runs against the same
-  stack, `e2e/sso.spec.ts` last, using what the sso phase configured. The
-  script runs the same way locally, and locally it also has a `race` phase
-  (two concurrent `POST /api/auth/setup` calls on a fresh stack must leave
-  exactly one `201` and one `409`; it skips itself with a message on a stack
-  that's already claimed, since that's what CI's stack always is by the
-  time it runs). If you change an endpoint any of these steps use, update
-  them: pytest won't catch it.
+  then runs `scripts/ci/stack-smoke.sh` through the proxy, in order: `race`,
+  `bootstrap`, `smoke`, `outside-in`, `backup-restore`, `restore-drill`,
+  `photos`, `share`, `trusted`, `sso`. `race` (two concurrent
+  `POST /api/auth/setup` calls on a fresh stack must leave exactly one
+  `201` and one `409`) runs first, before `bootstrap`; on a stack that is
+  already claimed it skips itself with a message. Then Playwright runs
+  against the same stack, `e2e/sso.spec.ts` last, using what the `sso`
+  phase configured. See the script's own header for what each phase
+  checks; if you change an endpoint any phase uses, update the script too:
+  pytest won't catch it.
 - **upgrade**: starts the last release before sign-in (v0.29.1, pulled from
   GHCR) against a fresh database, adds an item anonymously (that release has
   no login), switches to the images built from the commit under test, claims

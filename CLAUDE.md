@@ -2,8 +2,8 @@
 
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
-Manager." Repo name is `cabinet-numismatics`; UI/display name and OpenAPI title
-are "Cabinet." **Public on GitHub under MIT, released as v0.33.4, and deployed on the owner's
+Manager." Repo name is `cabinet-numismatics`; UI/display name is "Cabinet";
+the OpenAPI title is "Cabinet API." **Public on GitHub under MIT, released as v0.33.4, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -44,8 +44,12 @@ deploy/docker-stack.yaml Swarm stack (pulled images)
 .env.example / .env (gitignored)
 README.md, CLAUDE.md (this file), CHANGELOG.md
 docs/                    architecture, data-model, api, price-sources,
-                         monitoring, roadmap, implementation-notes, claude-code;
-                         specs/ holds build contracts; review briefs and reviews stay local (gitignored) from v0.33.0
+                         deployment, security, backup-restore, monitoring,
+                         live-validation, roadmap, implementation-notes,
+                         claude-code; specs/ holds build contracts;
+                         screenshots/ and import-samples/ hold generated
+                         assets; review briefs and reviews stay local
+                         (gitignored) from v0.33.0
 proxy/nginx.conf
 backend/                 FastAPI app, Alembic migrations, pytest suite
 frontend/                React + Vite app; e2e/ holds the Playwright tests,
@@ -326,15 +330,12 @@ the internet, whatever sign-in method or gateway sits in front, and the
 same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
 and `.env.example`. Review briefs and reviews stay local (gitignored), as
 they have since v0.33.0's spec was reviewed.
-**Next, in order:** the road to v1.0.0's remaining items: v0.33.0
-validated on the owner's Swarm (docs/live-validation.md: Authentik,
-Google, and GitHub sign-in, the trusted-header mode, an OpenVAS scan;
-nothing destructive against the live instance), a CI check against a
-breaking OpenAPI change, "Add a run" and the Numista banknote mapping
-confirmed against a live account, and a README and quick-start pass, then
-v1.0.0 itself; labels, a phone app, and more accounts are optional. Research
-and propose each before building, as always. Before that, the roadmap's Phase 5.9
-was demoted
+**Next, in order:** the road to v1.0.0's remaining items (a CI check
+against a breaking OpenAPI change, "Add a run" and the Numista banknote
+mapping confirmed against a live account, and a README and quick-start
+pass), then v1.0.0 itself; labels, a phone app, and more accounts are
+optional. Research and propose each before building, as always. Before
+that, the roadmap's Phase 5.9 was demoted
 on 19 September 2026 from a release train to one next item plus unordered
 **candidates** and **parked** items: the owner is entering 100–500 pieces by
 hand (runs and singles, mostly held), so don't build ahead of that beyond
