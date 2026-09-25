@@ -2359,7 +2359,7 @@ respect:
   `post_logout_redirect_uri={origin}/login`, no `id_token_hint` (the token
   isn't kept); anything else stays `204`.
 - **The appendix**: the eight routes are rows under "Single sign-on routes
-  (v0.33.0)" in SPEC_0300 (135 operations); `test_gate.ANONYMOUS` holds the
+  (v0.33.0)" in SPEC_0300 (137 operations); `test_gate.ANONYMOUS` holds the
   two flow pairs.
 
 ### Stage 3: the trusted header and nginx
@@ -2439,11 +2439,9 @@ Rules a later change has to respect:
   into `/api/auth/oidc/callback?[redacted]`. nginx's error log still
   prints a failing request's line, query included; nothing in this stage
   changes that.
-- **Stage 5 still owes** the header sign-in end to end through real nginx
-  against an assertion the mock provider signs (with
-  `TRUSTED_ASSERTION_HEADER` set on the CI stack), and the stage 3 build
-  log's live values from the owner's Authentik (`alg`, `iss`, `aud`,
-  `exp - iat`), which need the owner's gateway.
+- **Stage 5 proves the header sign-in through real nginx** (below); the
+  live values from a real gateway stay owed to whoever first deploys the
+  mode (SPEC_0330, "Owed to the owner's live check").
 
 ### Stage 4: the frontend
 
@@ -2604,9 +2602,9 @@ code changed. Rules a later change has to respect:
   nginx against an assertion the mock signs, the rendered include passing
   exactly one header (`nginx -T` and the generated file), a doubled header
   refused, a spoofed `X-authentik-meta-jwks` ignored, and `disable-sso`
-  taking effect with no restart. The live values from the owner's
-  Authentik (`alg`, `iss`, `aud`, `exp - iat`) still need the owner's
-  gateway.
+  taking effect with no restart. The live values from a real gateway stay
+  owed to whoever first deploys the mode (SPEC_0330, "Owed to the owner's
+  live check").
 - **`sso.spec.ts` sorts after `smoke.spec.ts`**, whose last two tests
   change the password and username and put them back, which revokes the
   suite's shared `storageState` session. So the file uses no stored state
@@ -2624,6 +2622,36 @@ code changed. Rules a later change has to respect:
   `FROM nginx:1.31-alpine`, as the backend image applies Debian's pending
   updates, so a CVE already fixed in Alpine's repository (Trivy flagged
   `libexpat`'s) isn't shipped until the next nginx base image.
+
+### Stage 6: documentation and release
+
+- **One source, five verbatim copies.** The exposure advisory's short
+  "standard warning" paragraph lives once, in `docs/deployment.md`'s new
+  section 2, and is copied byte-for-byte (never paraphrased or shortened)
+  into `docs/security.md`, `README.md`, `SECURITY.md`, and `.env.example`,
+  each copy marked with the same `exposure-warning: copied verbatim`
+  comment before and after it (a `#` comment in `.env.example`, since HTML
+  comments don't apply there). A later change to the wording edits
+  `docs/deployment.md` and then re-copies it into the other four; a stage
+  6 style grep (`directly exposed`, `exposed`, `internet`, `WAN`,
+  `reachable from`, `until single sign-on`, `until v0.33.0`, `second door`)
+  over `docs/`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `.env.example`,
+  and `frontend/README.md` is what to rerun to catch a sentence that still
+  implies an exposed deployment is supported.
+- **Section 2 pushed every later `deployment.md` heading down by one**, so
+  every anchor link into a numbered heading (not a `###` subheading, whose
+  anchor is unaffected) had to be checked, not just the two that actually
+  changed number (`#2-storage` to `#3-storage`, and the TLS section's
+  anchor, which also changed text along with its number).
+- **The per-platform provider subsections are written "as of September
+  2026" and by intent**, not by exact console menu path: a provider's own
+  UI changes faster than this document does. Each says plainly what this
+  build actually verified against a live account (only the mock provider
+  and pytest's fake, for every platform except GitHub's kind, which was
+  also exercised against the mock's GitHub mode) and what stays owed to
+  whoever first deploys with a real gateway or account (SPEC_0330, "Owed
+  to the owner's live check"), rather than presenting researched quirks as
+  confirmed behaviour.
 
 ### Stage 7: the security review's findings
 
@@ -2665,35 +2693,6 @@ section 19), no critical or high. Rules the fixes left:
   `accounts.google.com`), from the review's not-verified list; every other
   provider's `iss` must equal its configured issuer exactly.
 
-### Stage 6: documentation and release
-
-- **One source, five verbatim copies.** The exposure advisory's short
-  "standard warning" paragraph lives once, in `docs/deployment.md`'s new
-  section 2, and is copied byte-for-byte (never paraphrased or shortened)
-  into `docs/security.md`, `README.md`, `SECURITY.md`, and `.env.example`,
-  each copy marked with the same `exposure-warning: copied verbatim`
-  comment before and after it (a `#` comment in `.env.example`, since HTML
-  comments don't apply there). A later change to the wording edits
-  `docs/deployment.md` and then re-copies it into the other four; a stage
-  6 style grep (`directly exposed`, `exposed`, `internet`, `WAN`,
-  `reachable from`, `until single sign-on`, `until v0.33.0`, `second door`)
-  over `docs/`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `.env.example`,
-  and `frontend/README.md` is what to rerun to catch a sentence that still
-  implies an exposed deployment is supported.
-- **Section 2 pushed every later `deployment.md` heading down by one**, so
-  every anchor link into a numbered heading (not a `###` subheading, whose
-  anchor is unaffected) had to be checked, not just the two that actually
-  changed number (`#2-storage` to `#3-storage`, and the TLS section's
-  anchor, which also changed text along with its number).
-- **The per-platform provider subsections are written "as of September
-  2026" and by intent**, not by exact console menu path: a provider's own
-  UI changes faster than this document does. Each says plainly what this
-  build actually verified against a live account (only the mock provider
-  and pytest's fake, for every platform except GitHub's kind, which was
-  also exercised against the mock's GitHub mode) and what still needs the
-  owner's own gateway or a real account, rather than presenting researched
-  quirks as confirmed behaviour.
-
 ## v0.33.1
 
 The owner's first look at v0.33.0 live. Rules:
@@ -2715,11 +2714,17 @@ The owner's first look at v0.33.0 live. Rules:
   count, already fetched for the table; the list itself stays on the Stack
   page.
 
-## v0.33.4
+## v0.33.2
 
-- The identities table follows the provider table's shape (v0.33.3):
-  three columns, details as `.provider-detail` lines under the name, the
-  subject wrapping anywhere, inside `.table-scroll`.
+- **The dry run and the sign-in share one confirm rule.** `POST
+  /api/auth/providers` with `dry_run` answers `confirm` from
+  `oidc.confirm_capable(doc)`, the function `qualifies_for_confirm` calls at
+  sign-in; the two detail flags (`claims_supported_auth_time`,
+  `prompt_login`) stay, and `prompt_login` is true when the provider
+  publishes no `prompt_values_supported`, as Authentik doesn't. A new
+  condition on a provider confirm goes into `confirm_capable` only. Found
+  live: the first Test against the owner's Authentik said "no" while the
+  confirm would have been offered.
 
 ## v0.33.3
 
@@ -2732,17 +2737,11 @@ The owner's first look at v0.33.0 live. Rules:
   overwrite**: `choosePreset` replaces the name only while it is empty or
   still equals the previous preset's label, the `autoYear` pattern again.
 
-## v0.33.2
+## v0.33.4
 
-- **The dry run and the sign-in share one confirm rule.** `POST
-  /api/auth/providers` with `dry_run` answers `confirm` from
-  `oidc.confirm_capable(doc)`, the function `qualifies_for_confirm` calls at
-  sign-in; the two detail flags (`claims_supported_auth_time`,
-  `prompt_login`) stay, and `prompt_login` is true when the provider
-  publishes no `prompt_values_supported`, as Authentik doesn't. A new
-  condition on a provider confirm goes into `confirm_capable` only. Found
-  live: the first Test against the owner's Authentik said "no" while the
-  confirm would have been offered.
+- The identities table follows the provider table's shape (v0.33.3):
+  three columns, details as `.provider-detail` lines under the name, the
+  subject wrapping anywhere, inside `.table-scroll`.
 
 ## Releases
 

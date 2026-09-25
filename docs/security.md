@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted application. The design assumes the
 stack runs on a network you control, and that the operator is the only user.
 This document records what that means concretely, what is protected and how,
-and what you must do before exposing the app more widely. Every route
+and why it stays on a private network. Every route
 requires a sign-in or an API token (v0.30.0, roadmap Phase 7, P8 A1): one
 admin, database-backed sessions, scoped API tokens, and a deny-by-default
 gate. Single sign-on and a trusted-header mode (P8 A2) shipped in v0.33.0.
@@ -55,8 +55,8 @@ is strongly preferred: it survives a rebuilt volume, and it puts key custody
 where you can see it.
 
 The key file is deliberately **not** stored under `PHOTO_DIR`. nginx serves
-that directory publicly at `/photos/`, so a key placed there would be
-retrievable over HTTP.
+that directory to any signed-in browser at `/photos/`, so a key placed
+there would be retrievable over HTTP.
 
 ### Rotation
 
@@ -101,8 +101,9 @@ backups leave the host. See
 The in-app backup endpoints (`/api/backup.zip`, `/api/backups/…`) hand over
 the entire collection (database, photos, and documents) in one request, so
 they are admin-only and, for downloading, ask for the password again in the
-last 5 minutes (v0.30.0). The backup directory is kept out of the publicly
-served photo volume: the backend refuses a `BACKUP_DIR` inside `PHOTO_DIR`.
+last 5 minutes (v0.30.0). The backup directory is kept out of the photo
+volume served to any signed-in browser: the backend refuses a `BACKUP_DIR`
+inside `PHOTO_DIR`.
 
 **Restore from inside the app** (`/api/restore/…`, v0.26.0) is the most
 destructive thing the API does: it replaces the database, the photos, and
@@ -138,8 +139,9 @@ Settings.
 `metrics`-scoped token even once turned on (a `read` or `write` token gets
 403): it includes the collection's value and cost. Scrape it over the
 internal Docker network (see [monitoring.md](monitoring.md)) rather than
-exempting it from an authenticating proxy in front, since that proxy is a
-second door, not the one Cabinet itself checks. Alert webhooks and
+exempting it from an authenticating proxy in front, since an authenticating
+proxy in front is optional and never the check Cabinet relies on. Alert
+webhooks and
 heartbeats send only a check's name and its error message, never collection
 data.
 
@@ -188,19 +190,17 @@ design is under "Accounts and permissions" below;
 [SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) is a
 plain-language walkthrough of setup, sign-in, and the break-glass reset):
 
-- **Deny by default.** Anonymous callers reach only four routes (health,
-  whether setup is still open, setup, and sign-in); every other route
+- **Deny by default.** Anonymous callers reach only health, the setup
+  state, setup, sign-in, and (v0.33.0) the single sign-on start, callback,
+  and trusted-header routes; every other route
   answers 401 without one, and a route that doesn't declare a permission is
   refused rather than silently allowed. A path containing `%` is refused
   before routing. From v0.32.0 the share view's `GET /api/share/...` routes
   are open too, to anyone holding a share link, and only while the admin
   has switched sharing on (see [api.md](api.md#sharing)); while it is off
   they answer the same 401 as any other path, from memory, so a closed
-  instance looks like one without the feature. An authenticating
-  reverse proxy kept in front (optional from v0.33.0, below) guards
-  everything by default too, so
-  it needs `/s/`, `/api/share/`, and `/robots.txt` exempted from its own
-  check, or it blocks share links Cabinet itself would answer; see
+  instance looks like one without the feature. An authenticating proxy in
+  front must exempt `/s/`, `/api/share/`, and `/robots.txt`; see
   [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
 - **Sessions.** A signed-in browser gets an HttpOnly, Secure,
   `SameSite=Lax` cookie, valid a day after its last use and seven days at
@@ -293,7 +293,7 @@ plain-language walkthrough of setup, sign-in, and the break-glass reset):
 | Guessing the password, or locking the owner out while guessing is blocked | Argon2id, per-account and per-address delays, a known-device cookie with a reserved verification slot. Failed share lookups (v0.32.0) are counted in a map of their own, so a flood of them from many addresses can never push the account or address delays out of memory |
 | A stolen password reused later, or a token outliving a compromise | Password change revokes every other session, every known device, and every API token; `read`/`write` tokens expire within a week regardless |
 | An unlocked, signed-in browser | The recent-password window on sensitive actions; `no-store` and `Clear-Site-Data` on sign-out |
-| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default: never a cost, fee, gain, acquisition or sale detail, storage location, document, serial number, custom field, population, wish-list field, or edit history; the estimated value only when the link says so. Photos go through the share's own route, only for pieces in the share; documents have no share route at all. The token (256 random bits) is stored only as its SHA-256 and shown once; a lost one is regenerated, a leaked one revoked. The cert number has a toggle of its own, off by default, since it looks a slab up in auction archives. Photos carry no metadata (below), and the photo response no file time. Wrong, unknown, and revoked tokens all answer the same 404; the link is looked up first, so a live link is never throttled, and only failed lookups are: 20 per address (an IPv6 address by its /64), then the sign-in curve, and 300 a minute from all addresses, answered 429 without counting. That throttle doesn't slow guessing (every request is still looked up; a throttled guess that hits still opens), it only turns failed lookups into 429s: the 256-bit token is the defence. Sharing switched off is the gate's plain 401; the switch is held in each backend process's memory, so run one replica (as the schedulers already require), or a second one could keep answering after the first was switched off. A restore keeps the live links and switch, whatever the archive held, so a revoked link can't come back with an older archive. Widening a link (notes, values, the cert number) needs the password again and is alerted. Every answer carries `X-Robots-Tag: noindex, nofollow`, nothing is logged about a token (the backend's access log prints `/api/share/[token]`), a public route never makes a network call, and a session or token on the request is ignored. Switching sharing on and making, regenerating, or revoking a link are audited and alerted |
+| **A share link showing more than the owner meant, or found by someone it wasn't sent to** (v0.32.0) | A piece on a share is an allowlist pinned by a test, so a new field never leaks by default (never a cost, gain, storage location, document, or serial number; the estimated value only when the link says so). The token is stored only as its hash and shown once, and every failure (wrong, unknown, revoked, or sharing off) answers the same 404, with the lookup throttled apart from sign-in. A restore keeps the live links and switch. See [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption) for the forward-auth exemption a gateway in front needs |
 | A tampered or planted archive | The backup key's MAC (see "What is *not* encrypted"); a stored secret only used if it decrypts with this deployment's key |
 | **Shared Docker networks.** A container on the same network as the backend could otherwise reach it directly, bypassing nginx and the gate | Not enforced by Cabinet: the docs say nothing but nginx should reach the backend, and the example Swarm stack puts it on a network of its own. A deployment that shares a network with the backend anyway loses this protection |
 | **Swarm ingress mode.** Ports published in Swarm's default ingress mode arrive from the ingress network's address, not the real client's | Sign-in throttling leans on the known-device cookie rather than the address for this reason; the address is otherwise informational only (the audit log), never an allow/deny decision |
@@ -318,11 +318,7 @@ else**, onboarded when the app is initialised; the setup page asks for a
 **one-time setup code the backend prints in its log** (or takes from an
 environment variable), so an open instance can't be claimed by whoever gets
 there first; login is **always on**, with no switch to turn it off; and
-**scoped API tokens ship with that first cut**. Single sign-on for that
-admin is the second part. **More accounts (the editor and viewer roles and
-user maintenance) are optional and not built**: the table below keeps their
-columns so the design is ready if they are ever wanted, but only the admin
-exists today.
+**scoped API tokens ship with that first cut**.
 
 Decided on 21 September 2026, the details that shape the code:
 
@@ -335,7 +331,7 @@ Decided on 21 September 2026, the details that shape the code:
 | Recent password | Downloading a backup, exporting, restoring, deleting a stored archive, any settings change, creating or revoking a token, ending another session or signing out everywhere, deleting for good, and changing the password or username ask for the password again; a correct answer opens a 5-minute window for that session only, never for a token. Signing out of the current session never asks |
 | Password change | Revokes every other session, every known device, and every API token of every scope, naming each. The reset command in the container does the same |
 | Backups | Every archive is encrypted ([age](https://age-encryption.org), X25519) with a backup key from a Docker secret, from a variable, or generated on the state volume, and carries a MAC keyed by that key, so an archive on the backup share can be neither read nor forged without it. The key is shown only by a command in the container, never in the browser; losing it makes the archives unreadable, by design. Plain archives from before v0.30.0 are ignored; delete them by hand |
-| Anonymous requests | The only two routes that read a body without a login (sign-in and setup) accept at most 8 KiB, in nginx and in the gate |
+| Anonymous requests | The only three routes that read a body without a login (sign-in, setup, and the trusted-header sign-in) accept at most 8 KiB, in nginx and in the gate |
 | Photos | nginx `auth_request` declared server-wide, one subrequest per photo. Photos, documents, and exports are sent `Cache-Control: private, no-store`, and signing out clears the browser's cache of Cabinet. Caching the check only if measurement asks for it, and only with a reviewed cache key |
 | Hosts | nginx answers only the host names in `ALLOWED_HOSTS` (by default the hosts of `PUBLIC_ORIGINS`, plus any internal names an operator adds) and closes the connection for any other. It is separate from `PUBLIC_ORIGINS` so an internal name never becomes a trusted CSRF origin |
 | Proxies | nginx believes no forwarded header and overwrites them towards the backend with its own immediate peer and scheme. Cabinet pins no network ranges (the operator's infrastructure decides); the backend should be reachable by nothing but nginx, and uvicorn runs with `--no-proxy-headers`. The address nginx saw is recorded in the audit log for information only |
@@ -355,16 +351,11 @@ on a private network, because which of those the deployment uses is the
 operator's choice, not Cabinet's; see
 [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)
 for why "directly reachable" still means a private network, never the
-internet. The table includes
-the changes from four outside reviews on 21 September 2026, the last of them
-Codex's adversarial review; the contract, with a verdict on each finding, is
-[docs/specs/SPEC_0300.md](specs/SPEC_0300.md), and
-[SPEC_0300-how-it-works.md](specs/SPEC_0300-how-it-works.md) walks through
-setup, sign-in, password changes, and the break-glass reset.
+internet. See [SPEC_0300.md](specs/SPEC_0300.md) for the full contract.
 
 Accounts are logins to **one shared collection**, not separate collections.
 The setup page works only while no account exists. Three roles, of which
-only the admin is planned; editor and viewer are the optional part:
+only the admin is built; editor and viewer are the optional part:
 
 - **Admin**: everything, including users, settings, secrets, backups, and
   restore. The superuser created at setup is an admin.
@@ -423,11 +414,11 @@ Rules that go with the table:
   every request; a token is shown once and stored hashed. Any `/api/`
   request whose path is percent-encoded is refused (400), so no encoding can
   route around the gate.
-- Photos need the same check as the API. nginx serves them directly today,
-  so that becomes an `auth_request` to the backend, declared for the whole
-  server and switched off only for the static app and for `/api/` (where the
-  backend is the gate). It was chosen over signed, expiring photo URLs, which
-  would keep photo links plain but need a key rotation story of their own.
+- Photos need the same check as the API. nginx serves them only after an
+  `auth_request` to the backend, declared for the whole server and switched
+  off only for the static app and for `/api/` (where the backend is the
+  gate). It was chosen over signed, expiring photo URLs, which would keep
+  photo links plain but need a key rotation story of their own.
 - Single sign-on (OpenID Connect) signs in as the admin through an identity
   linked to that account; a trusted-header mode does the same for a
   forward-auth proxy. The local password stays so a provider outage can't
@@ -458,16 +449,9 @@ Rules that go with the table:
   that would reopen setup to whoever reaches it first.
 - On the first start after upgrading an open install, nothing is served but
   the setup page until the admin exists, and the log says so.
-- nginx believes no forwarded header from anyone: towards the backend it
-  overwrites the client address with its own immediate peer and the scheme
-  with its own, and blanks identity headers (`Remote-User`,
-  `X-Forwarded-User`, and the like). Nothing in the first release depends on
-  a forwarded address or scheme: cookies are `Secure` by configuration, and
-  the CSRF check compares against `PUBLIC_ORIGINS`. Cabinet pins no network
-  ranges; the rule it documents is that nothing but nginx should be able to
-  reach the backend, and uvicorn ignores forwarded headers entirely. On a
-  Swarm, ports published in the default ingress mode arrive from the ingress
-  network's address anyway, which is why sign-in limits lean on the
+- Forwarded headers are handled as the "Proxies" table row above describes.
+  On a Swarm, ports published in the default ingress mode arrive from the
+  ingress network's address anyway, which is why sign-in limits lean on the
   known-device cookie rather than on addresses. Sign-in limits are counted
   in memory, so a restart clears them.
 - **Credentials are deployment state, not collection data.** Users,
@@ -573,9 +557,8 @@ Rules that go with the table:
   for images; not for PDFs, which it stops Chrome's viewer rendering). PDFs
   open in the browser's own viewer rather than a bundled pdf.js, so a PDF's
   scripts never run in Cabinet's origin. Thumbnails render only page one, at
-  a fixed size. Like everything else here, documents are protected by the
-  reverse proxy's authentication, not by Cabinet, and they often carry
-  names and addresses.
+  a fixed size. Documents need a signed-in session (no token may read one),
+  and they often carry names and addresses.
 - **Import files** are staged under random ids in a temp folder, capped at
   1 GB, and deleted after a day. An OpenNumismat file is opened read-only as
   SQLite and only queried; nothing in it is executed. Imported values pass

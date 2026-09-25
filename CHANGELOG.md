@@ -8,6 +8,16 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Changed
+
+- Documentation pass: every document checked against v0.33.4's code by
+  four independent reviews; stale pre-0.33 wording, wrong counts, and
+  repeated passages corrected across the README, the deployment, security,
+  API, data-model, and price-source guides, the roadmap, and the
+  implementation notes; backend/README.md rewritten from its Phase 0 text.
+
 ## [0.33.4] - 2026-09-24
 
 ### Fixed
@@ -69,13 +79,13 @@ The owner's first look at v0.33.0 on the live instance.
   whether sharing is on and with how many links. The `stack` widget's table
   now says how many pieces the stack leaves out for want of a weight or
   fineness, linking to the Stack page's list.
-
-### Documentation
-
 - `docs/deployment.md`'s exposure section leads with the one standard
   warning paragraph and no longer repeats it in the sharing subsection or
   restates it in prose; the rest of the section is shorter and says only
   what the paragraph doesn't.
+
+### Added
+
 - `docs/live-validation.md`: the plan for validating v0.33.0 on a real
   deployment (the upgrade, sign-in through Authentik, Google, and GitHub,
   the trusted-header mode against an Authentik outpost, the recovery
@@ -1266,7 +1276,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 documents in `/data/documents` (`DOCUMENT_DIR`). Compose adds a
 `document_data` volume for it; a Swarm or bind-mount deployment must add a
 mount there, as for photos. See
-[deployment.md](docs/deployment.md#2-storage). Until it's mounted, document
+[deployment.md](docs/deployment.md#3-storage). Until it's mounted, document
 uploads are refused (Settings → About says so) rather than stored inside the
 container, where a redeploy would lose them.
 

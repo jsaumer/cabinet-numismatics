@@ -85,15 +85,6 @@ Researched and rejected:
   anything else offers, but the LBMA/ICE Benchmark Administration terms say a
   licence is needed to use benchmark data, including for valuation. Cabinet
   does not use it, and it must not gain an LBMA adapter without one.
-- **gold-api.com's `/history` endpoint** needs an API key (its free tier is
-  rate-limited to ten requests an hour); only its current-price endpoint
-  (already used for melt, above) is keyless.
-- **Stooq** now serves a bot-detection challenge page instead of CSV.
-- **Nasdaq Data Link and FRED** both need a free API key, which is one more
-  credential to manage for a single field most purchases won't use.
-- **datahub.io and the World Bank** publish monthly series only, too coarse
-  for a specific purchase date.
-- **Yahoo Finance's chart API** is unofficial and undocumented.
 
 Implemented instead with the public-domain (CC0) **fawazahmed0 currency-api**
 (`services/stack.py`, `historic_spot`), which has published daily
@@ -261,10 +252,9 @@ Requirements and limits:
 
 - An access token (pcgs.com/publicapi, OAuth against your PCGS login), stored
   encrypted in Settings; the source is disabled until you switch it on.
-- 100 calls a day by default (PCGS's documentation said 1,000 until it was
-  cut; a larger limit is available by emailing apis@pcgs.com); responses are
-  cached in `source_cache` for 7 days. PCGS documents no usage endpoint, no
-  quota headers, and no reset time.
+- 100 calls a day by default (more on request from PCGS, apis@pcgs.com);
+  responses are cached in `source_cache` for 7 days. PCGS documents no usage
+  endpoint, no quota headers, and no reset time.
 - PCGS signals failure in the body, not the status: `IsValidRequest: false`
   means the request values were malformed, and `"No data found"` means no such
   coin. Both surface as 422 with the reason. A 401, or a 500 (which usually
@@ -310,20 +300,10 @@ will hand them to a self-hosted app. Research in September 2026 found:
   applicants (2025–26 applications are refused); the Finding API's
   `findCompletedItems` was decommissioned in February 2025; the open Browse
   API returns asking prices on active listings only, and eBay's API licence
-  forbids using its content to model prices. Scraping is against the user
-  agreement.
-- **Auction houses and aggregators** (Heritage, GreatCollections, Stack's
-  Bowers, Spink, CoinArchives, acsearch, WorthPoint): no public API or data
-  licence for individuals, and their terms forbid automated collection.
-  Their archives are free or cheap to *read*.
-- **Price guides with APIs**: Greysheet/CDN needs a dealer subscription plus
-  $95–287 a month and is wholesale guide data, not sales; PriceCharting
-  derives values from eBay sales of US coins for $49 a month. Neither is
-  planned. NGC, PMG, and Colnect offer no usable price API.
-- **Numista** records past auction sales per type and issue
-  (`GET /types/{id}/sales_records`), but only on its paid API plan (€0.01 a
-  request, after a €100 activation fee and a €100 monthly minimum); a free
-  key gets 403 "Permission denied".
+  forbids using its content to model prices. No sold-price API is open to
+  individuals anywhere else either: auction houses and aggregators, price
+  guides, and Numista's own sales records all require a paid plan or forbid
+  automated collection.
 
 So the source is a **sales log per item**, filled by hand from those
 archives, with Numista's sales as an optional paid feed into the same log.
@@ -349,54 +329,18 @@ Implemented in `app/services/comps.py`:
   (one-day TTL); known lots are skipped by URL. Pictures are not kept (they
   carry the auction houses' copyright), and Numista is shown as the source.
 
-### Price-guide references
-Published guides (annual catalogs and grading-service price guides) give
-book values by grade. These are stable references but can lag the live market
-and may not be available via API, so some may require manual entry of values.
-
 ### Manual / user-provided
-The app should always allow manually recording a value the user researched
-themselves: their own comps, a dealer quote, or an auction result. Manual
-entries are first-class `price_estimates` rows with `source = "manual"` and a
-confidence the user sets (optional: omitted confidence is stored as null).
+A value the user researched themselves (their own comps, a dealer quote, or
+an auction result) is recorded as a `price_estimates` row with
+`source = "manual"` and a confidence the user sets (optional: omitted
+confidence is stored as null).
 An optional note (up to 500 characters: the lot, the dealer, raw or slabbed)
 is kept in `details` and shown the same way as an automatic source's
 provenance.
 
-## Confidence scoring
-
-A simple, transparent heuristic works better than false precision:
-
-- Larger sample of recent, well-matched comparables → higher confidence.
-- Exact catalog + grade match → higher confidence than an approximate match.
-- Book-value-only or single-data-point sources → lower confidence.
-- Manual entries carry whatever confidence the user assigns.
-
 ## Caveats
 
-- Estimates are **guidance, not appraisals.** For insurance or sale, get a
-  professional appraisal or grading-service valuation.
-- Grade dominates value; an estimate is only as good as the grade it assumes.
-- Thin markets (scarce items) may have too few comparables for a meaningful
-  estimate, so surface low confidence rather than a misleadingly precise number.
-- Cached estimates age; the `fetched_at` timestamp shows how stale a value is.
-
-## Implementation notes
-
-- Each source is one adapter, `(db, item) -> EstimateResult`, registered in
-  `pricing.get_adapter` (names in `pricing.ADAPTER_NAMES`) and raising
-  `NotApplicable` (422) or `SourceUnavailable` (502), so sources can be added
-  or disabled independently.
-- Cache upstream calls through `pricing.cached_fetch` and respect each
-  source's limits: a fresh entry spends no request, and a stale one beats a
-  failed fetch. `KeyRejected` and `QuotaExhausted` (kinds of
-  `SourceUnavailable`) raise alerts and stop a scheduled refresh at the
-  first one.
-- Store raw comparables (or a summary) alongside the estimate where possible so
-  a value can be explained, not just asserted (done as `details`, above).
-  Adapters build it as JSON-safe values (floats, strings, ISO dates; never
-  `Decimal`), and every row goes through `pricing.estimate_row` so the
-  on-demand and scheduled paths can't drift apart.
+Estimates are guidance, not appraisals.
 
 ## Pricing reports
 
@@ -417,7 +361,9 @@ Two pieces of the adapter contract exist for it:
   page and scheduled refresh alike, and records the outcome per item and
   source in `estimate_attempts`: `ok`, `not_applicable` (with what the source
   said, e.g. "Numista lists no 1955 issue"), or `unavailable` (the fetch
-  error). Only the latest attempt is kept.
+  error). Only the latest attempt is kept. Every estimate row, on-demand or
+  scheduled, goes through `pricing.estimate_row`, which builds `details` as
+  JSON-safe values (floats, strings, ISO dates; never `Decimal`).
 
 Accuracy compares the estimates that stood on the sale date (recorded on or
 before `sold_date`) with the sold price, so an estimate added after marking

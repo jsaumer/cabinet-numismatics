@@ -19,7 +19,7 @@
 #     point every volume at shared storage (NFS binds, or a volume driver) so
 #     a task can move between nodes. The backend refuses document uploads
 #     unless /data/documents is a real mount, so don't leave that one out.
-# See docs/deployment.md §7.
+# See docs/deployment.md §8.
 
 # Every service keeps its log to three 10 MB files.
 x-logging: &logging
@@ -116,7 +116,7 @@ services:
     image: ghcr.io/jsaumer/cabinet-numismatics-proxy:${TAG:-latest}
     # Published on the routing mesh. Behind Traefik or another ingress, drop
     # `ports:` and add that proxy's labels here instead (see deployment.md
-    # §3 for Traefik with forward-auth).
+    # §4 for Traefik with forward-auth).
     ports:
       - "${CABINET_PORT:?set CABINET_PORT}:80"
     environment:
