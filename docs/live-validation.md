@@ -69,7 +69,7 @@ concrete.
 | B4 | Sign out, open the sign-in page | One button for this provider, the password form still present |
 | B5 | Press the button **before linking** | The provider authenticates you and sends you back to `/login?error=` with "This account is not linked to Cabinet"; an `sso_sign_in_rejected` audit row with `reason: unlinked`; no session; no new account |
 | B6 | Sign in with the password, Settings → Sign-in → **Link** next to the provider | Round trip to the provider and back to `/settings/signin?linked=`; "Linked" shown; an `identity_linked` audit row and alert |
-| B7 | Sign out, press the button | Signed in; `sign_in` audit row with `method: oidc` (or `oauth2_profile` for GitHub); Settings → Account shows the session as a provider session; `GET /api/auth/me` reports `auth_method` and `provider_id` |
+| B7 | Sign out, press the button | Signed in; `sign_in` audit row with `method: oidc` (GitHub too: the row records the flow, not the preset kind); Settings → Account shows the session as a provider session; `GET /api/auth/me` reports `auth_method` and `provider_id` |
 | B8 | From a fresh browser profile, press the button | Signed in, plus a new-browser alert (no device cookie is issued for an external sign-in, so only the browser cookie decides whether a later sign-in from that profile alerts again) |
 | B9 | Do a fresh action (download a backup): the confirm dialog | Offers "Confirm at your sign-in provider" only where B2 said it would; choosing it re-prompts at the provider (a real password or second-factor prompt, not a silent bounce), returns to the page, and the download proceeds; the password option works too |
 | B10 | Sign out | With `logout_at_provider` on, the browser is sent to the provider's end-session page and back to `/login`; otherwise straight to `/login`. Provider off or GitHub: the plain path |
@@ -310,6 +310,27 @@ Not OpenVAS, but cheap and answering questions it can't:
 - `bash scripts/ci/stack-smoke.sh outside-in` against the live instance
   is **not** to be run: it mints tokens and creates items. Its
   local-stack run in CI is the authenticated coverage.
+
+## The first run (24 September 2026)
+
+Parts A and B ran the day of the release, against the owner's Swarm, in
+the order above, with Claude reading the audit log and Settings from a
+browser pane the owner had signed in with the password. Part A passed
+(A6 not applicable: no gateway in front). Authentik, Google, and GitHub
+passed every step; B13 and the trusted-header mode were skipped (one user
+per provider, no forward-auth gateway). Three Cabinet defects surfaced
+and shipped as 0.33.2, 0.33.3, and 0.33.4 the same day; the details are in
+[SPEC_0330](specs/SPEC_0330.md#owed-to-the-owners-live-check). Two things
+the plan didn't say that the run taught:
+
+- **Keep the reading session on the password.** A provider sign-in in the
+  same browser replaces the session, and a disable or unlink then ends it
+  mid-test; use a private window for every provider step.
+- **Unlink and Remove use the browser's own confirm dialog**, which an
+  embedded or automated browser may not show; do those two from an
+  ordinary browser.
+
+Part C is still to run.
 
 ## Recording the outcome
 
