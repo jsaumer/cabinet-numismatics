@@ -81,9 +81,10 @@ didn't complete.
 **Every request passes a gate before routing** (v0.30.0,
 `app/auth/gate.py`): an encoded path is refused, the caller is found from an
 API token (`Authorization: Bearer`) or the session cookie, anonymous callers
-reach only health, the setup state, setup, and sign-in, and a cookie request
-must come from one of `PUBLIC_ORIGINS` (CSRF). Then every route checks the
-permission it declares (`@permission`, `app/auth/permissions.py`); a route
+reach only health, the setup state, setup, sign-in, and (v0.33.0) the
+single sign-on start, callback, and trusted-header routes, and a cookie
+request must come from one of `PUBLIC_ORIGINS` (CSRF). Then every route
+checks the permission it declares (`@permission`, `app/auth/permissions.py`); a route
 without one is refused. Sessions, tokens, known devices, and the audit log
 live in the `cabinet_auth` schema; the sign-in throttles, the two password
 check slots, and the restore grant live in memory, which one process makes
@@ -185,7 +186,7 @@ app's Settings page and stored in the database.
 | `IMPORT_DIR`      | Where uploaded import files wait between preview and import (default: a temp folder; kept a day) |
 | `RESTORE_ENABLED` | In-app restore (default `true`); `false` makes every restore endpoint answer 404 and hides it in Settings |
 | `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
-| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.32.0`) |
+| `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.33.4`) |
 | `PUBLIC_ORIGINS`  | Required. The exact origins browsers use (`https://cabinet.example.com`), comma-separated; read by the backend (checked at start) and the proxy (its Host names) |
 | `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets no response |
 | `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |

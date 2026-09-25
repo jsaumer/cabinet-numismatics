@@ -16,17 +16,11 @@ All request and response bodies are JSON unless noted (photo, document, and
 import uploads and restore archives are multipart; exports, backups,
 document files, and metrics answer files or text).
 
-**Every endpoint needs a credential** (v0.30.0) except these: `GET
-/api/health` (just `{"status": ...}` for anonymous callers), `GET
-/api/auth/state`, `POST /api/auth/setup`, and `POST /api/auth/login`; the
-single sign-on routes (v0.33.0) `GET /api/auth/oidc/start`,
-`GET /api/auth/oidc/callback`, and `POST /api/auth/trusted`; and
-the share view's `GET /api/share/...` routes (v0.32.0), which need a share
-link's token instead, and only while sharing is on (see
-[Sharing](#sharing)). A
+**Every endpoint needs a credential** (v0.30.0) except the public and share
+routes listed under "Paths" in
+[Sign-in and permissions](#sign-in-and-permissions) below. A
 browser signs in and carries a session cookie; scripts send an API token
-(`Authorization: Bearer cabinet_...`). What each route allows is in
-[Sign-in and permissions](#sign-in-and-permissions) below. The three
+(`Authorization: Bearer cabinet_...`). The three
 endpoint renames of that release are in the stability policy.
 
 ## Stability policy
@@ -142,7 +136,7 @@ own `Cache-Control` get `private, no-store`.
 | Method | Path | Class | Purpose |
 |--------|------|-------|---------|
 | `GET` | `/api/auth/state` | public | `{"setup_required": bool, "methods": {"password": true, "providers": [{id, name, preset}], "trusted_header": {"available": true} or null}}`: one entry per enabled provider, read from the database on every call; `trusted_header` is `{"available": true}` when the four `TRUSTED_ASSERTION_*` variables are set and the mode is switched on, else `null`. This route never reads or verifies the request's assertion (v0.33.0) |
-| `POST` | `/api/auth/setup` | public | `{code, username, password}`: create the admin; `201` and both cookies, `403` wrong code, `409` already set up, `413` over 8 KiB, `422` a rule broken, `429` too many wrong codes |
+| `POST` | `/api/auth/setup` | public | `{code, username, password}`: create the admin; `201` with the session, device, and browser cookies, `403` wrong code, `409` already set up, `413` over 8 KiB, `422` a rule broken, `429` too many wrong codes |
 | `POST` | `/api/auth/login` | public | `{username, password}`: `200 {username, previous_sign_in_at, failed_since_previous}`, the session and device cookies, and the browser cookie when absent; `401`, `413`, `429` and `503` with `Retry-After` |
 | `POST` | `/api/auth/logout` | admin | End this session; `204`, cookies cleared, `Clear-Site-Data: "cache"`. A session from a provider with "sign out there too" on, whose discovery names an end-session endpoint, gets `200 {"redirect": <that URL with client_id and post_logout_redirect_uri={origin}/login>}` for the browser to follow |
 | `GET` | `/api/auth/me` | read | `username`, `role`, `via` (`session` or `token`), `scope`, `confirmed_until`, `auth_method` (`password`, `oidc`, `trusted_header`; null for a token), `provider_id` (the provider an `oidc` session signed in through, else null), `confirm_methods` (`["password"]`, plus `"provider"` on an `oidc` session whose provider can re-authenticate), and, once after a single sign-on and then null, `failed_since_previous` and `previous_sign_in_at` |
@@ -178,6 +172,8 @@ Codes: `401` for a missing, invalid, expired, or revoked credential; `403`
 for a valid one that isn't allowed; `429` with `Retry-After` when sign-in
 is being slowed down. Sign-in delays grow per username (after 5 failures)
 and per address (after 20), up to a minute, and never lock the account.
+Past 60 password checks a minute from every address together, sign-in
+answers `503` with `Retry-After` instead.
 
 ## Items
 
@@ -209,9 +205,7 @@ refs/tags),
 `fancy=true` (notes with any fancy-serial trait), `serial_trait` (one trait
 key from `/api/reference/serial-traits`; an unknown one is 422),
 `target_reached=true` (see the wish-list fields below), `metal` (`gold`,
-`silver`, `platinum`, `palladium`, or `none`; P11, v0.31.0, evaluated in
-Python with the same detector the metal breakdown uses, not a column, since
-a few hundred pieces need no index for it; an unknown value is 422),
+`silver`, `platinum`, `palladium`, or `none`; an unknown value is 422),
 `limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`,
@@ -392,17 +386,10 @@ Upload accepts a single image file plus optional `angle`. Files are validated
 as real JPEG/PNG/WebP images (the declared content-type is not trusted), EXIF
 orientation is corrected, and a JPEG thumbnail is generated alongside the
 original. **The original is stored re-encoded, without its metadata**
-(v0.32.0): the orientation is applied, then every EXIF block (GPS, camera,
-dates), XMP, IPTC, comment, and PNG text chunk is dropped; only the colour
-profile (and a palette's transparency) is kept, and from v0.32.2 a profile
-only when it is shaped like one. A JPEG is written at
-quality 95, so the stored file is not byte for byte the upload, and an
-animated WebP or PNG keeps its first frame only. The thumbnail is written
-the same way. Photos stored before v0.32.0, thumbnails included, are
-re-encoded once, in the background, on the first start (see
-[backup-restore.md](backup-restore.md#photo-metadata)); a file that can't
-be decoded is left as it is, which is why the share view checks each file
-before sending it from disk. The first photo uploaded becomes the primary image. Responses
+(v0.32.0): EXIF, XMP, IPTC, and comment data are dropped, keeping only the
+colour profile (and a palette's transparency). The thumbnail is generated
+the same way (see
+[backup-restore.md](backup-restore.md#photo-metadata)). The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
 `/photos/{file_key}` and `/photos/{thumb_key}`.
 
@@ -487,18 +474,12 @@ disables) and, since P11 (v0.31.0), also takes owned pieces that qualify for
 melt and have no estimate at all yet (a new bullion piece gets a value
 without waiting on the 12h loop or a button press); a melt refresh never
 supersedes an item whose latest estimate is manual, or from another source.
-**Saving an item** (create, update, "Add a run", and an import) also adds a
-melt estimate itself, from the cached spot price only, when the piece
-qualifies (metal, weight, fineness) and the cache for that metal is not
-stale: no network call ever happens on the save path (an absent or stale
-cache means nothing is added; the scheduled refresh above catches it later).
-It's skipped, too, when the piece already has a melt estimate with the same
-inputs (metal, weight, fineness, quantity), so an edit that doesn't touch any
-of those adds no duplicate row. The same 12h loop also refreshes Numista and/or PCGS when their own
-cadence is switched on in Settings (each off by default), independently of
-melt and of whichever source currently wins an item's overall-latest estimate,
-since `value_strategy` may prefer or average a source that isn't "latest"
-right now.
+**Saving an owned item** (create, update, "Add a run", and an import) adds a
+melt estimate from the cached spot price only, never a network call, skipped
+when the piece doesn't qualify (metal, weight, fineness), the cache is
+stale, or the inputs haven't changed since its last melt estimate. The same
+12h loop also refreshes Numista and/or PCGS when their own cadence is
+switched on in Settings (each off by default).
 
 ## Stats
 
@@ -623,7 +604,7 @@ parentheses):
 | `setup` | none | full |
 | `value_summary` | none | full |
 | `value_history` | `months`: 12, 24, 60, or 120 (24) | full |
-| `breakdown` | `dimension`: `country`, `type`, `decade`, `grade`, `tag`, `metal`, `acquisition_year` (`country`); `measure`: `value`, `count`, `cost` (`value`); `top_n`: 3-20 (8); `tag`: a tag name or `null` (`null`); `set_id`: a set id or `null` (`null`) | third |
+| `breakdown` | `dimension`: `country`, `type`, `decade`, `grade`, `tag`, `metal`, `acquisition_year` (`country`); `measure`: `value`, `count`, `cost` (`value`); `top_n`: 3-20 (8); `tag`: a tag name or `null`, up to 64 characters (`null`); `set_id`: a set id or `null` (`null`) | third |
 | `notes_by_signature` | none | full |
 | `unrealized_movers` | `top_n`: 3-25, best and worst each (5) | full |
 | `realized_gains` | `top_n`: 3-50 (20) | full |
@@ -632,7 +613,7 @@ parentheses):
 | `wishlist` | `mode`: `priority`, `reached` (`priority`); `count`: 3-20 (6) | half |
 | `fancy_serials` | `count`: 3-20 (6) | half |
 | `checklists` | `count`: 3-20 (6) | half |
-| `stack` | `metal`: `all`, `gold`, `silver`, `platinum`, `palladium` (`all`); `tag`: a tag name or `null` (`null`) | half |
+| `stack` | `metal`: `all`, `gold`, `silver`, `platinum`, `palladium` (`all`); `tag`: a tag name or `null`, up to 64 characters (`null`) | half |
 | `pricing_coverage` | none | third |
 | `stale_estimates` | `days`: 7, 30, 90, or 365 (30); `count`: 3-20 (6) | half |
 | `source_disagreements` | `count`: 3-20 (5) | half |
@@ -1001,8 +982,7 @@ explanation; an unreachable Numista is 502. One request, cached for a day.
 
 File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
 keyed by the exported `id`, and a duplicate when that id is still here,
-trash included; this is the one way to import a Cabinet export, since
-v0.30.0 removed `POST /api/items/import`), `spreadsheet` (any
+trash included), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
 (numista.com's collection export, by column name), and `opennumismat` (an
 OpenNumismat `.db`). Preview and run take the same JSON
@@ -1071,7 +1051,16 @@ Every answer carries `X-Robots-Tag: noindex, nofollow`; the JSON ones
 | `GET` | `/api/share/{token}/items` | `?offset=&limit=` (`offset` 0 to 1,000,000, `limit` 1 to 100, default 50; `422` outside them): `{"items": [...], "total": n}`, newest first |
 | `GET` | `/api/share/{token}/items/{item_id}` | One piece, if it is in the share |
 | `GET` | `/api/share/{token}/checklist` | A checklist link's **filled** slots only, `{"slots": [{position, label, year, mint_mark, item_id}]}` (`item_id` is `null` for a slot ticked by hand with no piece); other kinds `404` |
-| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time). The photo carries no metadata (see [Photos](#photos)): the file is sent as it is only when the one-time pass over stored photos has written its marker and the file passes an allowlist walk of its structure (a JPEG, PNG, or WebP; WebP from v0.32.2), and then as the bytes that were checked; otherwise the route re-encodes it without metadata on the request. A file the pass couldn't rewrite (listed in its marker) and one that can't be decoded are the same `404`. At most two photos are re-encoded at once: past that the route answers `503` with `Retry-After: 5` (and `no-store`). Either way the body is built in memory, so a `Range` (with `If-Range` or without) gets the whole photo, `200`, never a `206` |
+| `GET` | `/api/share/{token}/photos/{photo_id}/{variant}` | `thumb` or `full`: the file, when `show_photos` is on and the photo's piece is in the share; `Cache-Control: private, max-age=3600`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, and no `Last-Modified` or `ETag` (both would give the upload time) |
+
+The photo carries no metadata (see [Photos](#photos)): it is sent as it is
+once the one-time pass over stored photos has written its marker and the
+file passes an allowlist walk of its structure (a JPEG, PNG, or WebP; WebP
+from v0.32.2), otherwise the route re-encodes it without metadata on the
+request, capped at two re-encodes at once (`503` with `Retry-After: 5`
+past that). A file the pass couldn't rewrite, and one that can't be
+decoded, are both the one 404 below. The body is always built in memory,
+so a `Range` request gets the whole photo, `200`, never a `206`.
 
 **One 404.** A malformed token, an unknown one, a revoked one, a set or
 checklist that is gone, and a piece or photo outside the share all answer
@@ -1241,8 +1230,7 @@ reason (for example, `pg_dump failed: …`) and is recorded as the last run
 `ok`, `file`, `size`, `includes_photos`, and `pruned`. `GET /api/backups`
 answers `directory`, `free_bytes`, `last_run`, `backups` (`name`, `size`,
 `created_at`, `prerestore`: true for the safety archive an in-app restore
-took first, and `encrypted`: false for a plain `.zip` from before v0.30.0,
-which can't be restored), and `key`: `fingerprint` (the backup key's public
+took first), and `key`: `fingerprint` (the backup key's public
 key, `age1…`; the key itself never crosses the API), `saved`, `supplied`
 (from `BACKUP_KEY_FILE` or `BACKUP_KEY`), `location` (`separate`, `shared`, `not_verified`,
 `secret` for a supplied file, or `environment` for a supplied variable), and
@@ -1312,17 +1300,13 @@ stored secrets the restore cleared because this deployment couldn't use
 them (plain text, or encrypted with another key), and
 `finished_after_restart` is `true` when the backend stopped after the
 database step and finished the restore on its next start. `sharing`
-(v0.32.0) says what happened to the share links, which a restore keeps
-like sign-in data: `links_kept` (put back), `links_dropped` (a set or
-checklist link whose target, by id and name, the archive doesn't hold),
-`archive_links` and `archive_enabled` (what the archive held, now
-replaced), `enabled` (the switch, as it was before), and `differed`; an
-`error` there means the links couldn't be put back, so every link was
-removed and sharing switched off, and the links from before wait in
-`pending_sharing.json` on the state volume to be tried again (at the next
-start, every hour, and when Settings is opened). After a restart during a
-restore, `sharing` is added once the links have gone back, right after the
-startup migrations. It is audited as `restore_sharing`, and the restore's
+(v0.32.0) says what happened to the share links, which a restore keeps like
+sign-in data: `links_kept` (put back), `links_dropped` (a set or checklist
+link whose target, by id and name, the archive doesn't hold), `archive_links`
+and `archive_enabled` (what the archive held, now replaced), `enabled` (the
+switch, as it was before), and `differed`; an `error` there means the links
+couldn't be put back, so every link was removed and sharing switched off
+until it can retry. It is audited as `restore_sharing`, and the restore's
 alert says so when the archive differed. Switched off, it answers `enabled:
 false`, `state: "idle"`, and `null` for `step`, `started_at`, and `last`.
 
@@ -1465,9 +1449,9 @@ also carry `match_catalog`/`match_ref` or `match_country`/
 | `GET`  | `/api/health`  | Liveness/readiness probe            |
 
 Anonymous callers (a container health check, Uptime Kuma) get only
-`{"status": "ok"}`, and so does everyone while an in-app restore runs (the
-check then looks nothing up). Any signed-in session or token gets the full
-body: `status`, `db` (`ok` / `unreachable`), the app `version`, and
+`{"status": "ok"}`. Any signed-in session or token gets the full
+body: `status`, `db` (`ok`, `unreachable`, or `restoring` while an in-app
+restore runs, when the check looks nothing up), the app `version`, and
 `schema`: the database's `current` Alembic revision, the `expected` one this
 build ships, and a `status`, one of `ok`, `pending` (migrations not yet
 applied), `ahead` (the database was migrated by a newer build), or `unknown`

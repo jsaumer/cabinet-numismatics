@@ -40,7 +40,7 @@ page says sales records need the paid plan, and no key alert is raised.
 
 ### Events
 
-Two kinds of message are events, not checks: they have no recovery, are not
+Some messages are events, not checks: they have no recovery, are not
 listed among the checks in Settings, and don't affect the heartbeat or the
 `cabinet_alert_failing` metric. Without a saved webhook nothing is sent.
 
@@ -108,14 +108,11 @@ keys, since it usually carries a token; Settings shows only its host.
 | Slack / Mattermost | `POST` `{"text": "*title*\nmessage"}` to an incoming webhook                 |
 | Gotify             | `POST` `{"title", "message", "priority"}` to `/message?token=<app token>`   |
 
-`status` is `failing`, `recovered`, `test`, or `event`; `alert` is one of
-`backup`, `numista_key`, `numista_quota`, `pcgs_key`, `pcgs_quota`,
-`refresh_melt`, `refresh_numista`, `refresh_pcgs` (or `test`),
-`wishlist_target` for the wish-list event (`title` `Cabinet: Wish-list
-target reached`), and `spot_<metal>` for a spot-price alert, whose `title`
-names the threshold that crossed (e.g. `Cabinet: Silver is above $35.00`).
-Both events go out at normal priority (ntfy `default` with the `dart` tag,
-Gotify 4). An example:
+`status` is `failing`, `recovered`, `test`, or `event`; `alert` is the
+check's key (the table above, `sso_provider_<id>` for a sign-in provider,
+or `test`) or an event's key (the Events section, and the sign-in events
+listed in security.md); every event goes out at normal priority (ntfy
+`default` with the `dart` tag, Gotify 4). An example:
 
 ```json
 {

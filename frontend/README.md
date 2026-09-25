@@ -77,7 +77,8 @@ src/
                         (the section list, Section, SettingRow, the
                         useSettings load/apply hook), and one file per
                         section (General.tsx, Pricing.tsx, Backups.tsx,
-                        Alerts.tsx, Sharing.tsx, Account.tsx, About.tsx);
+                        Alerts.tsx, Sharing.tsx, Account.tsx, Signin.tsx,
+                        About.tsx);
                         Alerts.tsx and Account.tsx are thin wrappers around
                         components/alerts.tsx and components/account.tsx,
                         which already render their own single-h2 card
@@ -132,10 +133,15 @@ e2e/                  Playwright tests: auth.spec.ts (sign-in, sign-out, the
                        collection link end to end: create it, open it in a
                        fresh, storage-state-free browser context, see a
                        piece and no price, revoke it, see the inactive
-                       page), and smoke.spec.ts (the rest, its last two
-                       tests changing and reverting the admin's password
-                       and username); the sign-in global setup
-                       (global-setup.ts)
+                       page), sso.spec.ts (single sign-on through the CI
+                       mock provider: a provider sign-in round trip, the
+                       trusted-header sign-in with a minted assertion, and
+                       a confirm at the provider; skips itself unless
+                       MOCK_IDP_URL is set, and uses no stored state since
+                       it sorts after smoke.spec.ts's password change), and
+                       smoke.spec.ts (the rest, its last two tests changing
+                       and reverting the admin's password and username);
+                       the sign-in global setup (global-setup.ts)
 playwright.config.ts, vite.config.ts, tsconfig.json
 ```
 
@@ -145,7 +151,7 @@ page live in the URL, a Metal select beside Type among them since v0.31.0),
 `/stack` (fine ounces by metal, and, since v0.31.0, a "Left out" card
 listing owned precious-metal pieces missing a weight or fineness), `/report`,
 `/checklists`, `/import`, `/trash`, and `/settings/:section` (`general`,
-`pricing`, `backups`, `alerts`, `sharing`, `account`, `about`; `/settings`
+`pricing`, `backups`, `alerts`, `sharing`, `account`, `signin`, `about`; `/settings`
 redirects to `/settings/general`, and an unknown section falls back to it
 too). `/dashboard` redirects to `/`.
 `/setup` and
@@ -284,51 +290,37 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   dying session elsewhere in the app can never redirect a share visitor to
   `/login`.
 - **Every call the share page makes is `raw`** (`api.shareManifest`,
-  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`), and
-  `SharePage` treats any failed `shareManifest` call the same way: a bad
-  or revoked token is `404`, but sharing switched off answers `401`
-  instead (stage 4, finding 3, so an anonymous scan of `/api/share/`
-  while it's off costs the gate no lookup); the page's `.catch()` doesn't
-  read the status, so both, and a `429` from the per-address throttle,
-  land on the same "This link isn't active" page. None of this must ever
-  reach `req()`'s global 401 handler (which isn't even registered here,
-  `AuthProvider` not being mounted, but `raw` keeps the calls correct
-  regardless of that). `sharePhotoUrl(token, photoId, variant)` builds the
-  photo URL directly; it isn't a `req()` call at all, the same as
-  `photoUrl`.
+  `shareItems`, `shareItem`, `shareChecklist` in `api/calls.ts`): a bad or
+  revoked token is `404`, sharing switched off is `401`, and a `429` from
+  the per-address throttle is possible too; `SharePage`'s `.catch()`
+  doesn't read the status, so all of them land on the same "This link
+  isn't active" page. None of this must ever reach `req()`'s global 401
+  handler (which isn't even registered here, `AuthProvider` not being
+  mounted, but `raw` keeps the calls correct regardless of that).
+  `sharePhotoUrl(token, photoId, variant)` builds the photo URL directly;
+  it isn't a `req()` call at all, the same as `photoUrl`.
 - **The page never links into the signed-in app.** No `/items/...`,
   `/settings/...`, or sign-in link appears anywhere on a share page; the
   footer's "Shared from Cabinet" names the app without linking anywhere.
 - **`<meta name="robots" content="noindex">`** is added to `document.head`
-  while `SharePage` is mounted and removed on unmount; nginx repeats the
-  intent server-side with `X-Robots-Tag` on `/s/` (`proxy/nginx.conf`).
-  `robots.txt` disallows `/api/` but not `/s/` (stage 4, finding 7): a
-  crawler has to fetch a share page to see its `noindex` tag, so blocking
-  the path outright would have hidden the tag from the crawler that's
-  supposed to read it. A share link's token is kept out of nginx's own
-  access log regardless: a `map`/`log_format` at the top of that file
-  rewrites `/api/share/<token>...` and `/s/<token>...` to `.../[token]...`
-  before logging, the same redaction the backend already does for its own
-  `uvicorn.access` log. nginx's error log isn't redacted (an upstream
-  error can quote the path, token included); see
-  [deployment.md](../docs/deployment.md#sharing-and-the-forward-auth-exemption).
+  while `SharePage` is mounted and removed on unmount. See
+  [deployment.md](../docs/deployment.md#sharing-and-the-forward-auth-exemption)
+  for the proxy side of sharing (the `/s/` location, `robots.txt`, and log
+  redaction).
 - **A `ShareItem`'s toggle-gated keys are absent, not null, when the
   link's own `show_*` is off** (`api/types/share.ts`): `SharePiece.tsx`
   reads `item.grade_label === undefined` (and the same for `tags` and
   `notes`) to tell "not shown by this link" apart from "shown, but empty,"
   which is why a share never displays an empty grade or tags section on a
-  piece with none. `cert_number` is its own toggle (`show_certs`, stage 4,
-  finding 10) and is checked the same way, independently of
-  `grade_label`: a link can show the certification service
-  (`cert_service`, still under `show_grades`) without the cert number, or
-  neither, or both.
-- **Settings → Sharing** (`pages/settings/Sharing.tsx`) is a seventh
-  routed section, after Alerts & metrics: the `share_enabled` switch,
-  the links table (Rename, Options, Regenerate, Revoke, each an admin
-  call through `req()`, so the fresh ones open the confirm-password
-  dialog by themselves; `PATCH /api/share-links/{id}` became fresh in
-  stage 4, finding 9, so Options and Rename both need nothing extra), and
-  a create form. A link's URL is shown once, the same show-once-with-Copy
+  piece with none. `cert_number` is its own toggle (`show_certs`) and is
+  checked the same way, independently of `grade_label`: a link can show
+  the certification service (`cert_service`, still under `show_grades`)
+  without the cert number, or neither, or both.
+- **Settings → Sharing** (`pages/settings/Sharing.tsx`) is a routed
+  section: the `share_enabled` switch, the links table (Rename, Options,
+  Regenerate, Revoke, each an admin call through `req()`, so the fresh
+  ones open the confirm-password dialog by themselves), and a create
+  form. A link's URL is shown once, the same show-once-with-Copy
   pattern as a new API token in `components/account.tsx`. The six
   `show_*` toggles live in one `OPTIONS` array in `Sharing.tsx`, shared by
   the create form and a row's Options panel; `show_values` and
@@ -420,6 +412,20 @@ revoking an API token, and ending another session (a second browser context
 it signs in itself, distinguished by a custom `User-Agent`). The setup page
 itself isn't covered here: CI's curl claim already exercises it, and by the
 time Playwright runs the instance is claimed.
+
+`e2e/sso.spec.ts` drives single sign-on through the CI mock provider
+(`scripts/ci/mock_idp.py`) and the providers, linked identities, and
+trusted-header mode that `scripts/ci/stack-smoke.sh`'s `sso` phase leaves
+configured: Settings → Sign-in listing the provider and the linked
+identity, the sign-in page offering the provider and the trusted-header
+proxy above the password form, a full sign-in through the provider and
+back out, a confirm at the provider that opens the return in a fresh
+context and replays nothing, the proxy's own sign-in starting a
+trusted-header session with a minted assertion, and unlinking that
+identity from Settings. It skips itself unless `MOCK_IDP_URL` is set, and,
+since it sorts after `smoke.spec.ts`'s password and username change, it
+uses no stored state at all: every sign-in runs in a brand-new browser
+context, like `share.spec.ts`'s share visit.
 
 Cabinet needs a sign-in (v0.30.0). `global-setup.ts` runs once before the
 whole suite, claims an unclaimed stack with `SETUP_CODE` or signs in with

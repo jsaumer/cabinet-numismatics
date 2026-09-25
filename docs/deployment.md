@@ -1,8 +1,9 @@
 # Deployment
 
 Cabinet is designed for a single host running Docker Compose. This guide
-covers a durable install: real secrets, a reverse proxy with TLS and
-authentication, scheduled backups, and upgrades.
+covers a durable install: real secrets, a reverse proxy with TLS, and
+optionally a single sign-on provider or a gateway in front, scheduled
+backups, and upgrades.
 
 If you just want to try it, the quick start in the [README](../README.md) is
 enough.
@@ -74,7 +75,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.32.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.33.4`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -102,7 +103,8 @@ http://localhost/api/openapi.json for a signed-in browser. The backend
 creates the database schema itself before it starts serving.
 `curl http://localhost/api/health` answers `{"status":"ok"}`; signed in, or
 with a token, it also reports database reachability, the running version,
-`schema` (`status: "ok"` once migrations are applied), and `documents`
+`schema` and `auth_schema` (`status: "ok"` once migrations are applied, the
+collection and the sign-in chain respectively), and `documents`
 (`ok`, or `not_mounted` / `unwritable` when uploads would be refused).
 Settings → About shows the same.
 
@@ -141,20 +143,13 @@ identity-aware tunnel that terminates before Cabinet, so Cabinet itself is
 only ever reachable from inside. No port forward, no public DNS name
 pointing at it, and no "just for a while while I show someone": a port
 left open is a port left open. The owner's own deployment works this way:
-Cabinet sits behind Traefik and Authentik on the LAN, and the LAN is
-reached over a VPN.
+Cabinet sits behind Traefik (TLS only, no forward-auth) on the LAN, and the
+LAN is reached over a VPN.
 
-**Why the password path is the reason.** Cabinet has one admin account
-and, by design, a password sign-in with a single factor: a provider outage
-or a lost phone must never lock the owner out of their own collection, so
-the password stays a working recovery credential whatever else is
-configured. Single sign-on adds the provider's multi-factor check to the
-provider's button, not to that password. The sign-in is hardened (Argon2id
-hashing, per-account and per-address throttles, a known-device cookie,
-alerts on a new device or a password sign-in), but none of that changes
-what one guessed or leaked password hands over on an internet-facing
-instance: the whole collection, every storage location, every attached
-document. A private network is what makes the guess impossible to attempt.
+**Why the password path is the reason.** Cabinet's local admin password is
+a deliberately single-factor recovery credential, so a guessed or leaked
+one hands over the whole collection on an internet-facing instance. A
+private network is what makes the guess impossible to attempt.
 
 **What still applies inside the network.** TLS from a local certificate
 authority or your reverse proxy, so LAN traffic isn't plaintext; a long,
@@ -267,17 +262,11 @@ exactly as shown.
 **The Host header and forwarded headers.** Cabinet's nginx answers only the
 Host names from `PUBLIC_ORIGINS` and `ALLOWED_HOSTS`, so set
 `PUBLIC_ORIGINS` to the public address the edge proxy serves (Traefik passes
-the original Host through by default). nginx believes no forwarded header
-from anyone: `X-Forwarded-For`, `X-Real-IP`, and `X-Forwarded-Proto` are
-overwritten with what nginx itself saw (the edge proxy's address, and
-`http`), and the identity headers forward-auth gateways add (`Remote-User`,
-`X-authentik-*`, `X-Auth-Request-*`, and the like) are dropped before the
-backend sees them, except for the one header named by
-`TRUSTED_ASSERTION_HEADER`, passed through only when the trusted-header mode
-is configured (below). So an edge proxy's login is a door in front of
-Cabinet, never a way into it, unless you deliberately wire up the
-trusted-header mode. **Nothing but Cabinet's nginx should be able to reach
-the backend**: keep the backend off any network other services share.
+the original Host through by default); see
+[security.md](security.md#accounts-and-permissions) for how forwarded and
+identity headers are handled. **Nothing but Cabinet's nginx should be able
+to reach the backend**: keep the backend off any network other services
+share.
 
 First, stop publishing the port directly. In `docker-compose.override.yml`:
 
@@ -486,8 +475,8 @@ current request actually came through the gateway.
 
 Per gateway:
 
-- **Authentik proxy provider with Traefik forward-auth** (the owner's own
-  deployment). Create a **proxy provider dedicated to Cabinet alone**, in
+- **Authentik proxy provider with Traefik forward-auth.** Create a **proxy
+  provider dedicated to Cabinet alone**, in
   single-application mode: a domain-level provider shared across several
   apps would give every co-hosted app an assertion carrying Cabinet's own
   `iss` and `aud`, and a compromised or merely curious co-hosted app could
@@ -506,10 +495,10 @@ Per gateway:
   (on a Swarm, don't publish it; under Compose, put it only on the
   gateway's network): the mode's whole safety rests on nothing but the
   gateway being able to present the header. The exact claims in Authentik's
-  assertion aren't in its released documentation; confirm them against your
-  own Authentik and see the build log in
-  [SPEC_0330](specs/SPEC_0330.md#18-build-log) for what the owner recorded.
-  The forward-auth exemption for the share paths (below) still applies.
+  assertion are not in its released documentation and were not exercised
+  live in this build (the owner runs no gateway); confirm them against your
+  own Authentik. The forward-auth exemption for the share paths (below)
+  still applies.
 - **Cloudflare Access.** Header `Cf-Access-Jwt-Assertion`, JWKS
   `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, issuer the
   team domain (`https://<team>.cloudflareaccess.com`), audience the
@@ -523,9 +512,8 @@ Per gateway:
   `https://www.gstatic.com/iap/verify/public_key-jwk`, issuer
   `https://cloud.google.com/iap`, audience the backend service's
   `/projects/<number>/global/backendServices/<id>` string. Documented, not
-  exercised live. IAP is a public-cloud product: the exposure warning above
-  still applies in full: put a private network in front of the workload
-  IAP protects, the same as any other deployment.
+  exercised live. IAP is a public-cloud product: put a private network in
+  front of the workload it protects, the same as any other deployment.
 
 **When the gateway itself is down.** With a gateway in front, its sign-in
 page sits in front of Cabinet's own, so if the gateway is unreachable you
@@ -602,9 +590,8 @@ Before relying on single sign-on or the trusted-header mode, confirm:
 - A successful sign-in through each configured provider has been recorded
   (Settings → Sign-in, or the audit log).
 - For the trusted-header mode: the live assertion's `alg`, `iss`, `aud`,
-  and lifetime have been noted somewhere (the build log in
-  [SPEC_0330](specs/SPEC_0330.md#18-build-log) asks for the same values from
-  the owner's own gateway).
+  and lifetime have been noted somewhere (SPEC_0330's build log lists them
+  as owed by the first deployment that uses the mode).
 
 ### Traefik + Authentik (forward-auth)
 
@@ -742,15 +729,14 @@ Sharing on, and the instance reachable from outside your network, means
 exactly what a share link says: anyone holding the link can see what it
 shares, without signing in. Keep the switch off unless you mean to hand a
 link to someone; see [security.md](security.md#accounts-and-permissions)
-for what a link can and can't show. This is not, and is never meant to be,
-a way to expose Cabinet itself: section 2 applies unchanged.
-
+for what a link can and can't show.
 
 ### Other proxies
 
 Any proxy works: Caddy with `basicauth`, nginx with `auth_request`, or a
-tunnel that requires identity. The requirements are: TLS, authentication, and
-a body-size limit that permits photo uploads. HSTS belongs on that proxy too;
+tunnel that requires identity. The requirements are TLS and a body-size
+limit that permits photo uploads; authentication in front is optional
+(section 4). HSTS belongs on that proxy too;
 Cabinet's nginx sets the other security headers itself
 ([security.md](security.md)).
 
@@ -908,7 +894,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.32.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.33.4 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy
@@ -927,7 +913,8 @@ What that file does differently from `docker-compose.yaml`, and why:
   names: the database URL, the data paths, `SECRET_KEY` (left empty, the key
   falls back to the one generated on the `backend_state` volume),
   `REESTIMATE_DAYS`, `RESTORE_ENABLED`, `RESTORE_MAX_GB`, `PUID`/`PGID`,
-  `TZ`, and `PUBLIC_ORIGINS`. A commented `secrets:` block shows the setup
+  `TZ`, `PUBLIC_ORIGINS`, the four `TRUSTED_ASSERTION_*` variables, and
+  `SSO_CA_FILE`. A commented `secrets:` block shows the setup
   code as a Docker secret (`SETUP_CODE_FILE=/run/secrets/cabinet_setup_code`),
   preferred over `SETUP_CODE` on a Swarm because Portainer, Dozzle, and
   `docker service inspect` show environment variables but not secret
@@ -965,7 +952,8 @@ Upgrading is a tag bump: change `TAG`, deploy again, and the backend
 migrates on startup. Restore from Settings → Backups works on a Swarm as it
 does under Compose: the backend's health check keeps answering during a
 restore (`db: "restoring"`, without touching the database), so the task
-isn't killed halfway. It has not been tried on NFS-backed volumes; see
+isn't killed halfway. The first NFS restore (v0.26.0) found a
+folder-ownership bug, fixed in v0.26.1; see
 [backup-restore.md](backup-restore.md#what-to-know-before-relying-on-it).
 `restore.sh` needs `docker compose`, so the disaster-recovery restore on a
 Swarm is done by hand (see [backup-restore.md](backup-restore.md#on-a-swarm)).

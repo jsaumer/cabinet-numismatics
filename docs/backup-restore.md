@@ -73,7 +73,7 @@ bind-mount a NAS path instead (see [deployment.md](deployment.md#3-storage)).
   the newest three are kept.
 
 The backup directory must not be inside the photo directory (nginx serves
-that publicly), and the backend refuses to write there.
+that to any signed-in browser), and the backend refuses to write there.
 
 ### What an archive contains
 
@@ -144,7 +144,7 @@ encrypts every archive and keys its MAC.
   docker compose run --rm backend python -m app.cli backup-key new
   ```
 
-  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.30.0
+  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.33.4
   python -m app.cli backup-key new` where the stack isn't running). It
   prints a key in `age-keygen`'s format: save the whole output as the
   secret file, or put the `AGE-SECRET-KEY-1...` line in `BACKUP_KEY`. Keep
