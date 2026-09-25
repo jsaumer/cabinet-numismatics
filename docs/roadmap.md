@@ -852,7 +852,10 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   OpenVAS scan of the running instance, "Full and fast", from a fixed
   address, with any Cabinet defect fixed in a patch release. Nothing
   destructive is run against the live instance. Planned 24 September
-  2026, the day of the release.
+  2026, the day of the release. **Parts A and B ran that day**: the
+  upgrade and all three providers passed, three defects became 0.33.2 to
+  0.33.4, and the trusted-header items turned out not to apply (no
+  gateway in front). **Part C, the OpenVAS scan, is what remains.**
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
 - "Add a run" confirmed against live Numista.

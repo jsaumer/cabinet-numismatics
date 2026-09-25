@@ -328,9 +328,13 @@ Cabinet preset: **Custom OpenID Connect**. "Confirm at your sign-in
 provider" (the fresh-action dialog's provider option) works with
 Authentik, since it supports `prompt=login` and reports `auth_time`.
 
-*Verified in this build*: against `tests/fake_idp.py` and CI's
-`scripts/ci/mock_idp.py` only. The owner's own Authentik is the live check
-recorded in [SPEC_0330](specs/SPEC_0330.md)'s build log.
+*Verified*: against the owner's own Authentik on 24 September 2026
+(0.33.2 to 0.33.4): sign-in, link, confirm (Authentik re-prompts on
+`prompt=login`), RP-initiated logout, disable, unlink, and a wrong secret;
+see [SPEC_0330](specs/SPEC_0330.md#owed-to-the-owners-live-check). Two
+things to know from it: the issuer needs its trailing slash, and Authentik
+shows a provider's client secret only at creation, so a lost secret means
+a new provider (unlink in Cabinet, edit the client id and secret, relink).
 
 #### 2. Keycloak
 
@@ -389,7 +393,9 @@ sign-in provider" falls back to the password: Google supports neither
 `prompt=login` nor `auth_time`. Turn on 2-Step Verification on the Google
 account you link.
 
-*Verified in this build*: not against a live Google account.
+*Verified*: against a live Google account on 24 September 2026 (a
+Testing-status consent screen with one test user): every step, with the
+confirm dialog offering the password only, as described above.
 
 #### 6. GitHub
 
@@ -410,11 +416,12 @@ session always confirms with the password. Cabinet reads GitHub's token
 response as JSON and sends the client credentials as form fields, which is
 GitHub's documented shape.
 
-*Verified in this build*: the GitHub kind was exercised against
-`tests/fake_idp.py`'s GitHub mode in pytest (form-encoded and JSON token
-answers, the numeric `id`), not against the real `github.com` endpoints
-and not through the compose stack (the preset's URLs are fixed to
-github.com); see the build log.
+*Verified*: against the real `github.com` endpoints with an OAuth App on
+24 September 2026: the exchange succeeds although Cabinet always sends a
+PKCE `code_verifier`, the token answer is JSON, the profile `id` reads as
+an integer, and a wrong secret (`incorrect_client_credentials`) raises the
+credentials alert. In pytest the kind is also exercised against
+`tests/fake_idp.py`'s GitHub mode.
 
 #### 7. Any other OpenID Connect provider
 
