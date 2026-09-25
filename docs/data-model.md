@@ -5,79 +5,11 @@ documents, and edit history hanging off each item, plus reference tables for
 grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
-**Migration status:** revisions `0001`–`0022`. `0001` is an empty baseline;
-`0002` created `items`, `item_photos`, `price_estimates`; `0003` added the
-Phase 2 item columns, `grades` (seeded), `tags`, `catalog_refs` + joins, and
-photo ordering; `0004` added `spot_prices`; `0005` `exchange_rates`; `0006` `sets`
-plus `items.variety` / `set_id` / `custom_fields`; `0007` `item_events` and
-`checklists` + `checklist_slots`.
-
-Revision `0008` (pricing program M1) added `app_settings`: key/value JSON
-settings (display currency, source toggles, API credentials, melt cadence;
-later grew `value_strategy`/`preferred_source` for the blended-value display,
-`numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh,
-`comps_enabled`/`numista_sales_enabled` for the sales log,
-`backup_schedule`/`backup_retention_days` (v0.30.1; `backup_keep` before
-it)/`backup_include_photos`/`backup_last_run`
-for in-app backups, `trash_retention_days` for the trash, and
-`alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
-plus the service-written `refresh_last_run`/`alert_state` for alerts and
-metrics, `dashboard_layout` (v0.27.0, the customisable dashboard) for
-the saved widget layout, written only by `/api/dashboard/layout`, never by
-`PUT /api/settings`, and `spot_alerts` (v0.28.0, bullion stack figures: a
-list of spot-price thresholds, at most 12) with the service-written
-`spot_alert_state` (per threshold, whether it is currently met), neither of
-which needed a migration, since it's a generic key/value table), and from
-v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets
-cleared because they weren't encrypted with this deployment's key, until
-each is saved again) and `backup_key_saved` (the public key of the backup
-key the owner said they saved), and from v0.32.0 `share_enabled` (the
-share view's switch, off by default), read through `app/services/app_settings.py` with
-defaults and env fallbacks. One more key is not a setting at all:
-`restore_marker`, written and deleted by direct ORM during an in-app
-restore and never read through `get_setting` (see
-[backup-restore.md](backup-restore.md#when-it-fails)); a finished restore
-leaves none.
-The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
-`heartbeat_url`) are stored encrypted; see [security.md](security.md).
-Revision `0009` (M2) added `source_cache`; `0010` (M4) added
-`price_estimates.details`;
-`0011` (M5) added `estimate_attempts`, the latest automatic pricing attempt
-per item and source (`item_id` + `source` primary key, cascade with the item;
-`outcome` `ok` / `not_applicable` / `unavailable`, `message`,
-`attempted_at`), which the coverage report reads to explain gaps a failed
-attempt leaves no estimate for. `0012` (v0.14.0, catalog depth) added the
-grading, physical, banknote, and cost columns on `items` below, and PMG
-grades 1–3. `0013` (v0.17.0) added `comparables`, the per-item sales log. `0014`
-(v0.18.0) added `items.import_source` / `import_key`. `0015` (v0.19.0) added
-`documents` and `item_documents`. `0016` (v0.20.0) added `items.deleted_at`
-for the trash. `0017` (v0.23.0) added `checklists.match_catalog`,
-`match_ref`, `match_country`, and `match_denomination` (what fills a
-generated checklist) and `checklist_slots.year` and `mint_mark`; which item
-fills a slot is computed on read, never stored. `0018` (v0.25.0, parity
-fields) added fourteen nullable columns on `items`: `pcgs_population`,
-`pcgs_pop_higher`, `population_as_of`, `target_price`, `priority`,
-`charter_number`, `bank_city`, `bank_state`, `plate_position`,
-`serial_traits`, `die_axis`, `struck_calendar`, `struck_year`, and
-`struck_era`. It also backfills `serial_traits` for every item with a serial
-number or the replacement flag, trash included, using a copy of the traits
-logic frozen inside the revision. `0019` (v0.27.1, undated pieces) makes
-`items.year` nullable and adds `items.year_nd` (`NOT NULL`, default false);
-a data step turns any existing `year = 0` (what got typed when the field was
-required) into `year = NULL, year_nd = true`. Unlike `0018`, this revision
-has no service logic to freeze: the data step is a plain `year = 0` update.
-`0020` (v0.28.0, bullion stack figures) adds `items.spot_at_purchase` and
-`items.spot_at_purchase_source`, and widens `items.weight_g` from
-`Numeric(8, 3)` to `Numeric(9, 4)`: a troy ounce is 31.1035 g, which three
-decimal places could not hold as a round one-ounce weight.
-`0021` (v0.29.0, note details) adds `items.width_mm` and `items.height_mm`
-(Numeric(7, 2), for notes and anything else not round; coins keep
-`diameter_mm`), `items.printer` and `items.watermark` (String(200)), and
-`items.demonetized_on` (Date, coins and notes alike). No data step: all
-five are nullable and start empty.
-`0022` (v0.32.0, the share view) adds `share_links`: one row per read-only
-public link, with only the SHA-256 of its token (see
-[share_links](#share_links) below).
+**Migrations:** two Alembic chains. The collection (`backend/alembic/`,
+schema `public`) is at revision `0022`; sign-in data (`backend/alembic_auth/`,
+schema `cabinet_auth`, from v0.30.0) is at `a0002`. The backend applies both
+on startup, collection first, in one transaction. What each release added is
+in [implementation-notes.md](implementation-notes.md).
 
 **Phase 5 tables in brief:** `exchange_rates` (base+quote PK, cached daily
 rate); `sets` (id, unique name, notes; `items.set_id` SET NULL on delete);
@@ -112,20 +44,18 @@ transaction; by hand, `alembic -c alembic_auth.ini upgrade head`.
 |-------|-------|
 | `users` | The admin (`username` unique, lowercased; `password_hash` Argon2id, null for a provider-only account later; `role` `admin` / `editor` / `viewer`; `is_active`; `created_at`, `last_login_at`, `password_changed_at`) |
 | `claim` | One row (`id` is always 1) once the admin exists: its insert is the atomic claim of the instance (`claimed_at`, `user_id`) |
-| `sessions` | Signed-in browsers: the secret's SHA-256 (never the secret), `user_id`, `auth_method`, `created_at`, `last_seen_at`, `expires_at` (7 days at most), `confirmed_until` (the recent-password window), `user_agent`, `address`, `revoked_at`, `identity_id` (v0.33.0: the linked identity an `oidc` or `trusted_header` session came through, set null if it goes) |
+| `sessions` | Signed-in browsers: the secret's SHA-256 (never the secret), `user_id`, `auth_method`, `created_at`, `last_seen_at`, `expires_at` (7 days at most), `confirmed_until` (the recent-password window), `user_agent`, `address`, `revoked_at`, `identity_id` (v0.33.0: the linked identity an `oidc` or `trusted_header` session came through, set null if it goes), `notice_failed`, `notice_since` (v0.33.0: the failed-sign-ins figures of an external sign-in, handed over once by `GET /api/auth/me` and cleared) |
 | `api_tokens` | `public_id` (unique), the secret's SHA-256, `user_id`, `name`, `scope` (`read` / `write` / `metrics`, one each), `created_at`, `last_used_at`, `expires_at`, `revoked_at` |
 | `known_devices` | Browsers that signed in successfully: the cookie's SHA-256, `user_id`, `created_at`, `expires_at`, `failures` |
 | `audit_log` | One row per event: `at`, the actor (`actor_user_id`, set null if the user goes; `actor_label`; `actor_kind` `session` / `token` / `anonymous` / `cli` / `system`), `action`, `target`, `detail` (JSON), `address`, `user_agent`. Never anything from the collection |
 | `auth_providers` | v0.33.0. Sign-in providers, at most 8: `kind` (`oidc` / `oauth2_profile`), `preset` (`google` / `microsoft` / `github` / `custom`; `github` is the one `oauth2_profile`, a check), `display_name`, `enabled`, `issuer`, `client_id` (unique with `issuer`), `client_secret` (Fernet ciphertext, write-only), `scopes`, `logout_at_provider`, `created_at`, `updated_at` |
 | `identities` | v0.33.0. An outside identity linked to an account, `(issuer, subject)`, never an email: `user_id`, `kind` (`provider` / `trusted_header`), `provider_id` (set exactly for `provider`, a check), `display` (for the Settings list), `linked_at`, `last_used_at`. One per provider per account; one `trusted_header` row per account and per `(issuer, subject)` (partial unique indexes) |
 | `known_browsers` | v0.33.0. The new-browser alert's cookie: its SHA-256, `user_id`, `created_at`, `last_seen_at`, `expires_at`. No role in authentication or throttling |
-| `auth_config` | v0.33.0. One row (`id` is always 1): `password_sign_in_alerts`, `trusted_header_enabled` (with the four `TRUSTED_ASSERTION_*` variables, what turns header mode on), `alerts_defaulted_at` (when the first enabled provider switched the alerts on, once), `updated_at`. Read on every use, never cached |
+| `auth_config` | v0.33.0. One row (`id` is always 1): `password_sign_in_alerts`, `trusted_header_enabled` (defaults to true; with the four `TRUSTED_ASSERTION_*` variables, what turns header mode on; `disable-sso` sets it false), `alerts_defaulted_at` (when the first enabled provider switched the alerts on, once), `updated_at`. Read on every use, never cached |
 | `backup_ledger` | Every archive this Cabinet writes: `name`, `kind`, `created_at`, `mac_recipient`, `mac_digest`, `size`. Here, not in `public`, so no restore can rewrite the record of what came before it |
 
-The tables exist from v0.30.0's first start; the code that fills them
-(sign-in, tokens, the audit log, the archive record) arrives in the same
-release. SQLite tests map `cabinet_auth` away (`schema_translate_map`) and
-create both metadatas.
+SQLite tests map `cabinet_auth` away (`schema_translate_map`) and create
+both metadatas.
 
 ## Entity relationships
 
@@ -151,10 +81,38 @@ share_links ──N:1── sets or checklists (cascade; a collection link has n
 
 ## Tables
 
+### app_settings
+Key/value JSON settings: display currency, source toggles, API credentials,
+melt cadence, `value_strategy`/`preferred_source` for the blended-value
+display, `numista_refresh_days`/`pcgs_auto_refresh` for scheduled refresh,
+`comps_enabled`/`numista_sales_enabled` for the sales log,
+`backup_schedule`/`backup_retention_days` (v0.30.1; `backup_keep` before
+it)/`backup_include_photos`/`backup_last_run`
+for in-app backups, `trash_retention_days` for the trash, and
+`alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
+plus the service-written `refresh_last_run`/`alert_state` for alerts and
+metrics, `dashboard_layout` (v0.27.0, the customisable dashboard) for
+the saved widget layout, written only by `/api/dashboard/layout`, never by
+`PUT /api/settings`, and `spot_alerts` (v0.28.0, bullion stack figures: a
+list of spot-price thresholds, at most 12) with the service-written
+`spot_alert_state` (per threshold, whether it is currently met). From
+v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets
+cleared because they weren't encrypted with this deployment's key, until
+each is saved again) and `backup_key_saved` (the public key of the backup
+key the owner said they saved), and from v0.32.0 `share_enabled` (the
+share view's switch, off by default), read through
+`app/services/app_settings.py` with defaults and env fallbacks. One more
+key is not a setting at all: `restore_marker`, written and deleted by
+direct ORM during an in-app restore and never read through `get_setting`
+(see [backup-restore.md](backup-restore.md#when-it-fails)); a finished
+restore leaves none.
+The four secrets (`numista_api_key`, `pcgs_api_token`, `alert_webhook_url`,
+`heartbeat_url`) are stored encrypted; see [security.md](security.md).
+
 ### items
-The core record for a single coin or note (or a lot of identical pieces via
-`quantity`). Enums are stored as short strings, checked by the application,
-not as native postgres enum types.
+The core record for a single coin, note, or bar or round (or a lot of
+identical pieces via `quantity`). Enums are stored as short strings, checked
+by the application, not as native postgres enum types.
 
 | Column             | Type          | Notes                                   |
 |--------------------|---------------|-----------------------------------------|
@@ -335,7 +293,9 @@ request against a small free-tier quota (`source` + `cache_key` composite PK,
 `payload` JSON, `fetched_at`). Numista caches catalogue data (a type, its
 issues, searches) and prices for 7 days, auction sales for 1 day, and the
 user's own collection (for import) for 1 hour; PCGS caches CoinFacts
-responses for 7 days. A stale row is used if the upstream fetch fails.
+responses for 7 days; the bullion stack's purchase-day spot lookups
+(source `spot_history`) cache for ten years, since a past day's price never
+changes. A stale row is used if the upstream fetch fails.
 
 ### grades (reference)
 Grade scales for coins and notes. Seeded by migration `0003` from

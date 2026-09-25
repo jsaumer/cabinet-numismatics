@@ -42,9 +42,10 @@ or Playwright outside a container.
 Claude Code reads a `CLAUDE.md` file at the repository root at the start of
 every session and treats it as persistent context. This repo ships one:
 architecture, repo layout, conventions, build and test commands, the current
-status, and the rules that bite most often. Keep it under ~200 lines and
-specific: it is loaded into context every session, and shorter, concrete
-instructions are followed more reliably.
+status, and the rules that bite most often. It has grown to about 350
+lines; keep it from growing further, and move area rules to
+docs/implementation-notes.md. It is loaded into context every session, and
+shorter, concrete instructions are followed more reliably.
 
 `CLAUDE.md` imports the deeper docs with `@path` references
 (`@docs/roadmap.md`, `@docs/architecture.md`, and
@@ -83,9 +84,11 @@ Useful in-session commands:
   changelog entry, and push a `v*` tag: CI publishes both images to GHCR,
   and a deployment that pins those tags upgrades by changing the tag (the
   backend migrates on startup).
-- **What to build.** Nothing is queued on the roadmap. Work comes from
-  friction the owner reports while entering the real collection; parked and
-  tabled items in [roadmap.md](roadmap.md) are not built unprompted.
+- **What to build.** The road to v1.0.0 in [roadmap.md](roadmap.md) is
+  queued (a CI OpenAPI check, two live Numista confirmations, a README
+  pass); beyond that, work comes from friction the owner reports while
+  entering the collection, and parked or tabled items are not built
+  unprompted.
 
 ## Conventions that carry over (and one that doesn't)
 

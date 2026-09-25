@@ -32,13 +32,12 @@ once, values a toggle off by default, a checklist link showing filled slots
 only) shipped in v0.32.0; single sign-on (P8, A2: OpenID Connect, a GitHub
 button, and a trusted-header mode for a gateway that already
 authenticates, [SPEC_0330](specs/SPEC_0330.md)) shipped in v0.33.0.
-**What's next**: nothing is queued from Phase 7. The road to v1.0.0 is
-what remains, in this order: v0.33.0 validated on the owner's Swarm
-(Authentik, Google, and GitHub sign-in, the trusted-header mode, and an
-OpenVAS scan, per [live-validation.md](live-validation.md)); a CI check
-against a breaking OpenAPI change; "Add a run" and the Numista banknote
-mapping confirmed against a live account; then a README and quick-start
-pass, alongside whatever entering the rest of the collection turns up.
+**What's next**: nothing is queued from Phase 7, and v0.33.0 is validated
+live ([live-validation.md](live-validation.md)). The road to v1.0.0 has
+three items left, in this order: a CI check against a breaking OpenAPI
+change; "Add a run" and the Numista banknote mapping confirmed against a
+live account; then a README and quick-start pass, alongside whatever
+entering the rest of the collection turns up.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -398,13 +397,13 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (134 tests as of v0.13.0) on Python 3.10 and 3.14, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,270 tests as of v0.33.4) on Python 3.10 and 3.14, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0021`, applied by the
-  backend on startup since v0.11.1.
+  upgrades: Alembic since Phase 0, revisions `0001`–`0022` (and `a0001`–`a0002`
+  for the sign-in chain), applied by the backend on startup since v0.11.1.
 
 ---
 
@@ -714,8 +713,8 @@ if it's reachable beyond the LAN, and the first 25–50 real pieces entered,
 because the friction found doing that is the real roadmap. So the numbered
 train ends here:
 
-**Next**: nothing is queued; the next item comes from entering the
-collection.
+**Next** (19 September 2026): nothing is queued; the next item comes from
+entering the collection.
 
 - ✔ **Runs and registry sets** (v0.23.0, M–L). "Add a run": pick a Numista
   type, tick its issues (already fetched for "Fill from Numista"), get one
@@ -841,25 +840,12 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   sign-on (A2: OpenID Connect, GitHub, and a trusted-header mode) **shipped
   in v0.33.0**, completing the checklist item.
 
-- ✔ **v0.33.0 validated live** on the owner's Swarm, the plan in
-  [live-validation.md](live-validation.md): the upgrade itself; sign-in
-  through Authentik, Google, and GitHub (the other presets as instances
-  allow); the trusted-header mode against the Authentik outpost, closing
-  the "owed to the owner's live check" list in SPEC_0330's build log
-  (the assertion's `alg`, `iss`, `aud`, and lifetime; a forged header
-  through and around the gateway; `prompt=login` and `auth_time`
-  behaviour); the recovery commands rehearsed on the local stack; and an
-  OpenVAS scan of the running instance, "Full and fast", from a fixed
-  address, with any Cabinet defect fixed in a patch release. Nothing
-  destructive is run against the live instance. Planned 24 September
-  2026, the day of the release. **Parts A and B ran that day**: the
-  upgrade and all three providers passed, three defects became 0.33.2 to
-  0.33.4, and the trusted-header items turned out not to apply (no
-  gateway in front). **Part C ran the same evening**: two Full and fast
-  scans (the hostname through Traefik, and every Swarm node on every TCP
-  port) found nothing against a Cabinet component; every severity was the
-  nodes' own SSH configuration, the operator's to tune. The item is
-  closed; see live-validation.md's "The first run".
+- ✔ **v0.33.0 validated live** on 24 September 2026, per
+  [live-validation.md](live-validation.md): the upgrade, Authentik,
+  Google, and GitHub passed (three fixes became 0.33.2 to 0.33.4), the
+  OpenVAS scan found nothing against a Cabinet component, and the
+  trusted-header items stay owed to a deployment with a gateway in front
+  (SPEC_0330, "Owed to the owner's live check").
 - ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
   API (v0.24.5 to v0.24.6).
 - "Add a run" confirmed against live Numista.
@@ -896,9 +882,10 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   switches to the built images, claims the instance, and checks both
   migration chains (the collection and `cabinet_auth`) reach head with the
   item intact.
-- A README and quick-start pass (the screenshots are current as of
-  v0.30.0; the sign-in page, Settings → Sign-in, and a share page are
-  new since), read as a stranger installing for the first time: the
+- A README and quick-start pass (the screenshots were captured at v0.30.0
+  and predate 0.33.1's header change; the sign-in page, Settings →
+  Sign-in, and a share page are new since), read as a stranger installing
+  for the first time: the
   exposure advisory first, then Compose in one sitting, then the Swarm
   file. Last, so it describes the 1.0 build.
 - Then v1.0.0 itself: the version bump, a changelog entry that states
@@ -1131,9 +1118,10 @@ v0.26.0.
     docs repeat verbatim wherever reaching Cabinet from outside comes up.
     CI proves the OpenID Connect and GitHub flows, the trusted-header mode
     through real nginx, and a long list of deliberately broken tokens and
-    replays, against a mock provider built for this release; only the
-    owner's own Authentik, and a live GitHub, Google, or Microsoft
-    account, prove the parts a mock can't (see the build log in
+    replays, against a mock provider built for this release; Authentik,
+    Google, and GitHub were confirmed live on 24 September 2026
+    (live-validation.md); Entra ID and the trusted-header mode still need a
+    tenant or a gateway (see the build log in
     [SPEC_0330](specs/SPEC_0330.md#18-build-log)).
   - ◆ **More accounts are optional** (see the optional list below), not
     part of this item: Cabinet stays single-user unless that is wanted.
@@ -1236,12 +1224,8 @@ v0.26.0.
   not wait for P9: they show only what the owner's own dashboard already
   shows.
 
-**The order from here** (P10 the customisable dashboard shipped in v0.27.0,
-P7 the bullion stack figures in v0.28.0, P10's group C widgets in v0.29.0,
-P8 A1 for v0.30.0, P11 bars and rounds for v0.31.0, P9 the share view for
-v0.32.0, and P8 A2, single sign-on, for v0.33.0): Phase 7 is complete.
-What's left is the road to v1.0.0's remaining items (below) and whatever
-entering the rest of the collection turns up.
+**The order from here**: Phase 7 is complete (every item above is
+ticked); what's left is the road to v1.0.0, under Phase 5.9 above.
 
 Optional, after the above and only if still wanted:
 
@@ -1294,7 +1278,8 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0021`), never create-on-startup.
+  revision (`0001`–`0022`, and `a0001`–`a0002` for the sign-in chain), never
+  create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
   was still empty, the same reasoning that front-loaded Phase 2's fields.
