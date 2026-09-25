@@ -127,7 +127,11 @@ function AddProviderForm({
 
   function choosePreset(next: ProviderPreset) {
     setPreset(next);
-    setDisplayName(PRESET_LABELS[next]);
+    // The preset's label is only a suggestion: a name the owner typed
+    // ("Authentik") survives a preset change; the suggestion follows it.
+    if (displayName.trim() === "" || displayName === PRESET_LABELS[preset]) {
+      setDisplayName(PRESET_LABELS[next]);
+    }
     setScopes(presets.find((p) => p.name === next)?.scopes ?? "");
     setTestResult(null);
   }
@@ -403,12 +407,14 @@ function ProviderRow({
   return (
     <>
       <tr>
-        <td>{provider.display_name}</td>
-        <td className="muted">
-          {PRESET_LABELS[provider.preset]} ({provider.kind})
+        <td>
+          {provider.display_name}
+          <div className="muted provider-detail">{PRESET_LABELS[provider.preset]}</div>
+          {provider.issuer && <div className="muted provider-detail">{provider.issuer}</div>}
+          {provider.client_id && (
+            <div className="muted provider-detail">Client id {provider.client_id}</div>
+          )}
         </td>
-        <td className="muted">{provider.issuer || "–"}</td>
-        <td className="muted">{provider.client_id || "–"}</td>
         <td>{provider.enabled ? "On" : "Off"}</td>
         <td>
           {provider.linked ? "Linked" : "–"}
@@ -418,7 +424,7 @@ function ProviderRow({
             </span>
           )}
         </td>
-        <td className="provenance-toggle">
+        <td className="provenance-toggle provider-actions">
           <button disabled={busy} onClick={toggleEnabled}>
             {provider.enabled ? "Disable" : "Enable"}
           </button>{" "}
@@ -432,7 +438,7 @@ function ProviderRow({
       </tr>
       {editing && (
         <tr>
-          <td colSpan={7}>
+          <td colSpan={4}>
             <EditProviderForm
               provider={provider}
               onSaved={() => {
@@ -693,24 +699,23 @@ export default function SigninSection() {
       {config.providers.length === 0 ? (
         <p className="muted">No sign-in providers configured yet.</p>
       ) : (
-        <table className="estimates">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Preset</th>
-              <th>Issuer</th>
-              <th>Client id</th>
-              <th>Enabled</th>
-              <th>Linked</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {config.providers.map((p) => (
-              <ProviderRow key={p.id} provider={p} onChanged={reload} onError={setError} />
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="estimates">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Enabled</th>
+                <th>Linked</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {config.providers.map((p) => (
+                <ProviderRow key={p.id} provider={p} onChanged={reload} onError={setError} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <h3>Add a provider</h3>
