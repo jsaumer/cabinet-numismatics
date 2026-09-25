@@ -1784,6 +1784,15 @@ main {
   font-family: monospace;
   font-size: 0.85rem;
 }
+/* Settings -> Sign-in's provider table: the issuer and client id sit under
+   the name so the row fits the card; the buttons never wrap mid-row. */
+.provider-detail {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.provider-actions {
+  white-space: nowrap;
+}
 /* Inside a column .field (the client secret in Settings -> Sign-in) the
    row's flex-basis would apply to its height; let the field size it. */
 .field > .key-field {
