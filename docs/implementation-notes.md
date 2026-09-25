@@ -2715,6 +2715,17 @@ The owner's first look at v0.33.0 live. Rules:
   count, already fetched for the table; the list itself stays on the Stack
   page.
 
+## v0.33.3
+
+- **Settings → Sign-in's provider table is four columns.** Provider (with
+  the preset, issuer, and client id as `.provider-detail` lines under the
+  name), Enabled, Linked, and the actions (`.provider-actions`, `nowrap`),
+  inside `.table-scroll`; the edit row's `colSpan` is 4. A new column has
+  to keep the row inside a 28rem card, or go under the name instead.
+- **A preset's label is a suggestion for the display name, never an
+  overwrite**: `choosePreset` replaces the name only while it is empty or
+  still equals the previous preset's label, the `autoYear` pattern again.
+
 ## v0.33.2
 
 - **The dry run and the sign-in share one confirm rule.** `POST

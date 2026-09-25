@@ -8,6 +8,22 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.33.3] - 2026-09-24
+
+More from the live run against the owner's Authentik.
+
+### Fixed
+
+- Settings → Sign-in: the provider table overflowed its card (seven
+  columns, an issuer URL and a client id among them) and pushed its
+  buttons past the edge. The issuer and client id now sit under the name,
+  the table scrolls inside the card if it must, and the buttons never
+  wrap.
+- Settings → Sign-in: choosing a preset replaced a display name the owner
+  had already typed, so "Authentik" saved as "Custom OpenID Connect". A
+  typed name now survives a preset change; only the suggested name follows
+  the preset.
+
 ## [0.33.2] - 2026-09-24
 
 Found on the first live run of `docs/live-validation.md` against the
