@@ -330,7 +330,40 @@ the plan didn't say that the run taught:
   embedded or automated browser may not show; do those two from an
   ordinary browser.
 
-Part C is still to run.
+Part C ran the same evening from the homelab's Greenbone (26.7.0), driven
+through the browser pane against a Greenbone the owner had signed in.
+C-2 did not exist (the proxy port is published to nobody; only Traefik
+reaches it), which is the result the plan hoped for. C-1
+(`cabinet.saumer.cloud`, All IANA assigned TCP, Consider Alive, Full and
+fast, 1 h 21 min) and C-3 (the four Swarm nodes, All TCP and Nmap top 100
+UDP, Full and fast, about 1 h 30 min) both came back with **no Critical,
+High, or Medium at Greenbone's default QoD and no finding against any
+Cabinet component**: the application surface produced Log entries only
+(the header set, the certificate, the gate's 401 and 429 answers). Three
+web NVTs (the directory traversal, Log4Shell, and Shellshock active checks)
+timed out against the throttle rather than finishing; expected, and worth
+knowing they neither passed nor failed. Everything with a severity was the
+nodes' own SSH (weak MAC algorithms on 22 and 222; Terrapin and a
+username-enumeration CVE inferred below QoD 70) plus the timestamp noise
+every Linux host shows. The open-port inventory held no surprise: SSH,
+Swarm's own ports, Traefik's 80, 443, and 8080 on one node, rpcbind, and
+two published services; nothing of the database or the Docker API. The
+deployment items that fell out (an sshd `MACs` line, whether Traefik's
+8080 and rpcbind's 111 need to listen at all) are the operator's, not
+Cabinet's, and stay in the local results folder.
+
+What the run taught about the scan itself:
+
+- **Export with the filter cleared.** Greenbone exports the report through
+  its current filter, so the default export holds only rows at QoD 70 and
+  above with a severity; set the filter to `levels=hmlg min_qod=0` before
+  exporting if the local copy should hold the Log rows and the low-QoD
+  inferences.
+- **The hostname target scans a node.** `cabinet.saumer.cloud` resolves to
+  one Swarm node, so C-1 was that node's whole port range through the
+  hostname; the Cabinet-specific part of it is only what answered on 80
+  and 443. That is fine, and it is why C-3's per-node results duplicate
+  C-1's SSH rows.
 
 ## Recording the outcome
 
