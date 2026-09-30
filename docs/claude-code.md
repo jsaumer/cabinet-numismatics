@@ -81,7 +81,10 @@ Useful in-session commands:
   scripts/check_sources.py` probes Numista or PCGS with the saved key and
   prints the raw response; unit tests only ever see canned ones.
 - **Releases.** Bump the version in `backend/pyproject.toml`, add the
-  changelog entry, and push a `v*` tag: CI publishes both images to GHCR,
+  changelog entry, and push a `v*` tag: CI checks the two agree and
+  publishes both images to GHCR (a release candidate, `v1.0.0-rc.1` with
+  pyproject at `1.0.0rc1`, is published under its version but never as
+  `latest`),
   and a deployment that pins those tags upgrades by changing the tag (the
   backend migrates on startup).
 - **What to build.** The road to v1.0.0 in [roadmap.md](roadmap.md) is
