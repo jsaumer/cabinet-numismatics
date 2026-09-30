@@ -2747,7 +2747,11 @@ The owner's first look at v0.33.0 live. Rules:
 
 
 Pushing a `v*` tag runs CI's `publish` job, which pushes
-`ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
-nothing before v0.10.2 is published). The live homelab instance pins those
+`ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version, plus
+`latest` on a stable tag only; nothing before v0.10.2 is published). The
+job first checks the tag and `backend/pyproject.toml` name the same
+version through `packaging.version.Version`, so a semver prerelease tag
+(`v1.0.0-rc.1`) matches its PEP 440 form (`1.0.0rc1`); a tag with a `-` is
+a prerelease and never moves `latest`. The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
 the backend migrates on startup, so an upgrade there is just a tag bump.
