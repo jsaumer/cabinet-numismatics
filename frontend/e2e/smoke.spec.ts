@@ -142,11 +142,22 @@ test("a generated checklist fills itself from what's owned", async ({ page }) =>
   await expect(card).toHaveCount(0);
 });
 
-test("the collection finds it by search", async ({ page }) => {
+test("the collection finds it by search, opens it beside the list, and Enter opens its page", async ({ page }) => {
   await page.goto(`/collection?q=${encodeURIComponent(COUNTRY)}`);
-  const row = page.locator("table.items tbody tr", { hasText: COUNTRY }).first();
+  const row = page.locator(".wb-row", { hasText: COUNTRY }).first();
   await expect(row).toContainText(DENOMINATION);
-  await row.getByText(COUNTRY).click(); // rows open the item on click
+  await row.getByRole("link").click(); // at 1280px the piece opens in the inspector
+  const id = itemUrl.split("/").pop()!;
+  await expect(page).toHaveURL(new RegExp(`/collection/${id}\\?q=`));
+  const inspector = page.getByRole("region", { name: "Selected piece" });
+  await expect(inspector.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
+  await inspector.getByRole("tab", { name: "Value" }).click();
+  await expect(inspector.getByRole("tab", { name: "Value" })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/collection\?q=/);
+  await page.keyboard.press("j"); // the keyboard selects the first match again
+  await expect(inspector.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(itemUrl);
 });
 
@@ -257,7 +268,7 @@ test("the security headers are set and nothing trips the policy", async ({ page 
   for (const path of ["/collection", "/items/new", "/items/run", "/checklists", "/pricing", "/settings"]) {
     await page.goto(path);
     await page.waitForLoadState("networkidle");
-    await expect(page.getByRole("link", { name: "Collection" }).first()).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: /^Owned/ })).toBeVisible();
   }
   expect(violations).toEqual([]);
 });

@@ -764,6 +764,11 @@ pieces turned up, each shipped as a small release:
   delete button sat under the next tile's arrow), and a value typed in by
   mistake could not be removed. Both fixed; a price source's values are
   still kept.
+- Unreleased: the owner found the interface read as generic and chose a
+  "workbench" layout from three options (workbench, catalogue, holdings)
+  prototyped on 14 October 2026: a sidebar, and the collection as a list
+  with the selected piece open beside it. Inline editing and a lookup-first
+  add are next.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

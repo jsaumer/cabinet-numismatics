@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { MoonIcon, SettingsIcon, SunIcon, TrashIcon } from "./components/icons";
+import { MoonIcon, SunIcon } from "./components/icons";
+import { Sidebar } from "./components/sidebar";
 import { applyTheme, initialTheme } from "./components/theme";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AuthBrand } from "./auth/Brand";
@@ -130,20 +131,11 @@ function AuthedApp({
           <img src="/logo.svg" alt="" width="26" height="26" />
           Cabinet
         </Link>
-        <span className="subtitle">Numismatics: Coin &amp; Paper Money Collection Manager</span>
+        <HeaderSearch />
         <nav>
-          <NavLink to="/" end>Dashboard</NavLink>
-          <NavLink to="/collection">Collection</NavLink>
-          <NavLink to="/pricing">Pricing</NavLink>
-          <NavLink to="/stack">Stack</NavLink>
-          <NavLink to="/checklists">Checklists</NavLink>
-          <NavLink to="/import">Import</NavLink>
-          <NavLink className="nav-icon" to="/settings" title="Settings" aria-label="Settings">
-            <SettingsIcon />
-          </NavLink>
-          <NavLink className="nav-icon" to="/trash" title="Trash" aria-label="Trash">
-            <TrashIcon />
-          </NavLink>
+          <Link className="button primary header-add" to="/items/new" title="Add a piece (N)">
+            Add piece
+          </Link>
           <button
             className="theme-toggle nav-icon"
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -162,12 +154,15 @@ function AuthedApp({
           )}
         </nav>
       </header>
+      <div className="shell">
+      <Sidebar />
       <main>
         <FailedSignInsNotice />
         <ConfirmReturnNotice />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collection" element={<ItemList />} />
+          <Route path="/collection/:id" element={<ItemList />} />
           <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/stack" element={<Stack />} />
@@ -185,7 +180,57 @@ function AuthedApp({
           <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      </div>
     </>
+  );
+}
+
+/** Search from anywhere: Enter opens the collection filtered by the text,
+ * and "/" focuses the box from any page that isn't already typing. */
+function HeaderSearch() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [text, setText] = useState("");
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/collection")) {
+      setText(new URLSearchParams(location.search).get("q") ?? "");
+    }
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
+      e.preventDefault();
+      ref.current?.focus();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  return (
+    <form
+      className="header-search"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const q = text.trim();
+        navigate(q ? `/collection?q=${encodeURIComponent(q)}` : "/collection");
+      }}
+    >
+      <input
+        ref={ref}
+        type="search"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Search the collection"
+        aria-label="Search the collection"
+      />
+      <kbd aria-hidden="true">/</kbd>
+    </form>
   );
 }
 
