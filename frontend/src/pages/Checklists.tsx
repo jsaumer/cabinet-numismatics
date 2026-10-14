@@ -1,11 +1,18 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { api, ChecklistDetail, ChecklistSummary } from "../api";
 
 export default function Checklists() {
   const [lists, setLists] = useState<ChecklistSummary[]>([]);
   const [open, setOpen] = useState<ChecklistDetail | null>(null);
+  // The sidebar links straight to one checklist with ?id=.
+  const [params] = useSearchParams();
+  const linked = params.get("id");
+  useEffect(() => {
+    if (!linked) return;
+    api.getChecklist(Number(linked)).then(setOpen).catch(() => setOpen(null));
+  }, [linked]);
   const [missingOnly, setMissingOnly] = useState(false);
   const [name, setName] = useState("");
   const [slotText, setSlotText] = useState("");

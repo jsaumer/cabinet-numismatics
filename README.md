@@ -107,6 +107,23 @@ Dark is the default; the header toggle switches to light and remembers it.
   generated, with progress tracking.
 - List filters and paging persist in the URL, so back-navigation keeps your
   place.
+- **A workbench layout**: a sidebar holds every way into the collection
+  (owned, wish list, sold, the trash), each checklist with its progress, and
+  the insights pages; the header has a search box (`/` to focus it) and Add
+  piece. On a wide screen the collection is a compact list with the selected
+  piece open beside it, its sections behind Overview, Value, Photos and
+  files, and History tabs, and the keyboard moves through it (J and K,
+  Enter to open the full page, E to edit, N for a new piece, Esc to close).
+- **Edit in place**: on the item page and beside the list, a fact (grade,
+  series, mint mark, weight, fineness, paid, storage, and two dozen more)
+  turns into a field on click; Enter or leaving it saves, Esc puts it back.
+- **Quick add**: Add piece opens one lookup box that takes a name (a Numista
+  search), a Numista number, or a PCGS cert number, fills the piece from it,
+  offers the type's issues (owned ones struck through), and then asks only
+  for what's yours: grade, price, quantity, date, seller, storage, tags.
+  "Save and add another" keeps the date, seller, storage, and tags for the
+  next piece and lists what was added this visit; the full form is a link
+  away.
 - **The item page leads with the piece**: a large primary photo beside the
   title, grade, certification, and value, then the rest of what's known
   grouped into titled facts (identity, grade and certification, physical,

@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, CatalogRef, ItemType, ndYearLabel, NumistaIssue, NumistaSearchResult } from "../../api";
+import { api, CatalogRef, ItemType, ndYearLabel, NumistaIssue, NumistaSearchResult, NumistaType } from "../../api";
 import { FormState, TextField } from "./model";
 
 // Fields a Numista lookup can fill, with how the "filled …" message names them.
@@ -32,6 +32,64 @@ const yearSpan = (r: { min_year: number | null; max_year: number | null }) =>
     : r.max_year == null || r.max_year === r.min_year
       ? String(r.min_year)
       : `${r.min_year}–${r.max_year}`;
+
+/** What a Numista type fills on a form: only empty fields, plus the
+ * catalogue references the form doesn't have yet. Shared by the item form's
+ * card and the quick add. */
+export function fillFromNumista(
+  form: FormState,
+  refs: CatalogRef[],
+  found: NumistaType,
+): { next: FormState; newRefs: CatalogRef[]; filled: string[] } {
+  const next: FormState = { ...form };
+  const filled: string[] = [];
+  if (found.fields.type && found.fields.type !== form.type) {
+    next.type = found.fields.type as ItemType;
+    next.grade_id = "";
+    next.designations = [];
+    if (next.type !== "coin" && next.strike === "proof") next.strike = "business";
+    filled.push(`type (${next.type})`);
+  }
+  for (const [field, label] of Object.entries(NUMISTA_FIELDS) as [TextField, string][]) {
+    const value = found.fields[field];
+    if (value == null || value === "" || String(next[field]).trim() !== "") continue;
+    next[field] = String(value) as never;
+    filled.push(label);
+  }
+  // Every issue of the type is undated, and the piece isn't marked ND yet.
+  if (found.fields.year_nd === true && !next.year_nd) {
+    next.year_nd = true;
+    filled.push("ND");
+  }
+  // An issue matching a year already entered supplies its mint mark and mintage.
+  const year = Number(next.year);
+  const issue = found.issues.find(
+    (i) =>
+      i.year === year &&
+      (!next.mint_mark || (i.mint_letter ?? "").toLowerCase() === next.mint_mark.toLowerCase()),
+  );
+  if (issue?.mintage != null && next.mintage === "") {
+    next.mintage = String(issue.mintage);
+    filled.push("mintage");
+  }
+  const known = new Set(refs.map((r) => `${r.catalog.trim().toLowerCase()}|${r.ref_code.trim()}`));
+  const newRefs = found.catalog_refs.filter((r) => !known.has(`${r.catalog}|${r.ref_code}`));
+  if (newRefs.length) {
+    filled.push(`${newRefs.length} catalog reference${newRefs.length > 1 ? "s" : ""}`);
+  }
+  return { next, newRefs, filled };
+}
+
+/** The year, ND flag, mint mark, and mintage of one issue of a type. */
+export function issueFields(form: FormState, issue: NumistaIssue): FormState {
+  return {
+    ...form,
+    year: issue.year != null ? String(issue.year) : issue.nd ? "" : form.year,
+    year_nd: issue.nd,
+    mint_mark: issue.mint_letter ?? "",
+    mintage: issue.mintage != null ? String(issue.mintage) : form.mintage,
+  };
+}
 
 /** The item form's "Fill from Numista" card. Fills only empty fields and
  * hands the new form state, plus any catalogue references the form doesn't
@@ -89,42 +147,7 @@ export function NumistaFill({
     setNote(null);
     try {
       const found = await api.numistaType(typeId);
-      const next: FormState = { ...form };
-      const filled: string[] = [];
-      if (found.fields.type && found.fields.type !== form.type) {
-        next.type = found.fields.type as ItemType;
-        next.grade_id = "";
-        next.designations = [];
-        if (next.type !== "coin" && next.strike === "proof") next.strike = "business";
-        filled.push(`type (${next.type})`);
-      }
-      for (const [field, label] of Object.entries(NUMISTA_FIELDS) as [TextField, string][]) {
-        const value = found.fields[field];
-        if (value == null || value === "" || String(next[field]).trim() !== "") continue;
-        next[field] = String(value) as never;
-        filled.push(label);
-      }
-      // Every issue of the type is undated, and the piece isn't marked ND yet.
-      if (found.fields.year_nd === true && !next.year_nd) {
-        next.year_nd = true;
-        filled.push("ND");
-      }
-      // An issue matching a year already entered supplies its mint mark and mintage.
-      const year = Number(next.year);
-      const issue = found.issues.find(
-        (i) =>
-          i.year === year &&
-          (!next.mint_mark || (i.mint_letter ?? "").toLowerCase() === next.mint_mark.toLowerCase()),
-      );
-      if (issue?.mintage != null && next.mintage === "") {
-        next.mintage = String(issue.mintage);
-        filled.push("mintage");
-      }
-      const known = new Set(refs.map((r) => `${r.catalog.trim().toLowerCase()}|${r.ref_code.trim()}`));
-      const newRefs = found.catalog_refs.filter((r) => !known.has(`${r.catalog}|${r.ref_code}`));
-      if (newRefs.length) {
-        filled.push(`${newRefs.length} catalog reference${newRefs.length > 1 ? "s" : ""}`);
-      }
+      const { next, newRefs, filled } = fillFromNumista(form, refs, found);
       onApply(next, newRefs);
       setResults(null);
       setIssues(found.issues);
@@ -143,16 +166,7 @@ export function NumistaFill({
   function pickIssue(index: string) {
     const issue = issues[Number(index)];
     if (!issue) return;
-    onApply(
-      {
-        ...form,
-        year: issue.year != null ? String(issue.year) : issue.nd ? "" : form.year,
-        year_nd: issue.nd,
-        mint_mark: issue.mint_letter ?? "",
-        mintage: issue.mintage != null ? String(issue.mintage) : form.mintage,
-      },
-      [],
-    );
+    onApply(issueFields(form, issue), []);
     setNote(
       `Set the issue: ${[ndYearLabel(issue), issue.mint_letter].filter(Boolean).join(" ")}` +
         (issue.mintage != null ? `, mintage ${issue.mintage.toLocaleString()}` : "") +
