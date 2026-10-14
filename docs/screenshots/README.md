@@ -7,7 +7,7 @@ page is captured twice, dark first because dark is Cabinet's default:
 |-------|------|
 | `signin-dark.png`, `signin-light.png` | `/login`, signed out |
 | `dashboard-dark.png`, `dashboard-light.png` | `/` |
-| `collection-dark.png`, `collection-light.png` | `/collection` |
+| `collection-dark.png`, `collection-light.png` | `/collection/<id>?status=owned`: the list with that piece open beside it (the 1280px capture is wide enough) |
 | `item-detail-dark.png`, `item-detail-light.png` | `/items/<id>` |
 | `settings-general-dark.png`, `settings-general-light.png` | `/settings/general` |
 

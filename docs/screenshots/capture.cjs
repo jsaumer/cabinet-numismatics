@@ -3,7 +3,8 @@
 //   node capture.cjs signin            the sign-in page only, signed out
 //   node capture.cjs settings          the Settings page only (capture it first)
 //   node capture.cjs share             a share link's grid, signed out (SHARE_TOKEN)
-//   node capture.cjs rest <item-id>    collection, dashboard, and the item page
+//   node capture.cjs rest <item-id>    collection (that piece open beside the
+//                                      list), dashboard, and the item page
 //
 // Cabinet needs a sign-in (v0.30.0): "settings" and "rest" sign in through
 // the sign-in form itself, once per theme (a fresh browser context each
@@ -26,7 +27,7 @@ const pages =
       : mode === "share"
         ? [["share", `/s/${SHARE_TOKEN}`]]
         : [
-            ["collection", "/collection"],
+            ["collection", `/collection/${itemId}?status=owned`],
             ["dashboard", "/"],
             ["item-detail", `/items/${itemId}`],
           ];
