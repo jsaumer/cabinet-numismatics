@@ -166,8 +166,8 @@ and data migrations.
   tag names the same version as `backend/pyproject.toml` (semver in the
   tag, PEP 440 in pyproject: `v1.0.0-rc.1` and `1.0.0rc1` agree), then
   pushes the backend and proxy images to GHCR under that version. `latest`
-  moves only on a stable tag; a prerelease (any tag with a `-`, such as a
-  release candidate) is published under its own version alone.
+  moves only on a stable tag; a prerelease (whatever `packaging` reads as one,
+  such as a release candidate) is published under its own version alone.
 
 ### Running the stack checks locally
 
