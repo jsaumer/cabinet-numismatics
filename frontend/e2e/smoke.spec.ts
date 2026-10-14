@@ -161,6 +161,56 @@ test("the collection finds it by search, opens it beside the list, and Enter ope
   await expect(page).toHaveURL(itemUrl);
 });
 
+test("a fact changes in place beside the list, and Escape puts it back", async ({ page }) => {
+  const id = itemUrl.split("/").pop()!;
+  await page.goto(`/collection/${id}?q=${encodeURIComponent(COUNTRY)}`);
+  const inspector = page.getByRole("region", { name: "Selected piece" });
+  await inspector.getByRole("button", { name: "Show empty fields" }).click();
+  const storage = inspector.getByRole("button", { name: "Storage: change" });
+  await storage.click();
+  const field = inspector.getByLabel("Storage", { exact: true });
+  await field.fill("Box 7, row 2");
+  await field.press("Enter");
+  await expect(inspector.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await expect(storage).toHaveText("Box 7, row 2");
+
+  await storage.click();
+  await inspector.getByLabel("Storage", { exact: true }).fill("nowhere");
+  await inspector.getByLabel("Storage", { exact: true }).press("Escape");
+  await expect(storage).toHaveText("Box 7, row 2");
+  await expect(page).toHaveURL(new RegExp(`/collection/${id}`)); // Escape in a field keeps the piece open
+
+  await page.goto(itemUrl);
+  await expect(page.getByText("Box 7, row 2")).toBeVisible();
+});
+
+test("the quick add saves a piece typed in by hand and keeps the shared fields", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `Quick ${Date.now()}`;
+  await page.goto("/items/add");
+  await expect(page.getByRole("heading", { level: 1, name: "Add a piece" })).toBeVisible();
+  await expect(page.getByLabel("Look up a piece")).toBeFocused();
+  await page.getByLabel("Country", { exact: true }).fill(country);
+  await page.getByLabel("Denomination", { exact: true }).fill("5 cents");
+  await page.getByLabel("Year", { exact: true }).fill("1938");
+  await page.getByLabel("Paid").fill("3");
+  await page.getByLabel("Storage").fill("Album 4");
+  await page.getByRole("button", { name: "Save and add another" }).click();
+
+  const session = page.getByRole("complementary", { name: "Added this visit" });
+  const added = session.getByRole("link", { name: `1938 5 cents ${country}` });
+  await expect(added).toBeVisible();
+  await expect(page.getByLabel("Country", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Storage")).toHaveValue("Album 4");
+
+  // It's in the collection: open it beside the list, then move it to the trash.
+  await added.click();
+  const inspector = page.getByRole("region", { name: "Selected piece" });
+  await expect(inspector.getByRole("heading", { level: 1 })).toContainText(country);
+  await inspector.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/\/collection$/);
+});
+
 test("trash it, restore it, then delete it for good", async ({ page }) => {
   acceptDialogs(page);
   await page.goto(itemUrl);

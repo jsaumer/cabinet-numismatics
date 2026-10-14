@@ -6,6 +6,7 @@ import {
   CalendarReference,
   ItemDetail as ItemDetailData,
   ItemEvent,
+  ItemPayload,
   SourceStatus,
 } from "../api";
 import { DocumentsCard } from "../components/documents";
@@ -167,6 +168,12 @@ export default function ItemDetail({
     </>
   );
 
+  // Facts change in place through the same PATCH the edit form uses.
+  const saveFact = async (patch: Partial<ItemPayload>) => {
+    await api.updateItem(item.id, patch);
+    changed();
+  };
+
   const history = (
     <>
       {events === null && <p className="muted">Loading…</p>}
@@ -230,7 +237,8 @@ export default function ItemDetail({
         >
           {tab === "overview" && (
             <>
-              <ItemFacts item={item} calendars={calendars} traitReference={traitReference} />
+              <ItemFacts item={item} calendars={calendars} traitReference={traitReference}
+                onSave={saveFact} />
               <div className="card">
                 {item.notes && <p className="item-notes">{item.notes}</p>}
                 <LookupLinks item={item} />
@@ -273,7 +281,8 @@ export default function ItemDetail({
 
       <fieldset className="plain-fieldset" disabled={item.deleted_at !== null}>
 
-      <ItemFacts item={item} calendars={calendars} traitReference={traitReference} />
+      <ItemFacts item={item} calendars={calendars} traitReference={traitReference}
+                onSave={saveFact} />
 
       <div className="card">
         {item.notes && <p className="item-notes">{item.notes}</p>}
