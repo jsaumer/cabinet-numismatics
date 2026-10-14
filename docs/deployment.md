@@ -907,7 +907,9 @@ What that file does differently from `docker-compose.yaml`, and why:
 - **Images are pulled, never built.** `docker stack deploy` ignores `build:`,
   so `TAG` must name a published release. Images are published to GHCR on
   every `v*` tag from **v0.10.2** on (nothing earlier exists), as public
-  packages, so no node needs to log in to pull them.
+  packages, so no node needs to log in to pull them. `latest` is always the
+  newest stable release; a release candidate (`1.0.0-rc.1`) is pulled only
+  by naming it.
 - **No `depends_on`, no `restart:`, no `env_file`.** Swarm has none of the
   first two, and the stack file passes the backend only the variables it
   names: the database URL, the data paths, `SECRET_KEY` (left empty, the key

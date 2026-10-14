@@ -343,8 +343,10 @@ Phase 7: friction they report still comes first, and the pipeline statuses,
 tax lots, submissions, and slab scanning stay parked.
 
 Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
-`ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version + `latest`;
-nothing before v0.10.2 is published). The live homelab instance pins those
+`ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version, plus
+`latest` on a stable tag only; nothing before v0.10.2 is published). A
+release candidate is tagged `v1.0.0-rc.1` with pyproject at `1.0.0rc1`;
+the job refuses a tag that doesn't match pyproject's version. The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; the backend
 migrates on startup, so an upgrade there is just a tag bump.
 

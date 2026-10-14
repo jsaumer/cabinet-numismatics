@@ -17,6 +17,12 @@ applies them itself on startup; for earlier releases, run
   repeated passages corrected across the README, the deployment, security,
   API, data-model, and price-source guides, the roadmap, and the
   implementation notes; backend/README.md rewritten from its Phase 0 text.
+- Publishing: a prerelease tag (`v1.0.0-rc.1`) is pushed to GHCR under its
+  own version only, and `latest` moves on stable releases alone; the job
+  also refuses a tag that doesn't match `backend/pyproject.toml`'s version.
+- `.gitattributes` makes every text file LF in every checkout, Windows
+  included, so a working tree copied between machines no longer shows every
+  file as changed.
 
 ## [0.33.4] - 2026-09-24
 
