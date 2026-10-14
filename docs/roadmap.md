@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (September 2026): v0.33.4 (single sign-on, and its first-look
-fixes) is the latest published release**, with versioned images published to GHCR from each
+**Status (October 2026): v0.34.0 (the workbench layout) is the latest
+published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -764,7 +764,7 @@ pieces turned up, each shipped as a small release:
   delete button sat under the next tile's arrow), and a value typed in by
   mistake could not be removed. Both fixed; a price source's values are
   still kept.
-- Unreleased: the owner found the interface read as generic and chose a
+- ✔ v0.34.0: the owner found the interface read as generic and chose a
   "workbench" layout from three options (workbench, catalogue, holdings)
   prototyped on 14 October 2026: a sidebar, and the collection as a list
   with the selected piece open beside it, facts edited in place, and a
