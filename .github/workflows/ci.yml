@@ -236,8 +236,10 @@ jobs:
 
       # The tag is semver (v1.0.0-rc.1), pyproject is PEP 440 (1.0.0rc1);
       # both must name the same version, or /api/health and the image tag
-      # disagree. Checked before anything is pushed.
+      # disagree. Checked before anything is pushed. The same parse decides
+      # whether this is a prerelease, however the tag is spelled.
       - name: Check the tag matches pyproject's version
+        id: version
         run: |
           pip install --quiet packaging
           python - <<'PY'
@@ -249,12 +251,16 @@ jobs:
           if Version(tag) != Version(declared):
               raise SystemExit(f"tag v{tag} does not match pyproject version {declared}")
           print(f"tag v{tag} matches pyproject version {declared}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"prerelease={str(Version(tag).is_prerelease).lower()}\n")
           PY
 
-      # A prerelease tag (anything with a "-", like v1.0.0-rc.1) is pushed
-      # under its own version only; "latest" moves on stable releases.
+      # A prerelease (v1.0.0-rc.1, or v1.0.0rc1) is pushed under its own
+      # version only; "latest" moves on stable releases.
       - name: Image tags
         id: tags
+        env:
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           for image in backend proxy; do
@@ -262,10 +268,9 @@ jobs:
             {
               echo "$image<<EOF"
               echo "$name:$version"
-              case "$version" in
-                *-*) ;;
-                *) echo "$name:latest" ;;
-              esac
+              if [ "$PRERELEASE" = "false" ]; then
+                echo "$name:latest"
+              fi
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
           done
