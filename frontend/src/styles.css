@@ -1898,3 +1898,766 @@ main {
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border-soft);
 }
+
+/* ------------------------------------------------------------------ */
+/* Workbench layout (prototype): a sticky header with search, a sidebar of
+   every way into the collection, and the collection as a list with the
+   selected piece open beside it. */
+
+:root {
+  --header-h: 3.5rem;
+  --sidebar-w: 13rem;
+  --metal-gold: #c9a33b;
+  --metal-silver: #aeb4b9;
+  --metal-platinum: #cfd2cd;
+  --metal-palladium: #9da29c;
+  --metal-base: #a8743f;
+  --paper-note: #d8ceac;
+}
+:root[data-theme="dark"] {
+  --metal-silver: #b9bfc4;
+  --metal-base: #b98652;
+  --paper-note: #8d8466;
+}
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  height: var(--header-h);
+  padding-block: 0;
+}
+.header-search {
+  position: relative;
+  flex: 0 1 26rem;
+  margin-left: 1.5rem;
+}
+.header-search input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--header-ink);
+  padding: 0.4rem 2rem 0.4rem 0.7rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+.header-search input::placeholder {
+  color: var(--header-muted);
+}
+.header-search input:focus {
+  outline: none;
+  border-color: var(--header-rule);
+  background: rgba(255, 255, 255, 0.1);
+}
+.header-search kbd {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--header-muted);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: transparent;
+}
+.site-header a.header-add {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.35rem 0.8rem;
+  color: var(--accent-ink);
+}
+kbd {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.75em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  align-items: start;
+}
+.shell > main {
+  min-width: 0;
+  width: 100%;
+}
+.shell > main:has(> .workbench) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  background: var(--surface-alt);
+  border-right: 1px solid var(--border);
+  padding: 1rem 0.6rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  font-size: 0.92rem;
+}
+.sidebar h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin: 0 0 0.25rem;
+  padding: 0 0.55rem;
+}
+.sidebar h2 a {
+  color: inherit;
+  padding: 0;
+  background: none;
+}
+.sidebar h2 a.active,
+.sidebar h2 a:hover {
+  color: var(--ink);
+}
+.sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+}
+.sidebar li a {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  color: var(--ink-2);
+}
+.sidebar li a:hover {
+  background: var(--hover);
+  color: var(--ink);
+  text-decoration: none;
+}
+.sidebar li a.active {
+  background: var(--chip-bg);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+.sidebar .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar .count {
+  color: var(--ink-3);
+  font-size: 0.82rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.sidebar-empty a {
+  color: var(--link);
+}
+.sidebar-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+/* The collection: list on the left, the selected piece on the right. */
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .workbench {
+    grid-template-columns: minmax(24rem, 0.85fr) minmax(0, 1.15fr);
+  }
+}
+.wb-list {
+  padding: 1rem 1.1rem 2rem;
+  min-width: 0;
+}
+.wb-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.35rem;
+}
+.wb-head h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+.wb-head .spacer {
+  flex: 1;
+}
+.wb-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.wb-summary b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.wb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.wb-filters select,
+.wb-filters button {
+  font-size: 0.86rem;
+}
+.wb-advanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem 0.75rem;
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.wb-advanced .field input,
+.wb-advanced .field select {
+  width: 100%;
+}
+.wb-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+.wb-bulk input {
+  width: 8.5rem;
+}
+.wb-colhead,
+.wb-row {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.4rem;
+}
+.wb-colhead {
+  padding: 0 0.5rem 0.3rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+.wb-colhead > span:first-of-type {
+  padding-left: 2rem;
+}
+.wb-colhead {
+  grid-template-columns: 1.4rem minmax(0, 1fr) 5.5rem 7rem;
+}
+.wb-colhead .num {
+  text-align: right;
+}
+.wb-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wb-row {
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+.wb-row:hover {
+  background: var(--hover);
+}
+.wb-row.selected {
+  background: var(--chip-bg);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.wb-row > a {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) 5.5rem 7rem;
+  align-items: center;
+  column-gap: 0.4rem;
+  padding: 0.4rem 0;
+  color: var(--ink);
+  min-width: 0;
+}
+.wb-row > a:hover {
+  text-decoration: none;
+}
+.wb-row > a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.wb-title {
+  display: grid;
+  min-width: 0;
+}
+.wb-title .t,
+.wb-title .s {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-title .t {
+  font-weight: 600;
+  font-size: 0.93rem;
+}
+.wb-title .s {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+.wb-row.sold .t {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-3);
+  color: var(--ink-2);
+}
+.wb-grade {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wb-value {
+  text-align: right;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+.wb-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+
+/* The type mark: shape for coin, note, or bar; colour for the metal;
+   hollow for a wish-list piece. */
+.wb-glyph {
+  --m: var(--metal-base);
+  display: block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: var(--m);
+  margin-left: 0.3rem;
+}
+.wb-glyph.gold { --m: var(--metal-gold); }
+.wb-glyph.silver { --m: var(--metal-silver); }
+.wb-glyph.platinum { --m: var(--metal-platinum); }
+.wb-glyph.palladium { --m: var(--metal-palladium); }
+.wb-glyph.note {
+  --m: var(--paper-note);
+  width: 1.05rem;
+  height: 0.6rem;
+  border-radius: 1px;
+  margin-left: 0.2rem;
+}
+.wb-glyph.bullion {
+  width: 0.55rem;
+  height: 0.9rem;
+  border-radius: 1px;
+  margin-left: 0.45rem;
+}
+.wb-glyph.hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--m);
+}
+.wb-keys {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+}
+
+.wb-inspector {
+  position: sticky;
+  top: var(--header-h);
+  max-height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface-alt);
+  min-height: calc(100vh - var(--header-h));
+  padding: 1rem 1.25rem 2rem;
+  min-width: 0;
+}
+.wb-pick {
+  max-width: 28rem;
+  margin: 4rem auto;
+  text-align: center;
+  color: var(--ink-2);
+  display: grid;
+  gap: 0.6rem;
+}
+.inspector-body > .card,
+.inspector-body .plain-fieldset > .card {
+  margin-bottom: 0.9rem;
+}
+.inspector-body .item-hero {
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: 1rem;
+}
+.inspector-body .hero-main .detail-header h1 {
+  font-size: 1.3rem;
+}
+.inspector-body .hero-amount {
+  font-size: 1.45rem;
+}
+.inspector-body .hero-main .detail-header .button,
+.inspector-body .hero-main .detail-header button {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.6rem;
+}
+.inspector-body .tabs {
+  display: flex;
+  gap: 1.1rem;
+  border-bottom: 1px solid var(--border);
+  margin: 0 0 0.9rem;
+}
+.inspector-body .tab {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0.35rem 0 0.45rem;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+.inspector-body .tab:hover {
+  color: var(--ink);
+}
+.inspector-body .tab.active {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+.inspector-body .tab .count {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+@media (max-width: 800px) {
+  .site-header {
+    position: static;
+    height: auto;
+    padding-block: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .header-search {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 1rem;
+    padding: 0.5rem 0.75rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-group {
+    flex: none;
+  }
+  .sidebar ul {
+    grid-auto-flow: column;
+  }
+  .sidebar h2 {
+    display: none;
+  }
+  .sidebar-foot {
+    margin-top: 0;
+    border-top: 0;
+    padding-top: 0;
+  }
+  .wb-row > a {
+    grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+  }
+  .wb-row .wb-grade {
+    display: none;
+  }
+  .wb-colhead {
+    display: none;
+  }
+}
+/* In the inspector the hero's actions get a row of their own under the
+   title, rather than wrapping one at a time beside it. */
+.inspector-body .hero-main .detail-header .spacer {
+  flex-basis: 100%;
+  height: 0;
+}
+
+/* Facts that change in place: the value is a quiet button until clicked. */
+button.fact-edit {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-block;
+  max-width: 100%;
+  margin: -0.1rem -0.3rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+button.fact-edit:hover {
+  border-color: var(--border);
+  background: var(--hover);
+}
+button.fact-edit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+fieldset:disabled button.fact-edit {
+  cursor: default;
+  border-color: transparent;
+  background: none;
+}
+.fact-editing {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  max-width: 100%;
+}
+.fact-editing input,
+.fact-editing select {
+  min-width: 0;
+  width: 13rem;
+  max-width: 100%;
+  font: inherit;
+}
+.fact-editing input[type="number"] {
+  width: 8rem;
+}
+.fact-hint {
+  font-size: 0.75rem;
+}
+.fact-error {
+  flex-basis: 100%;
+  font-size: 0.82rem;
+  margin: 0;
+}
+dl.facts .saved-tick {
+  margin-left: 0.4rem;
+}
+
+/* The quick add: one lookup box, then only what's yours to say. */
+.quick-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+.qa-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.qa-main .detail-header {
+  margin-bottom: 0;
+}
+.qa-lookup {
+  display: grid;
+  gap: 0.5rem;
+}
+.qa-types {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.qa-types button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.88rem;
+}
+.qa-types button.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.qa-box {
+  display: flex;
+  gap: 0.5rem;
+}
+.qa-box input {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--chip-bg);
+}
+.qa-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.qa-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.qa-results li + li {
+  border-top: 1px solid var(--border-soft);
+}
+.qa-results button {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+}
+.qa-results button:hover,
+.qa-results button:focus-visible {
+  background: var(--hover);
+}
+.qa-results button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.qa-results .t {
+  font-weight: 600;
+}
+.qa-results .s {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+.qa-source {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.qa-source p {
+  margin: 0;
+}
+.qa-filled,
+.qa-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.qa-issues .issue {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+.qa-issues .issue.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.qa-issues .issue.owned {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.qa-form {
+  display: grid;
+  gap: 0.9rem;
+}
+.qa-legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+.qa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem 0.8rem;
+}
+.qa-grid .field input,
+.qa-grid .field select {
+  width: 100%;
+}
+.qa-money {
+  display: flex;
+  gap: 0.3rem;
+}
+.qa-money input:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.qa-grid .field .qa-currency {
+  width: 3.6rem;
+  text-transform: uppercase;
+}
+.qa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.qa-session {
+  position: sticky;
+  top: calc(var(--header-h) + 1rem);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.9rem;
+}
+.qa-session h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+.qa-session ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.qa-session li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.qa-session .grade {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+@media (max-width: 900px) {
+  .quick-add {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qa-session {
+    position: static;
+  }
+}

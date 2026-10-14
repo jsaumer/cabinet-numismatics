@@ -10,6 +10,30 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+
+- A workbench layout. A sidebar replaces the header's links: owned, wish
+  list, sold, everything, and the trash with their counts, each checklist
+  with its progress (a link opens it), then the dashboard, pricing, the
+  stack, and the insurance report, with Import and Settings at the foot.
+  The header gains a collection search (`/` focuses it) and Add piece, and
+  loses the subtitle. On a screen 1100px or wider the collection is a
+  compact list with the selected piece open beside it
+  (`/collection/<id>`, the filters kept), its sections behind Overview,
+  Value, Photos and files, and History tabs; J and K move, Enter opens the
+  full page, E edits, N adds, Esc closes. The type mark is a small shape
+  coloured by metal (hollow for the wish list); sold rows are struck
+  through. Less-used filters fold behind "More filters".
+- Edit in place: on the item page and in the inspector, a fact turns into a
+  field on click (the grade a select of its scale); Enter or leaving the
+  field saves through the usual item update, Esc puts it back.
+- Quick add (`/items/add`, where Add piece and N now go): one box takes a
+  name, a Numista number, or a PCGS cert; the match fills the piece, a
+  type's issues are offered with owned ones struck through, and the form
+  asks only for grade, price, quantity, date, seller, storage, and tags.
+  "Save and add another" keeps the date, seller, storage, and tags and lists
+  what was added this visit. The full form stays at `/items/new`.
+
 ### Changed
 
 - Documentation pass: every document checked against v0.33.4's code by

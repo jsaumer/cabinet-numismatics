@@ -1,7 +1,7 @@
 import { KeyboardEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, CatalogRef, Grade } from "../../api";
+import { api, CatalogRef, Grade, PcgsCert } from "../../api";
 import { FormState, TextField } from "./model";
 
 // Fields a cert lookup can fill, with how the "filled …" message names them.
@@ -22,6 +22,47 @@ const CERT_FIELDS: Partial<Record<TextField, string>> = {
   pcgs_population: "population",
   pcgs_pop_higher: "graded higher",
 };
+
+/** What a PCGS cert fills on a form: only empty fields (the grade too, when
+ * none is set), plus new catalogue references. Shared by the item form's
+ * card and the quick add. */
+export function fillFromCert(
+  form: FormState,
+  refs: CatalogRef[],
+  found: PcgsCert,
+  sheldon: Grade[],
+): { next: FormState; newRefs: CatalogRef[]; filled: string[] } {
+  const next: FormState = { ...form };
+  const filled: string[] = [];
+  if (form.type !== "coin") {
+    next.type = "coin";
+    next.grade_id = "";
+    next.designations = [];
+    filled.push("type (coin)");
+  }
+  for (const [field, label] of Object.entries(CERT_FIELDS) as [TextField, string][]) {
+    const value = found.fields[field];
+    if (value == null || value === "" || String(next[field]).trim() !== "") continue;
+    next[field] = String(value) as never;
+    filled.push(label);
+  }
+  if (found.grade && next.grade_id === "") {
+    const grade = sheldon.find((g) => g.rank === found.grade!.rank);
+    if (grade) {
+      next.grade_id = String(grade.id);
+      next.strike = found.grade.strike;
+      next.grade_plus = found.grade.plus;
+      next.designations = found.grade.designations;
+      filled.push(
+        `grade (${found.grade.strike === "proof" ? "PR" : found.grade.strike === "specimen" ? "SP" : "MS"}-${found.grade.rank}${found.grade.plus ? "+" : ""}${found.grade.designations.length ? " " + found.grade.designations.join(" ") : ""})`,
+      );
+    }
+  }
+  const known = new Set(refs.map((r) => `${r.catalog.trim().toLowerCase()}|${r.ref_code.trim()}`));
+  const newRefs = found.catalog_refs.filter((r) => !known.has(`${r.catalog}|${r.ref_code}`));
+  if (newRefs.length) filled.push("PCGS number");
+  return { next, newRefs, filled };
+}
 
 /** The item form's "Fill from a PCGS cert" card. Fills only empty fields
  * (the grade included, when none is set) and hands the new form state and
@@ -64,35 +105,7 @@ export function PcgsFill({
         api.pcgsCert(number),
         api.listGrades("sheldon") as Promise<Grade[]>,
       ]);
-      const next: FormState = { ...form };
-      const filled: string[] = [];
-      if (form.type !== "coin") {
-        next.type = "coin";
-        next.grade_id = "";
-        next.designations = [];
-        filled.push("type (coin)");
-      }
-      for (const [field, label] of Object.entries(CERT_FIELDS) as [TextField, string][]) {
-        const value = found.fields[field];
-        if (value == null || value === "" || String(next[field]).trim() !== "") continue;
-        next[field] = String(value) as never;
-        filled.push(label);
-      }
-      if (found.grade && next.grade_id === "") {
-        const grade = sheldon.find((g) => g.rank === found.grade!.rank);
-        if (grade) {
-          next.grade_id = String(grade.id);
-          next.strike = found.grade.strike;
-          next.grade_plus = found.grade.plus;
-          next.designations = found.grade.designations;
-          filled.push(
-            `grade (${found.grade.strike === "proof" ? "PR" : found.grade.strike === "specimen" ? "SP" : "MS"}-${found.grade.rank}${found.grade.plus ? "+" : ""}${found.grade.designations.length ? " " + found.grade.designations.join(" ") : ""})`,
-          );
-        }
-      }
-      const known = new Set(refs.map((r) => `${r.catalog.trim().toLowerCase()}|${r.ref_code.trim()}`));
-      const newRefs = found.catalog_refs.filter((r) => !known.has(`${r.catalog}|${r.ref_code}`));
-      if (newRefs.length) filled.push("PCGS number");
+      const { next, newRefs, filled } = fillFromCert(form, refs, found, sheldon);
       onApply(next, newRefs);
       const pop =
         found.population != null
