@@ -2743,6 +2743,42 @@ The owner's first look at v0.33.0 live. Rules:
   three columns, details as `.provider-detail` lines under the name, the
   subject wrapping anywhere, inside `.table-scroll`.
 
+## The workbench layout (unreleased)
+
+Chosen by the owner on 14 October 2026 from three prototypes (workbench,
+catalogue, holdings), after a review found the interface read as a generic
+generated dashboard. Frontend only, no API change. Rules a later change
+here has to respect:
+
+- **The signed-in shell is header, sidebar, main.** `App.tsx`'s `AuthedApp`
+  renders the sticky `.site-header` (height `--header-h`; a page that pins
+  something under it uses that token), then `.shell`, a grid of
+  `components/sidebar.tsx` and `<main>`. A page added to the app gets a
+  sidebar link in the group it belongs to; the sidebar's counts come from
+  requests other pages already make (`/api/stats/collection`, the trash,
+  the checklists), refetched on route change, never a new endpoint.
+- **A sidebar view is a URL.** "Owned" is `/collection?status=owned`, and it
+  shows as active only while the query holds nothing but `status` (and
+  `sort`), so a filtered list doesn't claim to be the plain view. A
+  checklist is `/checklists?id=<id>`, which `Checklists.tsx` opens.
+- **The collection is `ItemList` on `/collection` and `/collection/:id`.**
+  At 1100px and wider (`useWide`) a row links to `/collection/<id>` with the
+  filters kept and the inspector renders `ItemDetail` with `embedded`;
+  narrower, a row links to `/items/<id>` as before. `ItemDetail`'s embedded
+  mode takes the id as a prop, shows its sections behind tabs, keeps the
+  tab while moving between pieces, and on delete stays in the list
+  (`onChanged` refetches it). The full page at `/items/:id` is unchanged, and
+  the e2e suite still drives it.
+- **Keyboard handlers stand aside.** J/K, Enter, E, N, Esc on the list and
+  `/` for the header search do nothing while focus is in an input, a
+  textarea, a select, or editable content, or while a dialog is open. A
+  new shortcut follows the same check.
+- **The type mark replaces the type and status pills in the list**:
+  `.wb-glyph` is a shape for coin, note, or bar, coloured by
+  `detectMetal(composition)` through the `--metal-*` tokens (base metals
+  share `--metal-base`), hollow for a wish-list piece; a sold row is struck
+  through. The pills stay on the item page.
+
 ## Releases
 
 

@@ -10,6 +10,21 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Added
+
+- A workbench layout. A sidebar replaces the header's links: owned, wish
+  list, sold, everything, and the trash with their counts, each checklist
+  with its progress (a link opens it), then the dashboard, pricing, the
+  stack, and the insurance report, with Import and Settings at the foot.
+  The header gains a collection search (`/` focuses it) and Add piece, and
+  loses the subtitle. On a screen 1100px or wider the collection is a
+  compact list with the selected piece open beside it
+  (`/collection/<id>`, the filters kept), its sections behind Overview,
+  Value, Photos and files, and History tabs; J and K move, Enter opens the
+  full page, E edits, N adds, Esc closes. The type mark is a small shape
+  coloured by metal (hollow for the wish list); sold rows are struck
+  through. Less-used filters fold behind "More filters".
+
 ### Changed
 
 - Documentation pass: every document checked against v0.33.4's code by

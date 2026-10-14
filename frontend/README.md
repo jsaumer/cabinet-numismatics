@@ -35,7 +35,8 @@ public/               served at the site root, copied into dist/ as is
   logo-tile.svg         the logo on its tile background, the source of the PNGs
 src/
   main.tsx, App.tsx   entry; the boot gate (setup/sign-in/restoring/signed in),
-                      the header, navigation, theme toggle, and routes
+                      the header (search, Add piece, theme toggle, account),
+                      the sidebar shell, and routes
   styles.css          the one stylesheet, design tokens first
   api/                the API client; import everything from "../api"
     types/              response and payload types by area (items, settings,
@@ -65,7 +66,8 @@ src/
                       card, lazy mount, per-widget error), data.ts (the
                       per-page request cache), options.ts, edit.tsx (edit
                       mode, the drag, the catalogue and options dialogs)
-  pages/              one file per route: Dashboard, ItemList (/collection),
+  pages/              one file per route: Dashboard, ItemList (/collection
+                      and /collection/:id, the list with the inspector),
                       ItemDetail, ItemForm, AddRun, Checklists, Pricing,
                       Stack, Report, Import, Trash, Settings, Setup, Login
     item-form/          the item form's parts: model.ts (form state,
@@ -363,6 +365,13 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 - **The CSP is strict.** New inline scripts, external scripts or fonts, or
   iframes will trip it. The e2e header test visits the main pages and fails
   on any policy violation.
+- **The workbench shell.** Signed in, every page sits beside the sidebar
+  (`components/sidebar.tsx`), under a sticky header of `--header-h`. The
+  collection is `ItemList`: a list of `.wb-row` links and, at 1100px and
+  wider, an inspector that renders `ItemDetail` with `embedded` (tabs, and a
+  delete that stays in the list). Narrower, a row opens `/items/:id` as
+  before. Keyboard handlers ignore keys typed into a field or while a dialog
+  is open.
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 
@@ -371,7 +380,8 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 `e2e/smoke.spec.ts` drives the real pages in Chromium: the dashboard, adding
 an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
-filling itself, search, trash and restore, a note with a radar serial
+filling itself, search (the piece opening beside the list, its tabs, and the
+keyboard), trash and restore, a note with a radar serial
 number getting its badge and its size and printer showing on the item page,
 a wishlist coin showing its target price, an
 undated piece taking ND with no year, a bar or round getting a suggested

@@ -330,6 +330,7 @@ the internet, whatever sign-in method or gateway sits in front, and the
 same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
 and `.env.example`. Review briefs and reviews stay local (gitignored), as
 they have since v0.33.0's spec was reviewed.
+**In progress (14 October 2026):** the workbench layout on branch `workbench-layout` (a sidebar shell, the collection as a list with the selected piece in an inspector; inline editing and a lookup-first add next); see "The workbench layout" in the implementation notes.
 **Next, in order:** the road to v1.0.0's remaining items (a CI check
 against a breaking OpenAPI change, "Add a run" and the Numista banknote
 mapping confirmed against a live account, and a README and quick-start
