@@ -1,2 +1,6 @@
+# Everything: LF in the repository and in every checkout, Windows included,
+# so copying a working tree between machines can't show every file as
+# changed. Binary files are detected and left alone.
+* text=auto eol=lf
 # Shell scripts must stay LF: CRLF breaks bash, including Git Bash on Windows.
 *.sh text eol=lf
