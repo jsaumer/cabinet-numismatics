@@ -5,12 +5,25 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    ignore:
+      # pydantic pins pydantic-core exactly; it moves when pydantic does,
+      # and a bump of its own can never install.
+      - dependency-name: pydantic-core
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
+    groups:
+      # react and react-dom must be the same version, or the app fails to
+      # render; one PR moves them, and their types, together.
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
 
   - package-ecosystem: docker
     directories:
