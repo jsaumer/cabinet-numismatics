@@ -16,6 +16,7 @@ import ItemDetail from "./pages/ItemDetail";
 import ItemForm from "./pages/ItemForm";
 import Import from "./pages/Import";
 import ItemList from "./pages/ItemList";
+import QuickAdd from "./pages/QuickAdd";
 import Login from "./pages/Login";
 import Pricing from "./pages/Pricing";
 import Report from "./pages/Report";
@@ -133,7 +134,7 @@ function AuthedApp({
         </Link>
         <HeaderSearch />
         <nav>
-          <Link className="button primary header-add" to="/items/new" title="Add a piece (N)">
+          <Link className="button primary header-add" to="/items/add" title="Add a piece (N)">
             Add piece
           </Link>
           <button
@@ -172,6 +173,7 @@ function AuthedApp({
           <Route path="/trash" element={<Trash />} />
           <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="/settings/:section" element={<Settings />} />
+          <Route path="/items/add" element={<QuickAdd />} />
           <Route path="/items/new" element={<ItemForm />} />
           <Route path="/items/run" element={<AddRun />} />
           <Route path="/items/:id" element={<ItemDetail />} />

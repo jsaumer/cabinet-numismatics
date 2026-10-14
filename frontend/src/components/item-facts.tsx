@@ -10,6 +10,7 @@ import {
   SerialTrait,
   TROY_OUNCE_G,
 } from "../api";
+import { EditableValue, EditSpec, SaveFact } from "./inline-edit";
 import { TraitBadges } from "./serial-traits";
 
 /** "AH 1340", "Showa 12": the year as written, with its calendar's short name. */
@@ -47,6 +48,8 @@ interface Fact {
   forType?: ItemType | ItemType[];
   /** Already in the hero: a group holding nothing else isn't worth a block. */
   inHero?: boolean;
+  /** Editable in place, when the page passes onSave. */
+  edit?: EditSpec;
 }
 
 interface Group {
@@ -72,11 +75,17 @@ export function ItemFacts({
   item,
   calendars,
   traitReference,
+  onSave,
 }: {
   item: ItemDetail;
   calendars: CalendarReference | null;
   traitReference: SerialTrait[];
+  /** Given, every fact with an edit spec changes in place (PATCH). */
+  onSave?: SaveFact;
 }) {
+  const text = (field: EditSpec["field"], raw: string | null): EditSpec => ({ field, kind: "text", raw });
+  const num = (field: EditSpec["field"], raw: number | null, unit?: string, step = "any"): EditSpec =>
+    ({ field, kind: "number", raw, unit, step });
   const [showEmpty, setShowEmpty] = useState(remembered);
 
   const toggle = () => {
@@ -109,8 +118,8 @@ export function ItemFacts({
     {
       title: "Identity",
       facts: [
-        { label: "Series", value: item.series },
-        { label: "Variety", value: item.variety },
+        { label: "Series", value: item.series, edit: text("series", item.series) },
+        { label: "Variety", value: item.variety, edit: text("variety", item.variety) },
         {
           label: "Set / lot",
           value: item.set ? (
@@ -118,11 +127,12 @@ export function ItemFacts({
           ) : null,
         },
         { label: "Strike", value: strikeLabel(item) },
-        { label: "Mint mark", value: item.mint_mark, forType: "coin" },
+        { label: "Mint mark", value: item.mint_mark, forType: "coin", edit: text("mint_mark", item.mint_mark) },
         {
           label: item.type === "note" ? "Print run" : "Mintage",
           value: item.mintage != null ? count(item.mintage) : null,
           forType: ["coin", "note"],
+          edit: { field: "mintage", kind: "integer", raw: item.mintage },
         },
         {
           label: "Date as struck",
@@ -136,14 +146,15 @@ export function ItemFacts({
           label: item.type === "bullion" ? "Refiner or mint" : "Issuer",
           value: item.issuer,
           forType: ["note", "bullion"],
+          edit: text("issuer", item.issuer),
         },
-        { label: "Charter number", value: item.charter_number, forType: "note" },
+        { label: "Charter number", value: item.charter_number, forType: "note", edit: text("charter_number", item.charter_number) },
         {
           label: "Bank location",
           value: [item.bank_city, item.bank_state].filter(Boolean).join(", "),
           forType: "note",
         },
-        { label: "Signatures", value: item.signatures, forType: "note" },
+        { label: "Signatures", value: item.signatures, forType: "note", edit: text("signatures", item.signatures) },
         {
           label: "Serial number",
           value:
@@ -154,10 +165,11 @@ export function ItemFacts({
               </>
             ) : null,
           forType: ["note", "bullion"],
+          edit: text("serial_number", item.serial_number),
         },
-        { label: "Prefix / block", value: item.prefix_block, forType: "note" },
+        { label: "Prefix / block", value: item.prefix_block, forType: "note", edit: text("prefix_block", item.prefix_block) },
         { label: "Replacement note", value: item.replacement_note ? "Yes" : null, forType: "note" },
-        { label: "Plate / position", value: item.plate_position, forType: "note" },
+        { label: "Plate / position", value: item.plate_position, forType: "note", edit: text("plate_position", item.plate_position) },
       ],
     },
     {
@@ -167,6 +179,7 @@ export function ItemFacts({
           label: "Grade",
           value: item.grade ? `${item.grade_label} (${item.grade.label})` : null,
           inHero: true,
+          edit: item.type === "bullion" ? undefined : { field: "grade_id", kind: "grade", raw: item.grade?.id ?? null },
         },
         // The grade label above already carries these; on an ungraded piece
         // nothing else would show them.
@@ -216,9 +229,9 @@ export function ItemFacts({
     {
       title: "Physical",
       facts: [
-        { label: "Composition", value: item.composition },
-        { label: "Weight", value: item.weight_g != null ? `${item.weight_g} g` : null },
-        { label: "Fineness", value: item.fineness },
+        { label: "Composition", value: item.composition, edit: text("composition", item.composition) },
+        { label: "Weight", value: item.weight_g != null ? `${item.weight_g} g` : null, edit: num("weight_g", item.weight_g, "g") },
+        { label: "Fineness", value: item.fineness, edit: num("fineness", item.fineness) },
         {
           label: "Fine weight",
           value:
@@ -237,39 +250,43 @@ export function ItemFacts({
           label: "Diameter",
           value: item.diameter_mm != null ? `${item.diameter_mm} mm` : null,
           forType: "coin",
+          edit: num("diameter_mm", item.diameter_mm, "mm"),
         },
         {
           label: "Thickness",
           value: item.thickness_mm != null ? `${item.thickness_mm} mm` : null,
           forType: ["coin", "bullion"],
+          edit: num("thickness_mm", item.thickness_mm, "mm"),
         },
         { label: "Size", value: size, forType: ["note", "bullion"] },
-        { label: "Edge", value: item.edge, forType: "coin" },
-        { label: "Shape", value: item.shape, forType: ["coin", "bullion"] },
+        { label: "Edge", value: item.edge, forType: "coin", edit: text("edge", item.edge) },
+        { label: "Shape", value: item.shape, forType: ["coin", "bullion"], edit: text("shape", item.shape) },
         {
           label: "Die axis",
           value: item.die_axis != null ? dieAxis(item.die_axis) : null,
           forType: "coin",
         },
-        { label: "Printer", value: item.printer, forType: "note" },
-        { label: "Watermark", value: item.watermark, forType: "note" },
+        { label: "Printer", value: item.printer, forType: "note", edit: text("printer", item.printer) },
+        { label: "Watermark", value: item.watermark, forType: "note", edit: text("watermark", item.watermark) },
         {
           label: "Demonetised",
           value: item.demonetized_on ? date(item.demonetized_on) : null,
           forType: ["coin", "note"],
+          edit: { field: "demonetized_on", kind: "date", raw: item.demonetized_on },
         },
       ],
     },
     {
       title: "Acquisition",
       facts: [
-        { label: "Acquired", value: item.acquisition_date },
+        { label: "Acquired", value: item.acquisition_date, edit: { field: "acquisition_date", kind: "date", raw: item.acquisition_date } },
         {
           label: "Paid",
           value:
             item.acquisition_price != null
               ? money(item.acquisition_price, item.currency)
               : null,
+          edit: num("acquisition_price", item.acquisition_price, item.currency, "0.01"),
         },
         {
           label: "Fees, shipping & tax",
@@ -277,6 +294,7 @@ export function ItemFacts({
             item.acquisition_fees != null
               ? money(item.acquisition_fees, item.currency)
               : null,
+          edit: num("acquisition_fees", item.acquisition_fees, item.currency, "0.01"),
         },
         // Only worth its own line once fees make it differ from what was paid.
         {
@@ -284,7 +302,7 @@ export function ItemFacts({
           value:
             item.acquisition_fees != null ? money(item.cost_basis, item.currency) : null,
         },
-        { label: "From", value: item.acquired_from },
+        { label: "From", value: item.acquired_from, edit: text("acquired_from", item.acquired_from) },
         {
           label: "Spot at purchase",
           value:
@@ -303,7 +321,7 @@ export function ItemFacts({
               ? `${item.premium_paid_pct > 0 ? "+" : ""}${item.premium_paid_pct.toFixed(1)}%`
               : null,
         },
-        { label: "Storage", value: item.storage_location },
+        { label: "Storage", value: item.storage_location, edit: text("storage_location", item.storage_location) },
         { label: "Sold to / venue", value: item.status === "sold" ? item.sold_to : null },
         {
           label: "Selling fees",
@@ -334,7 +352,10 @@ export function ItemFacts({
 
   const blocks = groups
     .map((group) => ({ title: group.title, facts: group.facts.filter(offered) }))
-    .filter((group) => group.facts.some((fact) => showEmpty || !fact.inHero));
+    .filter((group) =>
+      // An editable hero fact (the grade) keeps its group, so it can be changed here.
+      group.facts.some((fact) => showEmpty || !fact.inHero || Boolean(onSave && fact.edit)),
+    );
 
   return (
     <div className="card item-facts">
@@ -352,7 +373,19 @@ export function ItemFacts({
               <div key={fact.label}>
                 <dt>{fact.label}</dt>
                 <dd>
-                  {filled(fact.value) ? fact.value : "–"}
+                  {onSave && fact.edit ? (
+                    <EditableValue
+                      label={fact.label}
+                      shown={filled(fact.value) ? fact.value : "–"}
+                      spec={fact.edit}
+                      itemType={item.type}
+                      onSave={onSave}
+                    />
+                  ) : filled(fact.value) ? (
+                    fact.value
+                  ) : (
+                    "–"
+                  )}
                   {filled(fact.value) && fact.note}
                 </dd>
               </div>

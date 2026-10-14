@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   api,
@@ -326,6 +326,14 @@ export default function ItemForm() {
     <>
       <div className="detail-header">
         <h1>{id ? "Edit item" : "Add item"}</h1>
+        {!id && (
+          <>
+            <div className="spacer" />
+            <Link to="/items/add" title="One lookup box and only the fields that are yours">
+              Quick add
+            </Link>
+          </>
+        )}
       </div>
       {error && <p className="error">{error}</p>}
       {savedNote && <p className="muted">{savedNote}</p>}

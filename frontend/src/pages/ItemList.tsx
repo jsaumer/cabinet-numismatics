@@ -253,7 +253,7 @@ export default function ItemList() {
       else if (e.key === "k" || e.key === "ArrowUp") move(selectedIndex < 0 ? 0 : selectedIndex - 1);
       else if (e.key === "Enter" && selectedId) navigate(`/items/${selectedId}`);
       else if (e.key === "e" && selectedId) navigate(`/items/${selectedId}/edit`);
-      else if (e.key === "n") navigate("/items/new");
+      else if (e.key === "n") navigate("/items/add");
       else if (e.key === "Escape" && selectedId) navigate(`/collection${search}`, { replace: true });
     }
     window.addEventListener("keydown", onKey);

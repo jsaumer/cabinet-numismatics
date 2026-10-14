@@ -2406,3 +2406,258 @@ kbd {
   flex-basis: 100%;
   height: 0;
 }
+
+/* Facts that change in place: the value is a quiet button until clicked. */
+button.fact-edit {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-block;
+  max-width: 100%;
+  margin: -0.1rem -0.3rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+button.fact-edit:hover {
+  border-color: var(--border);
+  background: var(--hover);
+}
+button.fact-edit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+fieldset:disabled button.fact-edit {
+  cursor: default;
+  border-color: transparent;
+  background: none;
+}
+.fact-editing {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.5rem;
+  max-width: 100%;
+}
+.fact-editing input,
+.fact-editing select {
+  min-width: 0;
+  width: 13rem;
+  max-width: 100%;
+  font: inherit;
+}
+.fact-editing input[type="number"] {
+  width: 8rem;
+}
+.fact-hint {
+  font-size: 0.75rem;
+}
+.fact-error {
+  flex-basis: 100%;
+  font-size: 0.82rem;
+  margin: 0;
+}
+dl.facts .saved-tick {
+  margin-left: 0.4rem;
+}
+
+/* The quick add: one lookup box, then only what's yours to say. */
+.quick-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+.qa-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.qa-main .detail-header {
+  margin-bottom: 0;
+}
+.qa-lookup {
+  display: grid;
+  gap: 0.5rem;
+}
+.qa-types {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.qa-types button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-2);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.88rem;
+}
+.qa-types button.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.qa-box {
+  display: flex;
+  gap: 0.5rem;
+}
+.qa-box input {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.1rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--chip-bg);
+}
+.qa-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+.qa-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.qa-results li + li {
+  border-top: 1px solid var(--border-soft);
+}
+.qa-results button {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+}
+.qa-results button:hover,
+.qa-results button:focus-visible {
+  background: var(--hover);
+}
+.qa-results button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.qa-results .t {
+  font-weight: 600;
+}
+.qa-results .s {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+.qa-source {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.qa-source p {
+  margin: 0;
+}
+.qa-filled,
+.qa-issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.qa-issues .issue {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+}
+.qa-issues .issue.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.qa-issues .issue.owned {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.qa-form {
+  display: grid;
+  gap: 0.9rem;
+}
+.qa-legend {
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0;
+  margin-bottom: 0.4rem;
+}
+.qa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem 0.8rem;
+}
+.qa-grid .field input,
+.qa-grid .field select {
+  width: 100%;
+}
+.qa-money {
+  display: flex;
+  gap: 0.3rem;
+}
+.qa-money input:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.qa-grid .field .qa-currency {
+  width: 3.6rem;
+  text-transform: uppercase;
+}
+.qa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.qa-session {
+  position: sticky;
+  top: calc(var(--header-h) + 1rem);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+  font-size: 0.9rem;
+}
+.qa-session h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+.qa-session ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.qa-session li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.qa-session .grade {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+@media (max-width: 900px) {
+  .quick-add {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .qa-session {
+    position: static;
+  }
+}

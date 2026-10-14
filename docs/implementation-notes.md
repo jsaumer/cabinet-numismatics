@@ -2778,6 +2778,25 @@ here has to respect:
   `detectMetal(composition)` through the `--metal-*` tokens (base metals
   share `--metal-base`), hollow for a wish-list piece; a sold row is struck
   through. The pills stay on the item page.
+- **A fact edits in place only through its `edit` spec**
+  (`components/inline-edit.tsx`): the field name, a kind (`text`, `number`,
+  `integer`, `date`, `grade`), and the raw stored value, never the
+  formatted one shown. `EditableValue` sends `PATCH /api/items/{id}` with
+  that one field, so the server's rules (the year-or-ND rule, serial traits,
+  `melt_on_save`) apply exactly as for the form; an empty field saves
+  `null`, and an unchanged one saves nothing. Year, denomination, and
+  country live in the title, not the facts, so they still change on the
+  form. Inside a disabled fieldset (a trashed piece) the value buttons are
+  disabled with it.
+- **The quick add shares the fill logic with the form.**
+  `fillFromNumista`/`issueFields` (`item-form/NumistaFill.tsx`) and
+  `fillFromCert` (`item-form/PcgsFill.tsx`) are the one mapping from a
+  Numista type or a PCGS cert onto `FormState`, used by the form's cards and
+  by `pages/QuickAdd.tsx`; the quick add saves through `toPayload` like the
+  form. `readLookup` decides what the box holds: `N#` or up to six digits is
+  a Numista type, seven or more digits (dashes allowed) a PCGS cert,
+  anything else a Numista name search. "Save and add another" keeps
+  `SHARED` (type, currency, date, seller, storage, tags) and nothing else.
 
 ## Releases
 

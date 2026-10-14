@@ -68,6 +68,7 @@ src/
                       mode, the drag, the catalogue and options dialogs)
   pages/              one file per route: Dashboard, ItemList (/collection
                       and /collection/:id, the list with the inspector),
+                      QuickAdd (/items/add, the lookup-first add),
                       ItemDetail, ItemForm, AddRun, Checklists, Pricing,
                       Stack, Report, Import, Trash, Settings, Setup, Login
     item-form/          the item form's parts: model.ts (form state,
@@ -372,6 +373,10 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   delete that stays in the list). Narrower, a row opens `/items/:id` as
   before. Keyboard handlers ignore keys typed into a field or while a dialog
   is open.
+- **Facts edit in place** through `components/inline-edit.tsx`: a fact in
+  `item-facts.tsx` with an `edit` spec (field, kind, the raw stored value)
+  becomes an `EditableValue` when the page passes `onSave`, which PATCHes
+  that one field. A new editable fact needs the spec and nothing else.
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 
@@ -381,7 +386,7 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
 filling itself, search (the piece opening beside the list, its tabs, and the
-keyboard), trash and restore, a note with a radar serial
+keyboard), a fact edited in place, the quick add, trash and restore, a note with a radar serial
 number getting its badge and its size and printer showing on the item page,
 a wishlist coin showing its target price, an
 undated piece taking ND with no year, a bar or round getting a suggested
