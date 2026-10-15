@@ -393,7 +393,8 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   sitting: README quick start plus `deployment.md` (secrets, reverse proxy +
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: `scripts/seed_demo.py` seeds a
-  16-item demo collection; screenshots are captured headlessly at a fixed
+  16-item demo collection (with public domain photos from Wikimedia
+  Commons, from the next release); screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs

@@ -8,6 +8,31 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Added
+
+- The demo collection (`scripts/seed_demo.py`) has photos: public domain
+  and CC0 images of 14 of its 16 pieces from Wikimedia Commons, each one's
+  source, license, and credit recorded beside its piece. Cabinet fetches
+  them through its own URL import while the seed runs, one at a time with
+  retries, since Commons refuses bursts; a photo that can't be fetched is a
+  warning, and `--no-photos` skips them. The two bullion pieces stay
+  without photos, since their designs are current and not free.
+
+### Changed
+
+- The demo's Egyptian 20 qirsh is dated 1916 and its 1902 National Bank
+  Note is from the Allentown National Bank, Pennsylvania, to match the
+  free photos of them.
+
+### Fixed
+
+- Importing a photo from a URL sends a `User-Agent` naming Cabinet, its
+  version, and the project's address. Wikimedia (and other hosts with the
+  same policy) throttled the bare `Cabinet` it sent before, so a few
+  imports in a row failed with HTTP 429.
+
 ## [0.35.2] - 2026-10-14
 
 ### Changed
