@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name is "Cabinet";
-the OpenAPI title is "Cabinet API." **Public on GitHub under MIT, released as v0.35.0, and deployed on the owner's
+the OpenAPI title is "Cabinet API." **Public on GitHub under MIT, released as v0.35.1, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -59,7 +59,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Conventions
 
-- Proper git project with maintained documentation. When behaviour changes,
+- Proper git project with maintained documentation. When behavior changes,
   update every affected document in the same commit, not only the changelog:
   `README.md` (features), `docs/api.md`, `docs/roadmap.md` (what shipped,
   what's next), `docs/implementation-notes.md`, `frontend/README.md`, and
@@ -74,6 +74,13 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 - No em dashes anywhere: UI text, messages, docs, comments, commit messages.
   Write the sentence so it doesn't need one (comma, colon, period,
   parentheses). An empty value in a table or field shows an en dash.
+- American spelling in everything a person reads: UI text, messages, docs,
+  the changelog, commit messages, and new comments (color, catalog,
+  customizable, demonetized, canceled, gray, license). Switched over in
+  v0.35.1. Identifiers and data stay as they are: `catalogue_fields`,
+  `routers/catalogue.py`, Numista's `catalogue` field, and the spreadsheet
+  import's "catalogue" header alias, so renaming those is never part of a
+  spelling fix.
 - Config via environment variables in `.env`; never commit real secrets.
   `.env.example` is the committed template.
 
@@ -96,7 +103,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
   frontend typecheck, and a compose build/migrate/smoke job that drives the
   API with curl (smoke test, backup → restore drill) and the pages with
   Playwright (`frontend/e2e/`, `npm run e2e` against a running stack,
-  `BASE_URL` for another host). When an endpoint's or a page's behaviour
+  `BASE_URL` for another host). When an endpoint's or a page's behavior
   changes, update those too; pytest won't catch them.
 - Demo data: `python scripts/seed_demo.py` against a running stack.
 - Price sources: `docker compose exec backend python scripts/check_sources.py
@@ -121,12 +128,12 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.35.0: roadmap Phase 7 is complete, migrations
+Released as v0.35.1: roadmap Phase 7 is complete, migrations
 `0001`–`0022` and `a0001`–`a0002`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
-demonetisation) and reworked the item page into a hero plus grouped facts,
+demonetization) and reworked the item page into a hero plus grouped facts,
 with ten more dashboard widgets from the "group C" survey. What each release added, and the rules it left behind, is in
 @docs/implementation-notes.md (read the section for any area you touch). The
 rules that bite most often:
@@ -191,7 +198,7 @@ rules that bite most often:
 - The bullion stack (`services/stack.py`) never calls out from the item save
   path: `spot_at_purchase` only ever arrives typed in or from the backfill.
   Purchase-day spot comes only from the CC0 fawazahmed0 currency-api, never
-  LBMA (its terms need a licence for valuation use).
+  LBMA (its terms need a license for valuation use).
 - In-app restore: only `maintenance.EXEMPT` (health, restore status) answers
   during one, and neither may touch the database; new loops use
   `maintenance.scheduled_task()`; `.restore-*` folders stay excluded from
@@ -231,12 +238,12 @@ unpack, database in one transaction, then the file swap; outcome and journal
 on the state volume; `RESTORE_ENABLED` / `RESTORE_MAX_GB`. Admin-only and
 password-confirmed from P8 A1 (v0.30.0); see "In-app restore" in the
 implementation notes.
-P10, a customisable dashboard, shipped in v0.27.0 (no migration):
+P10, a customizable dashboard, shipped in v0.27.0 (no migration):
 `services/dashboard.py` and `routers/dashboard.py`, `dashboard_layout` in
 `app_settings`, `/api/dashboard/layout` (`GET`/`PUT`/`DELETE`), and
 `frontend/src/dashboard/`; the default layout reproduces the old fixed
 page, reading is lenient and writing is strict, and the hand-written drag
-listens on `window` rather than the handle; see "A customisable dashboard"
+listens on `window` rather than the handle; see "A customizable dashboard"
 in the implementation notes.
 P7, bullion stack figures, shipped in v0.28.0 (migration `0020`):
 `services/stack.py` and `routers/stack.py`, `/api/stack` and
@@ -244,7 +251,7 @@ P7, bullion stack figures, shipped in v0.28.0 (migration `0020`):
 and server-set `spot_at_purchase_source` on the item, `spot_alerts` /
 `spot_alert_state` in settings, and the `stack` dashboard widget;
 purchase-day spot comes only from the CC0 fawazahmed0 currency-api (never
-LBMA, whose terms need a licence for valuation), cached ten years and
+LBMA, whose terms need a license for valuation), cached ten years and
 refusing today; a typed value is never overwritten by the hourly backfill;
 see "Bullion stack figures" in the implementation notes.
 Note details, the item page, and P10's "group C" widgets shipped in v0.29.0
@@ -295,7 +302,7 @@ each file on the fly); an in-app restore keeps the live `share_links` and
 both logs (the backend's `uvicorn.access` filter and nginx's own
 `access_log` rewrite the path to `[token]`). The security review that set
 those rules is kept outside the repository (reviews are local from
-v0.33.0; SPEC_0320 summarises its findings). An authenticating
+v0.33.0; SPEC_0320 summarizes its findings). An authenticating
 reverse proxy kept in front must
 exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or it
 blocks the app's own share links; see "Share and showcase view" in the
@@ -330,7 +337,7 @@ the internet, whatever sign-in method or gateway sits in front, and the
 same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
 and `.env.example`. Review briefs and reviews stay local (gitignored), as
 they have since v0.33.0's spec was reviewed.
-**v0.34.0 (14 October 2026)** shipped the workbench layout: a sidebar shell, the collection as a list with the selected piece in an inspector, facts edited in place, and a lookup-first quick add at `/items/add`; see "The workbench layout" in the implementation notes. v0.34.1 put the dashboard first in the sidebar and made the list's Piece, Grade, and Value headings sort it (`sort=name` mirrors the row title). v0.35.0 added four colour themes (Bronze, Silver, Album, Ledger) chosen in Settings → General and saved through `/api/appearance`; a theme lives in four places that must agree, see "Colour themes" in the implementation notes.
+**v0.34.0 (14 October 2026)** shipped the workbench layout: a sidebar shell, the collection as a list with the selected piece in an inspector, facts edited in place, and a lookup-first quick add at `/items/add`; see "The workbench layout" in the implementation notes. v0.34.1 put the dashboard first in the sidebar and made the list's Piece, Grade, and Value headings sort it (`sort=name` mirrors the row title). v0.35.0 added four color themes (Bronze, Silver, Album, Ledger) chosen in Settings → General and saved through `/api/appearance`; a theme lives in four places that must agree, see "Color themes" in the implementation notes.
 **Next, in order:** the road to v1.0.0's remaining items (a CI check
 against a breaking OpenAPI change, "Add a run" and the Numista banknote
 mapping confirmed against a live account, and a README and quick-start

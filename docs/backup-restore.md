@@ -144,7 +144,7 @@ encrypts every archive and keys its MAC.
   docker compose run --rm backend python -m app.cli backup-key new
   ```
 
-  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.35.0
+  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.35.1
   python -m app.cli backup-key new` where the stack isn't running). It
   prints a key in `age-keygen`'s format: save the whole output as the
   secret file, or put the `AGE-SECRET-KEY-1...` line in `BACKUP_KEY`. Keep
@@ -185,7 +185,7 @@ encrypts every archive and keys its MAC.
   where your backup key is stored relative to your backups" (**not
   verified**: two folders on one filesystem, whose parent may be shared; a
   network or FUSE filesystem, whose server may export them together; or
-  anything Cabinet doesn't recognise). A default Compose install, with both
+  anything Cabinet doesn't recognize). A default Compose install, with both
   volumes on the host's one disk, reads **not verified**: true, since
   Cabinet can't see how that disk is shared. A supplied key needs no check. The same check covers the
   generated `SECRET_KEY` file. For any deployment whose backups leave the
@@ -264,7 +264,7 @@ backup).
    nobody can quietly roll the collection back. "Older" compares the
    archive's own verified creation time with the newest in the record of
    archives (`cabinet_auth.backup_ledger`, which no restore rewrites), and
-   an archive is recognised by its verified MAC, never its file name or file
+   an archive is recognized by its verified MAC, never its file name or file
    time: renaming an old archive, giving it a new file time, or pruning its
    record doesn't make it newest. The run checks again from the archive
    itself, restoring an older one sends an alert, and after a failed run
@@ -588,7 +588,7 @@ Settings → Sharing, as above.
 From v0.32.0 no photo is stored with its metadata: an upload, a URL import,
 and an image saved from the in-browser editor are re-encoded with the
 orientation applied and every EXIF block (GPS, camera, dates), XMP, IPTC,
-comment, and PNG text chunk dropped; the colour profile stays. Thumbnails
+comment, and PNG text chunk dropped; the color profile stays. Thumbnails
 are written the same way. So new archives carry none either. Photos stored
 before that are cleaned once: on the first start after the upgrade (whether
 or not `AUTO_MIGRATE` is on; the pass needs no database) a background pass

@@ -693,7 +693,7 @@ export default function ItemForm() {
             {!isBullion &&
               text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
             {!isBullion &&
-              text("demonetized_on", "Demonetised on", {
+              text("demonetized_on", "Demonetized on", {
                 type: "date", title: "The date it stopped being legal tender",
               })}
             {isNote && (

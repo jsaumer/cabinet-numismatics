@@ -269,7 +269,7 @@ export function ItemFacts({
         { label: "Printer", value: item.printer, forType: "note", edit: text("printer", item.printer) },
         { label: "Watermark", value: item.watermark, forType: "note", edit: text("watermark", item.watermark) },
         {
-          label: "Demonetised",
+          label: "Demonetized",
           value: item.demonetized_on ? date(item.demonetized_on) : null,
           forType: ["coin", "note"],
           edit: { field: "demonetized_on", kind: "date", raw: item.demonetized_on },

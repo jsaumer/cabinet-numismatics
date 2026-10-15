@@ -8,12 +8,27 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.35.1] - 2026-10-14
+
+### Changed
+
+- American spelling throughout the interface and the docs: color,
+  catalog, customizable, demonetized, canceled, gray, license, and the
+  rest. In the app that touches the Theme help in Settings, Silver's
+  description, the Demonetized field and its form label, the catalog
+  wording on the Numista fill, Add a run, and Import, the data-health
+  check "No catalog reference", the spreadsheet mapping's "Catalog numbers"
+  field, and the canceled-confirmation and canceled-sign-in messages. Code
+  names and Numista's own field names are unchanged, and a spreadsheet
+  column headed "catalogue" still maps to catalog references. The rule is
+  in CLAUDE.md.
+
 ## [0.35.0] - 2026-10-14
 
 ### Added
 
-- Colour themes. Settings → General has a Theme row of four cards: Bronze
-  (the default, today's look), Silver (cool steel greys, a pewter-blue
+- Color themes. Settings → General has a Theme row of four cards: Bronze
+  (the default, today's look), Silver (cool steel grays, a pewter-blue
   accent), Album (a cabinet drawer's green baize, a brass accent), and
   Ledger (ink on white, one oxblood accent, under a light header). A choice
   applies at once and is saved on the server, so it follows you to every
@@ -24,7 +39,7 @@ applies them itself on startup; for earlier releases, run
 
 ### Fixed
 
-- Bronze's muted grey text in light mode (subtitles, labels, counts) was
+- Bronze's muted gray text in light mode (subtitles, labels, counts) was
   3.41:1 against a card, under WCAG AA's 4.5:1; it is a step darker.
 
 ### Changed
@@ -73,7 +88,7 @@ applies them itself on startup; for earlier releases, run
   (`/collection/<id>`, the filters kept), its sections behind Overview,
   Value, Photos and files, and History tabs; J and K move, Enter opens the
   full page, E edits, N adds, Esc closes. The type mark is a small shape
-  coloured by metal (hollow for the wish list); sold rows are struck
+  colored by metal (hollow for the wish list); sold rows are struck
   through. Less-used filters fold behind "More filters".
 - Edit in place: on the item page and in the inspector, a fact turns into a
   field on click (the grade a select of its scale); Enter or leaving the
@@ -357,7 +372,7 @@ deployment omission; both are closed here.
   from disk as it was, metadata included. A file like that only arrives
   after upload (damage on the volume, a `restore.sh` interrupted while
   unpacking photos, a file copied onto the volume by hand), and the pass
-  logs each one, but the marker is now only an optimisation: the share
+  logs each one, but the marker is now only an optimization: the share
   route serves a file from disk only when a header-only check finds no
   metadata and, for a JPEG, no trailer after the image; anything else is
   re-encoded on the fly or refused, as before the marker. A pass that was
@@ -392,7 +407,7 @@ Roadmap Phase 7, P9: the share and showcase view
   link is never throttled; failed lookups answer `429` rather than `404`
   per address past 20 (an IPv6 address by its /64) and past 300 a minute
   overall, in a throttle kept apart from sign-in's (it doesn't slow
-  guessing: the 256-bit token is the defence). Every answer carries
+  guessing: the 256-bit token is the defense). Every answer carries
   `X-Robots-Tag: noindex, nofollow`, a shared photo carries no file time
   (`Last-Modified`, `ETag`), and no public route makes a network call.
 - **Managing links**: `GET`/`POST /api/share-links`, `PATCH` and `DELETE
@@ -446,7 +461,7 @@ Roadmap Phase 7, P9: the share and showcase view
   link can now show a full-size photo to anyone holding it. Every upload,
   URL import, and edited image is re-encoded before it is stored: turned
   upright, with every EXIF block, XMP, IPTC, comment, and PNG text chunk
-  dropped and the colour profile kept (JPEG at quality 95; an animated
+  dropped and the color profile kept (JPEG at quality 95; an animated
   image keeps its first frame). Thumbnails are written the same way.
   Photos already stored, thumbnails included (an older thumbnail could
   carry the photo's JPEG comment), are all re-encoded once, in the
@@ -492,7 +507,7 @@ Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
   serial traits. The list's `type=` filter and bulk edit accept it; the type
   breakdown and `/api/metrics` pick it up automatically. Filling an item in
   from Numista, and both the account and file imports, now take a bar or
-  round from Numista's exonumia catalogue (still refusing tokens and
+  round from Numista's exonumia catalog (still refusing tokens and
   medals), and a spreadsheet's Type column reads "bar", "round", "ingot",
   or "bullion" the same way.
 - **The bullion type on the frontend.** The item form's type choice gains
@@ -506,7 +521,7 @@ Roadmap Phase 7, P11: bars and rounds ([SPEC_0310](docs/specs/SPEC_0310.md)).
   own fields (refiner, weight, fineness, size, shape, serial number) and
   hide the coin- and note-only ones. The list's type filter and bulk edit,
   and the dashboard's value hero and type breakdown, all know "Bars and
-  rounds"; the Numista fill searches its exonumia catalogue for a bullion
+  rounds"; the Numista fill searches its exonumia catalog for a bullion
   piece and shows what kind of object each hit is.
 - **A value from the start.** A new bullion piece (or any precious-metal
   item) gets a melt estimate without a button press: saving an item adds one
@@ -809,7 +824,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   notes and anything else not round; coins keep `diameter_mm`), `printer`,
   `watermark`, and `demonetized_on` (coins and notes alike). `q` search also
   matches `printer`. "Fill from Numista" fills all five for a banknote type
-  when the catalogue gives them. Migration `0021`.
+  when the catalog gives them. Migration `0021`.
 - **Ten more dashboard widgets** (the roadmap's "group C"): Most valuable,
   Piece of the day, Oldest piece, Newest acquisition, On this day, Photo
   mosaic, Certified share, Value spread, Population highlights, and Data
@@ -860,7 +875,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 ### Added
 - **Undated pieces (ND).** Year is now optional: tick "ND (no date on the
   piece)" on the item form for a piece that carries no date, with an
-  optional attributed year the way catalogues write it ("ND" or
+  optional attributed year the way catalogs write it ("ND" or
   "ND (1951)"). Migration `0019` makes `items.year` nullable and adds
   `items.year_nd`; a year of 0, the workaround people typed when the field
   was required, becomes `year_nd = true` with a null year on upgrade. Every
@@ -887,7 +902,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   rare, unpriced replacement note, and the estimate failed with "no priced
   grade" even though the common issue was priced. Same-year issues are now
   ranked (mint letter, replacement agreement with the item's own
-  replacement flag, a match on the item's catalogue reference, variety, or
+  replacement flag, a match on the item's catalog reference, variety, or
   signatures, then ND agreement) and tried in order, up to four, until one
   prices; the estimate's details record which one it used ("Priced as" on
   the item page).
@@ -901,7 +916,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 ## [0.27.0] - 2026-09-20
 
 ### Added
-- **A customisable dashboard** (roadmap Phase 7, P10). The dashboard is now
+- **A customizable dashboard** (roadmap Phase 7, P10). The dashboard is now
   an ordered list of widgets you can add, remove, resize (full, half, or a
   third of the row), duplicate, retitle, and set options on, then arrange by
   drag or with move-earlier/move-later buttons; a keyboard path (Space or
@@ -988,11 +1003,11 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 ### Fixed
 - **Dashboard bar charts start at the left edge of their card.** Labels sat
   right-aligned in a fixed-width gutter, so with short labels the whole
-  chart looked centred in the tile. The label column now fits the longest
+  chart looked centered in the tile. The label column now fits the longest
   label and reads from the left.
 - The Pick and Friedberg lookup links didn't appear on a note filled from
-  Numista, which writes Pick as `p: P#109`. The links now recognise the
-  short catalogue names (`p`, `fr`) and search for the bare number.
+  Numista, which writes Pick as `p: P#109`. The links now recognize the
+  short catalog names (`p`, `fr`) and search for the bare number.
 
 ## [0.25.0] - 2026-09-20
 
@@ -1015,7 +1030,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 - **Paper money depth.** Notes gain a charter number, bank city, bank state,
   and plate position for National Bank Notes; search matches the charter
   number and the bank city as well as the issuer. The form suggests `pick`
-  and `friedberg` as catalogues for a note, and the item page links to a web
+  and `friedberg` as catalogs for a note, and the item page links to a web
   search for either number. The dashboard lists owned notes by series and
   signature pair.
 - **Fancy serial numbers.** Cabinet reads a note's serial number and badges
@@ -1124,15 +1139,15 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   default; Settings, the cert fill, and the docs now say 100 (more on
   request from PCGS), and Settings warns when a weekly refresh would need
   more than a day allows.
-- The docs cited the wrong clause of Numista's API licence for the 7-day
-  cache: §8.3 covers only catalogue metadata, and §8.4 (personal projects)
+- The docs cited the wrong clause of Numista's API license for the 7-day
+  cache: §8.3 covers only catalog metadata, and §8.4 (personal projects)
   is what permits a self-hosted cache at all.
 
 ## [0.24.3] - 2026-09-20
 
 ### Fixed
-- The header's subtitle, navigation, and icons sat above centre once the
-  logo made the wordmark taller; everything in the header is centred again.
+- The header's subtitle, navigation, and icons sat above center once the
+  logo made the wordmark taller; everything in the header is centered again.
 
 ## [0.24.2] - 2026-09-20
 
@@ -1163,7 +1178,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   header, and a serif for the wordmark, page titles, and the dashboard's
   headline value. The serif comes from fonts already on your system, so
   nothing is downloaded. Card headings are small capitals, so page titles
-  clearly outrank them. Gain and loss colours and the badges are unchanged.
+  clearly outrank them. Gain and loss colors and the badges are unchanged.
   Screenshots retaken.
 - **Money reads as money**: `$2,733.42`, `CA$253.92`, `€52.00` instead of
   `2,733.42 USD`, everywhere an amount is shown. List columns no longer wrap
@@ -1226,7 +1241,7 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
   the dates and mints you have, fill in what they share (status, grade,
   date and price paid for each, source, storage, set, tags), and get one item
   per issue, each with the type's country, denomination, composition,
-  weight, and catalogue references plus its own year, mint mark, and
+  weight, and catalog references plus its own year, mint mark, and
   mintage. Issues you already own are marked and skipped. A fifty-coin run is
   one form instead of fifty.
 - **Checklists that fill themselves.** Generate a checklist from a Numista
@@ -1248,13 +1263,13 @@ Roadmap Phase 7, P8 A1: sign-in and encrypted backups.
 - **Fill from a PCGS cert.** A slabbed coin's cert number fills the item
   form in from PCGS: type, country, denomination, year, mint mark, series,
   variety, composition, weight, diameter, edge, mintage, the cert, the PCGS
-  number as a catalogue reference, and, when no grade is set, the grade,
+  number as a catalog reference, and, when no grade is set, the grade,
   strike, plus, and designations. Empty fields only, like the Numista fill;
   the same cached answer prices the item afterwards, so one request covers
   both. The message also says how many PCGS has graded at that grade and
   higher. Needs a PCGS API token (Settings → Price sources).
 - **A duplicate warning.** As an item is entered or edited, the form checks
-  for one already here with the same cert number, the same catalogue
+  for one already here with the same cert number, the same catalog
   reference, or the same country, denomination, year, and mint mark
   (trash included), and links to it. The import preview adds the same note
   to rows it doesn't already know by their import key.
@@ -1401,17 +1416,17 @@ container, where a redeploy would lose them.
   `¼ Dollar "Washington Quarter"` as well as `1 Dollar - Eisenhower`; the
   quoted form was taken whole as the series. Now the name becomes the series
   and the rest the denomination, for the account import and the export file.
-- **Importing your Numista collection brings the type's other catalogue
+- **Importing your Numista collection brings the type's other catalog
   numbers** (KM#, Schön#, Pick#…) along with the Numista number, from the same
-  catalogue lookup, as "Fill from Numista" on the item form already did.
+  catalog lookup, as "Fill from Numista" on the item form already did.
 - The preview no longer says a denomination was "taken from the type's title"
-  when the import is about to fill it in from Numista's catalogue; it says so.
+  when the import is about to fill it in from Numista's catalog; it says so.
 
 ## [0.18.1] - 2026-09-18
 
 ### Fixed
 - **A Cabinet export imports in full from the Import page**, as CSV *or*
-  Excel. It's recognised by its columns and read with every field (grades
+  Excel. It's recognized by its columns and read with every field (grades
   with designations, sets, custom fields, sale details…), with a preview
   like the other formats. The export's item id is the import key, so
   importing the same export twice (into this Cabinet or another) skips
@@ -1437,7 +1452,7 @@ container, where a redeploy would lose them.
     account with the API key already in Settings: grade, quantity, price
     paid, acquisition date and place, storage, comments, and slab details
     (grading company, slab grade, number, CAC sticker, designations). It
-    fills in denomination, composition, weight, and size from the catalogue
+    fills in denomination, composition, weight, and size from the catalog
     (one request per type, cached a week). Pictures can be downloaded too
     (off by default). Tokens and medals aren't imported.
   - **Numista's export file** (CSV or Excel), read by column name.
@@ -1495,8 +1510,8 @@ container, where a redeploy would lose them.
   `comparables`. Migration `0013` adds the `comparables` table.
 
 ### Changed
-- Numista catalogue data (a type, its issues, and searches) is cached for 7
-  days instead of 30, the longest Numista's API licence allows.
+- Numista catalog data (a type, its issues, and searches) is cached for 7
+  days instead of 30, the longest Numista's API license allows.
 
 ## [0.16.0] - 2026-09-18
 
@@ -1527,14 +1542,14 @@ container, where a redeploy would lose them.
 ## [0.15.0] - 2026-09-15
 
 ### Added
-- **Fill an item in from the Numista catalogue.** The item form's new
+- **Fill an item in from the Numista catalog.** The item form's new
   **Fill from Numista** card takes a Numista number (`N#1493`, or just
   `1493`) or a name search, and fills the fields that are still empty:
   country, denomination, series, composition, fineness (read from the
   composition for precious metals), weight, diameter, thickness, edge, and
   shape for coins; country, denomination, and issuing bank for notes; the
   year when the type has only one. It adds the Numista number and the type's
-  other catalogue references (KM, Pick…) as catalog refs, and lists the
+  other catalog references (KM, Pick…) as catalog refs, and lists the
   type's issues so picking one sets the year, mint mark, and mintage.
   API: `GET /api/numista/search?q=&category=` and
   `GET /api/numista/types/{id}`.
@@ -1752,7 +1767,7 @@ After upgrading, run `alembic upgrade head` (revision `0010`).
   item page shows a button per configured source. Requires a free Numista API
   key in Settings; the source stays off until you switch it on.
 - New `source_cache` table (revision `0009`) caching upstream price-source
-  responses (Numista catalogue data for 30 days, prices for 7), so repeated
+  responses (Numista catalog data for 30 days, prices for 7), so repeated
   estimates don't burn the free tier's 2,000 requests a month. A stale entry
   is preferred to a failed request, matching how spot prices and exchange
   rates behave.
