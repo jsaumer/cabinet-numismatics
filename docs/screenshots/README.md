@@ -84,7 +84,7 @@ shoot() {
     -v "$PWD/frontend:/app" -v "$PWD/docs/screenshots:/out" \
     -e CABINET_USER=owner -e CABINET_PASSWORD='correct horse battery' \
     -e SHARE_TOKEN="$SHARE_TOKEN" \
-    mcr.microsoft.com/playwright:v1.63.0-noble sh -c \
+    mcr.microsoft.com/playwright:v1.64.0-noble sh -c \
     "apt-get update -qq && apt-get install -y -qq fonts-crosextra-carlito >/dev/null && node /out/capture.cjs $*"
 }
 ```

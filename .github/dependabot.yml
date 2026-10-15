@@ -5,10 +5,14 @@ updates:
     schedule:
       interval: monthly
     open-pull-requests-limit: 5
-    ignore:
-      # pydantic pins pydantic-core exactly; it moves when pydantic does,
-      # and a bump of its own can never install.
-      - dependency-name: pydantic-core
+    groups:
+      # pydantic pins pydantic-core exactly, so neither can move alone: one
+      # pull request moves both. (Ignoring pydantic-core instead, as 0.34.0
+      # did, left every pydantic bump unable to install.)
+      pydantic:
+        patterns:
+          - pydantic
+          - pydantic-core
 
   - package-ecosystem: npm
     directory: /frontend
