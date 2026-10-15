@@ -144,7 +144,7 @@ encrypts every archive and keys its MAC.
   docker compose run --rm backend python -m app.cli backup-key new
   ```
 
-  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.33.4
+  (or `docker run --rm ghcr.io/jsaumer/cabinet-numismatics-backend:0.34.0
   python -m app.cli backup-key new` where the stack isn't running). It
   prints a key in `age-keygen`'s format: save the whole output as the
   secret file, or put the `AGE-SECRET-KEY-1...` line in `BACKUP_KEY`. Keep
