@@ -347,6 +347,29 @@ test("the security headers are set and nothing trips the policy", async ({ page 
   expect(violations).toEqual([]);
 });
 
+test("a theme chosen in Settings applies at once, survives a reload, and goes back", async ({ page }) => {
+  await page.goto("/settings/general");
+  const html = page.locator("html");
+  const album = page.getByRole("radio", { name: /^Album/ });
+  await album.click();
+  await expect(album).toHaveAttribute("aria-checked", "true");
+  await expect(html).toHaveAttribute("data-palette", "album");
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+
+  // Saved on the server: a fresh page in a new context, no browser copy, still shows it.
+  const other = await page.context().browser()!.newContext({ storageState: await page.context().storageState() });
+  const fresh = await other.newPage();
+  await fresh.addInitScript(() => localStorage.removeItem("cabinet.palette"));
+  await fresh.goto("/collection");
+  await expect(fresh.locator("html")).toHaveAttribute("data-palette", "album");
+  await other.close();
+
+  await page.getByRole("radio", { name: /^Bronze/ }).click();
+  await expect(html).toHaveAttribute("data-palette", "bronze");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: /^Bronze/ })).toHaveAttribute("aria-checked", "true");
+});
+
 test("every Settings section renders, with the version", async ({ page }) => {
   for (const [path, name] of [
     ["/settings/general", "General"],

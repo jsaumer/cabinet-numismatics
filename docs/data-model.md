@@ -93,7 +93,9 @@ for in-app backups, `trash_retention_days` for the trash, and
 plus the service-written `refresh_last_run`/`alert_state` for alerts and
 metrics, `dashboard_layout` (v0.27.0, the customisable dashboard) for
 the saved widget layout, written only by `/api/dashboard/layout`, never by
-`PUT /api/settings`, and `spot_alerts` (v0.28.0, bullion stack figures: a
+`PUT /api/settings`, `ui_theme` (v0.35.0, the colour theme: `bronze`,
+`silver`, `album`, or `ledger`), written only by `/api/appearance`, and
+`spot_alerts` (v0.28.0, bullion stack figures: a
 list of spot-price thresholds, at most 12) with the service-written
 `spot_alert_state` (per threshold, whether it is currently met). From
 v0.30.0 the service-written `secrets_cleared` (the keys of stored secrets

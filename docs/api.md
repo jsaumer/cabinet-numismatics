@@ -1138,6 +1138,21 @@ an in-app restore treats them like sign-in data: the live links and the
 `share_enabled` switch are put back after the archive's database is in
 place, whatever the archive held. See [Restore](#restore).
 
+## Appearance
+
+| Method | Path              | Purpose                                  |
+|--------|-------------------|------------------------------------------|
+| `GET`  | `/api/appearance` | The colour theme and the themes on offer |
+| `PUT`  | `/api/appearance` | Choose the theme                         |
+
+v0.35.0. `GET` (read) answers `{"theme": "bronze", "themes": ["bronze",
+"silver", "album", "ledger"]}`; a stored theme this build doesn't offer reads
+as `bronze`. `PUT` (admin, but not fresh, like the dashboard layout) takes
+`{"theme": "<one of themes>"}` and answers the same shape; anything else is
+422. The theme is stored under `ui_theme` in `app_settings`, so backups carry
+it, and it is not part of `GET`/`PUT /api/settings`. Light or dark is not
+here: that stays a per-browser choice on the header's toggle.
+
 ## Settings
 
 | Method | Path             | Purpose                                          |

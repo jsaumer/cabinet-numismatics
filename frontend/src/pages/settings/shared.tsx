@@ -56,15 +56,18 @@ export function SettingRow({
   label,
   help,
   htmlFor,
+  stacked = false,
   children,
 }: {
   label: ReactNode;
   help?: ReactNode;
   htmlFor?: string; // the control's id, so the label focuses it
+  /** A control too wide to sit beside its label (the theme cards) goes under it. */
+  stacked?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="setting-row">
+    <div className={stacked ? "setting-row stacked" : "setting-row"}>
       <div className="setting-row-text">
         {htmlFor ? (
           <label className="setting-row-label" htmlFor={htmlFor}>
