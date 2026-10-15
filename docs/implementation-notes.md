@@ -2778,6 +2778,13 @@ here has to respect:
   `detectMetal(composition)` through the `--metal-*` tokens (base metals
   share `--metal-base`), hollow for a wish-list piece; a sold row is struck
   through. The pills stay on the item page.
+- **The list's title and `sort=name` must agree.** The row title is built in
+  `ItemList.tsx` (year label, mint mark, denomination; refiner or country
+  and product name for bullion) and `routers/items._name_key` builds the
+  same text in SQL for `sort=name` (v0.34.1). Change one, change the other,
+  or Piece A to Z stops reading in the order shown. The Piece, Grade, and
+  Value headings are `SortHeading` buttons writing `sort` to the URL like
+  the Sort menu, so the two never disagree.
 - **A fact edits in place only through its `edit` spec**
   (`components/inline-edit.tsx`): the field name, a kind (`text`, `number`,
   `integer`, `date`, `grade`), and the raw stored value, never the

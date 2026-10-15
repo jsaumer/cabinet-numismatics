@@ -109,11 +109,13 @@ Dark is the default; the header toggle switches to light and remembers it.
   place.
 - **A workbench layout**: a sidebar holds every way into the collection
   (owned, wish list, sold, the trash), each checklist with its progress, and
-  the insights pages; the header has a search box (`/` to focus it) and Add
-  piece. On a wide screen the collection is a compact list with the selected
-  piece open beside it, its sections behind Overview, Value, Photos and
-  files, and History tabs, and the keyboard moves through it (J and K,
-  Enter to open the full page, E to edit, N for a new piece, Esc to close).
+  the insights pages, with the dashboard (the home page) first; the header
+  has a search box (`/` to focus it) and Add piece. The Piece, Grade, and
+  Value headings sort the list either way. On a wide screen the collection
+  is a compact list with the selected piece open beside it, its sections
+  behind Overview, Value, Photos and files, and History tabs, and the
+  keyboard moves through it (J and K, Enter to open the full page, E to
+  edit, N for a new piece, Esc to close).
 - **Edit in place**: on the item page and beside the list, a fact (grade,
   series, mint mark, weight, fineness, paid, storage, and two dozen more)
   turns into a field on click; Enter or leaving it saves, Esc puts it back.
