@@ -3,7 +3,9 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 
 import { MoonIcon, SunIcon } from "./components/icons";
 import { Sidebar } from "./components/sidebar";
-import { applyTheme, initialTheme } from "./components/theme";
+import { applyPalette, applyTheme, initialTheme } from "./components/theme";
+import { isThemeKey } from "./themes";
+import { api } from "./api";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AuthBrand } from "./auth/Brand";
 import { CONFIRM_MARKER, ConfirmDialogHost } from "./auth/ConfirmDialog";
@@ -123,6 +125,17 @@ function AuthedApp({
   setTheme: (fn: (t: "light" | "dark") => "light" | "dark") => void;
 }) {
   const { me, signOut } = useAuth();
+
+  // The server holds the theme; the copy in this browser only covers the
+  // moments before sign-in. A failed read keeps whatever is showing.
+  useEffect(() => {
+    api
+      .appearance()
+      .then((a) => {
+        if (isThemeKey(a.theme)) applyPalette(a.theme);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <>

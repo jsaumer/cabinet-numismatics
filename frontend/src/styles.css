@@ -11,7 +11,7 @@
   --border-soft: #ebe5d8;
   --ink: #26221c;
   --ink-2: #5f584c;
-  --ink-3: #91897a;
+  --ink-3: #7a7263; /* 4.5:1 on a card; #91897a was 3.4 (v0.35.0) */
   --link: #6d4f14;
   --header-bg: #211d17;
   --header-ink: #ffffff;
@@ -78,6 +78,175 @@
   --chart-grid: #2c2c2a;
   --chart-axis: #383835;
   --chart-muted: #898781;
+}
+
+
+/* Colour themes (v0.35.0). Bronze is the two blocks above; each other theme
+   redefines the same tokens, light then dark, chosen in Settings and set as
+   data-palette on <html> (components/theme.ts). Every pair that has to read
+   was checked to WCAG AA (4.5:1 text, 3:1 bars and accents). The keys must
+   match routers/appearance.THEMES and src/themes.ts. */
+:root[data-palette="silver"] {
+  --page: #f3f4f6;
+  --surface: #ffffff;
+  --surface-alt: #eceef1;
+  --hover: #e6e9ed;
+  --border: #d3d8de;
+  --border-soft: #e4e7eb;
+  --ink: #1d2127;
+  --ink-2: #4f5763;
+  --ink-3: #6c7480;
+  --link: #3f5370;
+  --header-bg: #1f242b;
+  --header-ink: #ffffff;
+  --header-muted: #a4adb8;
+  --header-rule: #8a96a5;
+  --accent: #4a5a70;
+  --accent-ink: #ffffff;
+  --chip-bg: #e7ebf0;
+  --series: #5e6f86;
+  --gain: #17663a;
+  --loss: #b3261e;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
+}
+:root[data-palette="silver"][data-theme="dark"] {
+  --page: #0f1114;
+  --surface: #171a1f;
+  --surface-alt: #1e2228;
+  --hover: #252a31;
+  --border: #343b45;
+  --border-soft: #262c34;
+  --ink: #e6e9ee;
+  --ink-2: #b5bdc8;
+  --ink-3: #8a939f;
+  --link: #a9bdd6;
+  --header-bg: #0b0d10;
+  --header-ink: #ffffff;
+  --header-muted: #8a939e;
+  --header-rule: #6f7c8c;
+  --accent: #9fb2c9;
+  --accent-ink: #10141a;
+  --chip-bg: #232932;
+  --series: #9fb2c9;
+  --gain: #4cc27a;
+  --loss: #ef7b72;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
+}
+:root[data-palette="album"] {
+  --page: #f2f5f2;
+  --surface: #fbfdfb;
+  --surface-alt: #e8efe9;
+  --hover: #e1eae3;
+  --border: #cbd8cf;
+  --border-soft: #dfe8e2;
+  --ink: #17221c;
+  --ink-2: #48584e;
+  --ink-3: #66766c;
+  --link: #6e5312;
+  --header-bg: #1d3a2e;
+  --header-ink: #f4f1e6;
+  --header-muted: #a9c2b4;
+  --header-rule: #b8963e;
+  --accent: #2f5d48;
+  --accent-ink: #ffffff;
+  --chip-bg: #e3ece6;
+  --series: #3f7a5f;
+  --gain: #1d6b3e;
+  --loss: #a8322b;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
+}
+:root[data-palette="album"][data-theme="dark"] {
+  --page: #0d1612;
+  --surface: #13201a;
+  --surface-alt: #192a22;
+  --hover: #1f3329;
+  --border: #2c4438;
+  --border-soft: #213429;
+  --ink: #e6eee9;
+  --ink-2: #b2c4ba;
+  --ink-3: #859a8e;
+  --link: #d7b765;
+  --header-bg: #0a120e;
+  --header-ink: #f4f1e6;
+  --header-muted: #8fa79a;
+  --header-rule: #b8963e;
+  --accent: #c9a755;
+  --accent-ink: #17140a;
+  --chip-bg: #1d3027;
+  --series: #c9a755;
+  --gain: #5cc48a;
+  --loss: #e47b70;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
+}
+:root[data-palette="ledger"] {
+  --page: #f6f6f4;
+  --surface: #ffffff;
+  --surface-alt: #efefec;
+  --hover: #e9e9e5;
+  --border: #d6d6d0;
+  --border-soft: #e6e6e1;
+  --ink: #111111;
+  --ink-2: #4a4a46;
+  --ink-3: #6b6b66;
+  --link: #7d2e2e;
+  --header-bg: #ffffff;
+  --header-ink: #111111;
+  --header-muted: #5f5f5a;
+  --header-rule: #111111;
+  --accent: #7d2e2e;
+  --accent-ink: #ffffff;
+  --chip-bg: #ececE7;
+  --series: #3b3b38;
+  --gain: #1f6b3a;
+  --loss: #c0362c;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
+}
+:root[data-palette="ledger"][data-theme="dark"] {
+  --page: #121212;
+  --surface: #1a1a1a;
+  --surface-alt: #212121;
+  --hover: #282828;
+  --border: #383838;
+  --border-soft: #2a2a2a;
+  --ink: #ededeb;
+  --ink-2: #b8b8b4;
+  --ink-3: #8d8d88;
+  --link: #e08a80;
+  --header-bg: #0b0b0b;
+  --header-ink: #ffffff;
+  --header-muted: #8e8e8a;
+  --header-rule: #e08a80;
+  --accent: #d77b70;
+  --accent-ink: #1a0d0b;
+  --chip-bg: #262626;
+  --series: #cfcfcb;
+  --gain: #4fbf7a;
+  --loss: #ef6a5e;
+  --chip-ref-bg: var(--chip-bg);
+  --danger: var(--loss);
+  --danger-border: color-mix(in srgb, var(--loss) 40%, var(--surface));
+  --chart-grid: color-mix(in srgb, var(--ink) 12%, var(--surface));
+  --chart-axis: color-mix(in srgb, var(--ink) 25%, var(--surface));
 }
 
 * {
@@ -1934,8 +2103,8 @@ main {
 }
 .header-search input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: color-mix(in srgb, var(--header-ink) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--header-ink) 18%, transparent);
   color: var(--header-ink);
   padding: 0.4rem 2rem 0.4rem 0.7rem;
   border-radius: 6px;
@@ -1948,7 +2117,7 @@ main {
 .header-search input:focus {
   outline: none;
   border-color: var(--header-rule);
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--header-ink) 10%, transparent);
 }
 .header-search kbd {
   position: absolute;
@@ -1956,7 +2125,7 @@ main {
   top: 50%;
   transform: translateY(-50%);
   color: var(--header-muted);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: color-mix(in srgb, var(--header-ink) 22%, transparent);
   background: transparent;
 }
 .site-header a.header-add {
@@ -2708,4 +2877,82 @@ button.wb-sort:focus-visible {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Settings → General's theme cards (v0.35.0). */
+.theme-picker {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
+}
+button.theme-card {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+button.theme-card:hover {
+  border-color: var(--ink-3);
+}
+button.theme-card.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+button.theme-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.theme-swatches {
+  display: flex;
+  height: 1.1rem;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.theme-swatches i {
+  flex: 1;
+}
+.theme-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.theme-about {
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  line-height: 1.3;
+}
+@media (max-width: 700px) {
+  .theme-cards {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+}
+.setting-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.setting-row.stacked .setting-row-text {
+  flex: none;
+}
+.setting-row.stacked .setting-row-control {
+  flex: none;
+}
+.setting-row.stacked .theme-cards {
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  width: 100%;
+}
+.setting-row.stacked .theme-picker {
+  width: 100%;
+  justify-items: stretch;
 }

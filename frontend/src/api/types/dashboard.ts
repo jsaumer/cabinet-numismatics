@@ -21,3 +21,9 @@ export interface DashboardLayout {
   widgets: DashboardWidget[];
   is_default: boolean; // nothing saved: this is the built-in layout
 }
+
+/** GET/PUT /api/appearance (v0.35.0): the colour theme, saved on the server. */
+export interface Appearance {
+  theme: string;
+  themes: string[];
+}

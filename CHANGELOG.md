@@ -8,7 +8,24 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.35.0] - 2026-10-14
+
+### Added
+
+- Colour themes. Settings → General has a Theme row of four cards: Bronze
+  (the default, today's look), Silver (cool steel greys, a pewter-blue
+  accent), Album (a cabinet drawer's green baize, a brass accent), and
+  Ledger (ink on white, one oxblood accent, under a light header). A choice
+  applies at once and is saved on the server, so it follows you to every
+  device; light or dark stays the header's toggle, per browser. Every theme
+  was checked for WCAG AA contrast in light and dark.
+- `GET /api/appearance` (read) and `PUT /api/appearance` (admin, not fresh)
+  for the theme, stored as `ui_theme`; it is not part of `/api/settings`.
+
+### Fixed
+
+- Bronze's muted grey text in light mode (subtitles, labels, counts) was
+  3.41:1 against a card, under WCAG AA's 4.5:1; it is a step darker.
 
 ### Changed
 
@@ -21,6 +38,8 @@ applies them itself on startup; for earlier releases, run
   guide's Playwright image with it). Dependabot now moves pydantic and
   pydantic-core in one pull request; 0.34.0's rule ignoring pydantic-core
   left every pydantic bump unable to install.
+- The README screenshots are retaken; Settings → General shows the theme
+  cards.
 
 ## [0.34.1] - 2026-10-14
 

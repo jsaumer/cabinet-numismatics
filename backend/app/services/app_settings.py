@@ -55,6 +55,9 @@ DEFAULTS: dict = {
     # The dashboard layout (services/dashboard.py). Written by its own
     # endpoints (routers/dashboard.py), never by PUT /api/settings.
     "dashboard_layout": None,
+    # The colour theme (v0.35.0), one of routers/appearance.THEMES. Written by
+    # its own endpoint, never by PUT /api/settings.
+    "ui_theme": "bronze",
     # Secrets cleared because they were not encrypted with this deployment's
     # key (clear_unusable_secrets), until each is entered again.
     "secrets_cleared": [],
