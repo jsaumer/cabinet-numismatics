@@ -173,7 +173,7 @@ frontend's job is to make that unsurprising rather than working around it.
   `setup_required` renders `/setup` for every path; a `503` (a restore is
   running) shows a plain message and retries every 5 seconds; a `401` from
   `/me` renders `/login` for every path, with `?next=` carrying the page that
-  was asked for (only a same-app relative path is honoured, checked in
+  was asked for (only a same-app relative path is honored, checked in
   `pages/Login.tsx`'s `safeNext`, never an absolute URL); otherwise the app
   renders as before, with the header showing the signed-in username and a
   Sign out button. `/setup` and `/login` are the only routes rendered without
@@ -334,9 +334,9 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   shows its number whatever the toggle says), shown as a hover title and
   as small text under the toggle list.
 
-- **Design tokens.** Colours and the typeface are CSS variables on `:root`
+- **Design tokens.** Colors and the typeface are CSS variables on `:root`
   at the top of `styles.css`, with the dark values under
-  `:root[data-theme="dark"]`. Use a token, never a literal colour, so both
+  `:root[data-theme="dark"]`. Use a token, never a literal color, so both
   themes keep working. The accent is bronze (`--accent`) on warm surfaces;
   charts take `--series`, `--chart-grid`, `--chart-axis`, and
   `--chart-muted`.
@@ -348,20 +348,20 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   light flash, `components/theme.ts` applies the theme, and the header
   toggle switches to light and remembers the choice in `localStorage`
   (`theme`). The operating system's preference is not consulted.
-- **Colour themes** (v0.35.0) are `data-palette` on `<html>`: Bronze is the
+- **Color themes** (v0.35.0) are `data-palette` on `<html>`: Bronze is the
   `:root` blocks, and each other theme in `styles.css` redefines the same
   tokens for light and then dark. `src/themes.ts` lists them for the picker
   (`components/theme-picker.tsx`, in Settings → General), and its keys must
   match the backend's `routers/appearance.THEMES`. `main.tsx` applies the
   browser's last theme (`localStorage` `cabinet.palette`) before the first
   paint; once signed in, `App.tsx` applies the server's. Anything drawn on
-  the header takes its colours from `--header-*`, never a fixed white, since
+  the header takes its colors from `--header-*`, never a fixed white, since
   Ledger's header is light.
 - **No sideways shift.** `html` has `scrollbar-gutter: stable` (with
   `overflow-y: scroll` where that isn't supported), so the header stays put
   between a short page and one that scrolls.
 - **Icons are inline SVG** from `components/icons.tsx`, never emoji (emoji
-  differ by system) and never an icon font. They take the text colour and
+  differ by system) and never an icon font. They take the text color and
   size of what they sit in. Add new ones there.
 - **Money goes through `money(value, currency)`** from `../api`: it formats
   with `Intl.NumberFormat` in currency style (the browser's locale,
@@ -487,5 +487,5 @@ BASE_URL=http://proxy npm run e2e      # another host
 The first run needs `npx playwright install chromium`. CI runs them in the
 compose stack job after the API smoke test and the backup and restore
 drills; a failed run
-keeps its report as a workflow artifact. When a page's behaviour or wording
+keeps its report as a workflow artifact. When a page's behavior or wording
 changes, update the spec in the same commit: pytest won't catch it.

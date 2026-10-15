@@ -102,7 +102,7 @@ export function ConfirmDialogHost() {
 
   function cancel() {
     setOpen(false);
-    pending.current?.reject(new Error("Confirmation cancelled."));
+    pending.current?.reject(new Error("Confirmation canceled."));
     pending.current = null;
   }
 

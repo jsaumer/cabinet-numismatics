@@ -42,7 +42,7 @@ deployed and takes no responsibility for an exposed instance. If you
 deploy it this way regardless, at minimum use TLS, single sign-on with
 multi-factor authentication enforced at the provider, an authenticating
 gateway in front, the alert webhook switched on, and a password no human
-has memorised.
+has memorized.
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 Reports that amount to "the API is reachable without a login when exposed

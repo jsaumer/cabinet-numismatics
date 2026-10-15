@@ -172,7 +172,7 @@ deployed and takes no responsibility for an exposed instance. If you
 deploy it this way regardless, at minimum use TLS, single sign-on with
 multi-factor authentication enforced at the provider, an authenticating
 gateway in front, the alert webhook switched on, and a password no human
-has memorised.
+has memorized.
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 See [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)
@@ -314,7 +314,7 @@ finding, is [SPEC_0300.md](specs/SPEC_0300.md). A2's contract, with its own
 two rounds of review, is [SPEC_0330.md](specs/SPEC_0330.md).
 
 Decided on 20 September 2026: the first cut is **one admin and nothing
-else**, onboarded when the app is initialised; the setup page asks for a
+else**, onboarded when the app is initialized; the setup page asks for a
 **one-time setup code the backend prints in its log** (or takes from an
 environment variable), so an open instance can't be claimed by whoever gets
 there first; login is **always on**, with no switch to turn it off; and
@@ -339,7 +339,7 @@ Decided on 21 September 2026, the details that shape the code:
 | Alerts | Through the existing webhook, carrying no collection data: a sign-in from a new device, repeated failures, a password change or reset, a new token, a backup download or export, a restore, secrets cleared |
 | API docs | The interactive `/api/docs` page is off; `/api/openapi.json` stays, for a signed-in session only |
 | Restore | Credentials are deployment state, not collection data: they live in their own Postgres schema, `cabinet_auth`, with their own migrations; backups leave that schema out and a restore never touches it. The session that starts a restore keeps an in-memory grant, so its progress page still answers while the database is replaced |
-| API tokens | 256-bit, with a recognisable prefix; recognised only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 7 days (a day by default); creating or revoking one needs the password, and creating one sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
+| API tokens | 256-bit, with a recognizable prefix; recognized only as `Authorization: Bearer` carrying that prefix. Scopes `read`, `write`, and `metrics` (which covers `/api/metrics` and the collection totals, so a dashboard tile never holds an inventory-reading token). `read` and `write` tokens expire within 7 days (a day by default); creating or revoking one needs the password, and creating one sends an alert; the page says plainly that a `read` token sees every item and where it is kept. No token can export, download a backup, or read a document file. Shown once, stored hashed, revocable, with a last-used time |
 | Single sign-on (v0.33.0) | OpenID Connect against any provider that speaks it, plus a `github` kind reading GitHub's profile endpoint; identities keyed by `(issuer, subject)`, never by email. One identity per configured provider, linked from Settings on a fresh session only, never claimed on a first sign-in. The callback passes the gate with no credential lookup at all, protected instead by the one-use state held in an encrypted, short-lived flow cookie. Several providers can be enabled at once, one button each |
 | Trusted header (v0.33.0) | A gateway's signed assertion only, verified against a configured key set, issuer, and audience; the header is passed by nginx only when the deployment names it, and never trusted unverified. One click on the sign-in page, never automatic; a stored switch lets the container turn it off without an environment change |
 | Second factor (v0.33.0) | The identity provider's own, for a single sign-on or trusted-header session; Cabinet stores none of its own. The password is one factor and a recovery credential, hardened as above; `password_sign_in_alerts` (off, switched on once any provider is enabled) alerts on every password sign-in as a tripwire |
@@ -511,7 +511,7 @@ Rules that go with the table:
   anyone holding it. So every original is re-encoded before it is stored
   (upload, URL import, and the in-browser editor alike): orientation
   applied, every EXIF block, XMP, IPTC, comment, and PNG text chunk dropped,
-  only the colour profile kept. Thumbnails are written the same way.
+  only the color profile kept. Thumbnails are written the same way.
   Nothing written to the photo volume carries metadata, whatever serves it
   (a share, nginx's `/photos/`, a backup). Photos stored before that,
   thumbnails included (an older thumbnail could carry the source's JPEG
@@ -528,7 +528,7 @@ Rules that go with the table:
   (v0.32.2), which refuses the known metadata containers (EXIF, XMP, IPTC,
   comments, text chunks), any marker or chunk it doesn't know (the reserved
   JPEG markers included), a container longer than its kind specifies or
-  running past the file, a bad PNG checksum, a colour profile that isn't
+  running past the file, a bad PNG checksum, a color profile that isn't
   shaped like one, and anything after the image ends. A JPEG, PNG, or WebP
   (WebP from v0.32.2) that passes is sent as the bytes that were checked,
   never read again. The walk reads structure only: bytes hidden inside the
@@ -540,7 +540,7 @@ Rules that go with the table:
   `Retry-After`, since a live link is never throttled and a large photo
   costs seconds of CPU), and one it can't decode is the same `404` as any
   other failure. A file the pass could not rewrite is listed in its marker
-  and refused outright until it is rewritten. The colour profile that is
+  and refused outright until it is rewritten. The color profile that is
   kept (only when it is shaped like one: its declared size, the `acsp`
   signature, every tag inside it) is
   usually a standard one (sRGB, Display P3), but a profile made by a device
@@ -587,7 +587,7 @@ Rules that go with the table:
   to the alert webhook and heartbeat URLs you save, and to a photo URL you
   ask for, all with timeouts, and the price and rate lookups with cached
   fallbacks. The collection is never sent outward: a price source receives
-  only the catalogue number, PCGS number or cert number, and grade being
+  only the catalog number, PCGS number or cert number, and grade being
   looked up; the purchase-day lookup sends only a date and a metal code. From v0.33.0, outbound requests also go to each configured single sign-on provider's discovery document, token endpoint, and key set, and to GitHub's profile endpoint for the `github` kind, and to a trusted-header gateway's key set: nothing beyond the protocol's own parameters (a code, a state value, a key id) ever leaves, and none of it carries collection data either.
 
 ## Containers and the browser

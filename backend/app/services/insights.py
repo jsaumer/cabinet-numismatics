@@ -118,7 +118,7 @@ _CHECKS = [
         ),
     ),
     ("no_storage", "No storage location", lambda i: not i.storage_location),
-    ("no_reference", "No catalogue reference", lambda i: not i.catalog_refs),
+    ("no_reference", "No catalog reference", lambda i: not i.catalog_refs),
 ]
 
 

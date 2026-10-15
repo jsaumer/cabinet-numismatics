@@ -332,7 +332,7 @@ for notes and anything else not round, coins keep `diameter_mm`), `printer`
 (up to 200 characters), `watermark` (up to 200), and `demonetized_on` (a
 date; coins and notes alike). None of the five are accepted in a bulk
 `set` (they're per piece). "Fill from Numista" fills them for a banknote
-type from the catalogue's `size`/`size2`, `printers`, `watermark`, and
+type from the catalog's `size`/`size2`, `printers`, `watermark`, and
 `demonetization` fields, when present.
 
 **Bullion (v0.31.0, roadmap Phase 7, P11)**: a third item
@@ -351,9 +351,9 @@ items of that type; `coins` and `notes` keep their own meaning), and
 `/api/metrics` pick it up automatically. `GET /api/numista/search` accepts
 `category=exonumia`, and filling in or importing an exonumia type maps it to
 `bullion` when it reads as a bar, round, or ingot (never a token or medal,
-which is refused); see Numista catalogue lookup and Imports below. The item
+which is refused); see Numista catalog lookup and Imports below. The item
 form's own Add/edit UI (a Metal select, a g/oz weight switch, a suggested
-product name) is frontend behaviour, not part of this API.
+product name) is frontend behavior, not part of this API.
 
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
@@ -393,7 +393,7 @@ as real JPEG/PNG/WebP images (the declared content-type is not trusted), EXIF
 orientation is corrected, and a JPEG thumbnail is generated alongside the
 original. **The original is stored re-encoded, without its metadata**
 (v0.32.0): EXIF, XMP, IPTC, and comment data are dropped, keeping only the
-colour profile (and a palette's transparency). The thumbnail is generated
+color profile (and a palette's transparency). The thumbnail is generated
 the same way (see
 [backup-restore.md](backup-restore.md#photo-metadata)). The first photo uploaded becomes the primary image. Responses
 include the file keys; the files themselves are served by nginx at
@@ -549,7 +549,7 @@ dashboard widgets): owned items only, trashed already hidden by the ORM.
   "items": [{"id", "label"}]}]}`. Checks, always in this order: `no_photo`,
   `no_grade`, `no_cost`, `no_value` (no estimate at all), `no_weight` (a
   detected precious metal with no weight or fineness to melt-price it),
-  `no_storage`, `no_reference` (no catalogue reference). `items` lists the
+  `no_storage`, `no_reference` (no catalog reference). `items` lists the
   first 5 matching items; `count` is the true total. Takes no `?currency=`:
   it counts items, not money.
 - **`/showcase?currency=`**: `{"piece_of_the_day", "oldest", "newest",
@@ -669,7 +669,7 @@ layout; add them from "Edit dashboard".
 
 Grades are seeded by migration: `sheldon` for coins, `pmg` for notes. Catalog
 references are managed inline on items rather than via a standalone endpoint;
-the catalogue name is free text (the form suggests `krause`, `numista`, and
+the catalog name is free text (the form suggests `krause`, `numista`, and
 `pcgs`, and for notes `pick` and `friedberg`).
 
 `/reference/serial-traits` answers a list of `key`, `label`, and
@@ -705,7 +705,7 @@ when it's empty, the same year-or-ND rule as an item), `shared` (`status`,
 `grade_id`, `quantity`, `acquisition_date`, `acquisition_price` and
 `acquisition_fees` per item, `currency`, `acquired_from`, `storage_location`,
 `set_id`, `tags`, `notes`), and `skip_owned` (default `true`). Each item gets
-the type's fields and catalogue references as "Fill from Numista" would,
+the type's fields and catalog references as "Fill from Numista" would,
 plus the issue's year, `year_nd`, mint mark, and mintage: an undated issue
 with no year makes an ND item with no year, an undated issue with a year
 makes "ND (year)". Issues already owned (same Numista number, year, and
@@ -778,12 +778,12 @@ purchase), an unknown metal or currency is `422`, and both source hosts
 failing is `502`. See [price-sources.md](price-sources.md) for where the
 price comes from and why.
 
-## Numista catalogue lookup
+## Numista catalog lookup
 
 | Method | Path                         | Purpose                                          |
 |--------|------------------------------|--------------------------------------------------|
-| `GET`  | `/api/numista/search`        | Search the catalogue: `q` (2–100 chars), optional `category` (`coin`/`banknote`/`exonumia`) |
-| `GET`  | `/api/numista/types/{id}`    | A type as fillable item fields, catalogue refs, and issues |
+| `GET`  | `/api/numista/search`        | Search the catalog: `q` (2–100 chars), optional `category` (`coin`/`banknote`/`exonumia`) |
+| `GET`  | `/api/numista/types/{id}`    | A type as fillable item fields, catalog refs, and issues |
 
 Both need a Numista API key in Settings (422 without one) and answer 502 when
 Numista is unreachable or the quota is exhausted; an unknown type is 404.
@@ -810,10 +810,10 @@ that category carry `object_type` (the name) so a client can show it.
 `catalog_refs` holds `numista:N#<id>` and the type's other references
 (`km:KM#273`, `pick:Pick#79a`…); `issues` lists `year` (null for an undated
 issue), `nd`, `mint_letter`, `mintage`, `comment`, `reference` (the issue's
-own catalogue references, e.g. `"P# M22a"`, telling apart two issues of the
+own catalog references, e.g. `"P# M22a"`, telling apart two issues of the
 same year), and `owned` (an owned item already carries this type, year, and
 mint mark). Responses are cached for 7 days in `source_cache` (the
-longest Numista's API licence allows), issues shared with Numista pricing.
+longest Numista's API license allows), issues shared with Numista pricing.
 
 ## PCGS cert lookup
 
@@ -1019,16 +1019,16 @@ authenticate as the API key's owner (OAuth client credentials, scope
 `view_collection`); the collection is cached for an hour, so a preview and the
 run that follows cost one fetch. Their preview's `format` is
 `numista_account`, and it adds `types`, `types_to_fetch` (requests a run would
-spend on catalogue details), and `fetched_at`. 422 without a key or when the
+spend on catalog details), and `fetched_at`. 422 without a key or when the
 key has no user; 502 when Numista is unreachable or refuses.
 
 **Bullion exonumia (v0.31.0)**: the Numista account import and the
 `numista_file` export-file import both read an exonumia type the same way
 the fill route does, mapping it to `type: "bullion"` when it reads as a bar,
 round, or ingot; a token or medal is still skipped, with an error message on
-its row. The account import now looks catalogue types up for exonumia items
+its row. The account import now looks catalog types up for exonumia items
 too (it used to skip them), so telling a bar from a token needs the type's
-own catalogue data; an exonumia item whose type isn't cached yet is skipped
+own catalog data; an exonumia item whose type isn't cached yet is skipped
 in a preview and resolved on the run that follows (`catalogue_details`
 fetches it there). The spreadsheet mapping reads a `type` cell of `bar`,
 `round`, `ingot`, or `bullion` the same way.
@@ -1142,7 +1142,7 @@ place, whatever the archive held. See [Restore](#restore).
 
 | Method | Path              | Purpose                                  |
 |--------|-------------------|------------------------------------------|
-| `GET`  | `/api/appearance` | The colour theme and the themes on offer |
+| `GET`  | `/api/appearance` | The color theme and the themes on offer |
 | `PUT`  | `/api/appearance` | Choose the theme                         |
 
 v0.35.0. `GET` (read) answers `{"theme": "bronze", "themes": ["bronze",

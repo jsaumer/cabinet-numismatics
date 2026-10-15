@@ -106,7 +106,7 @@ details grades; PCGS sends `PlusGrade` and prices details grades by cert
 only. PMG grades 1–3 were inserted with WHERE NOT EXISTS because `0003`
 seeds from the same list. CSV import commits per row.
 
-## Fill from the Numista catalogue, C5 (v0.15.0)
+## Fill from the Numista catalog, C5 (v0.15.0)
 
 `numista.search_types` / `numista.catalogue_type` behind
 `GET /api/numista/{search,types/{id}}` (`routers/catalogue.py`), cached via
@@ -140,8 +140,8 @@ grade-bucket-matching sales from the last 3 years (older if fewer than 3),
 converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there means
 no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
-day. Numista catalogue caching dropped to 7 days (licence §8.3's limit for
-catalogue metadata; §8.4, personal projects, is what permits the cache).
+day. Numista catalog caching dropped to 7 days (license §8.3's limit for
+catalog metadata; §8.4, personal projects, is what permits the cache).
 PriceCharting/Greysheet were researched and not planned.
 
 ## Import from other tools (v0.18.0–v0.18.2)
@@ -199,7 +199,7 @@ hard delete), and `purge_expired` runs in the hourly loop
 (`trash_retention_days`, 0 = never, default 30). `DELETE /api/items/{id}`
 trashes; `?permanent=true` purges. Imports and Cabinet-export dedupe look
 into the trash. CI's stack job drives the API with curl (smoke test, backup
-→ restore drill). When an endpoint's behaviour changes, update those steps
+→ restore drill). When an endpoint's behavior changes, update those steps
 too; pytest won't catch them (the trash broke the drill's `DELETE`).
 
 ## Alerts and metrics (v0.21.0)
@@ -249,7 +249,7 @@ plus flag, and Cabinet's designation codes; the frontend picks the grade row
 by rank from `/api/grades?scale=sheldon`. `services/duplicates.find_similar`
 is shared by `GET /api/items/similar` and the importer's `_note_similar`;
 matches are case- and space-insensitive, trash included, cert matches
-first. Catalogue references are shared rows, so a reference match goes
+first. Catalog references are shared rows, so a reference match goes
 through `item_catalog_refs`. The item page's outbound links live in
 `components/lookup.tsx`; they're URLs only.
 
@@ -258,7 +258,7 @@ through `item_catalog_refs`. The item page's outbound links live in
 Migration `0017`: `checklists.match_catalog`/`match_ref`/`match_country`/
 `match_denomination` and `checklist_slots.year`/`mint_mark`.
 `services/checklists.owned_by_issue` indexes owned (status `owned`,
-untrashed via the ORM listener) items of one kind (by catalogue reference
+untrashed via the ORM listener) items of one kind (by catalog reference
 through `item_catalog_refs`, or by country + denomination) keyed by
 (year, normalized mint mark). `slot_views` computes each slot's match **on
 read**; nothing about a match is stored, `ChecklistSlot.filled` stays the
@@ -304,7 +304,7 @@ of v0.24.0 lasted one release). The theme defaults to dark
 light flash before the script runs); only `localStorage` overrides it, so
 screenshots set that key (`docs/screenshots/capture.cjs`). No em dashes anywhere; see CLAUDE.md.
 
-## PCGS fill normalisation (v0.24.5)
+## PCGS fill normalization (v0.24.5)
 
 Confirmed against the live API with a real cert: `parse_grade` and
 `cert_fields` read PCGS's answer correctly. `pcgs._country` and
@@ -388,7 +388,7 @@ National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
   `NULLS LAST` is not used because SQLite's support depends on its version.
 - `q` also matches `charter_number` and `bank_city` (`issuer` already did).
   `friedberg` and `pick` are only suggestions in the form's datalist and
-  link builders in `components/lookup.tsx`; the catalogue stays free text.
+  link builders in `components/lookup.tsx`; the catalog stays free text.
   `GET /api/stats/notes-by-signature` groups in Python over the ORM select,
   so the trash is hidden for free.
 - The export gained twelve columns (not `serial_traits` or
@@ -399,11 +399,11 @@ National Bank Note fields, `serial_traits`, `die_axis`, the date as struck).
 
 ## v0.25.1
 
-`components/lookup.tsx` matches a catalogue by several names, because the
+`components/lookup.tsx` matches a catalog by several names, because the
 Numista fill writes Pick as `p: P#109` (so `p` and `pick`, `fr`/`f` and
 `friedberg`), and searches for the bare number. `HBars` sizes its label
 column from the longest label (`--hbar-label`, in `ch`) and left-aligns it:
-a fixed right-aligned gutter made short-label charts look centred.
+a fixed right-aligned gutter made short-label charts look centered.
 
 ## In-app restore (v0.26.0)
 
@@ -509,7 +509,7 @@ gotcha met while proving it: rebuilding only the backend leaves nginx
 holding the old container's address (502 until the proxy restarts); a Swarm
 service VIP doesn't have that problem.
 
-## A customisable dashboard (v0.27.0)
+## A customizable dashboard (v0.27.0)
 
 Roadmap Phase 7, P10. `backend/app/services/dashboard.py` and
 `routers/dashboard.py`; `frontend/src/dashboard/` (`registry.tsx`,
@@ -544,7 +544,7 @@ What a later change has to respect:
   migrated *from*) is empty today; a future document-shape change adds a
   function there rather than a new code path in `normalize_for_read`.
   `CURRENT_VERSION` moves up by one, and a stored layout runs through every
-  migration between its version and the current one before normalisation.
+  migration between its version and the current one before normalization.
 - **The drag listens on `window`, not the handle, and does not use pointer
   capture.** Reordering keyed React children moves the handle's DOM node,
   and a moved node loses whatever pointer capture it held, so the release
@@ -662,7 +662,7 @@ Roadmap Phase 7, P7. `services/stack.py`, `routers/stack.py`, migration
 - **Purchase-day spot comes only from the CC0 fawazahmed0 currency-api,
   never LBMA.** LBMA's public JSON price series goes back to 1968, further
   than the currency-api's 2024-03-02 start, but LBMA and ICE Benchmark
-  Administration require a licence to use benchmark data for valuation, so
+  Administration require a license to use benchmark data for valuation, so
   Cabinet does not fetch it and must not gain an LBMA adapter without one.
   gold-api.com's history needs a key. A purchase before 2024-03-02 takes a
   hand-typed figure; there is no way around that without a licensed source.
@@ -771,7 +771,7 @@ Two things the owner hit on a real note. The photo tile's controls were
 wider than the tile (150px), so every delete button but the last sat under
 the next tile's first arrow: the tile is 190px and `.photo-card .row` wraps
 compact controls inside it. Anything added to that row has to fit the tile;
-the check is that each button is the top element at its own centre. A photo
+the check is that each button is the top element at its own center. A photo
 whose file is gone (`img.missing`, set by `onError`) keeps a full-size tile
 so it can be deleted. And `DELETE /api/items/{id}/estimates/{estimate_id}`
 removes a typed-in value only: `pricing.source_key(source) in
@@ -1020,7 +1020,7 @@ change must respect:
   then pruned hourly (`accounts.prune`, with ended sessions, expired
   devices, and old audit rows).
 - **The audit log** refuses an unknown event name and a detail key naming a
-  password, secret, or code. Failed sign-ins are labelled with the account's
+  password, secret, or code. Failed sign-ins are labeled with the account's
   name only when the typed name is the account's, otherwise `unknown`. The
   JSON lines go to logger `cabinet.audit`, which `main._configure_logging`
   now includes; a container command writes its row but prints no line (its
@@ -1090,7 +1090,7 @@ change must respect:
   nuisance, not a bypass, and one to remember before adding a third.
 - **nginx forwards the raw request URI** (`proxy_pass http://backend:8000;`,
   no path), so the gate sees what the client sent. A `proxy_pass` with a
-  path forwards nginx's decoded, normalised URI instead, and `/api/%68ealth`
+  path forwards nginx's decoded, normalized URI instead, and `/api/%68ealth`
   arrived as `/api/health` (found through real nginx). A new location must
   keep `proxy_pass` without a path.
 - **Setup** (`app/auth/setup.py`): `prepare` runs at startup after
@@ -1131,7 +1131,7 @@ change must respect:
   replaces them. `test_gate.py`'s `dry_run` swaps layer 2's check for one
   answering 418 wherever the real one would allow the call, so the matrices
   call every operation without running a handler. The HTTP client
-  normalises `.` and `..` segments before sending, so those cases belong to
+  normalizes `.` and `..` segments before sending, so those cases belong to
   the real-nginx checks.
 - **Photos go through nginx's `auth_request`.** It is set at
   server level in `proxy/nginx.conf`, and every other location turns it off
@@ -1221,7 +1221,7 @@ change must respect:
   session. Token names carry a timestamp and PID so a second run against an
   already-claimed stack doesn't collide, and the metrics check turns
   `metrics_enabled` off before proving it is 404, since a previous run may
-  have left it on. One behaviour worth knowing: an anonymous request to a
+  have left it on. One behavior worth knowing: an anonymous request to a
   path that doesn't exist at all (like the removed `/api/docs`) now gets 401
   from the gate, which refuses an unlisted path before FastAPI's own routing
   ever runs; a session or token gets past the gate and sees the real 404. The
@@ -1452,7 +1452,7 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   before requiring `year` or `year_nd`. `RunIssue`'s own copy of the rule
   (schemas.py, for "Add a run") is deliberately untouched: nothing in
   SPEC_0310 extends runs to bullion, and the run endpoint only ever builds
-  coin/note items from a catalogue date/mint range, so the rule there still
+  coin/note items from a catalog date/mint range, so the rule there still
   applies to every run unconditionally. `Item.year_label` returns `""` for a
   bullion item with no year (coins and notes keep `"ND"`), and `Item.label`
   for bullion is `issuer or country`, then `denomination`, then the year if
@@ -1488,7 +1488,7 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   "missed", the same as a fetch failure, so a batch of mixed types never
   fails as a whole. `GET /api/numista/search` accepts `category=exonumia`.
   **Imports**: `routers/imports.py` no longer excludes exonumia types from
-  the account import's catalogue lookup (it used to skip them outright,
+  the account import's catalog lookup (it used to skip them outright,
   since Cabinet had nowhere to put them); `numista_account_candidates` now
   decides bullion vs. refused from the fetched type's own `details`, not the
   collected item's bare `category`, so an exonumia item whose type isn't
@@ -1524,11 +1524,11 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   \*"/the ND checkbox (no placeholder-free required attribute either: a
   bar's year is optional and never ND); mint mark, series stays, variety,
   strike, designations, die axis, the date as struck, mintage, and
-  demonetised are all hidden (`!isBullion` guards, or the block simply
+  demonetized are all hidden (`!isBullion` guards, or the block simply
   isn't reached); shown are weight, fineness (with a ".9999 for
   four-nines" `title`, not visible text, so `getByLabel("Fineness", {exact:
   true})` still matches just the label), shape, the note-style width/height
-  and thickness fields, serial number, and issuer labelled "Refiner or
+  and thickness fields, serial number, and issuer labeled "Refiner or
   mint". A coin's Composition field gains a one-line hint about the
   bullion stack; the Stack page's empty state says the same and links to
   `/items/new?type=bullion`.
@@ -1550,7 +1550,7 @@ Roadmap Phase 7, P11, built to [SPEC_0310](specs/SPEC_0310.md) on
   (falling back to `key` everywhere else) and `breakdowns.tsx` maps
   `bullion` to "Bars and rounds" (and `coin`/`note` to "Coin"/"Note") only
   for the `type` dimension. `lookup.tsx`'s CoinFacts link is now explicitly
-  `item.type === "coin"` (it was unconditional on a `pcgs` catalogue ref
+  `item.type === "coin"` (it was unconditional on a `pcgs` catalog ref
   existing, which a bullion piece could technically carry), so a bar's
   lookups are the eBay search alone, as the spec asks.
   **Numista fill**: `NumistaFill.tsx` searches `category=exonumia` when the
@@ -1781,7 +1781,7 @@ pass that closed out this release. Rules this stage left:
   as a second door until v0.33.0) guards everything behind it by default,
   so it blocks a share link too unless those paths are excluded from its
   own authentication check. This is a deployment note, not application
-  behaviour Cabinet can enforce, but it is the rule a later change to
+  behavior Cabinet can enforce, but it is the rule a later change to
   `docs/deployment.md`'s Traefik + Authentik example, or to the set of
   paths the share view answers on, has to keep true; see
   [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption).
@@ -1796,7 +1796,7 @@ pass that closed out this release. Rules this stage left:
 
 Stage 4, the security review's findings (23 September 2026,
 [SPEC_0320](specs/SPEC_0320.md#the-security-review-and-stage-4-23-september-2026),
-which summarises the review; the review itself is kept outside the
+which summarizes the review; the review itself is kept outside the
 repository). Rules it left:
 
 - **No photo is stored with its metadata.** `photos.save_photo` writes
@@ -1897,7 +1897,7 @@ repository). Rules it left:
   carried it): `cert_number` left `GRADE_FIELDS` and is added by
   `item_view` only when it is on; `cert_service` stays with `show_grades`.
 - **The link's origin** is `share.link_origin(request Origin)`: the
-  request's `Origin` when it normalises (`config.normalize_origin`) to one
+  request's `Origin` when it normalizes (`config.normalize_origin`) to one
   of `PUBLIC_ORIGINS`, else the first `https://` entry, else the first.
   `share.link_url(token, request)` takes the request for that.
 - **The photo response has no file time.** `routers/share._PhotoFile`
@@ -1907,7 +1907,7 @@ repository). Rules it left:
   `MAX_OFFSET` (1,000,000; 422 past it), since a value past bigint range
   was a Postgres error.
 
-Stage 5, the second review's findings (23 September 2026, summarised in
+Stage 5, the second review's findings (23 September 2026, summarized in
 SPEC_0320's build log; the review itself is kept outside the repository).
 Rules it left:
 
@@ -2011,7 +2011,7 @@ an unreadable file on the volume, which the share view then streamed from
 disk as it was, and that a pass already walking when a restore removed the
 marker wrote it back over the restored photos. Rules:
 
-- **The marker is an optimisation, never a promise.**
+- **The marker is an optimization, never a promise.**
   `routers/share.share_photo` sends `_PhotoFile` from disk only when
   `photos.marker_exists()` **and** `photos.looks_clean(path)`; anything
   else goes through `cleaned_file` (a `ValueError` stays the one 404).
@@ -2076,7 +2076,7 @@ read was trusted once it looked clean. Rules:
   (`_png_walk`): the signature, IHDR first, every chunk in `HARMLESS_PNG`,
   fitting the file, with a right CRC (`cleaned_file` would refuse a bad
   one, so the disk path mustn't serve it), the fixed lengths
-  (`_PNG_LENGTHS`) and those set by the colour type (`_PNG_BY_COLOUR`, a
+  (`_PNG_LENGTHS`) and those set by the color type (`_PNG_BY_COLOUR`, a
   palette's `tRNS` at most its entries), an `iCCP` named `ICC Profile` as
   Pillow writes it (the name is free text), and nothing after IEND. WebP
   (`_webp_walk`, no Pillow open at all): the RIFF size equals the file
@@ -2148,7 +2148,7 @@ has to respect:
 - **The trusted-header mode has a stored switch** (R2-02):
   `trusted_header_on(db, settings)` is the four `TRUSTED_ASSERTION_*`
   variables set **and** `auth_config.trusted_header_enabled`. Anything
-  that offers or honours the mode asks that function, never the variables
+  that offers or honors the mode asks that function, never the variables
   alone. `disable-sso` sets the switch false; only Settings (admin, fresh,
   audited `sso_configured`) sets it back.
 - **Removing a way in revokes before it deletes, in one transaction**
@@ -2651,7 +2651,7 @@ code changed. Rules a later change has to respect:
   also exercised against the mock's GitHub mode) and what stays owed to
   whoever first deploys with a real gateway or account (SPEC_0330, "Owed
   to the owner's live check"), rather than presenting researched quirks as
-  confirmed behaviour.
+  confirmed behavior.
 
 ### Stage 7: the security review's findings
 
@@ -2746,7 +2746,7 @@ The owner's first look at v0.33.0 live. Rules:
 ## The workbench layout (v0.34.0)
 
 Chosen by the owner on 14 October 2026 from three prototypes (workbench,
-catalogue, holdings), after a review found the interface read as a generic
+catalog, holdings), after a review found the interface read as a generic
 generated dashboard. Frontend only, no API change. Rules a later change
 here has to respect:
 
@@ -2774,7 +2774,7 @@ here has to respect:
   textarea, a select, or editable content, or while a dialog is open. A
   new shortcut follows the same check.
 - **The type mark replaces the type and status pills in the list**:
-  `.wb-glyph` is a shape for coin, note, or bar, coloured by
+  `.wb-glyph` is a shape for coin, note, or bar, colored by
   `detectMetal(composition)` through the `--metal-*` tokens (base metals
   share `--metal-base`), hollow for a wish-list piece; a sold row is struck
   through. The pills stay on the item page.
@@ -2805,7 +2805,7 @@ here has to respect:
   anything else a Numista name search. "Save and add another" keeps
   `SHARED` (type, currency, date, seller, storage, tags) and nothing else.
 
-## Colour themes (v0.35.0)
+## Color themes (v0.35.0)
 
 Four themes for the workbench layout, picked by the owner on 14 October 2026
 from a comparison of five (High contrast was left out): Bronze (the
@@ -2818,11 +2818,11 @@ default), Silver, Album, and Ledger. Rules a later change has to respect:
   `[data-theme="dark"]`), and `test_appearance.py`'s expected list. Adding
   one is all four; retiring one leaves stored values reading as the default
   (`appearance._current`), so an older archive never breaks.
-- **Every theme defines the same tokens in both modes**: the twenty colour
+- **Every theme defines the same tokens in both modes**: the twenty color
   tokens plus `--chip-ref-bg`, `--danger`, `--danger-border`,
   `--chart-grid`, `--chart-axis` (derived with `color-mix`). A token a dark
   block leaves out would show that theme's light value in dark mode, since
-  the light block also matches. Badge colours and the metal colours stay
+  the light block also matches. Badge colors and the metal colors stay
   shared across themes.
 - **Contrast is checked before a theme ships**: text 4.5:1 (body, muted,
   links, buttons, header, gain and loss, the selected row) and 3:1 (chart

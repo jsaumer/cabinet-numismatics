@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.35.0-informational)
+![Version](https://img.shields.io/badge/version-0.35.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.35.0 released.** 1.0 will mean a stable HTTP API; until then
+**Status: v0.35.1 released.** 1.0 will mean a stable HTTP API; until then
 the API may still change. See the [roadmap](docs/roadmap.md) for what's
 built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
@@ -35,7 +35,7 @@ deployed and takes no responsibility for an exposed instance. If you
 deploy it this way regardless, at minimum use TLS, single sign-on with
 multi-factor authentication enforced at the provider, an authenticating
 gateway in front, the alert webhook switched on, and a password no human
-has memorised.
+has memorized.
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 If you turn sharing on, exempt `/s/`, `/api/share/`, and `/robots.txt`
@@ -71,18 +71,18 @@ Dark is the default; the header toggle switches to light and remembers it.
   the composition and defaults the fineness to .999; weight can be entered
   in grams or troy ounces; the product name is suggested from weight,
   metal, and shape until you type your own. Filled in from Numista's
-  bullion catalogue too.
+  bullion catalog too.
 - **Dates as struck**: a coin dated in another calendar (Islamic, Persian,
   Thai Buddhist, Hebrew, Japanese eras, Vikram Samvat, Saka, Minguo, Chula
   Sakarat, Rattanakosin, Ethiopian) keeps the year as written, and the
   Gregorian year is worked out for you unless you type one.
 - **Paper money depth**: National Bank Note charter number, bank city and
-  state, and plate position; Pick and Friedberg catalogue references with a
+  state, and plate position; Pick and Friedberg catalog references with a
   web-search link; and fancy serial numbers (solid, ladder, radar, repeater,
   binary, low and high numbers, dates, star notes, and more) badged on the
   item and in the list, with a filter for any of them.
 - **Note details**: width and height for anything not round (coins keep
-  diameter), printer, watermark, and a demonetisation date for coins and
+  diameter), printer, watermark, and a demonetization date for coins and
   notes alike, filled in from Numista along with everything else.
 - **Grading** on seeded Sheldon (coins) and PMG (notes) scales, with proof
   and specimen strikes, plus grades, stars, designations (CAM/DCAM, PL/DMPL,
@@ -133,14 +133,14 @@ Dark is the default; the header toggle switches to light and remembers it.
   "Show empty fields" toggle for the full sheet.
 - **Fill from Numista**: enter a Numista number or search by name, and the
   item form fills in country, denomination, composition, fineness, weight,
-  dimensions, catalogue references, and the issue's year, mint, and mintage.
+  dimensions, catalog references, and the issue's year, mint, and mintage.
   Needs a free Numista API key in Settings.
 - **Fill from a PCGS cert number**: a slabbed coin's type, date, mint,
   denomination, grade, designations, variety, PCGS number, and population
   come from the cert lookup (needs a free PCGS API token). Only empty fields
   are filled.
 - **Duplicate warning** while entering anything already here: by cert,
-  catalogue reference, or country, denomination, year, and mint. The trash
+  catalog reference, or country, denomination, year, and mint. The trash
   is checked too, and the importer notes lookalikes in its preview.
 - **Add a run**: pick a type on Numista, tick the dates and mints you have,
   and get one item each, with the shared fields typed once. Issues you
@@ -155,7 +155,7 @@ Dark is the default; the header toggle switches to light and remembers it.
   other), a primary image, and reordering.
 - Uploads are validated as real JPEG/PNG/WebP images, EXIF orientation is
   corrected, and thumbnails are generated automatically. Every stored photo
-  is re-encoded with its EXIF, XMP, and IPTC metadata stripped (the colour
+  is re-encoded with its EXIF, XMP, and IPTC metadata stripped (the color
   profile is kept), so nothing but the image itself, no camera, location,
   or timestamp data, ever leaves the app, shared or not. Files live on a
   plain Docker volume served directly by nginx, with no object store.
@@ -211,7 +211,7 @@ Dark is the default; the header toggle switches to light and remembers it.
   webhook.
 
 ### Insights & reporting
-- Customisable dashboard (the home page): 32 widgets (value, breakdowns by
+- Customizable dashboard (the home page): 32 widgets (value, breakdowns by
   country/decade/grade/tag/metal or one tag/set, acquisitions by year,
   top-movers tables, owned notes by series and signature pair, wish list,
   fancy serials, checklists, the bullion stack, pricing coverage, operations
@@ -240,7 +240,7 @@ Dark is the default; the header toggle switches to light and remembers it.
   with a [Swarm stack file](deploy/docker-stack.yaml); an OpenAPI schema at
   `/api/openapi.json`. The backend applies its own migrations on startup.
 - Responsive UI for phone/tablet, **dark by default** with a light theme on
-  the header toggle, and **four colour themes** (Bronze, the default;
+  the header toggle, and **four color themes** (Bronze, the default;
   Silver; Album; Ledger) chosen in Settings → General, saved on the server
   so the choice follows you to every device. Each was checked for WCAG AA
   contrast in light and dark. System fonts and inline SVG icons only: the
@@ -382,13 +382,13 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
-| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.35.0` |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.35.1` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and
 frankfurter.dev for daily ECB exchange rates. Numista and PCGS are optional
 and contacted only once you save a key and switch them on. No collection
-data ever leaves the machine: a lookup sends a catalogue or cert number,
+data ever leaves the machine: a lookup sends a catalog or cert number,
 nothing else.
 
 ## Backup & restore

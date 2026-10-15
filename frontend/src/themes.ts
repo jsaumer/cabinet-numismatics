@@ -24,7 +24,7 @@ export const THEMES: ThemeInfo[] = [
   {
     key: "silver",
     label: "Silver",
-    description: "Cool steel greys with a pewter-blue accent.",
+    description: "Cool steel grays with a pewter-blue accent.",
     swatches: { light: ["#1f242b", "#f3f4f6", "#ffffff", "#4a5a70", "#5e6f86"], dark: ["#0b0d10", "#0f1114", "#171a1f", "#9fb2c9", "#9fb2c9"] },
   },
   {

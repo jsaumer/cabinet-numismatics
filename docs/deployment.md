@@ -75,7 +75,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.35.0`. `--build` builds
+- `TAG` (optional): pins the image tag, e.g. `TAG=0.35.1`. `--build` builds
   locally whatever the tag; without `--build`, Compose pulls the published
   image of that tag from GHCR instead.
 
@@ -129,7 +129,7 @@ deployed and takes no responsibility for an exposed instance. If you
 deploy it this way regardless, at minimum use TLS, single sign-on with
 multi-factor authentication enforced at the provider, an authenticating
 gateway in front, the alert webhook switched on, and a password no human
-has memorised.
+has memorized.
 <!-- exposure-warning: copied verbatim; the source is docs/deployment.md -->
 
 That paragraph is the whole recommendation, and it is repeated word for
@@ -552,7 +552,7 @@ container (or Settings → Sign-in) lists every identity, and anyone who held
 the provider account could have linked a second identity at another
 enabled provider, which survives `reset-password`, `sign-out-everywhere`,
 and `disable-sso` (linked identities are kept so the mode can be switched
-back on). Unlink every identity you don't recognise with `unlink-identity
+back on). Unlink every identity you don't recognize with `unlink-identity
 <id>`, then reset the password. The `identity_linked` alert through the
 webhook is the tripwire for that, so keep the webhook on. Switching the
 trusted-header mode off in Settings, switching a provider off, unlinking,
@@ -709,10 +709,10 @@ Any other forward-auth gateway needs the equivalent: whatever it offers for
 excluding a path prefix from its own authentication check. Skipping this
 doesn't fail loudly: a share link just shows the gateway's own sign-in page
 instead of Cabinet's share page, since the request never reaches Cabinet.
-The gateway also has to normalise the request path (collapse `..`
+The gateway also has to normalize the request path (collapse `..`
 segments, decode encoded dots) before it matches its own rules, or a path
 that only looks like it starts under `/s/` or `/api/share/` after
-normalisation could ride the exemption to a route it was never meant to
+normalization could ride the exemption to a route it was never meant to
 cover. Traefik does this itself unless `sanitizePath` is turned off on the
 entry point; check that a custom gateway does the equivalent before
 trusting a prefix match on unnormalised input.
@@ -838,7 +838,7 @@ docker compose build --pull && docker compose up -d
   from a URL fetches from whatever public host you name.
 - **The collection is never sent outward.** The spot and rate APIs receive
   only a metal symbol, a currency pair, or a date; Numista and PCGS receive
-  the catalogue number, PCGS number or cert number, and grade being looked
+  the catalog number, PCGS number or cert number, and grade being looked
   up, nothing else.
 - **Timestamps are UTC**, including the month boundaries in value-over-time.
 - **Logs**: `docker compose logs -f backend`. Secrets are never logged.
@@ -894,7 +894,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.35.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.35.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy
