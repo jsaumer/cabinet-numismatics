@@ -355,6 +355,11 @@ test("a theme chosen in Settings applies at once, survives a reload, and goes ba
   await expect(album).toHaveAttribute("aria-checked", "true");
   await expect(html).toHaveAttribute("data-palette", "album");
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  // The logo and the browser-tab icon follow the theme (v0.35.2).
+  await expect(page.locator(".site-header .brand img")).toHaveAttribute("src", "/logo-album.svg");
+  await expect(page.locator('link[rel="icon"][type="image/svg+xml"]')).toHaveAttribute("href", "/logo-album.svg");
+  await expect(page.locator('link[rel="icon"][sizes="any"]')).toHaveAttribute("href", "/favicon-album.ico");
+  expect((await page.request.get("/favicon-album.ico")).ok()).toBe(true);
 
   // Saved on the server: a fresh page in a new context, no browser copy, still shows it.
   const other = await page.context().browser()!.newContext({ storageState: await page.context().storageState() });
@@ -366,6 +371,7 @@ test("a theme chosen in Settings applies at once, survives a reload, and goes ba
 
   await page.getByRole("radio", { name: /^Bronze/ }).click();
   await expect(html).toHaveAttribute("data-palette", "bronze");
+  await expect(page.locator(".site-header .brand img")).toHaveAttribute("src", "/logo-bronze.svg");
   await page.reload();
   await expect(page.getByRole("radio", { name: /^Bronze/ })).toHaveAttribute("aria-checked", "true");
 });

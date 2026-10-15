@@ -8,6 +8,24 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.35.2] - 2026-10-14
+
+### Changed
+
+- The logo and the browser-tab icon follow the color theme: the coin in
+  the header, on the sign-in page, and on a share page is drawn in the
+  theme's own colors (Silver's steel, Album's brass with a green "C",
+  Ledger's paper with an oxblood "C"), and the tab icon (SVG and `.ico`)
+  and the mobile address bar's color change with it. Before the app
+  loads, and for links from outside (the README, a Homepage tile), it is
+  Bronze as before. `scripts/theme_icons.py` writes the per-theme files.
+
+### Fixed
+
+- The header's "Add piece" and "Sign out" wrapped onto two lines at about
+  900 pixels wide; header controls keep their label on one line and the
+  search box gives way first.
+
 ## [0.35.1] - 2026-10-14
 
 ### Changed
