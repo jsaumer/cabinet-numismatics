@@ -124,7 +124,7 @@ export function setupChecks(
       text: (
         <>
           No price-source key. A free Numista API key prices items and fills them in from the
-          catalogue (<Link to="/settings/pricing">Settings → Price sources</Link>).
+          catalog (<Link to="/settings/pricing">Settings → Price sources</Link>).
         </>
       ),
     });

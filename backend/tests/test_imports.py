@@ -388,7 +388,7 @@ def test_numista_account_preview(client, numista_account):
     assert "exonumia" in body["rows"][2]["error"]
     # types aren't looked up yet: the preview says the import fills them in
     assert any(
-        "filled in from Numista's catalogue on import" in m for m in body["rows"][0]["messages"]
+        "filled in from Numista's catalog on import" in m for m in body["rows"][0]["messages"]
     )
     assert body["rows"][1]["label"] == 'United States 1 Dollar 1881 "S"'
     # the preview spends the token and the collection, never type lookups

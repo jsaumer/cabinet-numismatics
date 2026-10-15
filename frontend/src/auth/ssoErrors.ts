@@ -8,7 +8,7 @@ const MESSAGES: Record<string, string> = {
   unlinked:
     "That account isn't linked to Cabinet. Sign in with your password and link it in Settings, Sign-in.",
   provider: "The sign-in provider didn't answer. Sign in with your password.",
-  denied: "You cancelled at the provider.",
+  denied: "You canceled at the provider.",
   token: "The provider's answer couldn't be verified. Sign in with your password.",
   profile: "The provider's answer couldn't be checked. Sign in with your password.",
   already_linked: "That identity is already linked.",

@@ -69,7 +69,7 @@ Useful in-session commands:
   `ruff` in `backend/`, and brings the stack up with
   `docker compose up --build` when a change needs a real database, nginx, or
   a browser. Commits and pushes happen when the owner asks for them.
-- **Docs in the same commit.** When behaviour changes, every affected
+- **Docs in the same commit.** When behavior changes, every affected
   document is updated with it: `README.md`, `docs/api.md`,
   `docs/roadmap.md`, `docs/implementation-notes.md`, `frontend/README.md`,
   the topic doc, and `CHANGELOG.md`. Before a release, those are reread

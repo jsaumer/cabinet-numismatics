@@ -96,7 +96,7 @@ sign-in, so `e2e/global-setup.ts` claims an unclaimed stack with `SETUP_CODE`
 or signs in with `CABINET_USER`/`CABINET_PASSWORD` (default `owner` /
 `correct horse battery`) before the suite runs, and saves the session for
 every spec. Export `SETUP_CODE` when the stack is still unclaimed. When a
-page's behaviour or wording changes, update them in the same change.
+page's behavior or wording changes, update them in the same change.
 
 ### Database changes
 
