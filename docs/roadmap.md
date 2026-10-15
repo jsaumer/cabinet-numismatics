@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (October 2026): v0.35.1 (color themes for the workbench
-layout, in American spelling) is the latest published release**, with versioned images published to GHCR from each
+**Status (October 2026): v0.35.2 (color themes for the workbench
+layout, the logo and tab icon with them) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -779,6 +779,7 @@ pieces turned up, each shipped as a small release:
   saved on the server. The check also fixed Bronze's light muted text.
 - ✔ v0.35.1: American spelling throughout the interface and the docs
   (color, catalog, customizable, demonetized), with the rule in CLAUDE.md.
+- ✔ v0.35.2: the logo and the browser-tab icon follow the color theme.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

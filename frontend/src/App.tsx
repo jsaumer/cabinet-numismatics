@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { MoonIcon, SunIcon } from "./components/icons";
+import { Logo } from "./components/logo";
 import { Sidebar } from "./components/sidebar";
 import { applyPalette, applyTheme, initialTheme } from "./components/theme";
 import { isThemeKey } from "./themes";
@@ -142,7 +143,7 @@ function AuthedApp({
       <ConfirmDialogHost />
       <header className="site-header no-print">
         <Link className="brand" to="/">
-          <img src="/logo.svg" alt="" width="26" height="26" />
+          <Logo size={26} />
           Cabinet
         </Link>
         <HeaderSearch />

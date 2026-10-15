@@ -2811,12 +2811,14 @@ Four themes for the workbench layout, picked by the owner on 14 October 2026
 from a comparison of five (High contrast was left out): Bronze (the
 default), Silver, Album, and Ledger. Rules a later change has to respect:
 
-- **A theme exists in four places, which must agree**: the backend's
+- **A theme exists in five places, which must agree**: the backend's
   `routers/appearance.THEMES` (what `PUT /api/appearance` accepts), the
   frontend's `src/themes.ts` (the picker, with swatches for show only), the
   `:root[data-palette="..."]` blocks in `styles.css` (light, then
-  `[data-theme="dark"]`), and `test_appearance.py`'s expected list. Adding
-  one is all four; retiring one leaves stored values reading as the default
+  `[data-theme="dark"]`), `test_appearance.py`'s expected list, and (from
+  v0.35.2) `scripts/theme_icons.py`'s coin colors with the
+  `public/logo-<theme>.svg` and `favicon-<theme>.ico` it writes. Adding
+  one is all five; retiring one leaves stored values reading as the default
   (`appearance._current`), so an older archive never breaks.
 - **Every theme defines the same tokens in both modes**: the twenty color
   tokens plus `--chip-ref-bg`, `--danger`, `--danger-border`,
@@ -2840,6 +2842,15 @@ default), Silver, Album, and Ledger. Rules a later change has to respect:
 - **The header can be light** (Ledger), so nothing on it may assume white
   ink: the search box derives its fill and border from `--header-ink` with
   `color-mix`.
+- **The logo and tab icon follow the theme** (v0.35.2). `<Logo>`
+  (`components/logo.tsx`) reads the palette through `useSyncExternalStore`
+  (`currentPalette`/`subscribePalette` in `components/theme.ts`, which
+  `applyPalette` notifies), so every logo on the page changes the moment
+  the theme does; `applyPalette` and `applyTheme` also repoint the SVG and
+  `.ico` icon links and set `<meta name="theme-color">` from the computed
+  `--header-bg`. `index.html` keeps linking the Bronze `logo.svg` and
+  `favicon.ico`, which is what shows before the script runs; the files a
+  theme uses are generated, never drawn by hand.
 
 ## Releases
 

@@ -28,8 +28,12 @@ Run in `frontend/`, after `npm ci` (which installs exactly what
 ```
 index.html            the shell: data-theme="dark", favicon and touch icon
 public/               served at the site root, copied into dist/ as is
-  logo.svg              the logo (header, README, SVG favicon)
-  favicon.ico           browser-tab icon
+  logo.svg              the logo in Bronze (README, and the tab icon before the
+                        app loads)
+  favicon.ico           browser-tab icon in Bronze, the same way
+  logo-<theme>.svg,     the logo and tab icon for each color theme (v0.35.2),
+  favicon-<theme>.ico   written by scripts/theme_icons.py; see "Color themes"
+                        below
   logo-512.png          for dashboards such as a Homepage tile
   apple-touch-icon.png  iOS home-screen icon
   logo-tile.svg         the logo on its tile background, the source of the PNGs
@@ -357,6 +361,17 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   paint; once signed in, `App.tsx` applies the server's. Anything drawn on
   the header takes its colors from `--header-*`, never a fixed white, since
   Ledger's header is light.
+- **The logo and the tab icon follow the theme** (v0.35.2):
+  `components/logo.tsx` shows `public/logo-<theme>.svg`, and
+  `applyPalette` points the page's icon links at that file and
+  `favicon-<theme>.ico` and sets `theme-color` to the header's color.
+  The per-theme files come from `scripts/theme_icons.py`, which holds each
+  theme's five coin colors; after changing them, regenerate the files with
+  ```bash
+  docker run --rm -v "$PWD":/w -w /w alpine:3.22 sh -c "apk add -q python3 rsvg-convert imagemagick && python3 scripts/theme_icons.py"
+  ```
+  from the repository root. `logo.svg`, `favicon.ico`, `logo-512.png`,
+  and `apple-touch-icon.png` stay Bronze.
 - **No sideways shift.** `html` has `scrollbar-gutter: stable` (with
   `overflow-y: scroll` where that isn't supported), so the header stays put
   between a short page and one that scrolls.

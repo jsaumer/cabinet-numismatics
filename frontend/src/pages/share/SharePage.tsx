@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { api, ShareManifest } from "../../api";
 import { MoonIcon, SunIcon } from "../../components/icons";
+import { Logo } from "../../components/logo";
 import { applyTheme, initialTheme } from "../../components/theme";
 import ShareChecklist from "./ShareChecklist";
 import ShareGrid from "./ShareGrid";
@@ -71,7 +72,7 @@ export default function SharePage() {
     return (
       <div className="auth-page">
         <div className="auth-brand">
-          <img src="/logo.svg" alt="" width="56" height="56" />
+          <Logo size={56} />
           <div className="auth-brand-name">Cabinet</div>
         </div>
         <div className="card auth-card">
@@ -87,7 +88,7 @@ export default function SharePage() {
     <>
       <header className="site-header no-print">
         <span className="brand">
-          <img src="/logo.svg" alt="" width="26" height="26" />
+          <Logo size={26} />
           {manifest ? manifest.name : "Cabinet"}
         </span>
         <nav>
