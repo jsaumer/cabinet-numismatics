@@ -8,6 +8,17 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Changed
+
+- Dependencies: pydantic 2.14.1 with pydantic-core 2.50.1, uvloop 0.23.0,
+  pypdfium2 5.14.0, python-dotenv 1.2.4, pycparser 3.11, Vite 8.3.4,
+  `@vitejs/plugin-react` 6.1.2, and Playwright 1.64.0 (the screenshot
+  guide's Playwright image with it). Dependabot now moves pydantic and
+  pydantic-core in one pull request; 0.34.0's rule ignoring pydantic-core
+  left every pydantic bump unable to install.
+
 ## [0.34.1] - 2026-10-14
 
 ### Changed
