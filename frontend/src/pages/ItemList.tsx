@@ -21,12 +21,56 @@ const PAGE_SIZE = 50;
 const SORTS = [
   { value: "-created_at", label: "Newest first" },
   { value: "created_at", label: "Oldest first" },
+  { value: "name", label: "Piece A–Z" },
+  { value: "-name", label: "Piece Z–A" },
   { value: "year", label: "Year ↑" },
   { value: "-year", label: "Year ↓" },
   { value: "country", label: "Country A–Z" },
-  { value: "-grade", label: "Grade ↓" },
+  { value: "-grade", label: "Grade, high to low" },
+  { value: "grade", label: "Grade, low to high" },
+  { value: "-value", label: "Value, high to low" },
+  { value: "value", label: "Value, low to high" },
   { value: "-acquisition_price", label: "Paid ↓" },
 ];
+
+/** A column heading that sorts the list: the first click takes `first`, the
+ * next flips it. */
+function SortHeading({
+  label,
+  field,
+  first,
+  sort,
+  onSort,
+  directions,
+  className,
+}: {
+  label: string;
+  field: string;
+  first: "asc" | "desc";
+  sort: string;
+  onSort: (value: string) => void;
+  directions: { asc: string; desc: string };
+  className?: string;
+}) {
+  const active = sort.replace(/^-/, "") === field;
+  const current = active ? (sort.startsWith("-") ? "desc" : "asc") : null;
+  const next = current ? (current === "asc" ? "desc" : "asc") : first;
+  return (
+    <button
+      type="button"
+      className={`wb-sort${active ? " active" : ""}${className ? ` ${className}` : ""}`}
+      aria-pressed={active}
+      title={`Sort by ${label.toLowerCase()}, ${directions[next]}`}
+      onClick={() => onSort(next === "desc" ? `-${field}` : field)}
+    >
+      {label}
+      <span className="wb-sort-mark" aria-hidden="true">
+        {current === "asc" ? " ▲" : current === "desc" ? " ▼" : ""}
+      </span>
+      {current && <span className="visually-hidden">, sorted {directions[current]}</span>}
+    </button>
+  );
+}
 
 // Offered when the list shows the wishlist.
 const WISHLIST_SORTS = [
@@ -490,9 +534,20 @@ export default function ItemList() {
                   )
                 }
               />
-              <span>Piece</span>
-              <span>Grade</span>
-              <span className="num">{wishlistView ? "Target" : "Value"}</span>
+              <SortHeading label="Piece" field="name" first="asc" sort={sort}
+                onSort={(v) => set("sort", v)} directions={{ asc: "A to Z", desc: "Z to A" }} />
+              <SortHeading label="Grade" field="grade" first="desc" sort={sort}
+                onSort={(v) => set("sort", v)}
+                directions={{ asc: "low to high", desc: "high to low" }} />
+              {wishlistView ? (
+                <SortHeading label="Target" field="target_price" first="desc" sort={sort}
+                  onSort={(v) => set("sort", v)} className="num"
+                  directions={{ asc: "low to high", desc: "high to low" }} />
+              ) : (
+                <SortHeading label="Value" field="value" first="desc" sort={sort}
+                  onSort={(v) => set("sort", v)} className="num"
+                  directions={{ asc: "low to high", desc: "high to low" }} />
+              )}
             </div>
             <ul className="wb-rows">
               {items.map((item) => {

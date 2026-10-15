@@ -372,7 +372,8 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   wider, an inspector that renders `ItemDetail` with `embedded` (tabs, and a
   delete that stays in the list). Narrower, a row opens `/items/:id` as
   before. Keyboard handlers ignore keys typed into a field or while a dialog
-  is open.
+  is open. The Piece, Grade, and Value headings sort the list (`sort=name`,
+  `grade`, `value`, first click A to Z or high to low).
 - **Facts edit in place** through `components/inline-edit.tsx`: a fact in
   `item-facts.tsx` with an `edit` spec (field, kind, the raw stored value)
   becomes an `EditableValue` when the page passes `onSave`, which PATCHes
@@ -386,7 +387,7 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 an item, recording a value, rearranging the dashboard and resetting it, the
 duplicate warning, a generated checklist
 filling itself, search (the piece opening beside the list, its tabs, and the
-keyboard), a fact edited in place, the quick add, trash and restore, a note with a radar serial
+keyboard), the sortable headings, a fact edited in place, the quick add, trash and restore, a note with a radar serial
 number getting its badge and its size and printer showing on the item page,
 a wishlist coin showing its target price, an
 undated piece taking ND with no year, a bar or round getting a suggested

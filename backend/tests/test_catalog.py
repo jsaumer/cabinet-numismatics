@@ -91,7 +91,11 @@ def test_grade_range_filter_and_sort(client):
 
     body = client.get("/api/items", params={"sort": "-grade"}).json()
     codes = [i["grade"]["code"] if i["grade"] else None for i in body["items"]]
-    assert codes[:3] == ["MS-63", "AU-55", "VG-8"]
+    assert codes == ["MS-63", "AU-55", "VG-8", None]
+    # Low to high keeps the ungraded piece last too.
+    body = client.get("/api/items", params={"sort": "grade"}).json()
+    codes = [i["grade"]["code"] if i["grade"] else None for i in body["items"]]
+    assert codes == ["VG-8", "AU-55", "MS-63", None]
 
 
 def test_value_range_filter(client):

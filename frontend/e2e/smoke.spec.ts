@@ -37,9 +37,12 @@ async function withPasswordConfirm(page: Page, act: () => Promise<void>) {
   await expect(dialog).toBeHidden();
 }
 
-test("the dashboard renders", async ({ page }) => {
+test("the dashboard renders, as the home page and the sidebar's first link", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  const first = page.getByRole("navigation", { name: "Main" }).getByRole("link").first();
+  await expect(first).toHaveText("Dashboard");
+  await expect(first).toHaveAttribute("aria-current", "page");
 });
 
 test("add an item and see it on its page", async ({ page }) => {
@@ -159,6 +162,27 @@ test("the collection finds it by search, opens it beside the list, and Enter ope
   await expect(inspector.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(itemUrl);
+});
+
+test("the Piece, Grade, and Value headings sort the list both ways", async ({ page }) => {
+  await page.goto("/collection");
+  const rows = page.locator(".wb-row");
+  await expect(rows.first()).toBeVisible();
+  for (const [name, first, second] of [
+    ["Piece", "name", "-name"],
+    ["Grade", "-grade", "grade"],
+    ["Value", "-value", "value"],
+  ]) {
+    const heading = page.getByRole("button", { name: new RegExp(`^${name}`) });
+    await heading.click();
+    await expect(page).toHaveURL(new RegExp(`sort=${first}(&|$)`));
+    await expect(heading).toHaveAttribute("aria-pressed", "true");
+    await expect(rows.first()).toBeVisible(); // the server answered the sort
+    await heading.click();
+    await expect(page).toHaveURL(new RegExp(`sort=${second}(&|$)`));
+    await expect(rows.first()).toBeVisible();
+  }
+  await expect(page.locator(".wb-list .error")).toHaveCount(0);
 });
 
 test("a fact changes in place beside the list, and Escape puts it back", async ({ page }) => {
