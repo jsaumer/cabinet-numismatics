@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
 import { SourceStatus, ValueStrategy } from "../../api";
+import { ThemePicker } from "../../components/theme-picker";
 import { Section, SavedTick, SettingRow, useSavedTick, useSettings } from "./shared";
 
-/** Settings → General: display currency, melt cadence, the blended-value
- * strategy, and the trash's automatic clear-out. */
+/** Settings → General: the colour theme, display currency, melt cadence,
+ * the blended-value strategy, and the trash's automatic clear-out. */
 export default function GeneralSection() {
   const { settings, error, note, saving, apply } = useSettings();
   const [currency, setCurrency] = useState("");
@@ -31,6 +32,13 @@ export default function GeneralSection() {
     >
       {error && <p className="error">{error}</p>}
       {note && <p className="muted">{note}</p>}
+      <SettingRow
+        stacked
+        label="Theme"
+        help="The colours, on every device you sign in from. Light or dark stays the toggle in the header."
+      >
+        <ThemePicker />
+      </SettingRow>
       <SettingRow
         label="Display currency"
         help="Totals, the dashboard, and the reports convert into this."

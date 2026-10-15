@@ -2805,6 +2805,42 @@ here has to respect:
   anything else a Numista name search. "Save and add another" keeps
   `SHARED` (type, currency, date, seller, storage, tags) and nothing else.
 
+## Colour themes (v0.35.0)
+
+Four themes for the workbench layout, picked by the owner on 14 October 2026
+from a comparison of five (High contrast was left out): Bronze (the
+default), Silver, Album, and Ledger. Rules a later change has to respect:
+
+- **A theme exists in four places, which must agree**: the backend's
+  `routers/appearance.THEMES` (what `PUT /api/appearance` accepts), the
+  frontend's `src/themes.ts` (the picker, with swatches for show only), the
+  `:root[data-palette="..."]` blocks in `styles.css` (light, then
+  `[data-theme="dark"]`), and `test_appearance.py`'s expected list. Adding
+  one is all four; retiring one leaves stored values reading as the default
+  (`appearance._current`), so an older archive never breaks.
+- **Every theme defines the same tokens in both modes**: the twenty colour
+  tokens plus `--chip-ref-bg`, `--danger`, `--danger-border`,
+  `--chart-grid`, `--chart-axis` (derived with `color-mix`). A token a dark
+  block leaves out would show that theme's light value in dark mode, since
+  the light block also matches. Badge colours and the metal colours stay
+  shared across themes.
+- **Contrast is checked before a theme ships**: text 4.5:1 (body, muted,
+  links, buttons, header, gain and loss, the selected row) and 3:1 (chart
+  bars, accent marks), light and dark. The check found today's Bronze light
+  muted text at 3.41:1, so `--ink-3` moved from `#91897a` to `#7a7263`.
+- **The theme is a display choice, not a setting change**: it has its own
+  endpoint, admin but not fresh, like the dashboard layout, so choosing one
+  never asks for the password again; `PUT /api/settings` doesn't touch it.
+  Light or dark stays per browser on the header toggle.
+- **No flash and no sign-in gap**: `main.tsx` applies the browser's copy
+  (`localStorage` `cabinet.palette`) before React renders, which also covers
+  the sign-in page; `App.tsx` then applies the server's after sign-in. A
+  share link's visitor gets whatever their browser last had, which is
+  Bronze for anyone who has never signed in.
+- **The header can be light** (Ledger), so nothing on it may assume white
+  ink: the search box derives its fill and border from `--header-ink` with
+  `color-mix`.
+
 ## Releases
 
 
