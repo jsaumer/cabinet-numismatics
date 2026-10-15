@@ -8,6 +8,24 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.34.1] - 2026-10-14
+
+### Changed
+
+- The dashboard is the first link in the sidebar, above the collection's
+  views, as the home page it already was; it left the Insights group.
+- The collection list's Piece, Grade, and Value headings sort it. A first
+  click on Piece sorts A to Z by the row's title (year first for coins and
+  notes, so oldest first, then undated pieces, then bars and rounds) and a
+  second Z to A; Grade and Value start high to low and flip to low to high.
+  An arrow marks the sorted column. On the wish list, the Target heading
+  sorts by target price the same way. The Sort menu offers the same orders.
+- `GET /api/items` takes `sort=name` (the list's title, case-insensitive),
+  and `sort=grade` now puts ungraded pieces last in both directions, as the
+  other mostly-empty sorts already did.
+- The README screenshots are retaken with the dashboard first in the
+  sidebar.
+
 ## [0.34.0] - 2026-10-14
 
 ### Added

@@ -91,6 +91,45 @@ def test_list_filters_sort_and_pagination(client):
     assert client.get("/api/items", params={"sort": "evil"}).status_code == 422
 
 
+def test_sort_by_name_follows_the_list_title(client):
+    """`sort=name` orders by the row title as shown: year (and mint) first for
+    coins and notes, "ND" for an undated piece, the refiner for a bar."""
+    base = {"type": "coin", "country": "United States", "quantity": 1}
+    for extra in [
+        {"denomination": "25 cents", "year": 1932, "mint_mark": "D"},
+        {"denomination": "5 mark", "year": 1876, "country": "Germany"},
+        {
+            "denomination": "50 pfennig",
+            "year": 1921,
+            "year_nd": True,
+            "type": "note",
+            "country": "Germany",
+        },
+        {
+            "denomination": "1 oz silver bar",
+            "type": "bullion",
+            "issuer": "PAMP Suisse",
+            "country": "Switzerland",
+        },
+        {"denomination": "10 cents", "year": 1942},
+    ]:
+        assert client.post("/api/items", json={**base, **extra}).status_code == 201
+
+    def names(sort):
+        items = client.get("/api/items", params={"sort": sort}).json()["items"]
+        return [(i["year"], i["denomination"]) for i in items]
+
+    expected = [
+        (1876, "5 mark"),
+        (1932, "25 cents"),
+        (1942, "10 cents"),
+        (1921, "50 pfennig"),  # "nd (1921) ..." after the dated titles
+        (None, "1 oz silver bar"),  # "pamp suisse ..."
+    ]
+    assert names("name") == expected
+    assert names("-name") == expected[::-1]
+
+
 def test_metal_filter(client):
     """P11, v0.31.0: `metal=` is evaluated in Python (detect_metal has no SQL
     equivalent), so it needs its own check on filtering, "none", and paging."""
