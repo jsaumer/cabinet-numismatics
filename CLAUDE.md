@@ -3,7 +3,7 @@
 Cabinet is a single-user, self-hosted web application for managing a coin and
 paper money collection. Subtitle: "Numismatics: Coin & Paper Money Collection
 Manager." Repo name is `cabinet-numismatics`; UI/display name is "Cabinet";
-the OpenAPI title is "Cabinet API." **Public on GitHub under MIT, released as v0.35.1, and deployed on the owner's
+the OpenAPI title is "Cabinet API." **Public on GitHub under MIT, released as v0.35.2, and deployed on the owner's
 homelab Docker Swarm from the published GHCR images**, so treat it as
 an open-source project: keep CONTRIBUTING/CHANGELOG/docs current, and bump the
 version in `backend/pyproject.toml` (surfaced by `GET /api/health`) with the
@@ -128,7 +128,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 ## Current status & next step
 
-Released as v0.35.1: roadmap Phase 7 is complete, migrations
+Released as v0.35.2: roadmap Phase 7 is complete, migrations
 `0001`–`0022` and `a0001`–`a0002`. v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
@@ -337,7 +337,7 @@ the internet, whatever sign-in method or gateway sits in front, and the
 same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
 and `.env.example`. Review briefs and reviews stay local (gitignored), as
 they have since v0.33.0's spec was reviewed.
-**v0.34.0 (14 October 2026)** shipped the workbench layout: a sidebar shell, the collection as a list with the selected piece in an inspector, facts edited in place, and a lookup-first quick add at `/items/add`; see "The workbench layout" in the implementation notes. v0.34.1 put the dashboard first in the sidebar and made the list's Piece, Grade, and Value headings sort it (`sort=name` mirrors the row title). v0.35.0 added four color themes (Bronze, Silver, Album, Ledger) chosen in Settings → General and saved through `/api/appearance`; a theme lives in four places that must agree, see "Color themes" in the implementation notes.
+**v0.34.0 (14 October 2026)** shipped the workbench layout: a sidebar shell, the collection as a list with the selected piece in an inspector, facts edited in place, and a lookup-first quick add at `/items/add`; see "The workbench layout" in the implementation notes. v0.34.1 put the dashboard first in the sidebar and made the list's Piece, Grade, and Value headings sort it (`sort=name` mirrors the row title). v0.35.0 added four color themes (Bronze, Silver, Album, Ledger) chosen in Settings → General and saved through `/api/appearance`; a theme lives in five places that must agree, see "Color themes" in the implementation notes. v0.35.2 made the logo and tab icon follow the theme (files written by `scripts/theme_icons.py`).
 **Next, in order:** the road to v1.0.0's remaining items (a CI check
 against a breaking OpenAPI change, "Add a run" and the Numista banknote
 mapping confirmed against a live account, and a README and quick-start

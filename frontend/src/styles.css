@@ -2956,3 +2956,14 @@ button.theme-card:focus-visible {
   width: 100%;
   justify-items: stretch;
 }
+
+/* Header controls keep their label on one line; the search box gives way
+   first (it wrapped "Add piece" and "Sign out" at about 900px). */
+.site-header nav a,
+.site-header nav button,
+.site-header .account-name {
+  white-space: nowrap;
+}
+.header-search {
+  min-width: 8rem;
+}
