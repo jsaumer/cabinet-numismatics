@@ -91,9 +91,9 @@ it)/`backup_include_photos`/`backup_last_run`
 for in-app backups, `trash_retention_days` for the trash, and
 `alert_webhook_url`/`alert_webhook_format`/`heartbeat_url`/`metrics_enabled`
 plus the service-written `refresh_last_run`/`alert_state` for alerts and
-metrics, `dashboard_layout` (v0.27.0, the customisable dashboard) for
+metrics, `dashboard_layout` (v0.27.0, the customizable dashboard) for
 the saved widget layout, written only by `/api/dashboard/layout`, never by
-`PUT /api/settings`, `ui_theme` (v0.35.0, the colour theme: `bronze`,
+`PUT /api/settings`, `ui_theme` (v0.35.0, the color theme: `bronze`,
 `silver`, `album`, or `ledger`), written only by `/api/appearance`, and
 `spot_alerts` (v0.28.0, bullion stack figures: a
 list of spot-price thresholds, at most 12) with the service-written
@@ -292,7 +292,7 @@ hours; a stale row is used if the upstream fetch fails.
 ### source_cache (cache)
 Raw responses from external price sources, so repeated estimates don't spend a
 request against a small free-tier quota (`source` + `cache_key` composite PK,
-`payload` JSON, `fetched_at`). Numista caches catalogue data (a type, its
+`payload` JSON, `fetched_at`). Numista caches catalog data (a type, its
 issues, searches) and prices for 7 days, auction sales for 1 day, and the
 user's own collection (for import) for 1 hour; PCGS caches CoinFacts
 responses for 7 days; the bullion stack's purchase-day spot lookups

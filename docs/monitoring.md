@@ -33,7 +33,7 @@ every remaining request would fail the same way, and the quota is better
 spent after the fix. Key and quota checks fire even when cached data covers
 for the failure, since the next refresh will need the key.
 
-Items a source can't price (no catalogue number, a proof on Numista) are
+Items a source can't price (no catalog number, a proof on Numista) are
 skipped, not failed, so they never raise a refresh alert. The same goes for
 a 403 from Numista's paid auction-sales endpoint on a free key: the item
 page says sales records need the paid plan, and no key alert is raised.

@@ -21,7 +21,7 @@ const NUMISTA_FIELDS: Partial<Record<TextField, string>> = {
   shape: "shape",
   printer: "printer",
   watermark: "watermark",
-  demonetized_on: "demonetised on",
+  demonetized_on: "demonetized on",
   issuer: "issuer",
   mintage: "mintage",
 };
@@ -187,7 +187,7 @@ export function NumistaFill({
       {configured === false ? (
         <p className="muted" style={{ margin: 0 }}>
           Add a Numista API key in <Link to="/settings/pricing">Settings</Link> to fill items in from
-          the Numista catalogue.
+          the Numista catalog.
         </p>
       ) : (
         <>
@@ -246,7 +246,7 @@ export function NumistaFill({
               </ul>
             ))}
           <p className="muted" style={{ marginBottom: 0 }}>
-            Fills only fields that are still empty, and adds the catalogue references. Each
+            Fills only fields that are still empty, and adds the catalog references. Each
             lookup uses Numista requests from your quota; results are cached for 30 days.
           </p>
         </>

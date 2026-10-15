@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (October 2026): v0.35.0 (colour themes for the workbench
-layout) is the latest published release**, with versioned images published to GHCR from each
+**Status (October 2026): v0.35.1 (color themes for the workbench
+layout, in American spelling) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -20,7 +20,7 @@ September 2026 from a survey of other collection tools; it includes
 application login, which reverses the earlier decision to ship v1.0.0
 without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
 depth, fancy serial numbers, die axis and foreign dates) shipped together in
-v0.25.0, in-app restore (P2) in v0.26.0, the customisable dashboard
+v0.25.0, in-app restore (P2) in v0.26.0, the customizable dashboard
 (P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
 "group C" widgets followed in v0.29.0, alongside note details and a
 regrouped item page from the data-entry pass; authentication's first part
@@ -111,13 +111,13 @@ The heart of the app: describing what you own, accurately and flexibly.
   **Target: v0.14.0.**
 - ✔ **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
   Phase 5.7 C4. **Target: v0.14.0.**
-- ✔ **[Core]** Fill in an item from the Numista catalogue by catalogue number or
+- ✔ **[Core]** Fill in an item from the Numista catalog by catalog number or
   name search. Phase 5.7 C5. **Target: v0.15.0.**
 - ✔ **[Core]** Fill in an item from its PCGS cert number (type, date, mint,
   grade, designation, variety), and a duplicate warning when an item with
   the same reference, year, and mint already exists. Phase 5.9.
   **Shipped in v0.22.0.**
-- ✔ **[Core]** Add a run: pick a catalogue type, tick its issues, and get one
+- ✔ **[Core]** Add a run: pick a catalog type, tick its issues, and get one
   item per date and mint. Phase 5.9. **Shipped in v0.23.0.**
 - ✔ **[Core]** Wish-list target price and priority, alerted when an estimate
   falls to the target. Phase 7, P3. **Shipped in v0.25.0.**
@@ -133,7 +133,7 @@ The heart of the app: describing what you own, accurately and flexibly.
 - ✔ **[Nice]** Die axis, and the date as struck in its own calendar beside
   the Gregorian year. Phase 7, P6. **Shipped in v0.25.0.**
 - ✔ **[Nice]** Note details: width and height for anything not round (coins
-  keep diameter), printer, and watermark; a demonetisation date for coins
+  keep diameter), printer, and watermark; a demonetization date for coins
   and notes alike. Filled from Numista too. From the data-entry pass, not
   in the original roadmap. **Shipped in v0.29.0.**
 - **[Nice]** Grading submissions: service, submission number, tier, fees
@@ -233,7 +233,7 @@ guidance, not appraisals.
 - ✔ **[Core]** Bars and rounds as an item type of their own, with metal
   detection that no longer counts nickel silver or Nordic gold as precious,
   fineness read from the metal's own percentage, weight in troy ounces, and
-  bars from Numista's catalogue. Phase 7, P11. **Shipped in v0.31.0**, see
+  bars from Numista's catalog. Phase 7, P11. **Shipped in v0.31.0**, see
   [SPEC_0310](specs/SPEC_0310.md). As built: a Metal select, a g/oz weight
   switch, a suggested product name, a `metal=` list filter, the Stack
   page's "Left out" list, and a melt value from the moment a piece is
@@ -246,7 +246,7 @@ guidance, not appraisals.
 
 - ✔ **[Core]** Dashboard: counts, total cost basis, total estimated value,
   and top-level breakdowns.
-- ✔ **[Core]** A customisable dashboard: choose, reorder, and size its cards,
+- ✔ **[Core]** A customizable dashboard: choose, reorder, and size its cards,
   with the layout saved on the server. Phase 7, P10. **Shipped in v0.27.0.**
 - ✔ **[Core]** Breakdowns by country, type, decade, grade, and tag, plus
   acquisitions by year.
@@ -262,7 +262,7 @@ guidance, not appraisals.
   progress, e.g. a date/mint run).
 - ✔ **[Nice]** Insurance report (itemized values, photos, certs, totals,
   disclaimer).
-- ✔ **[Nice]** Registry-style sets: checklist slots generated from a catalogue
+- ✔ **[Nice]** Registry-style sets: checklist slots generated from a catalog
   type's issues or a year and mint range, matched automatically to owned
   items, with a completion percentage and a "needed to complete" list.
   Phase 5.9. **Shipped in v0.23.0**, with "Add a run".
@@ -619,7 +619,7 @@ items need revisiting.
 
 - ✔ **C1: Grading depth.** A strike type on each item (business, proof,
   specimen) with proof grades on the Sheldon scale (PR/PF-60 to 70);
-  designations (CAM/DCAM, PL/DMPL, copper colour RD/RB/BN, "+" grades, star
+  designations (CAM/DCAM, PL/DMPL, copper color RD/RB/BN, "+" grades, star
   and CAC stickers); a "details" grade recording the problem (cleaned, damaged,
   environmental…); PMG's EPQ and star designations and its missing grades 1–3.
   The price adapters must respect them: PCGS keys proofs to their own numbers
@@ -640,18 +640,18 @@ items need revisiting.
   own cert lookup (PCGS, NGC, PMG), built from the cert service and number
   already stored. PCGS opens the certificate itself; NGC's and PMG's lookups
   also ask for the grade, so those open the lookup page. No API involved.
-- ✔ **C5: Fill in an item from Numista.** Enter a Numista catalogue number, or
+- ✔ **C5: Fill in an item from Numista.** Enter a Numista catalog number, or
   search by name, and pre-fill country, denomination, years, composition,
   weight, and diameter on the item form. Uses the configured key and the same
-  cache as pricing (catalogue data 7 days), and fills exactly the fields melt
+  cache as pricing (catalog data 7 days), and fills exactly the fields melt
   pricing needs. The biggest single time-saver when entering a real
-  collection by hand. It also adds the type's other catalogue references and
+  collection by hand. It also adds the type's other catalog references and
   lists its issues, so choosing one sets year, mint mark, and mintage; only
   empty fields are filled.
 
 *Exit: an item record can describe any coin or note accurately (proofs,
 problem coins, and notes' own details included), gains are net of costs, and
-entering a catalogued piece takes seconds.*
+entering a cataloged piece takes seconds.*
 
 ### Phase 5.8: Operations and quality of life
 
@@ -734,7 +734,7 @@ pieces turned up, each shipped as a small release:
   look, the Calibri-style typeface, dark by default, the logo and favicon,
   the Homepage tile, a header alignment fix).
 - ✔ v0.24.4: PCGS's daily limit corrected from 1,000 to 100, with a Settings
-  warning past 100 priceable items; the Numista licence citation corrected
+  warning past 100 priceable items; the Numista license citation corrected
   (§8.4, personal projects, permits the cache; §8.3 covers only metadata).
 - ✔ v0.24.5: a PCGS cert fill writes "United States" and drops a "P" the
   coin doesn't carry, so it matches hand-entered pieces.
@@ -756,7 +756,7 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.29.0: a note had nowhere to record its size, printer, or watermark
   (the owner had been typing the printer into the free-text notes), and the
   item page had grown into one grid of mostly dashes. Note details (size,
-  printer, watermark, demonetisation date) filled from Numista too, and the
+  printer, watermark, demonetization date) filled from Numista too, and the
   item page now leads with a hero (photo, title, grade, value) and groups
   the rest into titled facts that hide when empty, with a toggle for the
   full sheet. Ten more dashboard widgets from the "group C" survey.
@@ -765,7 +765,7 @@ pieces turned up, each shipped as a small release:
   mistake could not be removed. Both fixed; a price source's values are
   still kept.
 - ✔ v0.34.0: the owner found the interface read as generic and chose a
-  "workbench" layout from three options (workbench, catalogue, holdings)
+  "workbench" layout from three options (workbench, catalog, holdings)
   prototyped on 14 October 2026: a sidebar, and the collection as a list
   with the selected piece open beside it, facts edited in place, and a
   lookup-first quick add (one box for a name, a Numista number, or a PCGS
@@ -773,10 +773,12 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.34.1: the first look at 0.34.0 asked for the dashboard at the top
   of the sidebar and list headings that sort: Piece A to Z by the row's
   title, Grade and Value high to low, each flipping on a second click.
-- ✔ v0.35.0: colour themes. Five were compared on the workbench screen,
+- ✔ v0.35.0: color themes. Five were compared on the workbench screen,
   light and dark, with contrast measured; the owner chose four (Bronze,
   Silver, Album, Ledger; High contrast left out) as a picker in Settings,
   saved on the server. The check also fixed Bronze's light muted text.
+- ✔ v0.35.1: American spelling throughout the interface and the docs
+  (color, catalog, customizable, demonetized), with the rule in CLAUDE.md.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -995,7 +997,7 @@ v0.26.0.
   the alert is sent once, when an estimate first reaches the target; and
   the target and priority stay with a piece after it is bought.
 - ✔ **P4: Paper money depth** (M). Friedberg and Pick numbers as first-class
-  catalogue references with their own lookup links; National Bank Note
+  catalog references with their own lookup links; National Bank Note
   fields (charter number, bank, city, state); series and signature
   combination as structured fields with a report grouped by signature;
   plate and position letters. CurrencyManage is the benchmark. **Shipped in
@@ -1023,7 +1025,7 @@ v0.26.0.
   **Shipped in v0.28.0**, migration `0020`. As built: purchase-day spot comes
   from the public-domain fawazahmed0 currency-api (daily XAU/XAG/XPT/XPD from
   2 March 2024, cached for ten years since a past day never changes); LBMA's
-  longer public series was ruled out because its terms need a licence for
+  longer public series was ruled out because its terms need a license for
   valuation use, so Cabinet does not use it, and gold-api.com's history needs
   a key. Older purchases take a hand-typed figure, and a typed figure is
   never overwritten by the backfill (`POST /api/stack/backfill`, and the
@@ -1057,7 +1059,7 @@ v0.26.0.
   reviews. **The API consistency pass from the 1.0 checklist below shipped
   with A1**, since auth already touches every endpoint.
   - **A1: One admin. Shipped.** ◆ Single user to start: just the admin,
-    onboarded when the app is initialised. A setup page appears while no
+    onboarded when the app is initialized. A setup page appears while no
     account exists and asks for ◆ a one-time **setup code the backend
     prints in its log** at startup (or takes from an environment
     variable), so nobody else can claim an open instance first. ◆ Login is
@@ -1191,12 +1193,12 @@ v0.26.0.
   must exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or
   it blocks the app's own share links.
 
-- ✔ **P10: A customisable dashboard** (M–L). **Prioritised by the owner on 20
+- ✔ **P10: A customizable dashboard** (M–L). **Prioritized by the owner on 20
   September 2026: next, now that in-app restore has shipped**, ahead of P7
   to P9. The dashboard today is a fixed page; the owner wants to decide what
   is on it.
   Proposed: every card becomes a widget that can be shown or hidden,
-  reordered, and sized (full, half, or a third of the row); a catalogue of
+  reordered, and sized (full, half, or a third of the row); a catalog of
   widgets to add (the value hero, value over time, value by country, tag,
   decade, grade, acquisitions by year, gains, the notes report, the wish
   list with targets reached, recent additions, fancy serials, pricing

@@ -187,7 +187,7 @@ FIELDS = [
     ("sold_date", "Sold on", "date", ["sold date", "sale date", "date sold"]),
     ("sold_price", "Sold for", "money", ["sold price", "sale price", "sold for"]),
     ("sold_to", "Sold to", "text", ["sold to", "buyer"]),
-    ("catalog_refs", "Catalogue numbers (KM# 203…)", "refs",
+    ("catalog_refs", "Catalog numbers (KM# 203…)", "refs",
      ["catalog", "catalogue", "catalog number", "catalog codes", "references", "reference",
       "km", "km#", "krause"]),
     ("numista", "Numista number", "numista", ["n# number", "numista", "numista number", "n#"]),
@@ -797,7 +797,7 @@ def numista_account_candidates(
             if type_id in pending:
                 cand.messages.append(
                     "Denomination, composition, and size are filled in from Numista's "
-                    "catalogue on import"
+                    "catalog on import"
                 )
             elif denomination:
                 cand.messages.append("Denomination taken from the type's title")

@@ -15,7 +15,7 @@ source) and returns one estimate. Results are appended to the
 history is retained over time. Upstream responses are cached in the
 `source_cache` table (spot prices in `spot_prices`), so a repeat lookup
 spends no request and a stale copy covers for a failed one. No source is
-ever sent collection data: a lookup carries a catalogue or cert number and a
+ever sent collection data: a lookup carries a catalog or cert number and a
 grade, nothing else.
 
 Each estimate records:
@@ -83,7 +83,7 @@ Researched and rejected:
 
 - **LBMA's public JSON price series** goes back to 1968, well past what
   anything else offers, but the LBMA/ICE Benchmark Administration terms say a
-  licence is needed to use benchmark data, including for valuation. Cabinet
+  license is needed to use benchmark data, including for valuation. Cabinet
   does not use it, and it must not gain an LBMA adapter without one.
 
 Implemented instead with the public-domain (CC0) **fawazahmed0 currency-api**
@@ -115,7 +115,7 @@ was USD 29.81/oz, gold on 2024-06-03 was EUR 2145.62/oz, and a 2020 date was
 refused with 422.
 
 ### Numista (implemented, pricing program M2)
-Numista catalogues coins, banknotes, and exonumia and quotes collector-swap
+Numista catalogs coins, banknotes, and exonumia and quotes collector-swap
 estimates per grade. Implemented in `app/services/numista.py`.
 
 The chain an estimate follows:
@@ -129,7 +129,7 @@ The chain an estimate follows:
    then ranked, best first: a matching mint letter, then replacement
    agreement (does the issue look like a replacement note, the same way the
    item's own `replacement_note` flag does), then a match on the item's
-   catalogue reference, variety, or signatures, then ND agreement, then
+   catalog reference, variety, or signatures, then ND agreement, then
    Numista's own order. A type can list more than one issue for the same
    year, a replacement note beside the regular one being the case that
    prompted this: the ranking is what tells them apart.
@@ -163,8 +163,8 @@ Requirements and limits:
 - A free API key (numista.com), stored encrypted in Settings; the source is
   disabled until you switch it on.
 - 2,000 requests a month, so every response is cached in `source_cache`:
-  issues and prices for 7 days. The licence forbids storing its data (§8.1)
-  apart from identifiers (§8.2), catalogue metadata for seven days (§8.3),
+  issues and prices for 7 days. The license forbids storing its data (§8.1)
+  apart from identifiers (§8.2), catalog metadata for seven days (§8.3),
   and an individual's personal project (§8.4); §8.4 is what covers a
   self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
   does not cover publishing the data or running a public service. A stale
@@ -185,10 +185,10 @@ Requirements and limits:
 A missing prerequisite answers 422 with what to fix; an upstream failure or an
 exhausted quota answers 502.
 
-**Catalogue lookup.** The same key also fills items in: the item form looks a
+**Catalog lookup.** The same key also fills items in: the item form looks a
 type up by Numista number or name search (`GET /types/{id}` and
 `GET /types?q=`) and pre-fills identity, composition, and physical fields,
-catalogue references, and the issue list with mintages. It needs only the
+catalog references, and the issue list with mintages. It needs only the
 key, not the pricing toggle, and spends from the same quota: one request per
 search or type, cached 7 days; a type's issues are the same cache entry the
 estimates use, so pricing an item you just filled in costs one request fewer.
@@ -299,7 +299,7 @@ will hand them to a self-hosted app. Research in September 2026 found:
 - **eBay**: sold data is only in the Marketplace Insights API, closed to new
   applicants (2025–26 applications are refused); the Finding API's
   `findCompletedItems` was decommissioned in February 2025; the open Browse
-  API returns asking prices on active listings only, and eBay's API licence
+  API returns asking prices on active listings only, and eBay's API license
   forbids using its content to model prices. No sold-price API is open to
   individuals anywhere else either: auction houses and aggregators, price
   guides, and Numista's own sales records all require a paid plan or forbid

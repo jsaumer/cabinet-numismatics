@@ -91,7 +91,7 @@ export async function req<T>(url: string, init?: RequestInit, opts?: ReqOptions)
   const { message, reauth } = await readError(resp);
 
   if (resp.status === 403 && reauth && !opts?.raw && !opts?.retried && onReauthRequired) {
-    await onReauthRequired(); // throws "Confirmation cancelled." if the visitor cancels
+    await onReauthRequired(); // throws "Confirmation canceled." if the visitor cancels
     // Retried once, now inside the confirmed window; never a second dialog.
     return req<T>(url, init, { ...opts, retried: true });
   }

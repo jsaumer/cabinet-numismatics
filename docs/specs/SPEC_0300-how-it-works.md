@@ -75,7 +75,7 @@ sequenceDiagram
 
 - **Right code first.** The code is compared before any throttle counts it,
   in constant time. A right code always gets through; wrong codes count
-  towards five per address in 15 minutes, so a neighbour on the network
+  towards five per address in 15 minutes, so a neighbor on the network
   can't block the owner by burning attempts.
 - **Password rules:** 12 to 256 characters, no composition rules, hashed
   with Argon2id.

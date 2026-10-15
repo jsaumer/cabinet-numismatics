@@ -35,7 +35,7 @@ export default function GeneralSection() {
       <SettingRow
         stacked
         label="Theme"
-        help="The colours, on every device you sign in from. Light or dark stays the toggle in the header."
+        help="The colors, on every device you sign in from. Light or dark stays the toggle in the header."
       >
         <ThemePicker />
       </SettingRow>

@@ -327,7 +327,7 @@ export default function AddRun() {
               </label>
             </div>
             <p className="muted">
-              Each item gets the type's country, denomination, composition, weight, and catalogue
+              Each item gets the type's country, denomination, composition, weight, and catalog
               references, plus its own year, mint mark, and mintage. Grades and prices that differ
               can be fixed afterwards, one item or several at a time from the collection.
             </p>

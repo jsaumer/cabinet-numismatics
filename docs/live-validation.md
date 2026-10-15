@@ -191,7 +191,7 @@ until the outpost's header handling is understood.
 Bring up the local stack with the CI mock provider (`COMPOSE_FILE`
 including `docker-compose.ci.yml`; `bash scripts/ci/stack-smoke.sh sso`
 does the setup) and, with a provider linked, run each command once so its
-behaviour is known before it is needed on the Swarm:
+behavior is known before it is needed on the Swarm:
 
 - `status`: providers, identities, methods on or off.
 - `unlink-identity <id>`: the provider session ends at once.
@@ -235,7 +235,7 @@ out of scope.
 - **Scan config: "Full and fast."** Not "Full and very deep ultimate": the
   deep configs include denial-of-service and brute-force families, which
   the rules forbid against the live instance. "Full and fast" keeps
-  Greenbone's safe-checks behaviour.
+  Greenbone's safe-checks behavior.
 - **Port list**: "All IANA assigned TCP" for C-1 and C-2; "All TCP and
   Nmap top 100 UDP" for C-3.
 - **Alive test**: "Consider Alive" for C-1 and C-2, since a target behind
@@ -275,7 +275,7 @@ Expect these, and don't file them as findings:
   component (the nginx configuration, the frontend, an API answer), once
   you've confirmed it isn't a version-banner guess (OpenVAS infers
   versions; with `server_tokens off` it often can't and says so).
-- Any **Medium** result that is about behaviour rather than a header
+- Any **Medium** result that is about behavior rather than a header
   policy you already understand: an information leak in an error body, a
   path that answers anonymously outside the gate's allowed routes and the
   share prefix, a photo served without the `auth_request` check.

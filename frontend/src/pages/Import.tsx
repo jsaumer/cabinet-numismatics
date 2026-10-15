@@ -225,7 +225,7 @@ export default function Import() {
           <div className="estimate-form" style={{ marginTop: 0 }}>
             <label className="slot">
               <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} />
-              Fill in catalogue details (denomination, composition, weight, size): one Numista
+              Fill in catalog details (denomination, composition, weight, size): one Numista
               request per coin type not looked up in the last week
             </label>
             <label className="slot">
@@ -415,7 +415,7 @@ export default function Import() {
               {details &&
                 (preview.types_to_fetch
                   ? ` Importing looks up ${preview.types_to_fetch} of them on Numista (one request each, from your monthly quota).`
-                  : " Their catalogue details are already cached.")}
+                  : " Their catalog details are already cached.")}
               {preview.photos > 0 && !pictures && " Pictures won't be downloaded (the option is off)."}
             </p>
           )}
