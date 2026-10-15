@@ -3,8 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 
 import { api, ChecklistSummary, CollectionStats } from "../api";
 
-/** The workbench sidebar: every way into the collection, then the checklists,
- * then the pages that read the collection. Counts come from requests other
+/** The workbench sidebar: the dashboard (the home page) first, then every
+ * way into the collection, the checklists, and the pages that read the
+ * collection. Counts come from requests other
  * pages already make, refreshed whenever the route changes. */
 export function Sidebar() {
   const location = useLocation();
@@ -38,6 +39,15 @@ export function Sidebar() {
 
   return (
     <nav className="sidebar no-print" aria-label="Main">
+      <ul className="sidebar-home">
+        <li>
+          <Link to="/" className={pageOn("/") ? "active" : undefined}
+            aria-current={pageOn("/") ? "page" : undefined}>
+            Dashboard
+          </Link>
+        </li>
+      </ul>
+
       <div className="sidebar-group">
         <h2>Collection</h2>
         <ul>
@@ -94,7 +104,6 @@ export function Sidebar() {
       <div className="sidebar-group">
         <h2>Insights</h2>
         <ul>
-          <li><Link to="/" className={pageOn("/") ? "active" : undefined}>Dashboard</Link></li>
           <li><Link to="/pricing" className={pageOn("/pricing") ? "active" : undefined}>Pricing</Link></li>
           <li><Link to="/stack" className={pageOn("/stack") ? "active" : undefined}>Stack</Link></li>
           <li><Link to="/report" className={pageOn("/report") ? "active" : undefined}>Insurance report</Link></li>

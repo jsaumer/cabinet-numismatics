@@ -2661,3 +2661,51 @@ dl.facts .saved-tick {
     position: static;
   }
 }
+/* The dashboard sits above the groups: it is the home page. */
+.sidebar-home li a {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Sortable column headings in the collection list. */
+.wb-colhead > button.wb-sort:first-of-type {
+  padding-left: 2rem;
+}
+button.wb-sort {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+button.wb-sort.num {
+  text-align: right;
+}
+button.wb-sort:hover,
+button.wb-sort.active {
+  color: var(--ink);
+}
+button.wb-sort.active {
+  font-weight: 600;
+}
+button.wb-sort:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wb-sort-mark {
+  color: var(--accent);
+  font-size: 0.7em;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

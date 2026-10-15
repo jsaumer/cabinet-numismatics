@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.34.0-informational)
+![Version](https://img.shields.io/badge/version-0.34.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.34.0 released.** 1.0 will mean a stable HTTP API; until then
+**Status: v0.34.1 released.** 1.0 will mean a stable HTTP API; until then
 the API may still change. See the [roadmap](docs/roadmap.md) for what's
 built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
@@ -109,11 +109,13 @@ Dark is the default; the header toggle switches to light and remembers it.
   place.
 - **A workbench layout**: a sidebar holds every way into the collection
   (owned, wish list, sold, the trash), each checklist with its progress, and
-  the insights pages; the header has a search box (`/` to focus it) and Add
-  piece. On a wide screen the collection is a compact list with the selected
-  piece open beside it, its sections behind Overview, Value, Photos and
-  files, and History tabs, and the keyboard moves through it (J and K,
-  Enter to open the full page, E to edit, N for a new piece, Esc to close).
+  the insights pages, with the dashboard (the home page) first; the header
+  has a search box (`/` to focus it) and Add piece. The Piece, Grade, and
+  Value headings sort the list either way. On a wide screen the collection
+  is a compact list with the selected piece open beside it, its sections
+  behind Overview, Value, Photos and files, and History tabs, and the
+  keyboard moves through it (J and K, Enter to open the full page, E to
+  edit, N for a new piece, Esc to close).
 - **Edit in place**: on the item page and beside the list, a fact (grade,
   series, mint mark, weight, fineness, paid, storage, and two dozen more)
   turns into a field on click; Enter or leaving it saves, Esc puts it back.
@@ -377,7 +379,7 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
-| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.34.0` |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.34.1` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and

@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from pydantic import ValidationError
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth import events
@@ -59,8 +59,32 @@ SORTABLE = {
     "pcgs_pop_higher": Item.pcgs_pop_higher,
 }
 # Mostly empty columns: rows without a value sort last in either direction
-# (an undated piece has no year).
-NULLS_LAST = {"priority", "target_price", "year", "pcgs_pop_higher", "value"}
+# (an undated piece has no year, an ungraded one no grade).
+NULLS_LAST = {"priority", "target_price", "year", "pcgs_pop_higher", "value", "grade"}
+
+
+def _name_key():
+    """The list's title as text, lowercased, for `sort=name`: "1932-D 25 cents",
+    "ND (1921) 50 pfennig", or for a bar or round its refiner (else country)
+    and product name. Mirrors the frontend's row title, so A-Z reads in the
+    order the list shows (coins and notes mostly by year, as their titles
+    start with it)."""
+    year = cast(Item.year, String)
+    dated = func.coalesce(year, "") + case(
+        (func.coalesce(Item.mint_mark, "") != "", "-" + Item.mint_mark), else_=""
+    )
+    undated = "nd" + case((Item.year.is_(None), ""), else_=" (" + year + ")")
+    return func.lower(
+        case(
+            (
+                Item.type == "bullion",
+                func.coalesce(func.nullif(Item.issuer, ""), Item.country) + " " + Item.denomination,
+            ),
+            (Item.year_nd.is_(True), undated + " " + Item.denomination),
+            else_=dated + " " + Item.denomination,
+        )
+    )
+
 
 ITEM_LOAD = (
     selectinload(Item.photos),
@@ -424,6 +448,8 @@ def list_items(
     descending = sort.startswith("-")
     if field == "grade":
         order = Grade.rank.desc() if descending else Grade.rank.asc()
+    elif field == "name":
+        order = _name_key().desc() if descending else _name_key().asc()
     elif field == "value":
         # The newest estimate, the same subquery the value filters use.
         value_column = _latest_value_subquery()
@@ -436,6 +462,8 @@ def list_items(
     # come last whichever way the column runs.
     if field == "value":
         ordering = (_latest_value_subquery().is_(None), order)
+    elif field == "grade":
+        ordering = (Grade.rank.is_(None), order)
     elif field in NULLS_LAST:
         ordering = (SORTABLE[field].is_(None), order)
     else:

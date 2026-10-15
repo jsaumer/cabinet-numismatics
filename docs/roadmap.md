@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (October 2026): v0.34.0 (the workbench layout) is the latest
-published release**, with versioned images published to GHCR from each
+**Status (October 2026): v0.34.1 (the workbench layout, with sortable
+list headings) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -770,6 +770,9 @@ pieces turned up, each shipped as a small release:
   with the selected piece open beside it, facts edited in place, and a
   lookup-first quick add (one box for a name, a Numista number, or a PCGS
   cert).
+- ✔ v0.34.1: the first look at 0.34.0 asked for the dashboard at the top
+  of the sidebar and list headings that sort: Piece A to Z by the row's
+  title, Grade and Value high to low, each flipping on a second click.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

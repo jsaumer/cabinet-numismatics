@@ -209,11 +209,17 @@ key from `/api/reference/serial-traits`; an unknown one is 422),
 `limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`,
-`value`, `pcgs_pop_higher`, or `grade`; `-` prefix for descending; default
-`-created_at`; anything else is 422; with `priority`, `target_price`,
-`year`, `value`, and `pcgs_pop_higher`, items without a value come last in
-either direction). `value` sorts by the newest estimate, the same
-subquery the value filters use, not the blended `value_strategy` figure.
+`value`, `pcgs_pop_higher`, `grade`, or `name`; `-` prefix for descending;
+default `-created_at`; anything else is 422; with `priority`,
+`target_price`, `year`, `value`, `pcgs_pop_higher`, and `grade`, items
+without a value come last in either direction). `value` sorts by the newest
+estimate, the same subquery the value filters use, not the blended
+`value_strategy` figure, and compares amounts as stored, whatever their
+currency. `grade` sorts by the grade's rank (1 to 70 on both the Sheldon and
+PMG scales). `name` (v0.34.1) sorts by the collection list's row title,
+case-insensitively: the year label, mint mark, and denomination for a coin
+or note ("1932-D 25 cents", "ND (1921) 50 pfennig"), the refiner (else the
+country) and product name for a bar or round.
 The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
