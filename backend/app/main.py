@@ -15,6 +15,7 @@ from app.auth.permissions import ReauthRequired, reauth_body, require_permission
 from app.config import ConfigError, check_startup, get_settings
 from app.db import engine
 from app.routers import (
+    appearance,
     auth,
     backup,
     catalogue,
@@ -297,6 +298,7 @@ app.include_router(trash.router)
 app.include_router(monitoring.router)
 app.include_router(restore.router)
 app.include_router(dashboard.router)
+app.include_router(appearance.router)
 app.include_router(stack.router)
 app.include_router(share.router)
 app.include_router(share_links.router)

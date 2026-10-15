@@ -348,6 +348,15 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   light flash, `components/theme.ts` applies the theme, and the header
   toggle switches to light and remembers the choice in `localStorage`
   (`theme`). The operating system's preference is not consulted.
+- **Colour themes** (v0.35.0) are `data-palette` on `<html>`: Bronze is the
+  `:root` blocks, and each other theme in `styles.css` redefines the same
+  tokens for light and then dark. `src/themes.ts` lists them for the picker
+  (`components/theme-picker.tsx`, in Settings → General), and its keys must
+  match the backend's `routers/appearance.THEMES`. `main.tsx` applies the
+  browser's last theme (`localStorage` `cabinet.palette`) before the first
+  paint; once signed in, `App.tsx` applies the server's. Anything drawn on
+  the header takes its colours from `--header-*`, never a fixed white, since
+  Ledger's header is light.
 - **No sideways shift.** `html` has `scrollbar-gutter: stable` (with
   `overflow-y: scroll` where that isn't supported), so the header stays put
   between a short page and one that scrolls.
@@ -393,7 +402,8 @@ a wishlist coin showing its target price, an
 undated piece taking ND with no year, a bar or round getting a suggested
 product name and showing up on the Stack page, a silver piece showing its
 fine ounces on the Stack page, the
-security headers, every Settings section, an in-app restore of a backup
+security headers, choosing a theme (it applies, survives a reload from the
+server, and goes back), every Settings section, an in-app restore of a backup
 taken a moment earlier, and, last of all, changing the admin's password and
 username and putting each back (see "Sign-in tests" below for why those two
 are last). The tests run against a running stack (`docker compose up`), not

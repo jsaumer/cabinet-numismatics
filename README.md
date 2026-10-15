@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.34.1-informational)
+![Version](https://img.shields.io/badge/version-0.35.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.34.1 released.** 1.0 will mean a stable HTTP API; until then
+**Status: v0.35.0 released.** 1.0 will mean a stable HTTP API; until then
 the API may still change. See the [roadmap](docs/roadmap.md) for what's
 built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
@@ -240,8 +240,11 @@ Dark is the default; the header toggle switches to light and remembers it.
   with a [Swarm stack file](deploy/docker-stack.yaml); an OpenAPI schema at
   `/api/openapi.json`. The backend applies its own migrations on startup.
 - Responsive UI for phone/tablet, **dark by default** with a light theme on
-  the header toggle. System fonts and inline SVG icons only: the page loads
-  nothing from outside the app.
+  the header toggle, and **four colour themes** (Bronze, the default;
+  Silver; Album; Ledger) chosen in Settings → General, saved on the server
+  so the choice follows you to every device. Each was checked for WCAG AA
+  contrast in light and dark. System fonts and inline SVG icons only: the
+  page loads nothing from outside the app.
 - **Backups from the app**: download the collection as one encrypted,
   tamper-evident archive (database + photos + documents + manifest, `.zip.age`,
   encrypted with a backup key you keep a copy of) from Settings, or schedule
@@ -379,7 +382,7 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
-| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.34.1` |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.35.0` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and

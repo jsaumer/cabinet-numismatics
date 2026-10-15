@@ -4,7 +4,7 @@ import { json, req, ReqOptions } from "./client";
 import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
-import type { DashboardLayout, DashboardWidget } from "./types/dashboard";
+import type { Appearance, DashboardLayout, DashboardWidget } from "./types/dashboard";
 import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
 import type { ApiToken, AuditEntry, AuthSession, AuthState, DryRunResult, IdentitySummary, LoginResult, LogoutResult, Me, NewApiToken, PasswordChangeResult, ProviderBody, ProviderPatch, SavedProvider, SigninConfig, SigninConfigPatch, TokenScope } from "./types/auth";
@@ -204,6 +204,8 @@ export const api = {
   itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
 
   dashboardLayout: () => req<DashboardLayout>("/api/dashboard/layout"),
+  appearance: () => req<Appearance>("/api/appearance"),
+  setAppearance: (theme: string) => req<Appearance>("/api/appearance", json("PUT", { theme })),
   saveDashboardLayout: (widgets: DashboardWidget[]) =>
     req<DashboardLayout>("/api/dashboard/layout", json("PUT", { widgets })),
   /** Forgets the saved layout: the default comes back. */
