@@ -338,7 +338,9 @@ whether the schema is current. To run the published images instead of
 building, see [docs/deployment.md](docs/deployment.md).
 
 **Want something to look at first?** Load a small demo collection (16 items
-across several countries, decades, and grades, with value history). Mint a
+across several countries, decades, and grades, with value history, and
+public domain photos from Wikimedia Commons that Cabinet fetches while it
+seeds; `--no-photos` skips them). Mint a
 write-scoped API token first (Settings → Account → API tokens, or
 `POST /api/auth/tokens`):
 
