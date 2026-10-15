@@ -8,7 +8,7 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.34.0] - 2026-10-14
 
 ### Added
 
@@ -47,6 +47,12 @@ applies them itself on startup; for earlier releases, run
 - `.gitattributes` makes every text file LF in every checkout, Windows
   included, so a working tree copied between machines no longer shows every
   file as changed.
+- Dependencies: React and react-dom 19.3, react-router-dom 7.18.4, Vite
+  8.3.1, Starlette 1.7.0, uvicorn 0.54.0, Mako 1.4.3, watchfiles 1.3.0, and
+  `actions/upload-artifact` 7. Dependabot now moves React and react-dom in
+  one pull request and leaves pydantic-core to move with pydantic.
+- The README screenshots are retaken with the new layout; the collection
+  shot shows a piece open beside the list.
 
 ## [0.33.4] - 2026-09-24
 

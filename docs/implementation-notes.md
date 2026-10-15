@@ -2743,7 +2743,7 @@ The owner's first look at v0.33.0 live. Rules:
   three columns, details as `.provider-detail` lines under the name, the
   subject wrapping anywhere, inside `.table-scroll`.
 
-## The workbench layout (unreleased)
+## The workbench layout (v0.34.0)
 
 Chosen by the owner on 14 October 2026 from three prototypes (workbench,
 catalogue, holdings), after a review found the interface read as a generic
