@@ -12,8 +12,11 @@ applies them itself on startup; for earlier releases, run
 
 ### Changed
 
-- Dependencies: pydantic 2.14.1 with pydantic-core 2.50.1, uvloop 0.23.0,
-  pypdfium2 5.14.0, python-dotenv 1.2.4, pycparser 3.11, Vite 8.3.4,
+- Dependencies: FastAPI 0.143.1, which brings `opentelemetry-api` 1.45.1
+  into the image as a new dependency (FastAPI's own; Cabinet doesn't use
+  it), pydantic 2.14.1 with pydantic-core 2.50.1, uvloop 0.23.0, httptools
+  0.9.0, cryptography 50.0.2, PyJWT 2.15.1, MarkupSafe 3.0.4, pypdfium2
+  5.14.0, python-dotenv 1.2.4, pycparser 3.11, Vite 8.3.4,
   `@vitejs/plugin-react` 6.1.2, and Playwright 1.64.0 (the screenshot
   guide's Playwright image with it). Dependabot now moves pydantic and
   pydantic-core in one pull request; 0.34.0's rule ignoring pydantic-core
