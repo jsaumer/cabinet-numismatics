@@ -8,7 +8,7 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.34.1] - 2026-10-14
 
 ### Changed
 
@@ -23,6 +23,8 @@ applies them itself on startup; for earlier releases, run
 - `GET /api/items` takes `sort=name` (the list's title, case-insensitive),
   and `sort=grade` now puts ungraded pieces last in both directions, as the
   other mostly-empty sorts already did.
+- The README screenshots are retaken with the dashboard first in the
+  sidebar.
 
 ## [0.34.0] - 2026-10-14
 
