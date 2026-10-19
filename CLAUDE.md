@@ -366,6 +366,13 @@ release candidate is tagged `v1.0.0-rc.1` with pyproject at `1.0.0rc1`;
 the job refuses a tag that doesn't match pyproject's version. The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; the backend
 migrates on startup, so an upgrade there is just a tag bump.
+**The GitHub Releases list is curated** (the owner's decision, 18 October
+2026): one page per milestone, 15 from v0.9.0 to v0.36.0, each carrying
+the notes of the versions folded into it; the other 45 releases and their
+tags were deleted (their GHCR images stay). From here to 1.0 a minor gets
+a release page; a patch is still tagged, so its images build, but gets no
+page of its own: add its notes to its minor's page under a `## vX.Y.Z`
+heading. CHANGELOG.md keeps every version.
 
 ## Notes for working in Claude Code (desktop app)
 
