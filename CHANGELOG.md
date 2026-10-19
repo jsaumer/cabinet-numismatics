@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-10-18
+
 ### Added
 
 - The demo collection (`scripts/seed_demo.py`) has photos: public domain
