@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (October 2026): v0.35.2 (color themes for the workbench
-layout, the logo and tab icon with them) is the latest published release**, with versioned images published to GHCR from each
+**Status (October 2026): v0.36.0 (photos for the demo collection,
+after color themes for the workbench layout) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -394,7 +394,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: `scripts/seed_demo.py` seeds a
   16-item demo collection (with public domain photos from Wikimedia
-  Commons, from the next release); screenshots are captured headlessly at a fixed
+  Commons, from v0.36.0); screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
@@ -781,6 +781,9 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.35.1: American spelling throughout the interface and the docs
   (color, catalog, customizable, demonetized), with the rule in CLAUDE.md.
 - ✔ v0.35.2: the logo and the browser-tab icon follow the color theme.
+- ✔ v0.36.0: the demo collection has photos, public domain and CC0 images
+  from Wikimedia Commons fetched through the URL import while the seed
+  runs, so the screenshots (and the website to come) show real pieces.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

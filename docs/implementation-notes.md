@@ -125,7 +125,7 @@ of the turned frame, exported at full resolution), and the webcam modal; the
 item page adds drop, paste, and URL import. Backend:
 `POST /api/items/{id}/photos/url` (`photos.fetch_remote_image`: http(s),
 public addresses only at every redirect hop, 3 redirects, 25 MB, and from
-the release after v0.35.2 a `User-Agent` of `Cabinet/<version>` with the
+v0.36.0 a `User-Agent` of `Cabinet/<version>` with the
 project's address, since Wikimedia throttles a bare name hard enough that
 the demo seed's photos failed) and
 `PUT /api/photos/{id}/image`, which saves under a fresh file stem so cached
