@@ -39,3 +39,6 @@ docs/specs/*-claude-review*.md
 # Raw results of the live validation plan (docs/live-validation.md): scan
 # reports and anything naming a deployment stay local.
 docs/live-validation-results/
+# Local planning notes (feature surveys, brainstorms) stay out of the
+# repository; decisions that come of them land in docs/roadmap.md.
+docs/ideas/

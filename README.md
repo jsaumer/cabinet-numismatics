@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.35.2-informational)
+![Version](https://img.shields.io/badge/version-0.36.0-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.35.2 released.** 1.0 will mean a stable HTTP API; until then
+**Status: v0.36.0 released.** 1.0 will mean a stable HTTP API; until then
 the API may still change. See the [roadmap](docs/roadmap.md) for what's
 built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
@@ -338,7 +338,9 @@ whether the schema is current. To run the published images instead of
 building, see [docs/deployment.md](docs/deployment.md).
 
 **Want something to look at first?** Load a small demo collection (16 items
-across several countries, decades, and grades, with value history). Mint a
+across several countries, decades, and grades, with value history, and
+public domain photos from Wikimedia Commons that Cabinet fetches while it
+seeds; `--no-photos` skips them). Mint a
 write-scoped API token first (Settings → Account → API tokens, or
 `POST /api/auth/tokens`):
 
@@ -382,7 +384,7 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
-| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.35.2` |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.36.0` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and

@@ -37,6 +37,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from app import __version__
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -790,6 +791,9 @@ def delete_item_dir(item_id: uuid.UUID) -> None:
 REMOTE_MAX_BYTES = 25 * 1024 * 1024  # the same ceiling nginx puts on uploads
 REMOTE_TIMEOUT = 15.0
 REMOTE_REDIRECTS = 3
+# A name, version, and contact, as Wikimedia's User-Agent policy asks; it
+# throttles a bare "Cabinet" hard enough to fail a handful of imports.
+REMOTE_USER_AGENT = f"Cabinet/{__version__} (+https://github.com/jsaumer/cabinet-numismatics)"
 
 
 class RemoteImageUnavailable(Exception):
@@ -827,7 +831,7 @@ def fetch_remote_image(url: str) -> bytes:
                 url,
                 timeout=REMOTE_TIMEOUT,
                 follow_redirects=False,
-                headers={"User-Agent": "Cabinet"},
+                headers={"User-Agent": REMOTE_USER_AGENT},
             ) as resp:
                 if resp.is_redirect:
                     url = urljoin(url, resp.headers.get("location", ""))

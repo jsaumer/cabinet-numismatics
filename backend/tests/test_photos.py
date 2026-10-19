@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from app import __version__
 from app.config import get_settings
 from app.services import photos as photo_store
 from tests.conftest import image_bytes
@@ -185,6 +186,23 @@ def test_fetch_remote_image_follows_public_redirects(monkeypatch):
     )
     assert photo_store.fetch_remote_image("https://a.example/x") == b"image bytes"
     assert requested == ["https://a.example/x", "https://a.example/y.png"]
+
+
+def test_fetch_remote_image_says_who_is_asking(monkeypatch):
+    # Wikimedia throttles a bare "Cabinet" and answers a name, version, and
+    # contact (its User-Agent policy), as many image hosts do.
+    _resolve(monkeypatch, {"a.example": "93.184.216.34"})
+    sent = {}
+
+    def stream(method, url, **kwargs):
+        sent.update(kwargs["headers"])
+        return FakeResponse(200, b"image bytes")
+
+    monkeypatch.setattr(photo_store.httpx, "stream", stream)
+    photo_store.fetch_remote_image("https://a.example/x.jpg")
+    assert sent["User-Agent"] == (
+        f"Cabinet/{__version__} (+https://github.com/jsaumer/cabinet-numismatics)"
+    )
 
 
 def test_fetch_remote_image_refuses_the_local_network(monkeypatch):
