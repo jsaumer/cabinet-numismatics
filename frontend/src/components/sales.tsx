@@ -280,7 +280,7 @@ export function SalesLog({
             disabled={busy !== null || !hasNumistaRef}
             title={
               hasNumistaRef
-                ? "Add Numista's recorded auction sales for this issue (paid Numista API plan)"
+                ? "Add Numista's recorded auction sales for this issue (spends a Numista request)"
                 : "Add a 'numista' catalog reference (e.g. N#1234) first"
             }
             onClick={() =>
@@ -394,8 +394,8 @@ export function SalesLog({
         <p className="muted">
           Log sales in the same grade as your piece where you can; a sale with a known grade
           bucket that differs from this item's is kept but not counted. Numista's auction records
-          can fill this log automatically, but only on Numista's paid API plan; see Settings →
-          Price sources.
+          can fill this log automatically once that's switched on in Settings → Pricing (each
+          fetch spends a Numista request).
         </p>
       </details>
     </div>

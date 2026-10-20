@@ -134,20 +134,18 @@ export default function PricingSection() {
                 }
               />
               <b>Numista auction sales</b>
-              <span className="badge status-wishlist">paid Numista API plan</span>
+              <span className="badge status-wishlist">uses your Numista quota</span>
             </label>
             <p className="muted" style={{ margin: "0.3rem 0 0" }}>
               Adds a <i>Fetch Numista auction sales</i> button to each item's sales log, which
               copies the auction results Numista has recorded for that year and mint (house,
-              date, lot link, grade, price) into the log for the comps estimate.{" "}
-              <b>This needs Numista's paid API plan</b>: at the time of writing a one-time
-              €100 activation fee, then at least €100 a month (€0.01 a request, before VAT). A
-              free key gets <code>Permission denied</code>, and the button says so. Leave this
-              off unless you have that plan.
+              date, lot link, grade, price) into the log for the comps estimate. Works with a
+              free key since September 2026.
             </p>
             <p className="muted" style={{ margin: "0.3rem 0 0" }}>
-              Each fetch is one request, made only when you click, never on the refresh
-              schedule, and repeating it the same day is free (cached for a day).
+              Each fetch is one request from your 2,000 a month (€0.01 on Numista's paid plan),
+              made only when you click, never on the refresh schedule, and repeating it the same
+              day is free (cached for a day).
             </p>
           </div>
         )}

@@ -10,6 +10,26 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Changed
+
+- Numista's auction sales work with a free key: Numista opened its sales
+  records to the free plan in September 2026. Settings, the sales log, the
+  API, and the docs no longer say they need the paid plan; each fetch
+  spends a request from the 2,000 a month, so the switch stays off by
+  default. A 403 now says Numista refused the request.
+- The docs cite Numista's new API license (July 2026): the sections Cabinet
+  relies on are unchanged, and the cache is described as the stored data
+  its personal-project section allows rather than a way to save quota.
+
+### Fixed
+
+- A share link with values on could show a value from Numista, or a comps
+  median built on Numista's auction sales, to anyone holding the link.
+  Numista's API license lets an individual keep its data for a private
+  project, not show it to third parties (section 8.4), so a share link now
+  works out its value without them, and shows none when Numista was the
+  only source.
+
 ## [0.36.0] - 2026-10-18
 
 ### Added

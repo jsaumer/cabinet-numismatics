@@ -186,7 +186,7 @@ Dark is the default; the header toggle switches to light and remembers it.
   sold listings, auction archives, dealer sales) and get a comps estimate:
   the median of recent sales in your currency, with confidence from how many
   there are and how much they agree. Numista's auction records can fill the
-  log automatically on Numista's paid API plan.
+  log at a click, with any Numista key (each fetch spends a request).
 - **Value differentiation**: the item page shows every configured source's
   own latest value side by side (never blended), each with a "time since"
   label. A `value_strategy` setting picks the single blended number shown
