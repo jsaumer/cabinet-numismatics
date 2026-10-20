@@ -141,9 +141,9 @@ Migration `0013`. Research found no free sold-price API for individuals
 fourth adapter (`comps`, keyless, on by default): median of included,
 grade-bucket-matching sales from the last 3 years (older if fewer than 3),
 converted at daily rates. `numista.fetch_sales` feeds Numista's auction
-records into the log behind `numista_sales_enabled` (off; a 403 there means
-no paid plan, raised as `NotApplicable(PAID_PLAN)`), on click only, cached a
-day. Numista catalog caching dropped to 7 days (license §8.3's limit for
+records into the log behind `numista_sales_enabled` (off; a 403 there
+meant no paid plan, raised as `NotApplicable(PAID_PLAN)`, until v0.36.1),
+on click only, cached a day. Numista catalog caching dropped to 7 days (license §8.3's limit for
 catalog metadata; §8.4, personal projects, is what permits the cache).
 PriceCharting/Greysheet were researched and not planned.
 
@@ -1628,7 +1628,12 @@ permission class. Rules a later change has to respect:
   test in the same change; never add a cost, a fee, a gain, an acquisition
   or sale field, a location, a document, a serial, custom fields, the
   population, wish-list fields, spot at purchase, the import origin, or a
-  timestamp. `value` is the one money field, behind `show_values`.
+  timestamp. `value` is the one money field, behind `show_values`, and
+  from v0.36.1 it never carries Numista's data (`share.from_numista`: a
+  Numista estimate, or a comps median that used a Numista sale), since
+  Numista's API license (section 8.4) keeps a personal project's stored
+  data from third parties. A new price source whose terms say the same
+  joins that check.
 - **`share` is a permission class, and the gate knows its prefix.**
   While sharing is on (stage 4: never while it is off, see below),
   `gate.ANONYMOUS_PREFIXES` (`/api/share/`) passes a `GET` or `HEAD` before
@@ -2854,6 +2859,30 @@ default), Silver, Album, and Ledger. Rules a later change has to respect:
   `--header-bg`. `index.html` keeps linking the Bronze `logo.svg` and
   `favicon.ico`, which is what shows before the script runs; the files a
   theme uses are generated, never drawn by hand.
+
+## v0.36.1
+
+Numista's 2026 changes, read against its new API license (July 2026) and
+release notes on 20 October 2026. Rules:
+
+- **A share link never shows Numista's data.** The license's
+  personal-project section (8.4) lets an individual store Numista data, not
+  make it available to third parties, and a share link with values on is a
+  public page. `share.from_numista` leaves out a Numista estimate and a
+  comps median that used a sale fetched from Numista (`details.sales[].source`)
+  before the value is worked out, whatever `value_strategy` says, so a piece
+  priced only by Numista shares no value. The owner's own pages are
+  unchanged. A new price source with the same term joins that check.
+- **Numista's sales records are on the free plan** (September 2026; license
+  section 5: everything but search by image). The request Cabinet makes
+  still matches the API (3.36.1: `issue_id` optional, `count` up to 500,
+  paging added), so only the wording changed: `PAID_PLAN` became
+  `SALES_REFUSED`, a 403 says Numista refused, and the setting stays off by
+  default because each fetch spends a request from the 2,000 a month.
+- **The cache rests on section 8.4, not on saving quota.** The license
+  forbids caching "primarily to avoid API requests or charges" (section
+  11), so comments and docs describe `source_cache` as the stored data
+  section 8.4 allows, for the time Cabinet keeps it.
 
 ## Releases
 

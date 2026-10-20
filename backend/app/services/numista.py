@@ -6,13 +6,12 @@ quotes it per grade bucket. The adapter resolves that chain: the item's
 item (year or ND, mint mark, replacement, references) and tried best first, and
 the item's grade is mapped onto Numista's seven buckets.
 
-Free API keys allow 2,000 requests a month, so every upstream response is
-cached in `source_cache` (catalogue data and prices for 7 days: the API
-licence's personal-project exception (§8.4) is what lets a self-hosted tool
-keep them at all, and 7 days is the limit §8.3 sets for catalogue metadata,
-applied here to everything), and a stale entry is
-preferred over a failed request, the same discipline spot prices and exchange
-rates use.
+Every upstream response is kept in `source_cache` (catalog data and prices
+for 7 days). The API license's personal-project exception (section 8.4) is
+what lets a self-hosted tool keep them at all, and 7 days is the limit
+section 8.3 sets for catalog metadata, applied here to everything. A stale
+entry is preferred over a failed request, the same discipline spot prices
+and exchange rates use. The free plan allows 2,000 requests a month.
 
 Confidence is medium: these are collector-swap-derived estimates, not realized
 auction prices. Money is per row, so the per-piece price is multiplied by the
@@ -631,16 +630,17 @@ def catalogue_type(db: Session, type_id: int) -> dict:
 
 # ---------------------------------------------------------------- auction sales
 # Numista's record of past auction sales, fed into the item's sales log for the
-# `comps` estimate (v0.17.0). The endpoint is part of Numista's *paid* API plan
-# (€0.01 a request, after an activation fee and a monthly minimum); a free key
-# gets 403 "Permission denied". So it sits behind its own setting, off by
-# default, and runs only when asked, never on the refresh schedule.
+# `comps` estimate (v0.17.0). Paid-plan only until Numista opened it to the
+# free plan in September 2026 (license section 5): each request now counts
+# against the free plan's 2,000 a month, or costs €0.01 on the paid plan. So it
+# sits behind its own setting, off by default, and runs only when asked, never
+# on the refresh schedule.
 
 SALES_TTL = timedelta(days=1)  # a second click the same day costs nothing
 SALES_COUNT = 100
-PAID_PLAN = (
-    "Numista refused the auction-sales request. Sales records need Numista's paid "
-    'API plan: a free key gets "Permission denied". See Settings → Price sources.'
+SALES_REFUSED = (
+    "Numista refused the auction-sales request. Check that the API key in "
+    "Settings → Pricing is active on numista.com."
 )
 
 
@@ -648,7 +648,8 @@ def sales_prerequisite(db: Session, item: Item) -> str | None:
     """What stops fetching auction sales for this item, or None. No network."""
     if not app_settings.get_setting(db, "numista_sales_enabled"):
         return (
-            "Numista auction sales are switched off in Settings (they need Numista's paid API plan)"
+            "Numista auction sales are switched off in Settings "
+            "(each fetch spends a Numista request)"
         )
     if not str(app_settings.get_setting(db, "numista_api_key")):
         return "Add a Numista API key in Settings to fetch auction sales"
@@ -734,7 +735,7 @@ def fetch_sales(db: Session, item: Item) -> tuple[list[dict], int | None]:
             f"sales:{type_id}:{issue_id}",
             SALES_TTL,
             lambda: _request(
-                api_key, f"types/{type_id}/sales_records", params, forbidden=PAID_PLAN
+                api_key, f"types/{type_id}/sales_records", params, forbidden=SALES_REFUSED
             ),
         )
     except _NotFound:

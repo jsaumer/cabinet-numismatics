@@ -91,8 +91,8 @@ def delete_comparable(comparable_id: int, db: Session = Depends(get_db)):
 @permission("write")
 def fetch_numista_sales(item_id: uuid.UUID, db: Session = Depends(get_db)):
     """Add the auction sales Numista records for the item's issue to its sales
-    log, skipping ones already there. Needs Numista's paid API plan and the
-    setting that says so; spends one request (cached for a day)."""
+    log, skipping ones already there. Needs the setting switched on; spends a
+    Numista request when the issue's sales aren't cached (a day)."""
     item = get_item_or_404(db, item_id)
     try:
         rows, issue_id = numista.fetch_sales(db, item)

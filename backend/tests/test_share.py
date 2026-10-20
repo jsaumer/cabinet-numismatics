@@ -3,6 +3,7 @@ links, the switch, the allowlist, the one 404, the throttle, and the admin
 routes."""
 
 import json
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from sqlalchemy import select
 from app.auth import common, gate, throttle
 from app.db import Base, get_db
 from app.main import app
-from app.models import ExchangeRate, ShareLink
+from app.models import ExchangeRate, PriceEstimate, ShareLink
 from app.models.auth import AuditEntry, AuthBase
 from app.services import alerts, currency, share
 from tests.conftest import COIN, image_bytes
@@ -209,6 +210,89 @@ def test_value_is_null_when_it_cannot_be_converted_from_the_cache(client, anon_c
         db.close()
     view = anon_client.get(f"/api/share/{token}/items/{item['id']}").json()
     assert view["value"] == {"amount": 160.0, "currency": "USD"}  # a stale cache still serves
+
+
+def add_estimates(item_id: str, *rows: tuple[str, float, dict | None]) -> None:
+    """Estimates oldest first, a day apart, so the last is the newest."""
+    db = db_session()
+    try:
+        start = datetime.now(timezone.utc) - timedelta(days=len(rows))
+        for days, (source, value, details) in enumerate(rows):
+            db.add(
+                PriceEstimate(
+                    item_id=uuid.UUID(item_id),
+                    source=source,
+                    estimated_value=value,
+                    currency="USD",
+                    details=details,
+                    fetched_at=start + timedelta(days=days),
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+
+NUMISTA_SALE = {"date": "2026-01-02", "price": 900.0, "currency": "USD", "source": "numista"}
+HAND_SALE = {"date": "2026-01-03", "price": 400.0, "currency": "USD", "source": "manual"}
+
+
+def test_a_value_from_numista_is_never_shared(client, anon_client):
+    # Numista's license lets an individual store its data for a private
+    # project, not show it to third parties (section 8.4).
+    enable(client)
+    item = make_item(client)
+    add_estimates(item["id"], ("melt", 300, None), ("numista:N#100 XF", 900, None))
+    assert (
+        client.get(f"/api/items/{item['id']}")
+        .json()["estimates"][0]["source"]
+        .startswith("numista")
+    )
+    token, _ = make_link(client, show_values=True)
+    view = anon_client.get(f"/api/share/{token}/items/{item['id']}").json()
+    assert view["value"] == {"amount": 300.0, "currency": "USD"}  # the newest one not Numista's
+    listed = anon_client.get(f"/api/share/{token}/items").json()["items"][0]
+    assert listed["value"] == {"amount": 300.0, "currency": "USD"}
+
+
+def test_a_comps_median_from_numista_sales_is_never_shared(client, anon_client):
+    enable(client)
+    mixed = make_item(client)
+    add_estimates(
+        mixed["id"],
+        ("manual", 200, None),
+        ("comps:2 sales", 650, {"sales": [NUMISTA_SALE, HAND_SALE]}),
+    )
+    by_hand = make_item(client, country="Canada")
+    add_estimates(by_hand["id"], ("comps:1 sale", 400, {"sales": [HAND_SALE]}))
+    token, _ = make_link(client, show_values=True)
+    view = anon_client.get(f"/api/share/{token}/items/{mixed['id']}").json()
+    assert view["value"] == {"amount": 200.0, "currency": "USD"}
+    view = anon_client.get(f"/api/share/{token}/items/{by_hand['id']}").json()
+    assert view["value"] == {"amount": 400.0, "currency": "USD"}  # hand-logged sales are fine
+
+
+def test_a_piece_valued_only_by_numista_shares_no_value(client, anon_client):
+    enable(client)
+    item = make_item(client)
+    add_estimates(item["id"], ("numista:N#100 XF", 900, None))
+    token, _ = make_link(client, show_values=True)
+    view = anon_client.get(f"/api/share/{token}/items/{item['id']}").json()
+    assert view["value"] is None
+
+
+@pytest.mark.parametrize("strategy", ["preferred_source", "average"])
+def test_no_value_strategy_brings_numista_back(client, anon_client, strategy):
+    enable(client)
+    put = client.put(
+        "/api/settings", json={"value_strategy": strategy, "preferred_source": "numista"}
+    )
+    assert put.status_code == 200, put.text
+    item = make_item(client)
+    add_estimates(item["id"], ("melt", 300, None), ("numista:N#100 XF", 900, None))
+    token, _ = make_link(client, show_values=True)
+    view = anon_client.get(f"/api/share/{token}/items/{item['id']}").json()
+    assert view["value"] == {"amount": 300.0, "currency": "USD"}
 
 
 # --- the switch and the one 404 -------------------------------------------------------

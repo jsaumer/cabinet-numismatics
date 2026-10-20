@@ -526,9 +526,10 @@ class SpotPrice(Base):
 
 
 class SourceCache(Base):
-    """Cached raw responses from external price sources, keyed by source and
-    request. Free-tier quotas are small (Numista: 2,000/month), so repeated
-    estimates for the same item must not cost a request."""
+    """Raw responses from external price sources, kept for each source's
+    allowed time (Numista: 7 days, under its license's personal-project
+    section) and keyed by source and request, so an estimate within that time
+    reads what was already fetched."""
 
     __tablename__ = "source_cache"
 

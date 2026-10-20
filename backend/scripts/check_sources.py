@@ -15,7 +15,8 @@ Nothing is written to `price_estimates`: this only looks.
 counts against the source's quota (Numista 2,000/month, PCGS 100/day).
 Without it, a cached response is reused and the run costs nothing.
 `numista-sales` fetches the item's auction sales without adding them to its
-sales log; on Numista's paid plan each uncached request is billed.
+sales log; each uncached request counts against the monthly quota (and is
+billed on Numista's paid plan).
 
 This lives with the backend rather than in the repo-root `scripts/` because it
 imports the application; the scripts up there talk to the API or to Docker.
