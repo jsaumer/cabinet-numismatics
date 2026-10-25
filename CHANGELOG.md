@@ -30,6 +30,13 @@ applies them itself on startup; for earlier releases, run
   works out its value without them, and shows none when Numista was the
   only source.
 
+### Security
+
+- Pillow 13.0.0 (from 12.3.0) and certifi 2026.10.23 in the backend image.
+  Pillow's 28 advisories since 12.3.0 are mostly denial of service from a
+  crafted image, and Cabinet opens images it is sent (uploads, URL imports,
+  imports with photos). The photo cleaning and its checks pass unchanged.
+
 ## [0.36.0] - 2026-10-18
 
 ### Added
