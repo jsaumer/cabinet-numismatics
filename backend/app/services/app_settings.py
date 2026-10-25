@@ -25,7 +25,7 @@ DEFAULTS: dict = {
     "pcgs_enabled": False,
     "pcgs_api_token": "",
     "comps_enabled": True,
-    # Numista's sales records need its paid API plan; off until the user opts in.
+    # Each Numista sales fetch spends a request from the monthly quota; off until the user opts in.
     "numista_sales_enabled": False,
     "value_strategy": "latest",
     "preferred_source": None,

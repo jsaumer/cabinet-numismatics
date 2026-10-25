@@ -35,8 +35,8 @@ for the failure, since the next refresh will need the key.
 
 Items a source can't price (no catalog number, a proof on Numista) are
 skipped, not failed, so they never raise a refresh alert. The same goes for
-a 403 from Numista's paid auction-sales endpoint on a free key: the item
-page says sales records need the paid plan, and no key alert is raised.
+a 403 from Numista's auction-sales endpoint: the item page says Numista
+refused the request, and no key alert is raised.
 
 ### Events
 

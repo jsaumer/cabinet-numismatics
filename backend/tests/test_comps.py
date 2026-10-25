@@ -291,16 +291,16 @@ def test_numista_sales_are_off_by_default(client, numista_http):
     _configure(client, sales=False)
     resp = _fetch(client, _item(client))
     assert resp.status_code == 422
-    assert "paid API plan" in resp.json()["detail"]
+    assert "switched off" in resp.json()["detail"]
     assert numista_http["calls"] == []
 
 
-def test_free_key_gets_the_paid_plan_explanation(client, numista_http):
+def test_a_refused_sales_request_says_so(client, numista_http):
     _configure(client)
     numista_http["sales_status"] = 403
     resp = _fetch(client, _item(client))
     assert resp.status_code == 422
-    assert resp.json()["detail"] == numista.PAID_PLAN
+    assert resp.json()["detail"] == numista.SALES_REFUSED
 
 
 def test_numista_sales_fill_the_sales_log(client, numista_http):
@@ -346,6 +346,6 @@ def test_numista_sales_need_a_catalogue_reference(client, numista_http):
 
 
 def test_catalogue_data_is_cached_for_seven_days():
-    # Licence §8.4 (personal projects) permits the cache; seven days is §8.3's
-    # limit for catalogue metadata, which Cabinet applies to everything.
+    # License section 8.4 (personal projects) permits the cache; seven days is
+    # section 8.3's limit for catalog metadata, which Cabinet applies to everything.
     assert numista.CATALOG_TTL == timedelta(days=7)
