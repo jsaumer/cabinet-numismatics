@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { api, money, ShareItem, ShareItemPhoto, sharePhotoUrl } from "../../api";
-import { TypeIcon } from "../../components/item-types";
+import { TypeIcon, typeBadge } from "../../components/item-types";
 import { shareItemLabel } from "./ShareGrid";
 
 /** Keeps the page behind the lightbox from scrolling while it's open, the
@@ -212,7 +212,7 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
         </div>
         <div className="detail-header">
           <h1>{shareItemLabel(item)}</h1>
-          <span className={`badge ${item.type}`}>{item.type}</span>
+          <span className={`badge ${item.type}`}>{typeBadge(item.type)}</span>
         </div>
         {item.grade_label && (
           <p className="hero-grade">

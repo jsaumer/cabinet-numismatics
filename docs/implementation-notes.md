@@ -2946,6 +2946,44 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   `skipped_items`. A ticked set missing its weight or fineness does.
 - `count_in_stack` is ignored for coins, notes, and bars.
 
+### Stage 3: the type on the frontend
+
+- **A set's title is built in five places, all year, issuer (else
+  country), set name**: the backend's `Item.label` and `_name_key`, the
+  list row (`ItemList.tsx`), the item hero, the share grid's
+  `shareItemLabel`, and the report. Change one, change them all.
+- **`components/item-types.tsx` gained three helpers** beside `TYPE_INFO`:
+  `typeBadge` (the badge's word, "set" for a set), `setKind` (Proof set,
+  Uncirculated set, Specimen set, from `strike`), and `packagingLine`
+  ("Sealed, with box and certificate"; null when nothing is recorded).
+  The hero, the facts, and the report print packaging only through
+  `packagingLine`; the list's Grade column prints `PACKAGING_LABELS` alone,
+  or an en dash.
+- **The form hides, and `toPayload` clears, what a set doesn't have**: no
+  grade, cert, mint mark, ND, die axis, date as struck, demonetization, or
+  physical and note fields, so switching a coin to a set and saving drops
+  them rather than leaving them invisible. The PCGS and Numista fill cards
+  are hidden for a set. The set fields go out only for a set (false or
+  null otherwise).
+- **The set name suggestion** uses the bullion name's `autoDenomination`
+  ref (`suggestSetName(strike, metal)`), so it stops once the owner types
+  their own; the name box's datalist is every set name already used,
+  from `GET /api/items?type=mint_set&limit=500`.
+- **Precious metal on a set** is the bullion Metal select (composition has
+  no free-text box for a set), the weight with its g / oz switch labeled
+  "Precious metal", and fineness; the stack checkbox appears only once all
+  three are given. Bulk edit's stack choice sends `count_in_stack` to every
+  selected piece; the server ignores it for anything but a set.
+- **Quick add stays coins, notes, and bars** (`QUICK_TYPES`): its lookups
+  can't fill a set. `/items/new?type=mint_set` presets a proof set.
+- **Lookups**: a `numista_set` reference (`S2077` or `2077`) links to
+  `https://en.numista.com/S<n>`; a `pcgs` reference gets the CoinFacts link
+  on a set as on a coin.
+- The list mark for a set is a case of three coins (`.wb-glyph.mint_set`,
+  dots drawn with a repeating radial gradient), colored by metal like the
+  others; the badge has its own `--badge-set-*` tokens, shared across
+  themes like the other badges.
+
 ## Releases
 
 

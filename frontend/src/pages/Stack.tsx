@@ -99,7 +99,8 @@ export default function Stack() {
           <div className="empty">
             No precious-metal pieces with a weight and fineness yet. Name a precious metal and
             give a weight and fineness to include a coin or note, or{" "}
-            <Link to="/items/new?type=bullion">Add a bar or round</Link>.
+            <Link to="/items/new?type=bullion">Add a bar or round</Link>. A proof or mint set counts
+            once its "Count in the bullion stack" box is ticked.
           </div>
           {leftOut}
         </>

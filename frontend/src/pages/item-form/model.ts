@@ -4,6 +4,7 @@ import {
   CacSticker,
   CatalogRef,
   ItemDetail,
+  Packaging,
   ItemPayload,
   ItemStatus,
   ItemType,
@@ -77,13 +78,26 @@ export const EMPTY = {
   sold_to: "",
   notes: "",
   tags: "",
+  // Proof and mint sets
+  piece_count: "",
+  packaging: "",
+  has_box: false,
+  has_coa: false,
+  count_in_stack: false,
 };
 
 export type FormState = typeof EMPTY;
 export type TextField = {
   [K in keyof FormState]: FormState[K] extends string ? K : never;
 }[keyof FormState];
-export type FlagField = "grade_plus" | "grade_star" | "replacement_note" | "year_nd";
+export type FlagField =
+  | "grade_plus"
+  | "grade_star"
+  | "replacement_note"
+  | "year_nd"
+  | "has_box"
+  | "has_coa"
+  | "count_in_stack";
 export type CustomField = { key: string; value: string };
 
 // Designations as grading services print them, with what each means.
@@ -105,6 +119,7 @@ export const DESIGNATIONS: Record<ItemType, [string, string][]> = {
   ],
   note: [["EPQ", "Exceptional paper quality (PMG)"]],
   bullion: [], // no designations: the form hides the whole block for bullion
+  mint_set: [], // a set is never graded as a unit
 };
 
 export const PROBLEMS: Record<ItemType, string[]> = {
@@ -114,6 +129,7 @@ export const PROBLEMS: Record<ItemType, string[]> = {
   ],
   note: ["Restoration", "Tears", "Annotations", "Stains", "Trimmed", "Pinholes"],
   bullion: ["Scratched", "Corroded", "Tarnished", "Damaged"],
+  mint_set: [],
 };
 
 export const EDGES = ["Reeded", "Plain", "Lettered", "Security", "Interrupted reeding"];
@@ -173,6 +189,14 @@ export function suggestDenomination(weightG: number, metal: Metal, shape: string
   return `${rounded} ${wholeOrHalfOz ? "oz" : "g"} ${metal} ${kind}`;
 }
 
+/** The set name a proof or mint set suggests from its kind and metal:
+ * "Proof Set", "Silver Proof Set", "Uncirculated Set", "Specimen Set". */
+export function suggestSetName(strike: Strike, metal: Metal | null): string {
+  const kind = strike === "proof" ? "Proof" : strike === "specimen" ? "Specimen" : "Uncirculated";
+  const prefix = metal ? metal.charAt(0).toUpperCase() + metal.slice(1) + " " : "";
+  return `${prefix}${kind} Set`;
+}
+
 /** Whether a date falls inside the historic-spot lookup's coverage: on or
  * after 2 March 2024, and before today (today uses current spot instead). */
 export function inHistoricCoverage(dateStr: string): boolean {
@@ -193,6 +217,9 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
   const coin = form.type === "coin";
   const note = form.type === "note";
   const bullion = form.type === "bullion";
+  const mintSet = form.type === "mint_set";
+  // A set has no grade, cert, mint mark, or physical fields (SPEC_0370).
+  const plain = bullion || mintSet;
   const allowed = new Set(DESIGNATIONS[form.type].map(([code]) => code));
   const designations = form.designations.filter((d) => allowed.has(d));
   const sold = form.status === "sold";
@@ -205,12 +232,12 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     // With a date as struck and no year, the server converts it. A bar with
     // no year is neither dated nor ND (the year-or-ND rule doesn't apply).
     year: form.year === "" ? null : Number(form.year),
-    year_nd: bullion ? false : form.year_nd,
+    year_nd: plain ? false : form.year_nd,
     struck_calendar: struck ? form.struck_calendar : null,
     struck_year: struck ? Number(form.struck_year) : null,
     struck_era: struck && form.struck_calendar === "japanese" ? opt(form.struck_era) : null,
     die_axis: coin ? optNum(form.die_axis) : null,
-    mint_mark: bullion ? null : opt(form.mint_mark),
+    mint_mark: plain ? null : opt(form.mint_mark),
     series: opt(form.series),
     variety: bullion ? null : opt(form.variety),
     strike: form.strike,
@@ -224,28 +251,33 @@ export function toPayload(form: FormState, refs: CatalogRef[], fields: CustomFie
     // Size, printer, and watermark are edited on a note but kept on anything
     // that already carries them (an import may give a coin its size); a
     // bar's size (not round) uses the same width/height fields.
-    width_mm: optNum(form.width_mm),
-    height_mm: optNum(form.height_mm),
+    width_mm: mintSet ? null : optNum(form.width_mm),
+    height_mm: mintSet ? null : optNum(form.height_mm),
     edge: coin ? opt(form.edge) : null,
     shape: coin || bullion ? opt(form.shape) : null,
-    printer: opt(form.printer),
-    watermark: opt(form.watermark),
-    demonetized_on: bullion ? null : form.demonetized_on || null,
+    printer: mintSet ? null : opt(form.printer),
+    watermark: mintSet ? null : opt(form.watermark),
+    demonetized_on: plain ? null : form.demonetized_on || null,
     mintage: bullion ? null : optNum(form.mintage),
-    grade_id: form.grade_id === "" ? null : Number(form.grade_id),
-    grade_plus: form.grade_plus,
-    grade_star: form.grade_star,
+    piece_count: mintSet ? optNum(form.piece_count) : null,
+    packaging: mintSet && form.packaging ? (form.packaging as Packaging) : null,
+    has_box: mintSet && form.has_box,
+    has_coa: mintSet && form.has_coa,
+    count_in_stack: mintSet && form.count_in_stack,
+    grade_id: mintSet || form.grade_id === "" ? null : Number(form.grade_id),
+    grade_plus: !mintSet && form.grade_plus,
+    grade_star: !mintSet && form.grade_star,
     designations: designations.length ? designations : null,
-    grade_details: opt(form.grade_details),
+    grade_details: mintSet ? null : opt(form.grade_details),
     cac_sticker: coin && form.cac_sticker ? (form.cac_sticker as CacSticker) : null,
-    cert_service: opt(form.cert_service),
-    cert_number: opt(form.cert_number),
+    cert_service: mintSet ? null : opt(form.cert_service),
+    cert_number: mintSet ? null : opt(form.cert_number),
     pcgs_population: coin ? optNum(form.pcgs_population) : null,
     pcgs_pop_higher: coin ? optNum(form.pcgs_pop_higher) : null,
     serial_number: note || bullion ? opt(form.serial_number) : null,
     prefix_block: note ? opt(form.prefix_block) : null,
     signatures: note ? opt(form.signatures) : null,
-    issuer: note || bullion ? opt(form.issuer) : null,
+    issuer: note || bullion || mintSet ? opt(form.issuer) : null,
     replacement_note: note && form.replacement_note,
     charter_number: note ? opt(form.charter_number) : null,
     bank_city: note ? opt(form.bank_city) : null,
@@ -338,5 +370,10 @@ export function fromItem(item: ItemDetail): FormState {
     sold_to: str(item.sold_to),
     notes: str(item.notes),
     tags: item.tags.join(", "),
+    piece_count: str(item.piece_count),
+    packaging: str(item.packaging),
+    has_box: item.has_box,
+    has_coa: item.has_coa,
+    count_in_stack: item.count_in_stack,
   };
 }

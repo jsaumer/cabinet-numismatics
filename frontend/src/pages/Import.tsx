@@ -12,6 +12,7 @@ import {
   ImportPreview,
   ImportRunResult,
   ImportUpload,
+  ItemType,
   money,
 } from "../api";
 
@@ -445,7 +446,9 @@ export default function Import() {
                       <td>
                         {r.label}
                         {r.type && r.type !== "coin" && (
-                          <span className="muted"> · {r.type === "bullion" ? "bar or round" : r.type}</span>
+                          <span className="muted">
+                            {" "}· {TYPE_INFO[r.type as ItemType]?.one.toLowerCase() ?? r.type}
+                          </span>
                         )}
                         {(r.error || r.messages.length > 0) && (
                           <ul className="import-messages">
