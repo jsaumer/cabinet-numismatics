@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
+import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 import ItemDetail from "./ItemDetail";
 import { detectMetal } from "./item-form/model";
@@ -332,9 +333,9 @@ export default function ItemList() {
       <div className="wb-filters">
         <select aria-label="Type" value={get("type")} onChange={(e) => set("type", e.target.value)}>
           <option value="">All types</option>
-          <option value="coin">Coins</option>
-          <option value="note">Notes</option>
-          <option value="bullion">Bars and rounds</option>
+          {ITEM_TYPES.map((t) => (
+            <option key={t} value={t}>{TYPE_INFO[t].many}</option>
+          ))}
         </select>
         <select aria-label="Metal" value={get("metal")} onChange={(e) => set("metal", e.target.value)}>
           <option value="">Any metal</option>
@@ -462,9 +463,9 @@ export default function ItemList() {
       <span><b>{selected.size}</b> selected</span>
       <select aria-label="Set type" value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
         <option value="">Type unchanged</option>
-        <option value="coin">Coin</option>
-        <option value="note">Note</option>
-        <option value="bullion">Bar or round</option>
+        {ITEM_TYPES.map((t) => (
+          <option key={t} value={t}>{TYPE_INFO[t].one}</option>
+        ))}
       </select>
       <select aria-label="Set status" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
         <option value="">Status unchanged</option>

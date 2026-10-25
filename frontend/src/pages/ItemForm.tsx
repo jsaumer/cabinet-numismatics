@@ -31,6 +31,7 @@ import {
 import { NumistaFill } from "./item-form/NumistaFill";
 import { PcgsFill } from "./item-form/PcgsFill";
 import { DuplicateWarning } from "../components/duplicates";
+import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 
 // Catalogues the reference rows suggest; any other name is accepted too.
 const CATALOGS: Record<ItemType, string[]> = {
@@ -375,9 +376,9 @@ export default function ItemForm() {
                   });
                 }}
               >
-                <option value="coin">Coin</option>
-                <option value="note">Note</option>
-                <option value="bullion">Bar or round</option>
+                {ITEM_TYPES.map((t) => (
+                  <option key={t} value={t}>{TYPE_INFO[t].one}</option>
+                ))}
               </select>
             </label>
             {text("country", isBullion ? "Country of refiner *" : "Country *", {
