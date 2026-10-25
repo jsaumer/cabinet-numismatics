@@ -7,11 +7,17 @@ import { TypeIcon } from "../../components/item-types";
 const PAGE_SIZE = 100;
 
 /** The same convention item-hero.tsx uses for an item's title: bullion
- * leads with its issuer or country, everything else with country,
- * denomination, year, and the mint mark. */
+ * leads with its issuer or country, a set with its year, issuer or country,
+ * and name, everything else with country, denomination, year, and the mint
+ * mark. */
 export function shareItemLabel(item: ShareItem): string {
   if (item.type === "bullion") {
     return [item.issuer || item.country, item.denomination, item.year_label]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (item.type === "mint_set") {
+    return [item.year_label, item.issuer || item.country, item.denomination]
       .filter(Boolean)
       .join(" ");
   }

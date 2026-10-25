@@ -38,7 +38,10 @@ export function readLookup(input: string): Lookup | null {
   return { kind: "search", q };
 }
 
-const CATEGORY: Record<ItemType, "coin" | "banknote" | "exonumia"> = {
+// Sets stay out of quick add: Numista's API has no sets to look up.
+type QuickType = Exclude<ItemType, "mint_set">;
+const QUICK_TYPES: QuickType[] = ["coin", "note", "bullion"];
+const CATEGORY: Record<QuickType, "coin" | "banknote" | "exonumia"> = {
   coin: "coin",
   note: "banknote",
   bullion: "exonumia",
@@ -116,7 +119,7 @@ export default function QuickAdd() {
     setBusy(true);
     try {
       if (lookup.kind === "search") {
-        const found = await api.numistaSearch(lookup.q, CATEGORY[form.type]);
+        const found = await api.numistaSearch(lookup.q, CATEGORY[form.type as QuickType]);
         setResults(found.results);
         if (found.results.length === 0) setError(`Numista has nothing called "${lookup.q}" here.`);
       } else if (lookup.kind === "numista") {
@@ -237,7 +240,7 @@ export default function QuickAdd() {
 
         <div className="qa-lookup">
           <div className="qa-types" role="radiogroup" aria-label="What it is">
-            {(["coin", "note", "bullion"] as ItemType[]).map((t) => (
+            {QUICK_TYPES.map((t) => (
               <button
                 key={t}
                 type="button"

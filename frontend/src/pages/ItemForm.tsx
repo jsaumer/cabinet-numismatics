@@ -8,6 +8,8 @@ import {
   Grade,
   gradeScaleFor,
   ItemType,
+  PACKAGING_LABELS,
+  Packaging,
   SetInfo,
   TROY_OUNCE_G,
 } from "../api";
@@ -25,6 +27,7 @@ import {
   PROBLEMS,
   SHAPES,
   suggestDenomination,
+  suggestSetName,
   TextField,
   toPayload,
 } from "./item-form/model";
@@ -38,6 +41,7 @@ const CATALOGS: Record<ItemType, string[]> = {
   coin: ["krause", "numista", "pcgs"],
   note: ["pick", "friedberg", "numista", "krause"],
   bullion: ["numista"],
+  mint_set: ["numista_set", "krause", "pcgs"],
 };
 
 const WEIGHT_UNIT_KEY = "cabinet.form.weightUnit";
@@ -52,6 +56,7 @@ export default function ItemForm() {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [sets, setSets] = useState<SetInfo[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
+  const [setNames, setSetNames] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
@@ -85,28 +90,53 @@ export default function ItemForm() {
     api.calendars().then(setCalendars).catch(() => setCalendars(null));
   }, []);
 
-  // /items/new?type=bullion presets the type, for a new item only.
+  // /items/new?type=bullion (or mint_set) presets the type, for a new item only.
   useEffect(() => {
-    if (id || searchParams.get("type") !== "bullion") return;
-    setForm((f) => presetBullionFineness({ ...f, type: "bullion", grade_id: "", designations: [] }));
+    if (id) return;
+    const preset = searchParams.get("type");
+    if (preset === "bullion") {
+      setForm((f) => presetBullionFineness({ ...f, type: "bullion", grade_id: "", designations: [] }));
+    } else if (preset === "mint_set") {
+      // A new set is a proof set until the owner says otherwise.
+      setForm((f) => ({ ...f, type: "mint_set", strike: "proof", grade_id: "", designations: [] }));
+    }
     // Deliberately depends on `id` only: this is a one-time preset for a new
     // item, not a live sync with the URL.
   }, [id]);
 
-  // The product name suggestion (bullion only): filled only while it's empty,
-  // or still holds this form's own earlier suggestion, the way autoYear works.
+  // The product name (bullion) or set name (a set) suggestion: filled only
+  // while it's empty, or still holds this form's own earlier suggestion, the
+  // way autoYear works.
   useEffect(() => {
-    if (form.type !== "bullion") return;
     const metal = detectMetal(form.composition);
-    const weight = Number(form.weight_g);
-    if (!metal || !(weight > 0)) return;
-    const suggestion = suggestDenomination(weight, metal, form.shape);
+    let suggestion: string;
+    if (form.type === "bullion") {
+      const weight = Number(form.weight_g);
+      if (!metal || !(weight > 0)) return;
+      suggestion = suggestDenomination(weight, metal, form.shape);
+    } else if (form.type === "mint_set") {
+      suggestion = suggestSetName(form.strike, metal);
+    } else {
+      return;
+    }
     setForm((f) => {
       if (f.denomination !== "" && f.denomination !== autoDenomination.current) return f;
       autoDenomination.current = suggestion;
       return { ...f, denomination: suggestion };
     });
-  }, [form.type, form.composition, form.weight_g, form.shape]);
+  }, [form.type, form.composition, form.weight_g, form.shape, form.strike]);
+
+  // Every set name already used, offered in the name box so "Proof Set" stays
+  // "Proof Set" from one year to the next (a checklist matches by name).
+  useEffect(() => {
+    if (form.type !== "mint_set") return;
+    api
+      .listItems(new URLSearchParams({ type: "mint_set", limit: "500" }))
+      .then((page) =>
+        setSetNames([...new Set(page.items.map((i) => i.denomination))].sort((a, b) => a.localeCompare(b))),
+      )
+      .catch(() => setSetNames([]));
+  }, [form.type]);
 
   // Convert the date as struck (debounced). Year is filled only when empty,
   // or when it still holds an earlier conversion from this form.
@@ -285,6 +315,7 @@ export default function ItemForm() {
   const isCoin = form.type === "coin";
   const isNote = form.type === "note";
   const isBullion = form.type === "bullion";
+  const isSet = form.type === "mint_set";
   const metal = detectMetal(form.composition);
   const hasStruckDate = isCoin && form.struck_calendar !== "" && form.struck_year !== "";
   const axisChoice =
@@ -306,9 +337,9 @@ export default function ItemForm() {
     const grams = weightUnit === "oz" ? n * TROY_OUNCE_G : n;
     set("weight_g")(String(Math.round(grams * 10000) / 10000));
   }
-  const weightField = () => (
+  const weightField = (label = "Weight") => (
     <label className="field">
-      {`Weight (${weightUnit})`}
+      {`${label} (${weightUnit})`}
       <span style={{ display: "flex", gap: "0.3rem" }}>
         <input
           type="number" step="0.0001" min={0} style={{ flex: 1 }}
@@ -339,8 +370,9 @@ export default function ItemForm() {
       {error && <p className="error">{error}</p>}
       {savedNote && <p className="muted">{savedNote}</p>}
       <form onSubmit={submit}>
-        <PcgsFill form={form} refs={refs} onApply={applyFill} />
-        <NumistaFill form={form} refs={refs} onApply={applyFill} />
+        {/* Neither fills a set: a set has no cert, and Numista's API has no sets. */}
+        {!isSet && <PcgsFill form={form} refs={refs} onApply={applyFill} />}
+        {!isSet && <NumistaFill form={form} refs={refs} onApply={applyFill} />}
         <DuplicateWarning
           country={form.country}
           denomination={form.denomination}
@@ -369,7 +401,11 @@ export default function ItemForm() {
                       type,
                       grade_id: "",
                       designations: [],
-                      strike: type !== "coin" && f.strike === "proof" ? "business" : f.strike,
+                      // A set starts as a proof set; only coins and sets have proofs.
+                      strike:
+                        type === "mint_set"
+                          ? f.type === "mint_set" ? f.strike : "proof"
+                          : type !== "coin" && f.strike === "proof" ? "business" : f.strike,
                     };
                     if (type === "bullion") next = presetBullionFineness(next);
                     return next;
@@ -389,18 +425,46 @@ export default function ItemForm() {
                 <option key={c} value={c} />
               ))}
             </datalist>
-            {text("denomination", isBullion ? "Product name *" : "Denomination *", {
-              required: true,
-              placeholder: isBullion ? "suggested from weight and metal" : 'e.g. "25 cents"',
-            })}
+            {text(
+              "denomination",
+              isBullion ? "Product name *" : isSet ? "Set name *" : "Denomination *",
+              {
+                required: true,
+                list: isSet ? "set-name-options" : undefined,
+                placeholder: isBullion
+                  ? "suggested from weight and metal"
+                  : isSet
+                    ? "e.g. Proof Set, Prestige Proof Set"
+                    : 'e.g. "25 cents"',
+                title: isSet ? "The set's name without the year" : undefined,
+              },
+            )}
+            {isSet && (
+              <datalist id="set-name-options">
+                {setNames.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
+            )}
+            {isSet &&
+              text("issuer", "Issuing mint *", {
+                required: true,
+                placeholder: "e.g. United States Mint",
+                title:
+                  "The issuing authority, never the facility that struck it; a facility goes in the notes",
+              })}
             {/* The ND box sits under the year it changes the meaning of; bullion
                 has neither (the year-or-ND rule doesn't apply to a bar). */}
             <div className="field">
               <label className="field">
-                {isBullion ? "Year" : form.year_nd ? "Attributed year" : hasStruckDate ? "Year" : "Year *"}
+                {isBullion
+                  ? "Year"
+                  : isSet
+                    ? "Year of issue *"
+                    : form.year_nd ? "Attributed year" : hasStruckDate ? "Year" : "Year *"}
                 <input
                   type="number"
-                  required={!isBullion && !hasStruckDate && !form.year_nd}
+                  required={isSet || (!isBullion && !hasStruckDate && !form.year_nd)}
                   value={form.year}
                   placeholder={isBullion || form.year_nd ? "optional" : undefined}
                   title={
@@ -409,7 +473,8 @@ export default function ItemForm() {
                   onChange={(e) => set("year")(e.target.value)}
                 />
               </label>
-              {!isBullion && flag("year_nd", "ND (no date on the piece)", "The piece carries no date")}
+              {!isBullion && !isSet &&
+                flag("year_nd", "ND (no date on the piece)", "The piece carries no date")}
             </div>
             {isCoin && (
               <>
@@ -456,11 +521,23 @@ export default function ItemForm() {
                 )}
               </>
             )}
-            {!isBullion && text("mint_mark", "Mint mark")}
+            {!isBullion && !isSet && text("mint_mark", "Mint mark")}
             {text("series", "Series")}
             {!isBullion &&
-              text("variety", "Variety / sub-type", { placeholder: "e.g. 1955 DDO, overdate" })}
-            {!isBullion && (
+              text("variety", "Variety / sub-type", {
+                placeholder: isSet ? "e.g. missing mint mark" : "e.g. 1955 DDO, overdate",
+              })}
+            {isSet && (
+              <label className="field">
+                Kind
+                <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
+                  <option value="proof">Proof set</option>
+                  <option value="business">Uncirculated set</option>
+                  <option value="specimen">Specimen set</option>
+                </select>
+              </label>
+            )}
+            {!isBullion && !isSet && (
               <label className="field">
                 Strike
                 <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
@@ -470,6 +547,11 @@ export default function ItemForm() {
                 </select>
               </label>
             )}
+            {isSet &&
+              text("piece_count", "Pieces in the set", {
+                type: "number", min: 1, max: 100, step: 1,
+                title: "Every piece: the coins, any banknote, and any token or medal",
+              })}
             {text("quantity", "Quantity", { type: "number", min: 1 })}
             <label className="field">
               Set / lot
@@ -484,89 +566,131 @@ export default function ItemForm() {
                 <button type="button" onClick={newSet} title="Create a new set">+</button>
               </span>
             </label>
+            {isSet && (
+              <p className="muted full" style={{ margin: 0 }}>
+                A set here is one a mint issued and packaged: a proof, uncirculated, or specimen
+                set, a coin and currency set (the note's serial goes in the notes), or a bullion
+                proof set such as a four-coin American Gold Eagle set. Enter a set either as this one
+                item or as its coins, never both, or its coins count twice. A dealer's set is entered
+                as its coins, grouped with Set / lot.
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="card">
-          <h2>Grading &amp; certification</h2>
-          <div className="item-form">
-            <label className="field">
-              Grade ({gradeScaleFor(form.type)})
-              <select value={form.grade_id} onChange={(e) => set("grade_id")(e.target.value)}>
-                <option value="">ungraded</option>
-                {grades.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {gradeCode(g)}: {g.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {text("grade_details", "Details grade (problem)", {
-              list: "problem-options",
-              placeholder: "blank if problem-free",
-            })}
-            <datalist id="problem-options">
-              {PROBLEMS[form.type].map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-            {text("cert_service", "Cert service", { placeholder: "PCGS, NGC, PMG…" })}
-            {text("cert_number", "Cert number")}
-            {isCoin && (
-              <>
-                {text("pcgs_population", "PCGS population", {
-                  type: "number", min: 0, step: 1, title: "Coins PCGS has graded at this grade",
-                })}
-                {text("pcgs_pop_higher", "Graded higher", {
-                  type: "number", min: 0, step: 1, title: "Coins PCGS has graded higher",
-                })}
-              </>
-            )}
-            {isCoin && (
+        {isSet && (
+          <div className="card">
+            <h2>Packaging</h2>
+            <div className="item-form">
               <label className="field">
-                CAC sticker
-                <select value={form.cac_sticker} onChange={(e) => set("cac_sticker")(e.target.value)}>
-                  <option value="">none</option>
-                  <option value="green">Green</option>
-                  <option value="gold">Gold</option>
+                Packaging
+                <select value={form.packaging} onChange={(e) => set("packaging")(e.target.value)}>
+                  <option value="">not recorded</option>
+                  {(Object.keys(PACKAGING_LABELS) as Packaging[]).map((p) => (
+                    <option key={p} value={p}>{PACKAGING_LABELS[p]}</option>
+                  ))}
                 </select>
               </label>
-            )}
-            <div className="field full">
-              Grade qualifiers
-              <div className="chip-row">
-                {flag("grade_plus", "Plus grade (+)")}
-                {flag("grade_star", "Star (★)", "NGC or PMG star designation")}
-              </div>
-            </div>
-            {!isBullion && (
-              <div className="field full">
-                Designations
+              <div className="field">
+                &nbsp;
                 <div className="chip-row">
-                  {DESIGNATIONS[form.type].map(([code, meaning]) => (
-                    <button
-                      type="button"
-                      key={code}
-                      title={meaning}
-                      className={form.designations.includes(code) ? "chip active" : "chip"}
-                      onClick={() => toggleDesignation(code)}
-                    >
-                      {code}
-                    </button>
-                  ))}
+                  {flag("has_box", "Box or sleeve", "The mint's outer box or sleeve is present")}
+                  {flag("has_coa", "Certificate", "The certificate of authenticity is present")}
                 </div>
               </div>
-            )}
+              <p className="muted full" style={{ margin: 0 }}>
+                Sealed: never opened. Complete: opened, every piece in the mint's holder.
+                Incomplete: a piece missing or replaced. A cracked lens or haze goes in the notes.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isSet && (
+          <div className="card">
+            <h2>Grading &amp; certification</h2>
+            <div className="item-form">
+              <label className="field">
+                Grade ({gradeScaleFor(form.type)})
+                <select value={form.grade_id} onChange={(e) => set("grade_id")(e.target.value)}>
+                  <option value="">ungraded</option>
+                  {grades.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {gradeCode(g)}: {g.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {text("grade_details", "Details grade (problem)", {
+                list: "problem-options",
+                placeholder: "blank if problem-free",
+              })}
+              <datalist id="problem-options">
+                {PROBLEMS[form.type].map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {text("cert_service", "Cert service", { placeholder: "PCGS, NGC, PMG…" })}
+              {text("cert_number", "Cert number")}
+              {isCoin && (
+                <>
+                  {text("pcgs_population", "PCGS population", {
+                    type: "number", min: 0, step: 1, title: "Coins PCGS has graded at this grade",
+                  })}
+                  {text("pcgs_pop_higher", "Graded higher", {
+                    type: "number", min: 0, step: 1, title: "Coins PCGS has graded higher",
+                  })}
+                </>
+              )}
+              {isCoin && (
+                <label className="field">
+                  CAC sticker
+                  <select value={form.cac_sticker} onChange={(e) => set("cac_sticker")(e.target.value)}>
+                    <option value="">none</option>
+                    <option value="green">Green</option>
+                    <option value="gold">Gold</option>
+                  </select>
+                </label>
+              )}
+              <div className="field full">
+                Grade qualifiers
+                <div className="chip-row">
+                  {flag("grade_plus", "Plus grade (+)")}
+                  {flag("grade_star", "Star (★)", "NGC or PMG star designation")}
+                </div>
+              </div>
+              {!isBullion && (
+                <div className="field full">
+                  Designations
+                  <div className="chip-row">
+                    {DESIGNATIONS[form.type].map(([code, meaning]) => (
+                      <button
+                        type="button"
+                        key={code}
+                        title={meaning}
+                        className={form.designations.includes(code) ? "chip active" : "chip"}
+                        onClick={() => toggleDesignation(code)}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="card">
-          <h2>{isNote ? "Note details" : "Composition & physical"}</h2>
+          <h2>
+            {isNote ? "Note details" : isSet ? "Precious metal in the set" : "Composition & physical"}
+          </h2>
           <div className="item-form">
-            {text("composition", "Composition", {
-              placeholder: isCoin ? "e.g. 90% silver" : isBullion ? "e.g. .999 fine silver" : "e.g. paper, polymer",
-            })}
-            {isBullion && (
+            {!isSet &&
+              text("composition", "Composition", {
+                placeholder: isCoin ? "e.g. 90% silver" : isBullion ? "e.g. .999 fine silver" : "e.g. paper, polymer",
+              })}
+            {(isBullion || isSet) && (
               <label className="field">
                 Metal
                 <select
@@ -588,6 +712,29 @@ export default function ItemForm() {
               <p className="muted full" style={{ margin: 0 }}>
                 Name a precious metal and give a weight and fineness to include it in the bullion stack.
               </p>
+            )}
+            {isSet && (
+              <>
+                {weightField("Precious metal")}
+                {text("fineness", "Fineness", {
+                  type: "number", step: "0.0001", min: 0, max: 1, placeholder: "e.g. 0.999",
+                })}
+                {metal && form.weight_g !== "" && form.fineness !== "" && (
+                  <div className="field">
+                    &nbsp;
+                    {flag(
+                      "count_in_stack",
+                      "Count in the bullion stack",
+                      "Its precious metal counts in the stack's ounces, beside your bars and coins",
+                    )}
+                  </div>
+                )}
+                <p className="muted full" style={{ margin: 0 }}>
+                  The precious metal in the whole set: for a 2023 Silver Proof Set, silver, the total
+                  weight of its silver coins, and their fineness. That gives the set a melt value;
+                  it counts in the stack only when ticked.
+                </p>
+              </>
             )}
             {isCoin && (
               <>
@@ -692,8 +839,10 @@ export default function ItemForm() {
               </>
             )}
             {!isBullion &&
-              text("mintage", isCoin ? "Mintage" : "Print run", { type: "number", min: 0, step: 1 })}
-            {!isBullion &&
+              text("mintage", isCoin ? "Mintage" : isSet ? "Sets issued" : "Print run", {
+                type: "number", min: 0, step: 1,
+              })}
+            {!isBullion && !isSet &&
               text("demonetized_on", "Demonetized on", {
                 type: "date", title: "The date it stopped being legal tender",
               })}
@@ -790,7 +939,9 @@ export default function ItemForm() {
                         ? "catalog (krause, numista…)"
                         : isBullion
                           ? "catalog (numista…)"
-                          : "catalog (pick, friedberg…)"
+                          : isSet
+                            ? "catalog (numista_set, krause, pcgs…)"
+                            : "catalog (pick, friedberg…)"
                     }
                     onChange={(e) => setRef(i, "catalog", e.target.value)} />
                   <input value={ref.ref_code} placeholder="reference code"

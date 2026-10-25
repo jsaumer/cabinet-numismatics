@@ -11,6 +11,7 @@ import {
   TROY_OUNCE_G,
 } from "../api";
 import { EditableValue, EditSpec, SaveFact } from "./inline-edit";
+import { packagingLine, setKind } from "./item-types";
 import { TraitBadges } from "./serial-traits";
 
 /** "AH 1340", "Showa 12": the year as written, with its calendar's short name. */
@@ -114,7 +115,31 @@ export function ItemFacts({
           ? `${item.height_mm} mm tall`
           : null;
 
+  const isSet = item.type === "mint_set";
   const groups: Group[] = [
+    // A set leads with what makes it a set (SPEC_0370); its kind, mint, and
+    // count stay out of Identity below.
+    {
+      title: "The set",
+      facts: isSet
+        ? [
+            { label: "Kind", value: setKind(item.strike) },
+            { label: "Issuing mint", value: item.issuer, edit: text("issuer", item.issuer) },
+            {
+              label: "Pieces",
+              value: item.piece_count != null ? count(item.piece_count) : null,
+              edit: { field: "piece_count", kind: "integer", raw: item.piece_count },
+            },
+            {
+              label: "Sets issued",
+              value: item.mintage != null ? count(item.mintage) : null,
+              edit: { field: "mintage", kind: "integer", raw: item.mintage },
+            },
+            { label: "Packaging", value: packagingLine(item) },
+            { label: "In the stack", value: item.count_in_stack ? "Counted" : null },
+          ]
+        : [],
+    },
     {
       title: "Identity",
       facts: [
@@ -126,11 +151,11 @@ export function ItemFacts({
             <Link to={`/collection?set_id=${item.set.id}`}>{item.set.name}</Link>
           ) : null,
         },
-        { label: "Strike", value: strikeLabel(item) },
+        { label: "Strike", value: isSet ? null : strikeLabel(item) },
         { label: "Mint mark", value: item.mint_mark, forType: "coin", edit: text("mint_mark", item.mint_mark) },
         {
           label: item.type === "note" ? "Print run" : "Mintage",
-          value: item.mintage != null ? count(item.mintage) : null,
+          value: item.mintage != null && !isSet ? count(item.mintage) : null,
           forType: ["coin", "note"],
           edit: { field: "mintage", kind: "integer", raw: item.mintage },
         },
@@ -144,7 +169,7 @@ export function ItemFacts({
         },
         {
           label: item.type === "bullion" ? "Refiner or mint" : "Issuer",
-          value: item.issuer,
+          value: isSet ? null : item.issuer,
           forType: ["note", "bullion"],
           edit: text("issuer", item.issuer),
         },
@@ -174,7 +199,8 @@ export function ItemFacts({
     },
     {
       title: "Grade & certification",
-      facts: [
+      // Nothing grades a set as a unit.
+      facts: isSet ? [] : [
         {
           label: "Grade",
           value: item.grade ? `${item.grade_label} (${item.grade.label})` : null,
@@ -227,7 +253,7 @@ export function ItemFacts({
       ],
     },
     {
-      title: "Physical",
+      title: isSet ? "Precious metal" : "Physical",
       facts: [
         { label: "Composition", value: item.composition, edit: text("composition", item.composition) },
         { label: "Weight", value: item.weight_g != null ? `${item.weight_g} g` : null, edit: num("weight_g", item.weight_g, "g") },

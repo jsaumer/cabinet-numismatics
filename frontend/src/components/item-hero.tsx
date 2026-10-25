@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { certLookupUrl, ItemDetail, money, photoUrl, PRIORITY_LABELS } from "../api";
-import { TypeIcon } from "./item-types";
+import { packagingLine, setKind, TypeIcon, typeBadge } from "./item-types";
 import { Lightbox } from "./photos";
 import { latestBySource, timeSince } from "./provenance";
 
@@ -80,14 +80,18 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
               ? [item.issuer || item.country, item.denomination, item.year_label]
                   .filter(Boolean)
                   .join(" ")
-              : (
+              : item.type === "mint_set"
+                ? [item.year_label, item.issuer || item.country, item.denomination]
+                    .filter(Boolean)
+                    .join(" ")
+                : (
                 <>
                   {item.country} {item.denomination}, {item.year_label}
                   {item.mint_mark ? ` "${item.mint_mark}"` : ""}
                 </>
               )}
           </h1>
-          <span className={`badge ${item.type}`}>{item.type}</span>
+          <span className={`badge ${item.type}`}>{typeBadge(item.type)}</span>
           {item.status !== "owned" && (
             <span className={`badge status-${item.status}`}>{item.status}</span>
           )}
@@ -96,6 +100,17 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
           {actions}
         </div>
 
+        {item.type === "mint_set" && (
+          <p className="hero-grade">
+            <b>{setKind(item.strike)}</b>
+            {item.piece_count != null && (
+              <span className="muted">
+                {" "}· {item.piece_count} piece{item.piece_count === 1 ? "" : "s"}
+              </span>
+            )}
+            {packagingLine(item) && <span className="muted"> · {packagingLine(item)}</span>}
+          </p>
+        )}
         {(item.grade_label || cert) && (
           <p className="hero-grade">
             {item.grade_label && <b>{item.grade_label}</b>}

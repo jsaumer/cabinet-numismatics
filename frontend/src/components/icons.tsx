@@ -47,6 +47,16 @@ export const BullionIcon = () => (
   </Icon>
 );
 
+/** Stands in for a proof or mint set with no photo: a case holding coins. */
+export const SetIcon = () => (
+  <Icon>
+    <rect x="2.5" y="5.5" width="19" height="13" rx="1.5" />
+    <circle cx="7" cy="12" r="2.2" />
+    <circle cx="12" cy="12" r="2.2" />
+    <circle cx="17" cy="12" r="2.2" />
+  </Icon>
+);
+
 /** Settings, as sliders: a drawn gear at this size reads as a sun. */
 export const SettingsIcon = () => (
   <Icon>
