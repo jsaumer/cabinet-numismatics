@@ -162,12 +162,17 @@ Requirements and limits:
 
 - A free API key (numista.com), stored encrypted in Settings; the source is
   disabled until you switch it on.
-- 2,000 requests a month, so every response is cached in `source_cache`:
+- 2,000 requests a month on the free plan (license section 5, unchanged by
+  the new license of July 2026). Every response is kept in `source_cache`:
   issues and prices for 7 days. The license forbids storing its data (§8.1)
   apart from identifiers (§8.2), catalog metadata for seven days (§8.3),
   and an individual's personal project (§8.4); §8.4 is what covers a
   self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
-  does not cover publishing the data or running a public service. A stale
+  does not cover publishing the data, making it available to third parties,
+  or running a public service, which is why a share link never shows a
+  value from Numista (v0.36.1). Applications must also name Numista as the
+  source and show the N# beside a catalog search result (§4): Cabinet labels
+  a value "Numista value" and every search hit carries its N#. A stale
   entry is used when the upstream fails. An item missing its prerequisites
   (no ref, no grade) costs no request at all.
 - Confidence is medium by design: these are collector estimates, not realized
@@ -283,8 +288,8 @@ docker compose exec backend python scripts/check_sources.py -s numista-sales -i 
 `--list` shows which items carry a handle a source could use (a `numista` or
 `pcgs` reference, or a PCGS cert). `-s` takes `melt`, `numista`, `pcgs`,
 `comps`, or `numista-sales`, which fetches the item's Numista auction sales
-without adding them to its sales log (billed per uncached request on the
-paid plan). `-i` takes an item id or, failing that, the cert number of an
+without adding them to its sales log (each uncached request counts against
+the monthly quota, and is billed on the paid plan). `-i` takes an item id or, failing that, the cert number of an
 item already in the collection. `--fresh` ignores the cache TTL to force a
 real request (and so spends quota); without it a cached response is reused,
 shown as such, and the run is free. `--full` prints untrimmed payloads.
@@ -303,10 +308,11 @@ will hand them to a self-hosted app. Research in September 2026 found:
   forbids using its content to model prices. No sold-price API is open to
   individuals anywhere else either: auction houses and aggregators, price
   guides, and Numista's own sales records all require a paid plan or forbid
-  automated collection.
+  automated collection. (Numista opened its sales records to the free plan
+  in September 2026; each request counts against the 2,000 a month.)
 
 So the source is a **sales log per item**, filled by hand from those
-archives, with Numista's sales as an optional paid feed into the same log.
+archives, with Numista's sales as an optional feed into the same log.
 Implemented in `app/services/comps.py`:
 
 - A sale counts when it's included and, if its grade bucket is known, matches

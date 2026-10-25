@@ -29,7 +29,7 @@ from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import get_settings, normalize_origin, public_origins
-from app.models import AppSetting, Checklist, Item, ItemPhoto, ItemSet, ShareLink
+from app.models import AppSetting, Checklist, Item, ItemPhoto, ItemSet, PriceEstimate, ShareLink
 from app.services import app_settings, checklists, pricing
 from app.services.currency import Converter
 
@@ -304,11 +304,29 @@ def value_context(db: Session) -> tuple[str, str | None, Converter]:
     return strategy, preferred, converter
 
 
+def from_numista(estimate: PriceEstimate) -> bool:
+    """Whether an estimate carries Numista's data: its own price, or a comps
+    median that used a sale fetched from Numista. Numista's license (section
+    8.4) lets an individual store its data for a private project, not make it
+    available to third parties, so a share link never shows one."""
+    key = pricing.source_key(estimate.source)
+    if key == "numista":
+        return True
+    if key != "comps":
+        return False
+    sales = (estimate.details or {}).get("sales")
+    return isinstance(sales, list) and any(
+        isinstance(sale, dict) and sale.get("source") == "numista" for sale in sales
+    )
+
+
 def shown_value(item: Item, values: tuple[str, str | None, Converter]) -> dict | None:
-    """The list's shown value in the display currency, or None when there
-    is none or it can't be converted from the cache."""
+    """The list's shown value in the display currency, worked out as the
+    owner's list does but without any estimate from Numista, or None when
+    nothing else is left or it can't be converted from the cache."""
     strategy, preferred, converter = values
-    resolved = pricing.resolve_display_value(item.estimates, strategy, preferred, converter)
+    estimates = [e for e in item.estimates if not from_numista(e)]
+    resolved = pricing.resolve_display_value(estimates, strategy, preferred, converter)
     if resolved is None:
         return None
     amount = converter.convert(resolved[0], resolved[1])

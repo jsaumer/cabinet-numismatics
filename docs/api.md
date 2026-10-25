@@ -972,8 +972,10 @@ sales used. 422 when no sale counts or none converts.
 The Numista fetch needs `numista_sales_enabled`, an API key, and a `numista`
 catalog ref; it answers `found`, `added`, `already_logged` (matched by lot
 URL, or by auction house, date, and lot number when there is none), and
-`issue_id`. A key without Numista's paid plan gets 422 with that
-explanation; an unreachable Numista is 502. One request, cached for a day.
+`issue_id`. A 403 from Numista is 422 saying Numista refused the request
+(sales records were paid-plan only until September 2026; any key reaches
+them now); an unreachable Numista is 502. One request from the monthly
+quota, cached for a day.
 
 ## Imports
 
@@ -1097,9 +1099,13 @@ slot ticked by hand).
 auction archives that often give its sale price and date; with `show_tags`,
 `tags` (names); with `show_notes`, `notes`;
 with `show_values`, `value`: the list's shown value (the `value_strategy`
-setting) in the display currency, `{"amount", "currency"}`, or `null` when
-the piece has none or it can't be converted from the cached exchange rates
-(a public route never fetches a rate). Never a cost, fee, gain, acquisition
+setting) in the display currency, `{"amount", "currency"}`, worked out
+without any estimate carrying Numista's data (a Numista estimate, or a
+comps median that used a sale fetched from Numista), since Numista's API
+license lets an individual keep its data for a private project but not
+show it to third parties (section 8.4); `null` when nothing else is left,
+the piece has none, or it can't be converted from the cached exchange
+rates (a public route never fetches a rate). Never a cost, fee, gain, acquisition
 or sale field, the estimate's source or history, a storage location, a
 document, a serial number, custom fields, the population, wish-list fields,
 spot at purchase, the import origin, timestamps, or the edit history.
@@ -1196,7 +1202,7 @@ The response's read-only `backup_retention_choices` (`{"daily": [...],
 "weekly": [...]}`) gives both sets so a client never has to hard-code them.
 `comps_enabled` switches the comps source (on by default), and
 `numista_sales_enabled` (off by default) allows fetching Numista's auction
-sales, which needs Numista's paid API plan. `preferred_source` accepts
+sales (each fetch spends a request from the monthly quota). `preferred_source` accepts
 `comps`. `trash_retention_days` (`0` = never, `7`, `30`, `90`, or `365`; the
 default is `30`) is how long an item stays in the trash.
 

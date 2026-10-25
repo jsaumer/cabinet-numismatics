@@ -2,7 +2,7 @@
 
 The estimate is the median of recent sales in the item's sales log: sales the
 user recorded by hand (eBay sold listings, auction archives, dealer sales) or
-fetched from Numista's auction records (`numista.fetch_sales`, paid API plan).
+fetched from Numista's auction records (`numista.fetch_sales`, on request).
 No network: everything comes from the `comparables` table, converted into the
 display currency at the cached daily rates.
 

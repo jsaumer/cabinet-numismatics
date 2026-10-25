@@ -192,7 +192,8 @@ guidance, not appraisals.
   anything unconvertible. Never silently mix currencies.
 - ✔ **[Core]** On-demand estimate from comparables with a confidence score:
   a per-item **sales log** (filled by hand from eBay sold listings and
-  auction archives, or from Numista's auction records on its paid API plan)
+  auction archives, or from Numista's auction records, paid-plan only until
+  Numista opened them to the free plan in September 2026)
   and a `comps` source taking the median of recent matching sales. No free
   sold-price API exists for individuals; see price-sources.md.
   **Shipped in v0.17.0.**
