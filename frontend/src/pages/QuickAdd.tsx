@@ -13,6 +13,7 @@ import {
   NumistaSearchResult,
 } from "../api";
 import { DuplicateWarning } from "../components/duplicates";
+import { TYPE_INFO } from "../components/item-types";
 import { EMPTY, FormState, toPayload } from "./item-form/model";
 import { fillFromNumista, issueFields } from "./item-form/NumistaFill";
 import { fillFromCert } from "./item-form/PcgsFill";
@@ -245,7 +246,7 @@ export default function QuickAdd() {
                 className={form.type === t ? "active" : undefined}
                 onClick={() => setForm((f) => ({ ...f, type: t, grade_id: "" }))}
               >
-                {t === "coin" ? "Coin" : t === "note" ? "Note" : "Bar or round"}
+                {TYPE_INFO[t].one}
               </button>
             ))}
           </div>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { FileButton } from "../components/controls";
 import { UploadIcon } from "../components/icons";
+import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 import {
   api,
   ImportDefaults,
@@ -327,9 +328,9 @@ export default function Import() {
                       setDefaults({ ...defaults, type: e.target.value as ImportDefaults["type"] })
                     }
                   >
-                    <option value="coin">Coin</option>
-                    <option value="note">Banknote</option>
-                    <option value="bullion">Bar or round</option>
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t} value={t}>{TYPE_INFO[t].one}</option>
+                    ))}
                   </select>
                 </label>
                 <label className="field">

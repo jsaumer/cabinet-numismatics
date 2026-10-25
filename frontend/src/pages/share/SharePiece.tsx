@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { api, money, ShareItem, ShareItemPhoto, sharePhotoUrl } from "../../api";
-import { BullionIcon, CoinIcon, NoteIcon } from "../../components/icons";
+import { TypeIcon } from "../../components/item-types";
 import { shareItemLabel } from "./ShareGrid";
 
 /** Keeps the page behind the lightbox from scrolling while it's open, the
@@ -87,10 +87,6 @@ interface Group {
 }
 
 const filled = (value: ReactNode) => value !== null && value !== undefined && value !== "";
-
-function typeIcon(item: ShareItem) {
-  return item.type === "coin" ? <CoinIcon /> : item.type === "bullion" ? <BullionIcon /> : <NoteIcon />;
-}
 
 /** One shared piece: its photos (in the lightbox), the title and grade the
  * hero shows on the item page, and everything else in the same grouped-facts
@@ -211,7 +207,7 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
               </button>
             ))
           ) : (
-            <div className="share-thumb-empty large">{typeIcon(item)}</div>
+            <div className="share-thumb-empty large"><TypeIcon type={item.type} /></div>
           )}
         </div>
         <div className="detail-header">

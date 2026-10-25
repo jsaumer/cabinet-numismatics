@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { certLookupUrl, ItemDetail, money, photoUrl, PRIORITY_LABELS } from "../api";
-import { BullionIcon, CoinIcon, NoteIcon } from "./icons";
+import { TypeIcon } from "./item-types";
 import { Lightbox } from "./photos";
 import { latestBySource, timeSince } from "./provenance";
 
@@ -69,7 +69,7 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
           </button>
         ) : (
           <div className="hero-photo-empty" title="No photo yet">
-            {item.type === "coin" ? <CoinIcon /> : item.type === "bullion" ? <BullionIcon /> : <NoteIcon />}
+            <TypeIcon type={item.type} />
           </div>
         )}
       </div>
