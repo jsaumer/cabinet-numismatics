@@ -653,7 +653,10 @@ Roadmap Phase 7, P7. `services/stack.py`, `routers/stack.py`, migration
   `Item.fine_oz` (weight × fineness × quantity ÷ `TROY_OUNCE_G`, null unless
   `detect_metal(composition)` and `effective_fineness` both give an answer),
   `stack.in_scope` (the tag/set filter on top of it), and melt value
-  (`pricing.py`) must never disagree about which pieces are bullion. A new
+  (`pricing.py`) must never disagree about which pieces are bullion. One
+  stated exception since v0.37.0: a proof or mint set has melt and
+  `fine_oz` always, but counts in the stack only when ticked
+  (`stack.counts`, below under "Proof and mint sets"). A new
   path that changes what counts as a precious metal or a usable fineness has
   to update `detect_metal`/`effective_fineness` once, not separately in the
   stack service.
@@ -2927,6 +2930,21 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   issuer is empty or blank (the API and imports accept one; the form won't).
 - `counts.mint_sets` on `/api/stats/collection` follows the owned-only
   split; the type breakdown and `cabinet_items{type}` needed no change.
+
+### Stage 2: the stack
+
+- **`stack.counts(item)` is the one answer to "may this piece's metal count
+  in the stack"**: every coin, note, and bar, and a set only when
+  `count_in_stack` is ticked. `stack_figures`, `needs_spot` (so the
+  backfill, the hourly loop, and `missing_spot`), and
+  `fine_ounces_by_metal` (the `cabinet_stack_fine_ounces` gauge) all ask
+  it; the `stack` widget reads `/api/stack`, so it follows. A new place
+  that sums ounces asks it too.
+- **Melt and `fine_oz` don't ask it**: a set's melt is a value, and
+  `fine_oz` stays a fact about the piece, whatever the stack says.
+- **An unticked set is out by choice, not "left out"**: it never reaches
+  `skipped_items`. A ticked set missing its weight or fineness does.
+- `count_in_stack` is ignored for coins, notes, and bars.
 
 ## Releases
 

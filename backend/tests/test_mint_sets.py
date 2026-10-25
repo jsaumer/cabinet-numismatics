@@ -3,10 +3,13 @@ type on the backend."""
 
 from datetime import date, timedelta
 
+import pytest
+
 from app.models import Item
 from app.schemas import SET_YEAR_REQUIRED
 from app.services import numista, pcgs
 from tests.conftest import COIN
+from tests.test_stack import IN_COVERAGE, history, spot  # noqa: F401  (fixtures)
 
 SET = {
     "type": "mint_set",
@@ -247,3 +250,79 @@ def test_data_health_asks_a_set_for_its_mint_not_a_grade(client):
     assert checks["no_grade"]["count"] == 0
     assert checks["no_issuing_mint"]["count"] == 2
     assert {i["id"] for i in checks["no_issuing_mint"]["items"]} == {missing["id"], blank["id"]}
+
+
+# ---------------------------------------------------------------- the stack (stage 2)
+
+# Five .999 silver coins, one troy ounce each.
+SILVER_SET = {
+    **SET,
+    "denomination": "Silver Proof Set",
+    "composition": "Silver (.999)",
+    "weight_g": 155.5175,
+    "fineness": 0.999,
+    "acquisition_price": 150.0,
+    "acquisition_date": IN_COVERAGE,
+}
+
+
+@pytest.mark.usefixtures("spot")
+def test_an_unticked_set_has_melt_but_no_stack_ounces(client):
+    made = create(client, SILVER_SET)
+    melt = client.post(f"/api/items/{made['id']}/estimates/auto", params={"source": "melt"})
+    assert melt.status_code == 201, melt.text
+    assert melt.json()["estimated_value"] > 0
+
+    body = client.get("/api/stack").json()
+    assert body["metals"] == [] and body["items"] == []
+    assert body["skipped_items"] == []  # out by choice, not "left out"
+    assert body["missing_spot"] == 0
+
+    assert client.put("/api/settings", json={"metrics_enabled": True}).status_code == 200
+    assert "cabinet_stack_fine_ounces{" not in client.get("/api/metrics").text
+
+
+@pytest.mark.usefixtures("spot")
+def test_a_ticked_set_counts_in_the_stack(client):
+    create(client, SILVER_SET, count_in_stack=True)
+    body = client.get("/api/stack").json()
+    silver = {m["metal"]: m for m in body["metals"]}["silver"]
+    assert silver["fine_oz"] == 4.995  # five ounces at .999
+    assert body["missing_spot"] == 1
+
+    assert client.put("/api/settings", json={"metrics_enabled": True}).status_code == 200
+    assert 'cabinet_stack_fine_ounces{metal="silver"} 4.995' in client.get("/api/metrics").text
+
+
+@pytest.mark.usefixtures("spot", "history")
+def test_the_backfill_skips_an_unticked_set(client):
+    unticked = create(client, SILVER_SET)
+    ticked = create(client, SILVER_SET, count_in_stack=True, year=1982)
+    assert client.post("/api/stack/backfill").json() == {"filled": 1, "failed": 0, "remaining": 0}
+    assert client.get(f"/api/items/{unticked['id']}").json()["spot_at_purchase"] is None
+    assert client.get(f"/api/items/{ticked['id']}").json()["spot_at_purchase"] == 20.0
+
+
+@pytest.mark.usefixtures("spot")
+def test_a_ticked_set_missing_its_weight_is_left_out_by_name(client):
+    made = create(client, {**SILVER_SET, "weight_g": None}, count_in_stack=True)
+    body = client.get("/api/stack").json()
+    assert [(i["item_id"], i["missing"]) for i in body["skipped_items"]] == [(made["id"], "weight")]
+
+
+@pytest.mark.usefixtures("spot")
+def test_ticking_in_bulk_puts_sets_in_the_stack(client):
+    one, two = create(client, SILVER_SET), create(client, SILVER_SET, year=1982)
+    assert client.get("/api/stack").json()["metals"] == []
+    resp = client.post(
+        "/api/items/bulk", json={"ids": [one["id"], two["id"]], "set": {"count_in_stack": True}}
+    )
+    assert resp.status_code == 200
+    assert client.get("/api/stack").json()["metals"][0]["fine_oz"] == 9.99
+
+
+@pytest.mark.usefixtures("spot")
+def test_count_in_stack_means_nothing_for_a_coin(client):
+    coin = {**COIN, "composition": "99.9% silver", "weight_g": 31.1035, "fineness": 0.999}
+    create(client, coin, count_in_stack=False)
+    assert client.get("/api/stack").json()["metals"][0]["fine_oz"] == 0.999
