@@ -18,6 +18,7 @@ from app.auth.permissions import permission, require
 from app.db import get_db
 from app.models import CatalogRef, Grade, Item, ItemEvent, ItemSet, PriceEstimate, Tag
 from app.schemas import (
+    SET_YEAR_REQUIRED,
     YEAR_REQUIRED,
     BulkResult,
     BulkUpdate,
@@ -61,13 +62,16 @@ SORTABLE = {
 # Mostly empty columns: rows without a value sort last in either direction
 # (an undated piece has no year, an ungraded one no grade).
 NULLS_LAST = {"priority", "target_price", "year", "pcgs_pop_higher", "value", "grade"}
+# Types whose serial number is never read for fancy traits.
+NO_SERIAL_TRAITS = ("bullion", "mint_set")
 
 
 def _name_key():
     """The list's title as text, lowercased, for `sort=name`: "1932-D 25 cents",
-    "ND (1921) 50 pfennig", or for a bar or round its refiner (else country)
-    and product name. Mirrors the frontend's row title, so A-Z reads in the
-    order the list shows (coins and notes mostly by year, as their titles
+    "ND (1921) 50 pfennig", for a bar or round its refiner (else country)
+    and product name, and for a set its year, issuing mint (else country),
+    and name. Mirrors the frontend's row title, so A-Z reads in the order
+    the list shows (coins, notes, and sets mostly by year, as their titles
     start with it)."""
     year = cast(Item.year, String)
     dated = func.coalesce(year, "") + case(
@@ -79,6 +83,14 @@ def _name_key():
             (
                 Item.type == "bullion",
                 func.coalesce(func.nullif(Item.issuer, ""), Item.country) + " " + Item.denomination,
+            ),
+            (
+                Item.type == "mint_set",
+                func.coalesce(year, "")
+                + " "
+                + func.coalesce(func.nullif(Item.issuer, ""), Item.country)
+                + " "
+                + Item.denomination,
             ),
             (Item.year_nd.is_(True), undated + " " + Item.denomination),
             else_=dated + " " + Item.denomination,
@@ -144,6 +156,11 @@ CSV_COLUMNS = [
     "printer",
     "watermark",
     "demonetized_on",
+    "piece_count",
+    "packaging",
+    "has_box",
+    "has_coa",
+    "count_in_stack",
     "quantity",
     "acquisition_date",
     "acquisition_price",
@@ -279,6 +296,7 @@ def _filtered(
     fancy: bool | None = None,
     serial_trait: str | None = None,
     target_reached: bool | None = None,
+    packaging: str | None = None,
 ):
     if type:
         stmt = stmt.where(Item.type == type)
@@ -334,6 +352,8 @@ def _filtered(
         stmt = stmt.where(Item.serial_traits.is_not(None))
     if serial_trait:
         stmt = stmt.where(Item.serial_traits.like(f"%,{serial_trait},%"))
+    if packaging:
+        stmt = stmt.where(Item.packaging == packaging)
     if target_reached:
         # As Item.target_gap: the newest estimate, in the item's own currency.
         stmt = stmt.where(
@@ -384,7 +404,7 @@ def _value_settings(db: Session) -> tuple[str, str | None, Converter | None]:
 
 
 def filter_query(
-    type: str | None = Query(default=None, pattern="^(coin|note|bullion)$"),
+    type: str | None = Query(default=None, pattern="^(coin|note|bullion|mint_set)$"),
     status: str | None = Query(default=None, pattern="^(owned|sold|wishlist)$"),
     strike: str | None = Query(default=None, pattern="^(business|proof|specimen)$"),
     country: str | None = None,
@@ -403,6 +423,7 @@ def filter_query(
     serial_trait: str | None = Query(default=None, max_length=20),
     target_reached: bool | None = None,
     metal: str | None = Query(default=None, pattern="^(gold|silver|platinum|palladium|none)$"),
+    packaging: str | None = Query(default=None, pattern="^(sealed|complete|incomplete)$"),
 ) -> dict:
     """The list filters, shared by list and both exports via Depends. `metal`
     is popped and applied separately (in Python, not SQL; P11, v0.31.0)."""
@@ -432,6 +453,7 @@ def filter_query(
         "serial_trait": serial_trait,
         "target_reached": target_reached,
         "metal": metal,
+        "packaging": packaging,
     }
 
 
@@ -651,6 +673,11 @@ def _export_row(
         item.printer or "",
         item.watermark or "",
         item.demonetized_on or "",
+        "" if item.piece_count is None else item.piece_count,
+        item.packaging or "",
+        flag(item.has_box),
+        flag(item.has_coa),
+        flag(item.count_in_stack),
         item.quantity,
         item.acquisition_date or "",
         item.acquisition_price or "",
@@ -752,10 +779,11 @@ def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
 def _build_item(db: Session, payload: ItemCreate, grade_id: int | None = None) -> Item:
     data = payload.model_dump(exclude={"tags", "catalog_refs", "grade_id"})
     item = Item(**data)
-    # Fancy serial traits are never computed for bullion: a bar's serial isn't "fancy".
+    # Fancy serial traits are never computed for bullion or a set: a bar's
+    # serial isn't "fancy", and a set's note keeps its serial in the notes.
     item.serial_traits = (
         None
-        if item.type == "bullion"
+        if item.type in NO_SERIAL_TRAITS
         else serials.stored_traits(item.serial_number, item.replacement_note)
     )
     if item.pcgs_population is not None or item.pcgs_pop_higher is not None:
@@ -942,20 +970,22 @@ def _apply_struck_date(item: Item, fields: dict) -> None:
             )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    # The year rule, against the item as it will be; bullion is exempt.
-    if (
-        fields.get("type", item.type) != "bullion"
-        and fields.get("year", item.year) is None
-        and not fields.get("year_nd", item.year_nd)
-    ):
+    # The year rule, against the item as it will be; bullion is exempt, and
+    # a set always has its year of issue, never ND.
+    item_type = fields.get("type", item.type)
+    year, nd = fields.get("year", item.year), fields.get("year_nd", item.year_nd)
+    if item_type == "mint_set":
+        if year is None or nd:
+            raise HTTPException(status_code=422, detail=SET_YEAR_REQUIRED)
+    elif item_type != "bullion" and year is None and not nd:
         raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
 
 
 def _sync_derived(item: Item, changed) -> None:
     """The server-set fields, after an edit: the serial's traits, when the
     population figures last changed, and where a purchase-day spot came from."""
-    if item.type == "bullion":
-        item.serial_traits = None  # never computed for bullion; a bar's serial isn't "fancy"
+    if item.type in NO_SERIAL_TRAITS:
+        item.serial_traits = None  # never computed for bullion or a set
     elif "serial_number" in changed or "replacement_note" in changed or "type" in changed:
         item.serial_traits = serials.stored_traits(item.serial_number, item.replacement_note)
     if "pcgs_population" in changed or "pcgs_pop_higher" in changed:
@@ -1004,6 +1034,10 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         # Note details and demonetization are per piece, not bulk-editable.
         for key in ("width_mm", "height_mm", "printer", "watermark", "demonetized_on"):
             fields.pop(key, None)
+        # A set's pieces and packaging describe one set, not a batch;
+        # `count_in_stack` is the one set field a bulk edit changes.
+        for key in ("piece_count", "packaging", "has_box", "has_coa"):
+            fields.pop(key, None)
         if "year" in fields and fields["year"] is None:
             raise HTTPException(status_code=422, detail=YEAR_REQUIRED)
         if "grade_id" in fields:
@@ -1018,6 +1052,12 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         summary["add_tags"] = [None, payload.add_tags]
     if remove_names:
         summary["remove_tags"] = [None, sorted(remove_names)]
+    if fields.get("type") == "mint_set":
+        # The set's year rule, which bulk edit otherwise skips: a set needs a
+        # year and can't be ND, so an undated piece can't become one here.
+        year = fields.get("year")
+        if any((year if "year" in fields else i.year) is None or i.year_nd for i in items):
+            raise HTTPException(status_code=422, detail=SET_YEAR_REQUIRED)
     for item in items:
         touched = {f for f, value in fields.items() if getattr(item, f) != value}
         for field, value in fields.items():

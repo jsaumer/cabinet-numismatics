@@ -653,7 +653,10 @@ Roadmap Phase 7, P7. `services/stack.py`, `routers/stack.py`, migration
   `Item.fine_oz` (weight × fineness × quantity ÷ `TROY_OUNCE_G`, null unless
   `detect_metal(composition)` and `effective_fineness` both give an answer),
   `stack.in_scope` (the tag/set filter on top of it), and melt value
-  (`pricing.py`) must never disagree about which pieces are bullion. A new
+  (`pricing.py`) must never disagree about which pieces are bullion. One
+  stated exception since v0.37.0: a proof or mint set has melt and
+  `fine_oz` always, but counts in the stack only when ticked
+  (`stack.counts`, below under "Proof and mint sets"). A new
   path that changes what counts as a precious metal or a usable fineness has
   to update `detect_metal`/`effective_fineness` once, not separately in the
   stack service.
@@ -2883,6 +2886,147 @@ release notes on 20 October 2026. Rules:
   forbids caching "primarily to avoid API requests or charges" (section
   11), so comments and docs describe `source_cache` as the stored data
   section 8.4 allows, for the time Cabinet keeps it.
+
+## Proof and mint sets (v0.37.0)
+
+Built to [SPEC_0370](specs/SPEC_0370.md) on `mint-sets`, stage by stage.
+
+### Stage 1: the type on the backend, and one place per type
+
+Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
+`count_in_stack`), the `mint_set` type, and on the frontend
+`components/item-types.tsx`. Rules a later change has to respect:
+
+- **A type is described once on the frontend.** `TYPE_INFO` in
+  `components/item-types.tsx` holds each type's singular and plural labels
+  and its stand-in icon; the item page, both share pages, the list filter,
+  bulk edit, the form, the import default, quick add, and the type
+  breakdown read it (`TypeIcon`, `ITEM_TYPES`). A new type is an entry
+  there, and the `Record<ItemType, ...>` refuses to compile without one.
+  Quick add keeps its own list of the types its lookups can fill.
+- **A set's year rule lives where the others do**: `ItemBase._year_or_nd`
+  (create) and `routers/items._apply_struck_date` (update), both raising
+  `SET_YEAR_REQUIRED`: a set needs a year and is never ND. Bulk edit skips
+  the year rule, so it checks this one itself when `type` becomes
+  `mint_set`. "Add a run" never makes a set.
+- **The label and the name sort agree**: `Item.label` for a set is year,
+  issuer (else country), set name, and `routers/items._name_key` builds the
+  same text, so Piece A to Z places a set by its year among the coins.
+  Stage 3's row title must match it too.
+- **`NO_SERIAL_TRAITS`** (`routers/items.py`) is the types whose serial is
+  never read for fancy traits (bullion and sets), in `_build_item` and
+  `_sync_derived` alike.
+- **Bulk edit changes `count_in_stack` only**: `piece_count`, `packaging`,
+  `has_box`, and `has_coa` describe one set and are dropped there.
+- **Neither price source takes a set**: `pcgs.SETS_REFUSED` and
+  `numista.SETS_REFUSED` come first in each `prerequisite`, before the key
+  check, since a key wouldn't help; Numista's sales prerequisite refuses a
+  set too. The probe that settled it is in SPEC_0370's build log.
+- **A set isn't marked down for having no grade**: comps' confidence treats
+  a set as graded.
+- **Sets stay out of the grade figures**: `insights.quality_stats` drops
+  them before counting (nothing certifies a set as a unit), the data-health
+  `no_grade` check skips them, and `no_issuing_mint` counts sets whose
+  issuer is empty or blank (the API and imports accept one; the form won't).
+- `counts.mint_sets` on `/api/stats/collection` follows the owned-only
+  split; the type breakdown and `cabinet_items{type}` needed no change.
+
+### Stage 2: the stack
+
+- **`stack.counts(item)` is the one answer to "may this piece's metal count
+  in the stack"**: every coin, note, and bar, and a set only when
+  `count_in_stack` is ticked. `stack_figures`, `needs_spot` (so the
+  backfill, the hourly loop, and `missing_spot`), and
+  `fine_ounces_by_metal` (the `cabinet_stack_fine_ounces` gauge) all ask
+  it; the `stack` widget reads `/api/stack`, so it follows. A new place
+  that sums ounces asks it too.
+- **Melt and `fine_oz` don't ask it**: a set's melt is a value, and
+  `fine_oz` stays a fact about the piece, whatever the stack says.
+- **An unticked set is out by choice, not "left out"**: it never reaches
+  `skipped_items`. A ticked set missing its weight or fineness does.
+- `count_in_stack` is ignored for coins, notes, and bars.
+
+### Stage 3: the type on the frontend
+
+- **A set's title is built in five places, all year, issuer (else
+  country), set name**: the backend's `Item.label` and `_name_key`, the
+  list row (`ItemList.tsx`), the item hero, the share grid's
+  `shareItemLabel`, and the report. Change one, change them all.
+- **`components/item-types.tsx` gained three helpers** beside `TYPE_INFO`:
+  `typeBadge` (the badge's word, "set" for a set), `setKind` (Proof set,
+  Uncirculated set, Specimen set, from `strike`), and `packagingLine`
+  ("Sealed, with box and certificate"; null when nothing is recorded).
+  The hero, the facts, and the report print packaging only through
+  `packagingLine`; the list's Grade column prints `PACKAGING_LABELS` alone,
+  or an en dash.
+- **The form hides, and `toPayload` clears, what a set doesn't have**: no
+  grade, cert, mint mark, ND, die axis, date as struck, demonetization, or
+  physical and note fields, so switching a coin to a set and saving drops
+  them rather than leaving them invisible. The PCGS and Numista fill cards
+  are hidden for a set. The set fields go out only for a set (false or
+  null otherwise).
+- **The set name suggestion** uses the bullion name's `autoDenomination`
+  ref (`suggestSetName(strike, metal)`), so it stops once the owner types
+  their own; the name box's datalist is every set name already used,
+  from `GET /api/items?type=mint_set&limit=500`.
+- **Precious metal on a set** is the bullion Metal select (composition has
+  no free-text box for a set), the weight with its g / oz switch labeled
+  "Precious metal", and fineness; the stack checkbox appears only once all
+  three are given. Bulk edit's stack choice sends `count_in_stack` to every
+  selected piece; the server ignores it for anything but a set.
+- **Quick add stays coins, notes, and bars** (`QUICK_TYPES`): its lookups
+  can't fill a set. `/items/new?type=mint_set` presets a proof set.
+- **Lookups**: a `numista_set` reference (`S2077` or `2077`) links to
+  `https://en.numista.com/S<n>`; a `pcgs` reference gets the CoinFacts link
+  on a set as on a coin.
+- The list mark for a set is a case of three coins (`.wb-glyph.mint_set`,
+  dots drawn with a repeating radial gradient), colored by metal like the
+  others; the badge has its own `--badge-set-*` tokens, shared across
+  themes like the other badges.
+
+### Stage 4: imports, exports, sharing
+
+- **Numista's export groups by "From set", never by position.**
+  `numista_file_candidates` sets a row aside when its `From set` names a
+  set, leaves a placeholder where the set's first row was, and
+  `numista_set` builds one candidate from the group: kind from the title
+  (`set_kind`: proof, specimen, else uncirculated), year from the title's
+  leading four digits else the rows' commonest, the name with that year and
+  the issuer taken off the front (`_set_name`), pieces from the rows,
+  quantity the smallest row quantity, the price the sum of every row's, and
+  "Contents: N#… year mint, …" then the rows' comments, each once, in the
+  notes. The set's import key is `set:` plus a hash of the title and the
+  sorted row keys, so importing the export again skips it. A group whose
+  coins all appear the same number of times is that many copies (two sets
+  exported as separate rows), so pieces divide and quantity multiplies.
+  Nothing else is guessed: the issuing mint, the Numista set number, and
+  the metal stay empty, and the preview says so.
+- **Importing a set as its coins is `ImportOptions.sets_as_coins`**, a list
+  of titles. Those rows go through as before, struck proof or specimen when
+  the title says so, with "From the set: …" in their notes. Every row of a
+  set, grouped or not, carries `set_title` into the preview, which is how
+  the Import page puts one checkbox on each set's first row; ticking it
+  previews again with the new list. The Numista account import (the API)
+  has no sets and is unchanged.
+- **The preview prints a grade as the item will** (`importing._shown_code`,
+  mirroring `Item.grade_code`): a proof read from Numista's UNC band is
+  PR-60, not MS-60. This also fixes a parsed proof grade's preview label.
+- **A spreadsheet's Type cell** reading "proof set", "mint set",
+  "uncirculated set", or "specimen set" (singular or plural, `_SET_TYPE`)
+  is a `mint_set` with the kind from the same words; the check runs before
+  the note and bar words.
+- **The Cabinet CSV and XLSX** carry `piece_count`, `packaging`, `has_box`,
+  `has_coa`, and `count_in_stack` after `demonetized_on`; an older export
+  without them imports with their defaults.
+- **The share allowlist** gained `piece_count`, `packaging`, `has_box`, and
+  `has_coa` (on every piece, empty or false off a set), and the share page
+  shows a set's mint, pieces, and packaging in a group of its own.
+  `count_in_stack` never joins it: it is how the owner counts, not what the
+  set is. `tests/test_share.py`'s key list moved with it.
+- The synthetic export (`tests/import_samples.py`'s `NUMISTA_SET_ROWS`, and
+  `docs/import-samples/numista-export-sets.*`) is made up, shaped like the
+  real export in SPEC_0370's build log; the owner's own file stays out of
+  the repository.
 
 ## Releases
 

@@ -179,6 +179,15 @@ def _spot_per_oz(db: Session, metal: str, rates: _Rates):
     return Decimal(row.price_per_gram) * TROY_OUNCE_G * rate, row.fetched_at, fresh["stale"]
 
 
+def counts(item: Item) -> bool:
+    """Whether a piece's metal may count in the stack at all: every coin,
+    note, and bar, and a proof or mint set only when the owner ticked
+    `count_in_stack` (SPEC_0370). The one place this is decided: the stack
+    figures, the purchase-day spot backfill, and the ounces gauge all ask.
+    Melt is a value and applies to a set either way."""
+    return item.type != "mint_set" or bool(item.count_in_stack)
+
+
 def in_scope(item: Item, tag: str | None, set_id: int | None) -> bool:
     if tag is not None and not any(t.name == tag for t in item.tags):
         return False
@@ -187,10 +196,11 @@ def in_scope(item: Item, tag: str | None, set_id: int | None) -> bool:
 
 def needs_spot(item: Item, today: date | None = None) -> bool:
     """Whether the purchase-day spot for this piece could be looked up: in the
-    stack, no figure yet, a cost, and a purchase date the source covers."""
+    stack (a set only when ticked), no figure yet, a cost, and a purchase date the source covers."""
     today = today or _today()
     return (
-        item.fine_oz is not None
+        counts(item)
+        and item.fine_oz is not None
         and item.spot_at_purchase is None
         and item.acquisition_date is not None
         and HISTORY_START <= item.acquisition_date < today
@@ -220,7 +230,8 @@ def stack_figures(
 
     for item in _owned(db):
         metal = detect_metal(item.composition)
-        if metal is None or not in_scope(item, tag, set_id):
+        # An unticked set is out by the owner's choice, not "left out".
+        if metal is None or not counts(item) or not in_scope(item, tag, set_id):
             continue
         oz = item.fine_oz
         if oz is None:
@@ -355,7 +366,7 @@ def fine_ounces_by_metal(db: Session) -> dict[str, float]:
     totals: dict[str, Decimal] = {}
     for item in db.execute(select(Item).where(Item.status == "owned")).scalars():
         metal = detect_metal(item.composition)
-        oz = item.fine_oz if metal else None
+        oz = item.fine_oz if metal and counts(item) else None
         if oz is not None:
             totals[metal] = totals.get(metal, Decimal(0)) + oz
     return {metal: round(float(oz), 4) for metal, oz in totals.items()}

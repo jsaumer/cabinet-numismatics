@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, photoUrl, TrashList } from "../api";
+import { typeBadge } from "../components/item-types";
 
 const when = (iso: string) => new Date(iso).toLocaleDateString();
 
@@ -137,7 +138,7 @@ export default function Trash() {
                   <td>
                     <Link to={`/items/${item.id}`}>{item.label}</Link>
                     {item.series && <span className="muted"> · {item.series}</span>}{" "}
-                    <span className={`badge ${item.type}`}>{item.type}</span>
+                    <span className={`badge ${item.type}`}>{typeBadge(item.type)}</span>
                   </td>
                   <td>{item.grade_label ?? "–"}</td>
                   <td>

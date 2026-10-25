@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api, CollectionStats, ItemListEntry, money, photoUrl } from "../api";
+import { packagingLine, setKind } from "../components/item-types";
 
 /* Print-optimized insurance report: use the browser's Print → Save as PDF.
    The site chrome is hidden by the print stylesheet. */
@@ -67,8 +68,16 @@ export default function Report() {
               </td>
               <td>
                 <b>
-                  {item.country} {item.denomination}, {item.year_label}
-                  {item.mint_mark ? ` "${item.mint_mark}"` : ""}
+                  {item.type === "mint_set" ? (
+                    [item.year_label, item.issuer || item.country, item.denomination]
+                      .filter(Boolean)
+                      .join(" ")
+                  ) : (
+                    <>
+                      {item.country} {item.denomination}, {item.year_label}
+                      {item.mint_mark ? ` "${item.mint_mark}"` : ""}
+                    </>
+                  )}
                 </b>
                 {item.series && <div className="muted">{item.series}</div>}
                 {item.composition && (
@@ -79,6 +88,25 @@ export default function Report() {
                 )}
                 {item.storage_location && <div className="muted">@ {item.storage_location}</div>}
               </td>
+              {/* A set has no grade or cert: what an insurer asks about is its
+                  packaging, how many pieces, and how many were issued. */}
+              {item.type === "mint_set" ? (
+                <td>
+                  {setKind(item.strike)}
+                  <div className="muted">{packagingLine(item) ?? "Packaging not recorded"}</div>
+                  {(item.piece_count != null || item.mintage != null) && (
+                    <div className="muted">
+                      {[
+                        item.piece_count != null &&
+                          `${item.piece_count} piece${item.piece_count === 1 ? "" : "s"}`,
+                        item.mintage != null && `${item.mintage.toLocaleString()} sets issued`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  )}
+                </td>
+              ) : (
               <td>
                 {item.grade_label ?? "–"}
                 {item.cert_service && (
@@ -87,6 +115,7 @@ export default function Report() {
                   </div>
                 )}
               </td>
+              )}
               <td className="num">{item.quantity}</td>
               <td>
                 {item.acquisition_date ?? (item.acquired_from ? null : "–")}

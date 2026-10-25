@@ -1,16 +1,18 @@
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.services import calendars
 
-ItemTypeName = Literal["coin", "note", "bullion"]
+ItemTypeName = Literal["coin", "note", "bullion", "mint_set"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
 AngleName = Literal["obverse", "reverse", "edge", "other"]
 StrikeName = Literal["business", "proof", "specimen"]
 CacStickerName = Literal["green", "gold"]
+# How complete a set's mint packaging is; empty means not recorded.
+PackagingName = Literal["sealed", "complete", "incomplete"]
 
 # Strike and surface designations as grading services print them. EPQ is PMG's.
 DESIGNATIONS = (
@@ -103,6 +105,7 @@ def _validate_calendar(value: str | None) -> str | None:
 
 YEAR_ZERO = "There is no year 0. Tick ND for a piece with no date."
 YEAR_REQUIRED = "Enter the year, or tick ND for a piece with no date."
+SET_YEAR_REQUIRED = "Enter the year the set was issued; a proof or mint set is never ND."
 
 
 def _validate_year(value: int | None) -> int | None:
@@ -118,7 +121,7 @@ def _validate_era(value: str | None) -> str | None:
 
 
 TRIMMED_FIELDS = ("charter_number", "bank_city", "bank_state", "plate_position")
-LOWERED_FIELDS = ("struck_calendar", "struck_era")
+LOWERED_FIELDS = ("struck_calendar", "struck_era", "packaging")
 
 
 def _lowered(value):
@@ -196,6 +199,14 @@ class ItemBase(BaseModel):
     printer: str | None = Field(default=None, max_length=200)
     watermark: str | None = Field(default=None, max_length=200)
     demonetized_on: date | None = None
+    # v0.37.0: proof and mint sets (SPEC_0370). Every piece in the set, the
+    # mint packaging's state, its box and certificate, and whether its
+    # precious metal counts in the stack.
+    piece_count: int | None = Field(default=None, ge=1, le=100)
+    packaging: PackagingName | None = None
+    has_box: bool = False
+    has_coa: bool = False
+    count_in_stack: bool = False
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -208,8 +219,12 @@ class ItemBase(BaseModel):
     @model_validator(mode="after")
     def _year_or_nd(self):
         """A year is required unless the piece carries no date; bullion is
-        exempt (a bar may have neither)."""
-        if self.type != "bullion" and self.year is None and not self.year_nd:
+        exempt (a bar may have neither), and a set always has its year of
+        issue, never ND."""
+        if self.type == "mint_set":
+            if self.year is None or self.year_nd:
+                raise ValueError(SET_YEAR_REQUIRED)
+        elif self.type != "bullion" and self.year is None and not self.year_nd:
             raise ValueError(YEAR_REQUIRED)
         return self
 
@@ -312,6 +327,13 @@ class ItemUpdate(BaseModel):
     printer: str | None = Field(default=None, max_length=200)
     watermark: str | None = Field(default=None, max_length=200)
     demonetized_on: date | None = None
+    # v0.37.0: sets. Only `count_in_stack` is bulk-editable; the router drops
+    # the other four there (they describe one set, not a batch).
+    piece_count: int | None = Field(default=None, ge=1, le=100)
+    packaging: PackagingName | None = None
+    has_box: bool | None = None
+    has_coa: bool | None = None
+    count_in_stack: bool | None = None
 
     _cf = field_validator("custom_fields")(_validate_custom_fields)
     _dz = field_validator("designations")(_validate_designations)
@@ -516,6 +538,10 @@ class ImportOptions(BaseModel):
     mapping: dict[str, str] | None = None  # spreadsheet: Cabinet field → column
     skip_rows: int | None = Field(default=None, ge=0, le=1000)  # None = find the header
     defaults: ImportDefaults = ImportDefaults()
+    # Numista's export: the "From set" titles to import as their coins, not as one set.
+    sets_as_coins: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=1000
+    )
 
 
 class NumistaImportOptions(BaseModel):
@@ -546,6 +572,7 @@ class ImportPreviewRow(BaseModel):
     price: float | None = None
     currency: str | None = None
     photos: int = 0
+    set_title: str | None = None  # Numista's export: the set this row is, or came from
     messages: list[str] = []
     error: str | None = None
 
@@ -925,7 +952,7 @@ class CollectionStats(BaseModel):
     are excluded and counted, never silently mixed."""
 
     currency: str
-    counts: dict[str, int]  # owned / sold / wishlist / coins / notes / bullion / total
+    counts: dict[str, int]  # owned / sold / wishlist / coins / notes / bullion / mint_sets / total
     cost_basis: float  # owned items: price paid plus fees, in the display currency
     estimated_value: float  # owned items' latest estimates in the display currency
     unrealized_gain: float  # over owned items having BOTH price and estimate

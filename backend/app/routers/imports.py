@@ -129,7 +129,9 @@ def _read(upload_id: str, options: ImportOptions, db: Session):
             if fmt == "cabinet":
                 candidates = formats.cabinet_candidates(rows, db)
             elif fmt == "numista_file":
-                candidates = formats.numista_file_candidates(rows, defaults)
+                candidates = formats.numista_file_candidates(
+                    rows, defaults, set(options.sets_as_coins)
+                )
             else:
                 mapping = (
                     formats.suggest_mapping(headers) if options.mapping is None else options.mapping
