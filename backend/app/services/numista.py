@@ -271,8 +271,13 @@ def _currency_of(payload: dict, fallback: str) -> str:
     return value.upper() if isinstance(value, str) and len(value) == 3 else fallback
 
 
+SETS_REFUSED = "Numista doesn't price sets in Cabinet: its API has no sets"
+
+
 def prerequisite(db: Session, item: Item) -> str | None:
     """What stops Numista pricing this item before any request, or None."""
+    if item.type == "mint_set":
+        return SETS_REFUSED  # the API (v3) has no sets (SPEC_0370, stage 0)
     if not str(app_settings.get_setting(db, "numista_api_key")):
         return "Add a Numista API key in Settings to price items from Numista"
     if type_id_for(item) is None:
@@ -646,6 +651,8 @@ SALES_REFUSED = (
 
 def sales_prerequisite(db: Session, item: Item) -> str | None:
     """What stops fetching auction sales for this item, or None. No network."""
+    if item.type == "mint_set":
+        return "Numista's auction sales are per coin, and its API has no sets"
     if not app_settings.get_setting(db, "numista_sales_enabled"):
         return (
             "Numista auction sales are switched off in Settings "
