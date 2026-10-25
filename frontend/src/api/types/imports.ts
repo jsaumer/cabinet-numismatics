@@ -76,6 +76,8 @@ export interface ImportOptions {
   mapping?: Record<string, string> | null;
   skip_rows?: number | null;
   defaults?: ImportDefaults;
+  /** Numista's export: "From set" titles to import as their coins, not as one set. */
+  sets_as_coins?: string[];
 }
 
 export interface NumistaImportOptions {
@@ -94,6 +96,8 @@ export interface ImportPreviewRow {
   price: number | null;
   currency: string | null;
   photos: number;
+  /** Numista's export: the set this row is, or (imported as coins) came from. */
+  set_title: string | null;
   messages: string[];
   error: string | null;
 }

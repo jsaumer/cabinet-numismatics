@@ -4,7 +4,7 @@
 // NewShareLink); the public routes a link itself opens are under "share"
 // (ShareManifest, ShareItem, ShareItemsPage, ShareChecklistSlot).
 
-import type { Angle, CacSticker, ItemType } from "./items";
+import type { Angle, CacSticker, ItemType, Packaging } from "./items";
 
 export type ShareKind = "collection" | "set" | "checklist";
 
@@ -103,6 +103,10 @@ export interface ShareItem {
   shape: string | null;
   issuer: string | null;
   quantity: number;
+  piece_count: number | null; // a proof or mint set's own description
+  packaging: Packaging | null;
+  has_box: boolean;
+  has_coa: boolean;
   photos?: ShareItemPhoto[]; // show_photos
   grade_label?: string | null; // show_grades
   grade_details?: string | null;

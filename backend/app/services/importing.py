@@ -80,10 +80,15 @@ class Candidate:
     extra_notes: list[str] = field(default_factory=list)  # appended to notes
     # Already validated by the source's own reader: (ItemCreate, grade_id).
     ready: tuple | None = None
+    # Numista's export: the "From set" title this row (or this whole set) came from.
+    set_title: str | None = None
 
     @property
     def label(self) -> str:
         f = self.fields
+        if f.get("type") == "mint_set":  # as Item.label: year, issuer or country, name
+            parts = [f.get("year"), f.get("issuer") or f.get("country"), f.get("denomination")]
+            return " ".join(str(p) for p in parts if p) or f"Row {self.row}"
         parts = [str(f[k]) for k in ("country", "denomination") if f.get(k)]
         year = f.get("year")
         if f.get("year_nd"):
@@ -350,6 +355,14 @@ def _scale(item_type: str) -> str:
     return "pmg" if item_type == "note" else "sheldon"
 
 
+def _shown_code(grade: Grade, strike: str | None) -> str:
+    """The code as the item will print it (`Item.grade_code`): a proof or
+    specimen on the Sheldon scale reads PR-/SP- with the same number."""
+    if grade.scale == "sheldon" and strike in ("proof", "specimen"):
+        return f"{'PR' if strike == 'proof' else 'SP'}-{grade.rank}"
+    return grade.code
+
+
 def resolve_grade(candidate: Candidate, grades: GradeTable) -> tuple[int | None, str | None]:
     """Apply the candidate's grade to its fields; returns (grade_id, label)."""
     f = candidate.fields
@@ -362,10 +375,11 @@ def resolve_grade(candidate: Candidate, grades: GradeTable) -> tuple[int | None,
             candidate.messages.append(f"Grade {candidate.grade_bucket!r} not recognized")
             return None, None
         if not candidate.grade:
+            code = _shown_code(grade, f.get("strike"))
             candidate.messages.append(
-                f"Numista's {bucket.upper()} band recorded as {grade.code}, its lowest grade"
+                f"Numista's {bucket.upper()} band recorded as {code}, its lowest grade"
             )
-            return grade.id, grade.code
+            return grade.id, code
     if not candidate.grade:
         return None, None
     match = parse_grade(candidate.grade)
@@ -384,9 +398,10 @@ def resolve_grade(candidate: Candidate, grades: GradeTable) -> tuple[int | None,
         f.setdefault("grade_star", True)
     if match.designations:
         f.setdefault("designations", match.designations)
+    code = _shown_code(grade, f.get("strike"))
     if match.approximate or not exact:
-        candidate.messages.append(f"Grade {candidate.grade!r} recorded as {grade.code}")
-    return grade.id, grade.code
+        candidate.messages.append(f"Grade {candidate.grade!r} recorded as {code}")
+    return grade.id, code
 
 
 # ---------------------------------------------------------------- validation
@@ -514,6 +529,7 @@ def preview(prepared: list[Prepared]) -> dict:
                 "price": f.get("acquisition_price"),
                 "currency": f.get("currency"),
                 "photos": len(c.photos),
+                "set_title": c.set_title,
                 "messages": c.messages,
                 "error": c.error,
             }
