@@ -78,7 +78,7 @@ def test_the_auth_migration_creates_every_table_the_model_has():
 
 
 def test_two_chains_with_their_own_heads():
-    assert schema.script_revisions()[0] == "0022"
+    assert schema.script_revisions()[0] == "0023"
     head, known = schema.auth_script_revisions()
     assert head == "a0002" and known == frozenset({"a0001", "a0002"})
 

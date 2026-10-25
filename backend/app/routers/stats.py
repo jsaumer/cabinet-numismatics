@@ -72,6 +72,7 @@ def collection_stats(
         "coins": 0,
         "notes": 0,
         "bullion": 0,
+        "mint_sets": 0,
     }
     cost_basis = 0.0
     estimated_value = 0.0
@@ -86,6 +87,8 @@ def collection_stats(
                 counts["coins"] += 1
             elif item.type == "note":
                 counts["notes"] += 1
+            elif item.type == "mint_set":
+                counts["mint_sets"] += 1
             else:
                 counts["bullion"] += 1
         resolved = resolve_display_value(item.estimates, strategy, preferred_source, conv)

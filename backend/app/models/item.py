@@ -26,7 +26,9 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, with_lo
 
 from app.db import Base
 
-ItemType = Enum("coin", "note", "bullion", name="item_type", native_enum=False, length=10)
+ItemType = Enum(
+    "coin", "note", "bullion", "mint_set", name="item_type", native_enum=False, length=10
+)
 ItemStatus = Enum("owned", "sold", "wishlist", name="item_status", native_enum=False, length=10)
 StrikeType = Enum("business", "proof", "specimen", name="strike_type", native_enum=False, length=10)
 PhotoAngle = Enum(
@@ -185,6 +187,15 @@ class Item(Base):
     printer: Mapped[str | None] = mapped_column(String(200))
     watermark: Mapped[str | None] = mapped_column(String(200))
     demonetized_on: Mapped[date | None] = mapped_column(Date)
+    # Proof and mint sets (SPEC_0370): every piece in the set, how complete
+    # the mint's packaging is (sealed | complete | incomplete, or not
+    # recorded), its box and certificate, and whether the set's precious
+    # metal counts in the stack (off unless the owner ticks it).
+    piece_count: Mapped[int | None] = mapped_column(SmallInteger)
+    packaging: Mapped[str | None] = mapped_column(String(12))
+    has_box: Mapped[bool] = mapped_column(Boolean, default=False)
+    has_coa: Mapped[bool] = mapped_column(Boolean, default=False)
+    count_in_stack: Mapped[bool] = mapped_column(Boolean, default=False)
     # Wish list: what to pay at most (in `currency`), and 1 high / 2 medium / 3 low.
     target_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     priority: Mapped[int | None] = mapped_column(SmallInteger)
@@ -231,8 +242,9 @@ class Item(Base):
 
     @property
     def year_label(self) -> str:
-        """The year as catalogues write it: "1922", "ND", or "ND (1922)".
-        Empty for a bullion piece with no year: a bar needs no "ND"."""
+        """The year as catalogs write it: "1922", "ND", or "ND (1922)".
+        Empty for a bullion piece with no year: a bar needs no "ND". (A set
+        always has a year.)"""
         if self.year is None:
             return "" if self.type == "bullion" else "ND"
         return f"ND ({self.year})" if self.year_nd else str(self.year)
@@ -241,7 +253,11 @@ class Item(Base):
     def label(self) -> str:
         """Short display label, e.g. `United States 25 cents 1932 "D"`, or for
         bullion `PAMP Suisse 1 oz silver bar` (no mint mark, and no year part
-        when there is none)."""
+        when there is none), or for a set `2023 United States Mint Proof Set`
+        (the year first, then the issuing mint or the country, then its name)."""
+        if self.type == "mint_set":
+            parts = [self.year_label, self.issuer or self.country, self.denomination]
+            return " ".join(p for p in parts if p)
         if self.type == "bullion":
             parts = [self.issuer or self.country, self.denomination, self.year_label]
             return " ".join(p for p in parts if p)

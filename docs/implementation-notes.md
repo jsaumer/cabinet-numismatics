@@ -2884,6 +2884,50 @@ release notes on 20 October 2026. Rules:
   11), so comments and docs describe `source_cache` as the stored data
   section 8.4 allows, for the time Cabinet keeps it.
 
+## Proof and mint sets (v0.37.0)
+
+Built to [SPEC_0370](specs/SPEC_0370.md) on `mint-sets`, stage by stage.
+
+### Stage 1: the type on the backend, and one place per type
+
+Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
+`count_in_stack`), the `mint_set` type, and on the frontend
+`components/item-types.tsx`. Rules a later change has to respect:
+
+- **A type is described once on the frontend.** `TYPE_INFO` in
+  `components/item-types.tsx` holds each type's singular and plural labels
+  and its stand-in icon; the item page, both share pages, the list filter,
+  bulk edit, the form, the import default, quick add, and the type
+  breakdown read it (`TypeIcon`, `ITEM_TYPES`). A new type is an entry
+  there, and the `Record<ItemType, ...>` refuses to compile without one.
+  Quick add keeps its own list of the types its lookups can fill.
+- **A set's year rule lives where the others do**: `ItemBase._year_or_nd`
+  (create) and `routers/items._apply_struck_date` (update), both raising
+  `SET_YEAR_REQUIRED`: a set needs a year and is never ND. Bulk edit skips
+  the year rule, so it checks this one itself when `type` becomes
+  `mint_set`. "Add a run" never makes a set.
+- **The label and the name sort agree**: `Item.label` for a set is year,
+  issuer (else country), set name, and `routers/items._name_key` builds the
+  same text, so Piece A to Z places a set by its year among the coins.
+  Stage 3's row title must match it too.
+- **`NO_SERIAL_TRAITS`** (`routers/items.py`) is the types whose serial is
+  never read for fancy traits (bullion and sets), in `_build_item` and
+  `_sync_derived` alike.
+- **Bulk edit changes `count_in_stack` only**: `piece_count`, `packaging`,
+  `has_box`, and `has_coa` describe one set and are dropped there.
+- **Neither price source takes a set**: `pcgs.SETS_REFUSED` and
+  `numista.SETS_REFUSED` come first in each `prerequisite`, before the key
+  check, since a key wouldn't help; Numista's sales prerequisite refuses a
+  set too. The probe that settled it is in SPEC_0370's build log.
+- **A set isn't marked down for having no grade**: comps' confidence treats
+  a set as graded.
+- **Sets stay out of the grade figures**: `insights.quality_stats` drops
+  them before counting (nothing certifies a set as a unit), the data-health
+  `no_grade` check skips them, and `no_issuing_mint` counts sets whose
+  issuer is empty or blank (the API and imports accept one; the form won't).
+- `counts.mint_sets` on `/api/stats/collection` follows the owned-only
+  split; the type breakdown and `cabinet_items{type}` needed no change.
+
 ## Releases
 
 
