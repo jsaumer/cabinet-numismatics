@@ -227,6 +227,63 @@ def numista_xlsx(path: Path) -> Path:
     return path
 
 
+# Numista's newer export (August 2026 on): a set comes out as its coins, one
+# row each, with the set's title in "From set", sorted by denomination rather
+# than by set, so a loose coin can sit between a set's rows. The header is the
+# one seen in a real export (SPEC_0370's build log); every value here is made up.
+NUMISTA_SET_HEADER = [
+    "Issuer", "Reference", "N# number (with link)", "Title", "Year", "Gregorian year",
+    "Mintmark", "Marks", "References", "Comment", "Quantity", "For exchange", "Grade",
+    "From set", "Buying price (USD)", "Estimate (USD)", "Private comment", "Public comment",
+]  # fmt: skip
+PROOF_SET = "1985 United States Proof Set"
+SPECIMEN_SET = "1995 Canada Specimen Set"
+NUMISTA_SET_ROWS = [
+    ["United States", "", "9101", "1 Cent - Lincoln Memorial Cent", "1985", "1985", "S", "",
+     "KM# 201b", "Proof issue", "1", "", "UNC", PROOF_SET, "", "0.90", "", ""],
+    ["United States", "", "9102", "5 Cents - Jefferson Nickel", "1985", "1985", "S", "",
+     "KM# 192", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.10", "", ""],
+    ["United States", "", "9103", "1 Dime - Roosevelt Dime", "1985", "1985", "S", "",
+     "KM# 195", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.20", "", ""],
+    # The loose coin, between the proof set's dime and quarter.
+    ["United States", "", "9201", "1/4 Dollar - Washington Quarter", "1998", "1998", "P", "",
+     "KM# 164a", "", "1", "", "XF", "", "0.50", "0.30", "Pocket change", ""],
+    ["United States", "", "9104", "1/4 Dollar - Washington Quarter", "1985", "1985", "S", "",
+     "KM# 164a", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.30", "", ""],
+    ["United States", "", "9105", "1/2 Dollar - Kennedy Half Dollar", "1985", "1985", "S", "",
+     "KM# 202b", "Proof issue", "1", "", "UNC", PROOF_SET, "12.00", "2.40",
+     "Outer box a little worn", ""],
+    # Two copies of a three-coin set, exported as rows of 2 (one row says 3),
+    # with the price on two rows.
+    ["Canada", "", "9301", "1 Cent - Elizabeth II", "1995", "1995", "", "", "KM# 289", "",
+     "2", "", "UNC", SPECIMEN_SET, "9.00", "", "", ""],
+    ["Canada", "", "9302", "5 Cents - Elizabeth II", "1995", "1995", "", "", "KM# 182", "",
+     "2", "", "UNC", SPECIMEN_SET, "9.00", "", "", ""],
+    ["Canada", "", "9303", "25 Cents - Elizabeth II", "1995", "1995", "", "", "KM# 184", "",
+     "3", "", "UNC", SPECIMEN_SET, "", "", "", ""],
+]  # fmt: skip
+
+
+def numista_sets_csv(path: Path) -> Path:
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.writer(fh, quoting=csv.QUOTE_ALL)
+        writer.writerow(NUMISTA_SET_HEADER)
+        writer.writerows(NUMISTA_SET_ROWS)
+    return path
+
+
+def numista_sets_xlsx(path: Path) -> Path:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(NUMISTA_SET_HEADER)
+    for row in NUMISTA_SET_ROWS:
+        ws.append(row)
+    wb.save(path)
+    return path
+
+
 # ---------------------------------------------------------------- spreadsheets
 
 
@@ -332,6 +389,8 @@ def write_all(folder: Path) -> list[Path]:
         opennumismat(folder / "opennumismat-1.11.db", 11),
         numista_csv(folder / "numista-export.csv"),
         numista_xlsx(folder / "numista-export.xlsx"),
+        numista_sets_csv(folder / "numista-export-sets.csv"),
+        numista_sets_xlsx(folder / "numista-export-sets.xlsx"),
         hand_sheet(folder / "hand-kept-sheet.csv"),
         colnect_like(folder / "colnect-style.csv"),
     ]

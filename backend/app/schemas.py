@@ -1,6 +1,6 @@
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -538,6 +538,10 @@ class ImportOptions(BaseModel):
     mapping: dict[str, str] | None = None  # spreadsheet: Cabinet field → column
     skip_rows: int | None = Field(default=None, ge=0, le=1000)  # None = find the header
     defaults: ImportDefaults = ImportDefaults()
+    # Numista's export: the "From set" titles to import as their coins, not as one set.
+    sets_as_coins: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=1000
+    )
 
 
 class NumistaImportOptions(BaseModel):
@@ -568,6 +572,7 @@ class ImportPreviewRow(BaseModel):
     price: float | None = None
     currency: str | None = None
     photos: int = 0
+    set_title: str | None = None  # Numista's export: the set this row is, or came from
     messages: list[str] = []
     error: str | None = None
 

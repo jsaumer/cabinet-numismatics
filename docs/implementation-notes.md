@@ -2984,6 +2984,50 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   others; the badge has its own `--badge-set-*` tokens, shared across
   themes like the other badges.
 
+### Stage 4: imports, exports, sharing
+
+- **Numista's export groups by "From set", never by position.**
+  `numista_file_candidates` sets a row aside when its `From set` names a
+  set, leaves a placeholder where the set's first row was, and
+  `numista_set` builds one candidate from the group: kind from the title
+  (`set_kind`: proof, specimen, else uncirculated), year from the title's
+  leading four digits else the rows' commonest, the name with that year and
+  the issuer taken off the front (`_set_name`), pieces from the rows,
+  quantity the smallest row quantity, the price the sum of every row's, and
+  "Contents: N#… year mint, …" then the rows' comments, each once, in the
+  notes. The set's import key is `set:` plus a hash of the title and the
+  sorted row keys, so importing the export again skips it. A group whose
+  coins all appear the same number of times is that many copies (two sets
+  exported as separate rows), so pieces divide and quantity multiplies.
+  Nothing else is guessed: the issuing mint, the Numista set number, and
+  the metal stay empty, and the preview says so.
+- **Importing a set as its coins is `ImportOptions.sets_as_coins`**, a list
+  of titles. Those rows go through as before, struck proof or specimen when
+  the title says so, with "From the set: …" in their notes. Every row of a
+  set, grouped or not, carries `set_title` into the preview, which is how
+  the Import page puts one checkbox on each set's first row; ticking it
+  previews again with the new list. The Numista account import (the API)
+  has no sets and is unchanged.
+- **The preview prints a grade as the item will** (`importing._shown_code`,
+  mirroring `Item.grade_code`): a proof read from Numista's UNC band is
+  PR-60, not MS-60. This also fixes a parsed proof grade's preview label.
+- **A spreadsheet's Type cell** reading "proof set", "mint set",
+  "uncirculated set", or "specimen set" (singular or plural, `_SET_TYPE`)
+  is a `mint_set` with the kind from the same words; the check runs before
+  the note and bar words.
+- **The Cabinet CSV and XLSX** carry `piece_count`, `packaging`, `has_box`,
+  `has_coa`, and `count_in_stack` after `demonetized_on`; an older export
+  without them imports with their defaults.
+- **The share allowlist** gained `piece_count`, `packaging`, `has_box`, and
+  `has_coa` (on every piece, empty or false off a set), and the share page
+  shows a set's mint, pieces, and packaging in a group of its own.
+  `count_in_stack` never joins it: it is how the owner counts, not what the
+  set is. `tests/test_share.py`'s key list moved with it.
+- The synthetic export (`tests/import_samples.py`'s `NUMISTA_SET_ROWS`, and
+  `docs/import-samples/numista-export-sets.*`) is made up, shaped like the
+  real export in SPEC_0370's build log; the owner's own file stays out of
+  the repository.
+
 ## Releases
 
 

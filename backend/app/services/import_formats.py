@@ -16,10 +16,12 @@
 """
 
 import csv
+import hashlib
 import io
 import re
 import sqlite3
 import zipfile
+from collections import Counter
 from datetime import date, datetime, time
 from functools import partial
 from pathlib import Path
@@ -236,8 +238,13 @@ def suggest_mapping(headers: list[str]) -> dict[str, str]:
     return mapping
 
 
+_SET_TYPE = re.compile(r"\b(?:proof|mint|uncirculated|specimen)\s+sets?\b")
+
+
 def _item_type(value, default: str) -> str:
     text = (clean(value) or "").lower()
+    if _SET_TYPE.search(text):
+        return "mint_set"
     if any(word in text for word in ("banknote", "bank note", "paper", "note", "bill")):
         return "note"
     if any(word in text for word in ("bar", "round", "ingot", "bullion")):
@@ -286,6 +293,8 @@ def spreadsheet_candidates(
         f = cand.fields
         get = _mapped_getter(row, mapping)
         f["type"] = _item_type(get("type"), defaults.get("type") or "coin")
+        if f["type"] == "mint_set" and _SET_TYPE.search((clean(get("type")) or "").lower()):
+            f["strike"] = set_kind(clean(get("type")) or "")
         f["status"] = _status(get("status"), defaults.get("status") or "owned")
         f["currency"] = _currency_code(get("currency")) or defaults.get("currency") or "USD"
         for key in FIELD_KEYS:
@@ -422,10 +431,17 @@ def cabinet_candidates(rows: list[dict], db) -> list[Candidate]:
 # ---------------------------------------------------------------- numista export file
 
 
-def numista_file_candidates(rows: list[dict], defaults: dict) -> list[Candidate]:
-    """Rows of numista.com's collection export (CSV or XLSX), by header name."""
+def numista_file_candidates(
+    rows: list[dict], defaults: dict, sets_as_coins: set[str] | frozenset = frozenset()
+) -> list[Candidate]:
+    """Rows of numista.com's collection export (CSV or XLSX), by header name.
+
+    Rows naming a set in "From set" become one Proof or mint set (v0.37.0),
+    unless that title is in `sets_as_coins`: then each row is a coin, as
+    before, with the set named in its notes."""
     keys = fingerprint_keys(rows)
-    out = []
+    out: list = []
+    groups: dict[str, list[Candidate]] = {}
     for index, raw in enumerate(rows):
         row = {(k or "").strip().lower(): v for k, v in raw.items()}
         get = _first_getter(row)
@@ -513,8 +529,122 @@ def numista_file_candidates(rows: list[dict], defaults: dict) -> list[Candidate]
         if collection := clean(get("collection"), 50):
             cand.tags.append(collection)
         _require(cand)
+        if from_set := clean(get("from set"), 300):
+            cand.set_title = from_set
+            if from_set in sets_as_coins:
+                if (kind := set_kind(from_set)) != "business":
+                    f["strike"] = kind
+                cand.extra_notes.append(f"From the set: {from_set}")
+            elif from_set in groups:
+                groups[from_set].append(cand)
+                continue
+            else:
+                # Grouped by title, never by position: the export sorts by
+                # denomination, so a loose coin can sit between a set's rows.
+                groups[from_set] = [cand]
+                out.append(from_set)  # where the set goes, filled in below
+                continue
         out.append(cand)
-    return out
+    return [numista_set(c, groups[c]) if isinstance(c, str) else c for c in out]
+
+
+_SET_YEAR = re.compile(r"^\s*(\d{4})\b")
+
+
+def set_kind(text: str) -> str:
+    """A set's kind (its strike) from its title or a Type cell: proof,
+    specimen, or anything else uncirculated."""
+    lowered = text.lower()
+    if re.search(r"\bproof\b", lowered):
+        return "proof"
+    if re.search(r"\bspecimen\b", lowered):
+        return "specimen"
+    return "business"
+
+
+def _set_name(title: str, year: int | None, country: str | None) -> str:
+    """The title less its leading year and issuer: "1981 United States Proof
+    Set Type 1" is "Proof Set Type 1"."""
+    name = title.strip()
+    if year is not None and (match := _SET_YEAR.match(name)) and int(match.group(1)) == year:
+        name = name[match.end() :].strip()
+    if country and name.lower().startswith(country.lower() + " "):
+        name = name[len(country) :].strip()
+    return name or title.strip()
+
+
+def _piece(cand: Candidate) -> tuple:
+    f = cand.fields
+    ref = next((r["ref_code"] for r in cand.refs if r["catalog"] == "numista"), None)
+    return (ref, f.get("year"), f.get("mint_mark"), f.get("denomination"))
+
+
+def numista_set(title: str, members: list[Candidate]) -> Candidate:
+    """One Proof or mint set from the export rows that name it in "From set"."""
+    first = members[0]
+    digest = hashlib.sha1(
+        "\n".join([title, *sorted(m.key or "" for m in members)]).encode("utf-8")
+    ).hexdigest()[:20]
+    cand = Candidate(row=first.row, key=f"set:{digest}", set_title=title)
+    f = cand.fields
+    f.update(type="mint_set", status="owned", strike=set_kind(title))
+    if match := _SET_YEAR.match(title):
+        year = int(match.group(1))
+    else:
+        years = Counter(m.fields["year"] for m in members if m.fields.get("year") is not None)
+        year = years.most_common(1)[0][0] if years else None
+    if year is not None:
+        f["year"] = year
+    countries = Counter(m.fields["country"] for m in members if m.fields.get("country"))
+    country = countries.most_common(1)[0][0] if countries else None
+    if country:
+        f["country"] = country
+    f["denomination"] = _set_name(title, year, country)
+    # Two copies exported as separate rows each list every coin twice.
+    counts = set(Counter(_piece(m) for m in members).values())
+    copies = counts.pop() if len(counts) == 1 else 1
+    pieces = len(members) // copies
+    if pieces > 100:
+        cand.messages.append(f"{pieces} rows: recorded as 100 pieces, the most a set holds")
+    f["piece_count"] = min(pieces, 100)
+    quantity = min(m.fields.get("quantity", 1) for m in members) * copies
+    if quantity > 1:
+        f["quantity"] = quantity
+    priced = [m for m in members if m.fields.get("acquisition_price") is not None]
+    if priced:
+        # Whichever row Numista put the set's price on, the sum is right.
+        f["acquisition_price"] = round(sum(m.fields["acquisition_price"] for m in priced), 2)
+        f["currency"] = priced[0].fields["currency"]
+    else:
+        f["currency"] = first.fields.get("currency")
+    for key in ("acquisition_date", "acquired_from", "storage_location"):
+        if value := next((m.fields[key] for m in members if m.fields.get(key)), None):
+            f[key] = value
+    for m in members:
+        cand.tags.extend(t for t in m.tags if t not in cand.tags)
+    contents, seen = [], set()
+    for m in members:
+        if (piece := _piece(m)) in seen:
+            continue
+        seen.add(piece)
+        ref, piece_year, mark, denomination = piece
+        contents.append(" ".join(str(p) for p in (ref or denomination, piece_year, mark) if p))
+    comments = []
+    for m in members:
+        for line in (m.fields.get("notes") or "").splitlines():
+            if line.strip() and line not in comments:
+                comments.append(line)
+    f["notes"] = "\n".join(["Contents: " + ", ".join(contents), *comments])
+    cand.messages.append(
+        f'{len(members)} rows from "{title}" imported as one set of {f["piece_count"]} pieces'
+    )
+    cand.messages.append(
+        "Left for you: the issuing mint, the Numista set number (search numista.com for "
+        "the title above), and the precious metal; Numista's export carries none of them"
+    )
+    cand.messages.append("The coins' own grades and Numista estimates aren't carried over")
+    _require(cand)
+    return cand
 
 
 # ---------------------------------------------------------------- OpenNumismat
