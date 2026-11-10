@@ -3071,7 +3071,7 @@ sets live (a loose 1998-P quarter beside the 1981 proof set):
   and dropped the other. Duplicates are removed at import (`_dedupe`), as
   before. The synthetic export's loose quarter now has the real shape.
 
-## Review fixes (unreleased, after v0.37.2)
+## Review fixes (v0.37.3)
 
 A full review on 9 November 2026 reproduced five bugs on a throwaway stack
 (real Postgres); these are the rules their fixes left. No migration.
