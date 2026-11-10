@@ -83,6 +83,10 @@ def test_numista_export_imports_each_set_as_one(client, tmp_path, builder):
     assert specimen["acquisition_price"] == 18  # the price was on two rows
     [coin] = [i for i in _all(client) if i["type"] == "coin"]
     assert (coin["year"], coin["mint_mark"], coin["acquisition_price"]) == (1998, "P", 0.5)
+    # v0.37.1: with no Face value column the title's denomination stands alone,
+    # and both reference columns are read.
+    assert (coin["denomination"], coin["series"]) == ("\u00bc Dollar", "Washington Quarter")
+    assert {r["ref_code"] for r in coin["catalog_refs"]} == {"N#9201", "KM#164a", "PCGS#5942"}
 
     # A second import skips both sets as duplicates, as it does the coin.
     again = _run(client, upload)

@@ -245,9 +245,11 @@ NUMISTA_SET_ROWS = [
      "KM# 192", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.10", "", ""],
     ["United States", "", "9103", "1 Dime - Roosevelt Dime", "1985", "1985", "S", "",
      "KM# 195", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.20", "", ""],
-    # The loose coin, between the proof set's dime and quarter.
-    ["United States", "", "9201", "1/4 Dollar - Washington Quarter", "1998", "1998", "P", "",
-     "KM# 164a", "", "1", "", "XF", "", "0.50", "0.30", "Pocket change", ""],
+    # The loose coin, between the proof set's dime and quarter, shaped as the
+    # real export writes most rows: a quoted name in the title, the type's KM#
+    # in "Reference", and the issue's own numbers in "References".
+    ["United States", "KM# 164a", "9201", '\u00bc Dollar "Washington Quarter"', "1998", "1998",
+     "P", "", "PCGS# 5942", "", "1", "", "XF", "", "0.50", "0.30", "Pocket change", ""],
     ["United States", "", "9104", "1/4 Dollar - Washington Quarter", "1985", "1985", "S", "",
      "KM# 164a", "Proof issue", "1", "", "UNC", PROOF_SET, "", "1.30", "", ""],
     ["United States", "", "9105", "1/2 Dollar - Kennedy Half Dollar", "1985", "1985", "S", "",

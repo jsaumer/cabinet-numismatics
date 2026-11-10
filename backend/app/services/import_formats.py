@@ -463,7 +463,13 @@ def numista_file_candidates(
         f["status"] = "owned"
         f["country"] = clean(get("country", "issuer", "ruling authority"))
         face, unit = clean(get("face value")), clean(get("currency"))
-        f["denomination"] = " ".join(p for p in (face, unit) if p) or clean(get("title"))
+        # Without the Face value column, the title's own denomination
+        # (`¼ Dollar "Washington Quarter"` gives `¼ Dollar`; the name is the series).
+        f["denomination"] = (
+            " ".join(p for p in (face, unit) if p)
+            or split_title(get("title"))[0]
+            or clean(get("title"))
+        )
         year, undated = parse_year(get("gregorian year", "year", "year range"))
         if year is not None:
             f["year"] = year
@@ -525,7 +531,10 @@ def numista_file_candidates(
                 digits := re.search(r"\d+", str(row[header] or ""))
             ):
                 cand.refs.append({"catalog": "numista", "ref_code": f"N#{digits.group()}"})
-        cand.refs.extend(parse_refs(get("references", "reference")))
+        # The type's "Reference" and the issue's "References" are separate
+        # columns, and either may hold what the other doesn't.
+        for header in ("reference", "references"):
+            cand.refs.extend(parse_refs(row.get(header)))
         if collection := clean(get("collection"), 50):
             cand.tags.append(collection)
         _require(cand)
