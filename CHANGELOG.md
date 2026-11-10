@@ -8,6 +8,15 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Changed
+
+- The backend image runs Python 3.15 (was 3.14), and CI tests on 3.10
+  (the supported floor) and 3.15 (what the image runs).
+- Dependencies updated: FastAPI 0.162, SQLAlchemy 2.0.55, Alembic 1.20.1,
+  Vite 8.3.5, React Router 7.18.5, Playwright 1.64.1.
+
 ## [0.37.1] - 2026-11-09
 
 ### Fixed

@@ -99,7 +99,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
   `PUBLIC_ORIGINS=http://localhost:5173` with `AUTH_INSECURE_HTTP=true`.
 - Tests: in `backend/`, `pip install -e .[dev]` once, then `pytest`. Tests do
   not require a running database (in-memory SQLite, every outbound call
-  mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.14, a
+  mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.15, a
   frontend typecheck, and a compose build/migrate/smoke job that drives the
   API with curl (smoke test, backup → restore drill) and the pages with
   Playwright (`frontend/e2e/`, `npm run e2e` against a running stack,
