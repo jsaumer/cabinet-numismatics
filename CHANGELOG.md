@@ -8,6 +8,17 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [0.37.1] - 2026-11-09
+
+### Fixed
+
+- **A coin imported from Numista's export** kept its nickname in the
+  denomination (`¼ Dollar "Washington Quarter"` instead of `¼ Dollar`)
+  when the export had no Face value column, and lost its type's catalog
+  number (KM# 164a) when the issue had references of its own. The
+  denomination now comes from the title, with the nickname as the series,
+  and both reference columns are read.
+
 ## [0.37.0] - 2026-11-09
 
 ### Added
@@ -2030,6 +2041,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.1...HEAD
-[0.9.1]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.0...v0.9.1
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.37.1...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
