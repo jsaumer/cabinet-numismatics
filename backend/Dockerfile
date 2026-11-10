@@ -5,7 +5,7 @@
 # client packages drag in perl (~50 MB) for wrapper scripts Cabinet never uses.
 ARG PG_CLIENT_MAJORS="14 15 16 17 18"
 
-FROM python:3.14-slim AS pgclient
+FROM python:3.15-slim AS pgclient
 ARG PG_CLIENT_MAJORS
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates postgresql-common \
@@ -18,7 +18,7 @@ RUN apt-get update \
          || exit 1; \
        done
 
-FROM python:3.14-slim
+FROM python:3.15-slim
 COPY --from=pgclient /etc/apt/sources.list.d/pgdg.sources /etc/apt/sources.list.d/
 COPY --from=pgclient /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg \
      /usr/share/postgresql-common/pgdg/
