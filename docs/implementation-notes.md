@@ -142,7 +142,7 @@ fourth adapter (`comps`, keyless, on by default): median of included,
 grade-bucket-matching sales from the last 3 years (older if fewer than 3),
 converted at daily rates. `numista.fetch_sales` feeds Numista's auction
 records into the log behind `numista_sales_enabled` (off; a 403 there
-meant no paid plan, raised as `NotApplicable(PAID_PLAN)`, until v0.36.1),
+meant no paid plan, raised as `NotApplicable(PAID_PLAN)`, until v0.37.0),
 on click only, cached a day. Numista catalog caching dropped to 7 days (license §8.3's limit for
 catalog metadata; §8.4, personal projects, is what permits the cache).
 PriceCharting/Greysheet were researched and not planned.
@@ -1632,7 +1632,7 @@ permission class. Rules a later change has to respect:
   or sale field, a location, a document, a serial, custom fields, the
   population, wish-list fields, spot at purchase, the import origin, or a
   timestamp. `value` is the one money field, behind `show_values`, and
-  from v0.36.1 it never carries Numista's data (`share.from_numista`: a
+  from v0.37.0 it never carries Numista's data (`share.from_numista`: a
   Numista estimate, or a comps median that used a Numista sale), since
   Numista's API license (section 8.4) keeps a personal project's stored
   data from third parties. A new price source whose terms say the same
@@ -2863,10 +2863,11 @@ default), Silver, Album, and Ledger. Rules a later change has to respect:
   `favicon.ico`, which is what shows before the script runs; the files a
   theme uses are generated, never drawn by hand.
 
-## v0.36.1
+## Numista's 2026 terms (v0.37.0)
 
 Numista's 2026 changes, read against its new API license (July 2026) and
-release notes on 20 October 2026. Rules:
+release notes on 20 October 2026, merged as PR 69 and released with proof
+and mint sets. Rules:
 
 - **A share link never shows Numista's data.** The license's
   personal-project section (8.4) lets an individual store Numista data, not
@@ -3027,6 +3028,32 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   `docs/import-samples/numista-export-sets.*`) is made up, shaped like the
   real export in SPEC_0370's build log; the owner's own file stays out of
   the repository.
+
+### Stage 5: proof and paperwork
+
+- **Melt for a set is pytest's, not Playwright's.** The e2e suite makes no
+  network call and a stack in CI may hold no cached spot price, so
+  `smoke.spec.ts`'s set test checks what melt is worked out from (the item
+  page's fine weight: 3 oz of .999 silver reads `2.997 oz`) and that the set
+  reaches the Stack page only once ticked; `test_mint_sets.py` checks the
+  melt estimate itself, with the spot price mocked like every outbound
+  call.
+- **The smoke script's `smoke` phase** refuses an ND set (422), adds a
+  silver proof set, checks the list filter, `counts.mint_sets`, and that the
+  set is in neither the stack's `items` nor `skipped_items` until a `PATCH`
+  ticks `count_in_stack`, then checks `cabinet_items{status="owned",
+  type="mint_set"}` in the metrics before trashing it. The set stays alive
+  until the metrics check, since the gauge leaves the trash out.
+- **The demo set** in `scripts/seed_demo.py` is a 2019 Silver Proof Set (11
+  pieces: ten coins in the lenses and the bonus 2019-W cent in the box),
+  with the dime, quarters, and half's silver (46.937 g of .999) and
+  `count_in_stack` off. Its photo is the United States Mint's own, public
+  domain as a work of the federal government (Commons,
+  `2019_US_Mint_silver_proof_set.jpg`). The demo collection is 17 items.
+- **The screenshots were retaken** (`docs/screenshots/README.md`) with the
+  set in the demo: the list shows it with "Complete" in the Grade column,
+  and the dashboard hero counts "1 proof or mint set". No screenshot shows
+  the item form, so none needed retaking for the form itself.
 
 ## Releases
 

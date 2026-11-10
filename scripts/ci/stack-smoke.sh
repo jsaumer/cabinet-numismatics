@@ -316,6 +316,43 @@ assert any(m["metal"] == "silver" and m["fine_oz"] > 0 for m in report["metals"]
   apif -X DELETE "$BASE/api/items/$bid" -o /dev/null
   apif "$BASE/api/trash" | grep -q "$bid"
 
+  # a proof set (SPEC_0370, v0.37.0): a year and never ND, its silver gives
+  # it a fine weight, and it counts in the stack only once ticked
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" -X POST "$BASE/api/items" \
+    -H 'Content-Type: application/json' \
+    -d '{"type":"mint_set","country":"CI","denomination":"Proof Set","year_nd":true}')" = 422
+  sid=$(apif -X POST "$BASE/api/items" \
+    -H 'Content-Type: application/json' \
+    -d '{"type":"mint_set","strike":"proof","country":"United States","issuer":"CI Mint","denomination":"Silver Proof Set","year":2023,"piece_count":10,"packaging":"sealed","has_box":true,"composition":"Silver","weight_g":93.3105,"fineness":0.999}' \
+    | field id)
+  apif "$BASE/api/items/$sid" | "$PY" -c '
+import json, sys
+item = json.load(sys.stdin)
+assert item["type"] == "mint_set", item
+assert item["year_label"] == "2023" and item["issuer"] == "CI Mint", item
+assert item["piece_count"] == 10 and item["packaging"] == "sealed", item
+assert item["count_in_stack"] is False and item["fine_oz"] > 2.9, item
+'
+  apif "$BASE/api/items?type=mint_set" | grep -q "$sid"
+  apif "$BASE/api/stats/collection" | "$PY" -c '
+import json, sys
+stats = json.load(sys.stdin)
+assert stats["counts"]["mint_sets"] >= 1, stats
+'
+  in_stack() {
+    apif "$BASE/api/stack" | "$PY" -c '
+import json, sys
+report = json.load(sys.stdin)
+ids = {i["item_id"] for i in report["items"]}
+ids |= {i["item_id"] for i in report["skipped_items"]}
+print("yes" if sys.argv[1] in ids else "no")
+' "$sid"
+  }
+  test "$(in_stack)" = no
+  apif -X PATCH "$BASE/api/items/$sid" -H 'Content-Type: application/json' \
+    -d '{"count_in_stack":true}' -o /dev/null
+  test "$(in_stack)" = yes
+
   # metrics: anonymous 401, a read token 403, a metrics token 404 while off,
   # then 200 once an admin session turns it on. Explicitly turned off first,
   # since a previous run against the same claimed stack may have left it on.
@@ -332,6 +369,8 @@ assert any(m["metal"] == "silver" and m["fine_oz"] > 0 for m in report["metals"]
   # may hold what earlier runs left there)
   trashed=$(apif "$BASE/api/trash" | "$PY" -c 'import json,sys; print(len(json.load(sys.stdin)["items"]))')
   grep -q "^cabinet_items_in_trash ${trashed}.0" "$STATE_DIR/metrics.txt"
+  grep -q '^cabinet_items{status="owned",type="mint_set"}' "$STATE_DIR/metrics.txt"
+  apif -X DELETE "$BASE/api/items/$sid" -o /dev/null
 
   # no webhook saved: the test alert says so rather than failing
   adminf -X POST "$BASE/api/alerts/test" | grep -q '"ok":false'
