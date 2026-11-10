@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { FileButton } from "../components/controls";
 import { UploadIcon } from "../components/icons";
+import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 import {
   api,
   ImportDefaults,
@@ -11,6 +12,7 @@ import {
   ImportPreview,
   ImportRunResult,
   ImportUpload,
+  ItemType,
   money,
 } from "../api";
 
@@ -61,6 +63,8 @@ export default function Import() {
   const [format, setFormat] = useState<ImportFormat>("spreadsheet");
   const [mapping, setMapping] = useState<Record<string, string> | null>(null);
   const [skipRows, setSkipRows] = useState<number | null>(null);
+  // Numista's export: sets the owner has broken up, imported as their coins.
+  const [setsAsCoins, setSetsAsCoins] = useState<string[]>([]);
   const [defaults, setDefaults] = useState<ImportDefaults>({
     type: "coin",
     status: "owned",
@@ -109,8 +113,17 @@ export default function Import() {
     mapping: format === "spreadsheet" && preview?.header_row === skipRows ? mapping : null,
     skip_rows: format === "spreadsheet" ? skipRows : null,
     defaults: { ...defaults, country: defaults.country?.trim() || null },
+    sets_as_coins: format === "numista_file" ? setsAsCoins : [],
     ...overrides,
   });
+
+  function toggleSet(title: string, asCoins: boolean) {
+    const next = asCoins
+      ? [...setsAsCoins, title]
+      : setsAsCoins.filter((t) => t !== title);
+    setSetsAsCoins(next);
+    refreshPreview({ sets_as_coins: next });
+  }
 
   async function chooseFile(file: File | undefined) {
     if (!file) return;
@@ -123,6 +136,7 @@ export default function Import() {
     setFormat(staged.format);
     setMapping(null);
     setSkipRows(null);
+    setSetsAsCoins([]);
     const first = await run("preview", () =>
       api.previewImport(staged.upload_id, { format: staged.format, defaults }),
     );
@@ -327,9 +341,9 @@ export default function Import() {
                       setDefaults({ ...defaults, type: e.target.value as ImportDefaults["type"] })
                     }
                   >
-                    <option value="coin">Coin</option>
-                    <option value="note">Banknote</option>
-                    <option value="bullion">Bar or round</option>
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t} value={t}>{TYPE_INFO[t].one}</option>
+                    ))}
                   </select>
                 </label>
                 <label className="field">
@@ -438,14 +452,34 @@ export default function Import() {
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.rows.map((r) => (
+                  {preview.rows.map((r, index) => (
                     <tr key={r.row} className={`import-${r.status}`}>
                       <td className="muted">{r.row}</td>
                       <td>
                         {r.label}
                         {r.type && r.type !== "coin" && (
-                          <span className="muted"> · {r.type === "bullion" ? "bar or round" : r.type}</span>
+                          <span className="muted">
+                            {" "}· {TYPE_INFO[r.type as ItemType]?.one.toLowerCase() ?? r.type}
+                          </span>
                         )}
+                        {r.set_title && r.set_title !== r.label && (
+                          <div className="muted">
+                            {r.type === "mint_set" ? "Numista's title" : "From the set"}: {r.set_title}
+                          </div>
+                        )}
+                        {/* One choice per set, on its first row only. */}
+                        {r.set_title &&
+                          preview.rows.findIndex((o) => o.set_title === r.set_title) === index && (
+                            <label className="slot">
+                              <input
+                                type="checkbox"
+                                checked={setsAsCoins.includes(r.set_title)}
+                                disabled={busy !== null}
+                                onChange={(e) => toggleSet(r.set_title!, e.target.checked)}
+                              />{" "}
+                              Import this set as its coins
+                            </label>
+                          )}
                         {(r.error || r.messages.length > 0) && (
                           <ul className="import-messages">
                             {r.error && <li>{r.error}</li>}

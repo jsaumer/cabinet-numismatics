@@ -1,5 +1,6 @@
 import { api, BreakdownEntry, Breakdowns, money, WidgetOptions } from "../../api";
 import { ChartDatum, Columns, HBars } from "../../components/charts";
+import { TYPE_INFO } from "../../components/item-types";
 import { optionIdOrNull, optionNumber, optionOrNull, optionText } from "../options";
 import { useWidgetData, useWidgetEmpty, WidgetProps } from "../WidgetFrame";
 
@@ -30,14 +31,11 @@ export const DIMENSIONS: Record<string, Dimension> = {
   },
 };
 
-// The type dimension's keys are the raw item type ("coin", "note",
-// "bullion"); this is the only dimension whose bars need a friendlier label
-// than the key itself.
-const TYPE_LABELS: Record<string, string> = {
-  coin: "Coin",
-  note: "Note",
-  bullion: "Bars and rounds",
-};
+// The type dimension's keys are the raw item type; this is the only
+// dimension whose bars need a friendlier label than the key itself.
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(TYPE_INFO).map(([type, info]) => [type, info.many]),
+);
 
 const MEASURE_TITLES: Record<Measure, string> = {
   value: "Estimated value by",

@@ -92,6 +92,8 @@ export function ValueSummaryWidget() {
           <span className="muted">
             {stats.counts.coins} coins · {stats.counts.notes} notes
             {stats.counts.bullion > 0 && ` · ${stats.counts.bullion} bars and rounds`}
+            {stats.counts.mint_sets > 0 &&
+              ` · ${stats.counts.mint_sets} ${stats.counts.mint_sets === 1 ? "proof or mint set" : "proof and mint sets"}`}
           </span>
         </div>
         <div className="tile">

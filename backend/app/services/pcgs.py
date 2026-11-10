@@ -180,8 +180,15 @@ def _count(value) -> int | None:
     return value
 
 
+SETS_REFUSED = "PCGS doesn't price sets in Cabinet: it has no guide price or population for one"
+
+
 def prerequisite(db: Session, item: Item) -> str | None:
     """What stops PCGS pricing this item before any request, or None."""
+    if item.type == "mint_set":
+        # PCGS's API knows a set's number but answers no guide price and no
+        # graded population for one (SPEC_0370, stage 0).
+        return SETS_REFUSED
     if not str(app_settings.get_setting(db, "pcgs_api_token")):
         return "Add a PCGS API token in Settings to price items from PCGS"
     if item.type != "coin":
