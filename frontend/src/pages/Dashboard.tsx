@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, DashboardLayout, DashboardWidget, WidgetOptions, WidgetSize } from "../api";
-import { invalidateData, useData } from "../dashboard/data";
+import { forgetData, invalidateData, useData } from "../dashboard/data";
 import {
   DashboardEditBar,
   useWidgetDrag,
@@ -33,6 +33,11 @@ export default function Dashboard() {
   const [announcement, setAnnouncement] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
+
+  // Each visit starts from fresh data: without this, coming back after
+  // adding a piece showed the totals (or "Nothing to report yet") from
+  // before it. A state initializer runs once, ahead of every widget's fetch.
+  useState(() => forgetData());
 
   // The shell needs the counts to know whether the collection is empty; the
   // widgets read the same cached request.

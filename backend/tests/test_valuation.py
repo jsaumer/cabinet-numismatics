@@ -259,6 +259,53 @@ def test_melt_on_save_no_duplicate_on_an_unrelated_edit(client, spot):
     assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 2  # inputs changed
 
 
+def _backdate_estimates(item_id, days=1):
+    """SQLite keeps whole seconds, so make "earlier" unmistakable."""
+    from datetime import datetime, timezone
+
+    from app.models import PriceEstimate
+
+    db = _session()
+    try:
+        for row in db.query(PriceEstimate).filter(PriceEstimate.item_id == uuid.UUID(item_id)):
+            row.fetched_at = datetime.now(timezone.utc) - timedelta(days=days)
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_melt_on_save_never_buries_a_typed_in_value(client, spot):
+    """A key date worth far more than its silver: correcting its weight must
+    leave the owner's number as the newest estimate (found on a live stack,
+    where a typed $5,000 became $41.09)."""
+    _warm_cache(client, spot)
+    item = _create(client, {**SILVER, "denomination": "1/2 dollar"})  # melt on create
+    _backdate_estimates(item["id"])
+    typed = client.post(
+        f"/api/items/{item['id']}/estimates", json={"estimated_value": 5000, "source": "manual"}
+    )
+    assert typed.status_code == 201
+
+    reweighed = client.patch(f"/api/items/{item['id']}", json={"weight_g": 30.0})
+    assert reweighed.status_code == 200
+    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    assert [row["source"].split(":")[0] for row in history] == ["manual", "melt"]
+    listed = client.get("/api/items", params={"q": "1/2 dollar"}).json()["items"][0]
+    assert listed["latest_value"] == 5000
+
+
+def test_melt_on_save_leaves_a_piece_with_only_a_typed_value_alone(client, spot):
+    """Entered while the spot cache was cold, valued by hand, edited later."""
+    item = _create(client, SILVER)  # nothing cached: no melt row
+    client.post(f"/api/items/{item['id']}/estimates", json={"estimated_value": 500})
+    _warm_cache(client, spot)
+
+    edited = client.patch(f"/api/items/{item['id']}", json={"storage_location": "Safe"})
+    assert edited.status_code == 200
+    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    assert len(history) == 1 and history[0]["estimated_value"] == 500
+
+
 def test_melt_on_save_is_owned_pieces_only(client, spot):
     _warm_cache(client, spot)
     wishlist = _create(client, {**SILVER, "status": "wishlist"})

@@ -33,7 +33,7 @@ body:
     attributes:
       label: Version
       description: From `GET /api/health`, or the release tag / commit you're on.
-      placeholder: "0.37.2"
+      placeholder: "0.37.3"
     validations:
       required: true
 
