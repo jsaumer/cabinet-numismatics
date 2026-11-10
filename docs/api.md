@@ -1031,7 +1031,10 @@ File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
 keyed by the exported `id`, and a duplicate when that id is still here,
 trash included), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
-(numista.com's collection export, by column name), and `opennumismat` (an
+(numista.com's collection export, by column name; from v0.37.1 a row
+without a Face value column takes its denomination from the title, so
+`¼ Dollar "Washington Quarter"` is `¼ Dollar` with the name as its series,
+and both the Reference and References columns are read), and `opennumismat` (an
 OpenNumismat `.db`). Preview and run take the same JSON
 options: `format` (default: as detected), `mapping` (spreadsheet; default:
 suggested from the header names), `skip_rows` (lines above the header;

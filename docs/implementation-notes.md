@@ -3055,6 +3055,22 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   and the dashboard hero counts "1 proof or mint set". No screenshot shows
   the item form, so none needed retaking for the form itself.
 
+## v0.37.1
+
+Two things the owner's own Numista export turned up while checking the
+sets live (a loose 1998-P quarter beside the 1981 proof set):
+
+- **A Numista export row without Face value takes its denomination from
+  the title** through `importing.split_title`, the parser the account
+  import already uses: `¼ Dollar "Washington Quarter"` gives `¼ Dollar`
+  (the name was already the series). Face value and Currency still win
+  when the export has them, and a title neither form matches stays whole.
+- **Both reference columns are read.** The export's "Reference" is the
+  type's number (KM# 164a) and "References" the issue's (PCGS, GSID, a
+  second KM#); `get("references", "reference")` took the first non-empty
+  and dropped the other. Duplicates are removed at import (`_dedupe`), as
+  before. The synthetic export's loose quarter now has the real shape.
+
 ## Releases
 
 
@@ -3067,3 +3083,15 @@ version through `packaging.version.Version`, so a semver prerelease tag
 reads as a prerelease (`-rc.1` or `rc1`) never moves `latest`. The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; from v0.11.1
 the backend migrates on startup, so an upgrade there is just a tag bump.
+
+The Releases page is written by hand after the tag (`gh release create`,
+the changelog section with an upgrade line first). On 18 October 2026 the
+owner trimmed it to one page per milestone: v0.9.0, v0.18.0, v0.23.0,
+v0.25.0, v0.26.1, v0.27.1, v0.28.0, v0.29.1, v0.30.2, v0.31.0, v0.32.2,
+v0.33.4, v0.34.1, v0.35.2, and v0.36.0. Each page opens with a paragraph
+naming the versions folded into it, then each version's notes under its
+own `## vX.Y.Z (date)` heading, newest first; the other 45 releases and
+their git tags were deleted, and their GHCR images kept. Until 1.0, a minor
+gets a page and a patch doesn't: tag it (the images have to build), then
+add its notes to its minor's page the same way. Don't recreate a deleted
+tag; CHANGELOG.md is the record of every version.
