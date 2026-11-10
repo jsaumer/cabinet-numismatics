@@ -1,8 +1,16 @@
 import uuid
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    create_model,
+    field_validator,
+    model_validator,
+)
 
 from app.services import calendars
 
@@ -13,6 +21,30 @@ StrikeName = Literal["business", "proof", "specimen"]
 CacStickerName = Literal["green", "gold"]
 # How complete a set's mint packaging is; empty means not recorded.
 PackagingName = Literal["sealed", "complete", "incomplete"]
+
+CURRENCY_CODE = "currency must be a three-letter code such as USD"
+
+
+def _currency_code(value):
+    """A currency as every total compares it: three letters, upper case. A
+    code stored as `usd` would match no exchange rate and drop out of them."""
+    if isinstance(value, str):
+        value = value.strip().upper()
+        if len(value) != 3 or not (value.isascii() and value.isalpha()):
+            raise ValueError(CURRENCY_CODE)
+    return value
+
+
+Currency = Annotated[str, BeforeValidator(_currency_code), Field(min_length=3, max_length=3)]
+
+# Upper bounds that match the columns, so a number or a text too large for
+# one is a 422 here and never a database error (which SQLite, under the
+# tests, wouldn't raise at all).
+INT4_MAX = 2_147_483_647
+MONEY_MAX = 10**10  # exclusive: Numeric(12, 2)
+WEIGHT_MAX_G = 100_000  # exclusive: Numeric(9, 4)
+MINTAGE_MAX = 10**18
+TagName = Annotated[str, Field(max_length=50)]
 
 # Strike and surface designations as grading services print them. EPQ is PMG's.
 DESIGNATIONS = (
@@ -106,6 +138,11 @@ def _validate_calendar(value: str | None) -> str | None:
 YEAR_ZERO = "There is no year 0. Tick ND for a piece with no date."
 YEAR_REQUIRED = "Enter the year, or tick ND for a piece with no date."
 SET_YEAR_REQUIRED = "Enter the year the set was issued; a proof or mint set is never ND."
+BULK_YEAR_REQUIRED = (
+    "A coin or a note needs a year, or ND, and a selected bar or round has neither. "
+    "Give it a year or tick ND on its own page first."
+)
+YEAR_MIN, YEAR_MAX = -700, 2100  # numismatics goes back a while
 
 
 def _validate_year(value: int | None) -> int | None:
@@ -136,20 +173,20 @@ class ItemBase(BaseModel):
     denomination: str = Field(min_length=1, max_length=100)
     # Numismatics goes back a while. Null only on an undated piece (`year_nd`),
     # where a year that is given is the attributed one: "ND (1951)".
-    year: int | None = Field(default=None, ge=-700, le=2100)
+    year: int | None = Field(default=None, ge=YEAR_MIN, le=YEAR_MAX)
     year_nd: bool = False  # the piece carries no date
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
     strike: StrikeName = "business"
     composition: str | None = Field(default=None, max_length=100)
-    weight_g: float | None = Field(default=None, gt=0)
+    weight_g: float | None = Field(default=None, gt=0, lt=WEIGHT_MAX_G)
     fineness: float | None = Field(default=None, gt=0, le=1)
     diameter_mm: float | None = Field(default=None, gt=0, le=1000)
     thickness_mm: float | None = Field(default=None, gt=0, le=100)
     edge: str | None = Field(default=None, max_length=100)
     shape: str | None = Field(default=None, max_length=50)
-    mintage: int | None = Field(default=None, ge=0)
+    mintage: int | None = Field(default=None, ge=0, le=MINTAGE_MAX)
     cert_service: str | None = Field(default=None, max_length=50)
     cert_number: str | None = Field(default=None, max_length=50)
     grade_plus: bool = False
@@ -162,16 +199,16 @@ class ItemBase(BaseModel):
     signatures: str | None = Field(default=None, max_length=200)
     issuer: str | None = Field(default=None, max_length=200)
     replacement_note: bool = False
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT4_MAX)
     acquisition_date: date | None = None
-    acquisition_price: float | None = Field(default=None, ge=0)
-    acquisition_fees: float | None = Field(default=None, ge=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    acquisition_price: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    acquisition_fees: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    currency: Currency = "USD"
     acquired_from: str | None = Field(default=None, max_length=200)
     storage_location: str | None = Field(default=None, max_length=200)
     sold_date: date | None = None
-    sold_price: float | None = Field(default=None, ge=0)
-    sold_fees: float | None = Field(default=None, ge=0)
+    sold_price: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    sold_fees: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
     sold_to: str | None = Field(default=None, max_length=200)
     custom_fields: dict[str, str] | None = None
     notes: str | None = None
@@ -232,7 +269,7 @@ class ItemBase(BaseModel):
 class ItemCreate(ItemBase):
     grade_id: int | None = None
     set_id: int | None = None
-    tags: list[str] = []
+    tags: list[TagName] = []
     catalog_refs: list[CatalogRefIn] = []
 
     @model_validator(mode="before")
@@ -258,25 +295,34 @@ class ItemCreate(ItemBase):
         return data
 
 
+# The item fields that are never empty (the columns are NOT NULL): a PATCH
+# or a bulk edit may leave one out, never send null for it.
+NEVER_NULL = tuple(
+    name
+    for name, info in ItemBase.model_fields.items()
+    if type(None) not in get_args(info.annotation)
+)
+
+
 class ItemUpdate(BaseModel):
     type: ItemTypeName | None = None
     status: ItemStatusName | None = None
     country: str | None = Field(default=None, min_length=1, max_length=100)
     denomination: str | None = Field(default=None, min_length=1, max_length=100)
-    year: int | None = Field(default=None, ge=-700, le=2100)
+    year: int | None = Field(default=None, ge=YEAR_MIN, le=YEAR_MAX)
     year_nd: bool | None = None  # not bulk-editable; the router drops it there
     mint_mark: str | None = Field(default=None, max_length=20)
     series: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=200)
     strike: StrikeName | None = None
     composition: str | None = Field(default=None, max_length=100)
-    weight_g: float | None = Field(default=None, gt=0)
+    weight_g: float | None = Field(default=None, gt=0, lt=WEIGHT_MAX_G)
     fineness: float | None = Field(default=None, gt=0, le=1)
     diameter_mm: float | None = Field(default=None, gt=0, le=1000)
     thickness_mm: float | None = Field(default=None, gt=0, le=100)
     edge: str | None = Field(default=None, max_length=100)
     shape: str | None = Field(default=None, max_length=50)
-    mintage: int | None = Field(default=None, ge=0)
+    mintage: int | None = Field(default=None, ge=0, le=MINTAGE_MAX)
     grade_plus: bool | None = None
     grade_star: bool | None = None
     designations: list[str] | None = None
@@ -287,24 +333,24 @@ class ItemUpdate(BaseModel):
     signatures: str | None = Field(default=None, max_length=200)
     issuer: str | None = Field(default=None, max_length=200)
     replacement_note: bool | None = None
-    acquisition_fees: float | None = Field(default=None, ge=0)
-    sold_fees: float | None = Field(default=None, ge=0)
+    acquisition_fees: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    sold_fees: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
     sold_to: str | None = Field(default=None, max_length=200)
     grade_id: int | None = None
     set_id: int | None = None
     custom_fields: dict[str, str] | None = None
     cert_service: str | None = Field(default=None, max_length=50)
     cert_number: str | None = Field(default=None, max_length=50)
-    quantity: int | None = Field(default=None, ge=1)
+    quantity: int | None = Field(default=None, ge=1, le=INT4_MAX)
     acquisition_date: date | None = None
-    acquisition_price: float | None = Field(default=None, ge=0)
-    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    acquisition_price: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    currency: Currency | None = None
     acquired_from: str | None = Field(default=None, max_length=200)
     storage_location: str | None = Field(default=None, max_length=200)
     sold_date: date | None = None
-    sold_price: float | None = Field(default=None, ge=0)
+    sold_price: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
     notes: str | None = None
-    tags: list[str] | None = None
+    tags: list[TagName] | None = None
     catalog_refs: list[CatalogRefIn] | None = None
     # v0.25.0: population, wish-list target, paper money depth, die axis, date as struck
     pcgs_population: int | None = Field(default=None, ge=0, le=2_000_000_000)
@@ -342,6 +388,20 @@ class ItemUpdate(BaseModel):
     _cal = field_validator("struck_calendar")(_validate_calendar)
     _era = field_validator("struck_era")(_validate_era)
     _yr = field_validator("year")(_validate_year)
+
+    @model_validator(mode="after")
+    def _no_null_where_required(self):
+        """Leaving a field out keeps it; null empties it, which these can't be."""
+        nulls = [
+            name
+            for name in NEVER_NULL
+            if name in self.model_fields_set and getattr(self, name) is None
+        ]
+        if nulls:
+            raise ValueError(
+                f"{', '.join(nulls)} can't be empty; leave a field out to keep it as it is"
+            )
+        return self
 
 
 class PhotoOut(BaseModel):
@@ -439,8 +499,8 @@ class PhotoOrder(BaseModel):
 
 
 class EstimateCreate(BaseModel):
-    estimated_value: float = Field(gt=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    estimated_value: float = Field(gt=0, lt=MONEY_MAX)
+    currency: Currency = "USD"
     source: str = Field(default="manual", min_length=1, max_length=100)
     confidence: float | None = Field(default=None, ge=0, le=1)
     note: str | None = Field(default=None, max_length=500)
@@ -468,16 +528,11 @@ class ComparableBase(BaseModel):
     url: str | None = Field(default=None, max_length=1000)
     grade: str | None = Field(default=None, max_length=100)
     price: float = Field(gt=0, lt=10**10)  # per piece
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Currency = "USD"
     premium_included: bool | None = None  # null = unknown
     fees: float | None = Field(default=None, ge=0, lt=10**10)
     included: bool = True
     note: str | None = Field(default=None, max_length=1000)
-
-    @field_validator("currency")
-    @classmethod
-    def _upper(cls, value: str) -> str:
-        return value.upper()
 
 
 class ComparableCreate(ComparableBase):
@@ -492,7 +547,7 @@ class ComparableUpdate(BaseModel):
     url: str | None = Field(default=None, max_length=1000)
     grade: str | None = Field(default=None, max_length=100)
     price: float | None = Field(default=None, gt=0, lt=10**10)
-    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    currency: Currency | None = None
     premium_included: bool | None = None
     fees: float | None = Field(default=None, ge=0, lt=10**10)
     included: bool | None = None
@@ -524,13 +579,8 @@ class ImportDefaults(BaseModel):
 
     type: ItemTypeName = "coin"
     status: ItemStatusName = "owned"
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: Currency = "USD"
     country: str | None = Field(default=None, max_length=100)
-
-    @field_validator("currency")
-    @classmethod
-    def _upper(cls, value: str) -> str:
-        return value.upper()
 
 
 class ImportOptions(BaseModel):
@@ -611,7 +661,20 @@ class ImportRunResult(BaseModel):
     photos_failed: int
 
 
-class ItemOut(ItemBase):
+# What an item is read back with: ItemBase's fields and types with none of its
+# input rules (ranges, lengths, the year-or-ND rule). A stored row is shown as
+# it is; validating it again would turn one row an older build, an import, or
+# a rule tightened since let through into a 500 for every list page holding it.
+_ItemRead = create_model(
+    "_ItemRead",
+    **{
+        name: (info.annotation, ... if info.is_required() else info.default)
+        for name, info in ItemBase.model_fields.items()
+    },
+)
+
+
+class ItemOut(_ItemRead):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
@@ -651,7 +714,7 @@ class ItemOut(ItemBase):
 class BulkUpdate(BaseModel):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
     set: ItemUpdate | None = None  # scalar fields applied to every item
-    add_tags: list[str] = []
+    add_tags: list[TagName] = []
     remove_tags: list[str] = []
 
 
@@ -670,7 +733,7 @@ class EventOut(BaseModel):
 
 class ChecklistCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    slots: list[str] = Field(min_length=1, max_length=500)
+    slots: list[Annotated[str, Field(max_length=200)]] = Field(min_length=1, max_length=500)
 
 
 class SlotOut(BaseModel):
@@ -708,17 +771,17 @@ class ChecklistGenerate(BaseModel):
     type_id: int | None = Field(default=None, ge=1)
     country: str | None = Field(default=None, max_length=100)
     denomination: str | None = Field(default=None, max_length=100)
-    year_from: int | None = Field(default=None, ge=-700, le=2100)
-    year_to: int | None = Field(default=None, ge=-700, le=2100)
+    year_from: int | None = Field(default=None, ge=YEAR_MIN, le=YEAR_MAX)
+    year_to: int | None = Field(default=None, ge=YEAR_MIN, le=YEAR_MAX)
     mint_marks: list[str] = Field(default=[""], max_length=20)  # "" = no mint mark
     skip: list[str] = Field(default=[], max_length=500)  # labels to leave out
 
 
 class RunIssue(BaseModel):
-    year: int | None = Field(default=None, ge=-700, le=2100)
+    year: int | None = Field(default=None, ge=YEAR_MIN, le=YEAR_MAX)
     nd: bool = False  # an undated issue; `year` is then the attributed one
     mint_mark: str | None = Field(default=None, max_length=20)
-    mintage: int | None = Field(default=None, ge=0)
+    mintage: int | None = Field(default=None, ge=0, le=MINTAGE_MAX)
 
     _yr = field_validator("year")(_validate_year)
 
@@ -734,15 +797,15 @@ class RunShared(BaseModel):
 
     status: ItemStatusName = "owned"
     grade_id: int | None = None
-    quantity: int = Field(default=1, ge=1)
+    quantity: int = Field(default=1, ge=1, le=INT4_MAX)
     acquisition_date: date | None = None
-    acquisition_price: float | None = Field(default=None, ge=0)
-    acquisition_fees: float | None = Field(default=None, ge=0)
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    acquisition_price: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    acquisition_fees: float | None = Field(default=None, ge=0, lt=MONEY_MAX)
+    currency: Currency = "USD"
     acquired_from: str | None = Field(default=None, max_length=200)
     storage_location: str | None = Field(default=None, max_length=200)
     set_id: int | None = None
-    tags: list[str] = []
+    tags: list[TagName] = []
     notes: str | None = None
 
 

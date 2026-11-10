@@ -235,6 +235,38 @@ test("the quick add saves a piece typed in by hand and keeps the shared fields",
   await expect(page).toHaveURL(/\/collection$/);
 });
 
+test("the dashboard counts a piece added since it was last open", async ({ page }) => {
+  acceptDialogs(page);
+  const country = `Fresh ${Date.now()}`;
+  // The hero's Owned tile, read once the stats have arrived.
+  const owned = page.locator(".tile", { hasText: "Owned" }).locator(".tile-value").first();
+  await page.goto("/");
+  await expect(owned).toHaveText(/^\d+$/);
+  const before = Number(await owned.innerText());
+
+  // Everything from here stays inside the app (no page load), which is what
+  // used to leave the dashboard showing the totals from before the piece.
+  await page.getByRole("link", { name: "Add piece" }).click();
+  await page.getByLabel("Country", { exact: true }).fill(country);
+  await page.getByLabel("Denomination", { exact: true }).fill("1 cent");
+  await page.getByLabel("Year", { exact: true }).fill("1909");
+  await page.getByRole("button", { name: "Save and add another" }).click();
+  const session = page.getByRole("complementary", { name: "Added this visit" });
+  const added = session.getByRole("link", { name: `1909 1 cent ${country}` });
+  await expect(added).toBeVisible();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Dashboard" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await expect(owned).toHaveText(String(before + 1));
+
+  // Leave nothing behind: the piece goes to the trash.
+  await page.goto(`/collection?q=${encodeURIComponent(country)}`);
+  await page.locator(".wb-row", { hasText: country }).first().getByRole("link").click();
+  const inspector = page.getByRole("region", { name: "Selected piece" });
+  await expect(inspector.getByRole("heading", { level: 1 })).toContainText(country);
+  await inspector.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/\/collection\?q=/);
+});
+
 test("trash it, restore it, then delete it for good", async ({ page }) => {
   acceptDialogs(page);
   await page.goto(itemUrl);
