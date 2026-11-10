@@ -3055,6 +3055,22 @@ Migration `0023` (`piece_count`, `packaging`, `has_box`, `has_coa`,
   and the dashboard hero counts "1 proof or mint set". No screenshot shows
   the item form, so none needed retaking for the form itself.
 
+## v0.37.1
+
+Two things the owner's own Numista export turned up while checking the
+sets live (a loose 1998-P quarter beside the 1981 proof set):
+
+- **A Numista export row without Face value takes its denomination from
+  the title** through `importing.split_title`, the parser the account
+  import already uses: `¼ Dollar "Washington Quarter"` gives `¼ Dollar`
+  (the name was already the series). Face value and Currency still win
+  when the export has them, and a title neither form matches stays whole.
+- **Both reference columns are read.** The export's "Reference" is the
+  type's number (KM# 164a) and "References" the issue's (PCGS, GSID, a
+  second KM#); `get("references", "reference")` took the first non-empty
+  and dropped the other. Duplicates are removed at import (`_dedupe`), as
+  before. The synthetic export's loose quarter now has the real shape.
+
 ## Releases
 
 
