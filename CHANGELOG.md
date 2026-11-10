@@ -2041,5 +2041,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.37.1...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
