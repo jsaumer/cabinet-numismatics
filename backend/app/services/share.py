@@ -58,6 +58,12 @@ FIELDS = (
     "shape",
     "issuer",
     "quantity",
+    # A proof or mint set's description (v0.37.0); never `count_in_stack`,
+    # which is how the owner counts, not what the set is.
+    "piece_count",
+    "packaging",
+    "has_box",
+    "has_coa",
 )
 # The grading service stays with the grade; the cert number has a toggle of
 # its own (`show_certs`, off by default): it looks a slab up in auction

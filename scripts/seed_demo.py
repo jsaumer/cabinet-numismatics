@@ -14,7 +14,8 @@ below. Cabinet fetches them, so the stack needs to reach
 upload.wikimedia.org; Commons refuses bursts, so they come one at a time
 (about a minute for all of them), a photo that still can't be fetched is a
 warning, not a failure, and --no-photos skips them. The two bullion pieces
-have none (their designs are current and not free). Delete the demo items
+have none (their designs are current and not free); the proof set's is the
+United States Mint's own, a work of the federal government. Delete the demo items
 from the list view when you're done, or start clean by recreating the stack
 with `docker compose down -v`.
 
@@ -314,6 +315,28 @@ DEMO_ITEMS: list[tuple[dict, list[tuple[float, str]]]] = [
             "storage_location": "Safe", "tags": ["silver", "bullion"],
         },
         [],
+    ),
+    (
+        {
+            # A proof set (v0.37.0): one item for the whole set, no grade, its
+            # silver giving it a melt value; left out of the stack until ticked.
+            # Ten coins in the lenses plus the bonus 2019-W cent in the box.
+            "type": "mint_set", "strike": "proof", "country": "United States",
+            "issuer": "United States Mint", "denomination": "Silver Proof Set",
+            "year": 2019, "piece_count": 11, "packaging": "complete",
+            "has_box": True, "has_coa": True,
+            # The dime, five quarters, and half in .999 silver.
+            "composition": "Silver", "weight_g": 46.937, "fineness": 0.999,
+            "acquisition_date": "2024-11-08", "acquisition_price": 60.0,
+            "acquired_from": "coin show", "storage_location": "Shelf",
+            "tags": ["us", "proof"],
+            "notes": "Includes the 2019-W proof cent, packed loose in the box.",
+            "photos": [
+                commons("other", "e/e2/2019_US_Mint_silver_proof_set.jpg", "Public domain",
+                        "United States Mint"),
+            ],
+        },
+        [(70.0, "dealer quote")],
     ),
 ]
 

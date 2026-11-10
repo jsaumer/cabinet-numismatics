@@ -206,6 +206,8 @@ refs/tags),
 key from `/api/reference/serial-traits`; an unknown one is 422),
 `target_reached=true` (see the wish-list fields below), `metal` (`gold`,
 `silver`, `platinum`, `palladium`, or `none`; an unknown value is 422),
+`packaging` (v0.37.0: `sealed`, `complete`, or `incomplete`; anything else
+is 422),
 `limit` (default 50,
 1–500), `offset`, `sort` (`created_at`, `year`, `country`, `denomination`,
 `acquisition_date`, `acquisition_price`, `priority`, `target_price`,
@@ -219,7 +221,9 @@ currency. `grade` sorts by the grade's rank (1 to 70 on both the Sheldon and
 PMG scales). `name` (v0.34.1) sorts by the collection list's row title,
 case-insensitively: the year label, mint mark, and denomination for a coin
 or note ("1932-D 25 cents", "ND (1921) 50 pfennig"), the refiner (else the
-country) and product name for a bar or round.
+country) and product name for a bar or round, and the year, issuing mint
+(else the country), and set name for a proof or mint set ("2019 United
+States Mint Silver Proof Set").
 The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
@@ -238,7 +242,10 @@ as a single item, so `target_price`, `priority`, `target_gap`,
 or tick ND for a piece with no date."), and `year: 0` is always 422 ("There
 is no year 0. Tick ND for a piece with no date."); `PATCH` checks the rule
 against the item as it will be after the patch. **Bullion is exempt**
-(v0.31.0): a bar may leave both `year` and `year_nd` empty. Every response carries a
+(v0.31.0): a bar may leave both `year` and `year_nd` empty. **A proof or
+mint set is the opposite** (v0.37.0): it needs its year of issue and is
+never ND, 422 otherwise ("Enter the year the set was issued; a proof or
+mint set is never ND."). Every response carries a
 read-only `year_label` (`"1922"`, `"ND"`, or `"ND (1922)"`), used everywhere
 a year is shown; `Item.label` ends with it. `year_nd` is not accepted in a
 bulk `set` (a bulk `year` stays as it is, and can't be cleared without it).
@@ -255,7 +262,10 @@ are reported without aborting the rest; it answers `created`, `skipped`, and
 ignored), `add_tags`, and `remove_tags`, and answers `updated`; 404 when any
 id is missing or in the trash. `set` validates like an update, so `priority`
 (1–3, or `null` to clear) can be set in bulk, and a bulk change to
-`replacement_note` or `serial_number` recomputes `serial_traits`.
+`replacement_note` or `serial_number` recomputes `serial_traits`. Of a set's
+own fields only `count_in_stack` is accepted in a bulk `set` (v0.37.0; it
+is ignored for anything but a set), and a bulk change of `type` to
+`mint_set` is 422 for an item with no year or with `year_nd`.
 
 Grading fields: `strike` (`business` default, `proof`, `specimen`),
 `grade_plus`, `grade_star`, `designations` (list; `PL`, `DMPL`, `CAM`, `DCAM`,
@@ -355,12 +365,39 @@ which is refused); see Numista catalog lookup and Imports below. The item
 form's own Add/edit UI (a Metal select, a g/oz weight switch, a suggested
 product name) is frontend behavior, not part of this API.
 
+**Proof and mint sets (v0.37.0, [SPEC_0370](specs/SPEC_0370.md))**: a
+fourth `type`, `mint_set` ("Proof or mint set" in the UI): one item for a
+set as the mint issued it. Its kind is `strike` (`proof` a proof set,
+`business` an uncirculated or mint set, `specimen` a specimen set);
+`denomination` is the set name ("Silver Proof Set", "Prestige Proof Set");
+`issuer` is the issuing mint as an authority ("United States Mint"), which
+the form requires and the API and imports accept empty; and `mintage` is
+the number of sets issued. Five fields of its own: `piece_count` (1–100,
+every piece including any banknote or medal), `packaging` (`sealed`,
+`complete`, `incomplete`, or `null` when not recorded), `has_box` and
+`has_coa` (default false), and `count_in_stack` (default false; ignored
+for every other type). `Item.label` is the year, the issuer (else the
+country), and the set name. A set's composition, weight, and fineness
+describe the precious metal in the whole set, so it has `fine_oz` and a
+melt value, but it counts in the [Bullion stack](#bullion-stack) only with
+`count_in_stack`. Neither price source prices a set: `numista` and `pcgs`
+answer 422 for one (their APIs have no set prices; see SPEC_0370's build
+log), and a comps estimate from the sales log is the way to give one a
+market value. The form offers no grade for a set, and the grade figures
+and the data-health grade check leave sets out. Fancy serial traits are
+never computed for one. `type=mint_set` and `packaging=` filter the list,
+`counts.mint_sets` is on `/api/stats/collection`, and `by_type` and
+`cabinet_items{type="mint_set"}` pick the type up. **An export holding a
+set doesn't import into v0.36.0 or older**, which refuse the type.
+
 The CSV and Excel exports, and both ways of importing them back, carry
 `die_axis`, `struck_calendar`, `struck_year`, `struck_era`,
 `pcgs_population`, `pcgs_pop_higher`, `charter_number`, `bank_city`,
 `bank_state`, `plate_position`, `target_price`, `priority`, `spot_at_purchase`
-(v0.28.0), and (v0.29.0) `width_mm`, `height_mm`, `printer`, `watermark`, and
-`demonetized_on`. An export from an older version imports as before.
+(v0.28.0), (v0.29.0) `width_mm`, `height_mm`, `printer`, `watermark`, and
+`demonetized_on`, and (v0.37.0) `piece_count`, `packaging`, `has_box`,
+`has_coa`, and `count_in_stack`. An export from an older version imports as
+before.
 `serial_traits`, `population_as_of`, and `spot_at_purchase_source` are not
 exported: the import recomputes them (a `spot_at_purchase` cell always
 imports as `manual`).
@@ -498,12 +535,12 @@ switched on in Settings (each off by default).
 | `GET`  | `/api/stats/notes-by-signature` | Owned notes grouped by series and signature pair |
 | `GET`  | `/api/stats/quality`     | Certified vs. raw owned items, by count and value, plus a breakdown by grading service (`?currency=`) |
 | `GET`  | `/api/stats/value-spread` | Min/median/max/mean of owned items' shown values, and the share held by the top 10% (`?currency=`) |
-| `GET`  | `/api/stats/data-health` | Owned items missing a photo, grade, cost, value, weight, storage, or reference |
+| `GET`  | `/api/stats/data-health` | Owned items missing a photo, grade, cost, value, weight, storage, or reference, and sets missing an issuing mint |
 | `GET`  | `/api/stats/showcase`    | Piece of the day, oldest, newest, and pieces acquired on this day in an earlier year (`?currency=`) |
 
 `/collection` answers `currency`, `counts` (`total`, `owned`, `sold`,
-`wishlist`, and `coins` / `notes` / `bullion` (v0.31.0), which count owned
-items only),
+`wishlist`, and `coins` / `notes` / `bullion` (v0.31.0) / `mint_sets`
+(v0.37.0), which count owned items only),
 `cost_basis` (owned items, fees included), `estimated_value` (each owned
 item's shown value under `value_strategy`) with `estimated_items` (how many
 contribute), `unrealized_gain` (owned items with both a cost and a value),
@@ -547,7 +584,8 @@ dashboard widgets): owned items only, trashed already hidden by the ORM.
   least one); every field is `null` when no owned item has a value.
 - **`/data-health`**: `{"owned", "checks": [{"key", "label", "count",
   "items": [{"id", "label"}]}]}`. Checks, always in this order: `no_photo`,
-  `no_grade`, `no_cost`, `no_value` (no estimate at all), `no_weight` (a
+  `no_grade` (never a set), `no_issuing_mint` (v0.37.0: a set whose
+  `issuer` is empty), `no_cost`, `no_value` (no estimate at all), `no_weight` (a
   detected precious metal with no weight or fineness to melt-price it),
   `no_storage`, `no_reference` (no catalog reference). `items` lists the
   first 5 matching items; `count` is the true total. Takes no `?currency=`:
@@ -758,7 +796,8 @@ whether its other money was converted). It answers:
   `converted`.
 - `missing_spot`: pieces eligible for the purchase-day-spot backfill.
   `skipped`: pieces with a detected metal but no weight or fineness (so
-  they're not in `metals`/`items` at all); `skipped_items` (P11, v0.31.0)
+  they're not in `metals`/`items` at all); a set without `count_in_stack`
+  is out by choice and counted in neither (v0.37.0); `skipped_items` (P11, v0.31.0)
   lists them: `item_id`, `label`, and `missing` (`"weight"`, `"fineness"`, or
   `"weight and fineness"`). `history_start`: the earliest date the
   purchase-day lookup covers (`2024-03-02`).
@@ -992,12 +1031,17 @@ File formats: `cabinet` (Cabinet's own export, CSV or XLSX, every field,
 keyed by the exported `id`, and a duplicate when that id is still here,
 trash included), `spreadsheet` (any
 CSV/XLSX, read through a field → column `mapping`), `numista_file`
-(numista.com's collection export, by column name), and `opennumismat` (an
+(numista.com's collection export, by column name; from v0.37.1 a row
+without a Face value column takes its denomination from the title, so
+`¼ Dollar "Washington Quarter"` is `¼ Dollar` with the name as its series,
+and both the Reference and References columns are read), and `opennumismat` (an
 OpenNumismat `.db`). Preview and run take the same JSON
 options: `format` (default: as detected), `mapping` (spreadsheet; default:
 suggested from the header names), `skip_rows` (lines above the header;
 default: found automatically), and `defaults`: `type`, `status`,
-`currency`, `country` for rows that don't say. A spreadsheet preview also
+`currency`, `country` for rows that don't say; and `sets_as_coins`
+(v0.37.0, `numista_file` only): the titles of Numista sets to import as
+their coins rather than as one set (below). A spreadsheet preview also
 returns `headers`, `header_row`, the `mapping` used, and the mappable
 `fields`.
 
@@ -1005,7 +1049,8 @@ A preview answers `format`, `filename`, `total`, `new`, `duplicates` (already
 imported), `errors`, `warnings`, `photos`, and up to 200 `rows` (`row`,
 `status` new / duplicate / error, `label`, the resolved `grade`, `type`,
 `status_value` (the item's status), `quantity`, `price`, `currency`, `photos`,
-`messages`, `error`). An unknown or expired `upload_id` is 404; a file that
+`messages`, `error`, and `set_title`: the Numista set a row came from, or
+`null`). An unknown or expired `upload_id` is 404; a file that
 can't be read as the chosen format, or a `mapping` naming a field or column
 that isn't there, is 422. A run answers `created`, `skipped`, `errors` (`row`,
 `error`), `photos_added`, and `photos_failed`; each item commits on its own,
@@ -1034,6 +1079,24 @@ own catalog data; an exonumia item whose type isn't cached yet is skipped
 in a preview and resolved on the run that follows (`catalogue_details`
 fetches it there). The spreadsheet mapping reads a `type` cell of `bar`,
 `round`, `ingot`, or `bullion` the same way.
+
+**Sets in Numista's export (v0.37.0)**: Numista's collection export lists a
+set's coins as rows naming the set in `From set`. The `numista_file` import
+groups rows by that title (never by position, so a loose coin sorted
+between them stays a coin) and imports each group as one `mint_set` where
+its first row was: the kind from the title (proof, specimen, else
+uncirculated), the year from the title's leading four digits (else the
+rows' commonest), the set name with the year and issuer taken off, the
+pieces from the rows, the price summed over them, and "Contents: N#… year
+mint, …" followed by the rows' comments in the notes. Its import key is a
+hash of the title and the rows, so a second import skips it. The export
+carries no issuing mint, Numista set number, or metal, so those stay empty,
+and the preview row says so. A title in `sets_as_coins` imports its rows as
+coins instead, struck proof or specimen when the title says so, with
+"From the set: …" in their notes. The Numista account import has no sets
+(Numista's API doesn't list them) and is unchanged. A spreadsheet's `type`
+cell reading "proof set", "mint set", "uncirculated set", or "specimen set"
+(singular or plural) makes a `mint_set` of that kind.
 
 ## Sharing
 
@@ -1092,7 +1155,9 @@ slot ticked by hand).
 **What a piece shows** is an allowlist, pinned by a test: `id`, `type`,
 `country`, `denomination`, `year_label`, `mint_mark`, `series`, `variety`,
 `composition`, `weight_g`, `fineness`, `diameter_mm`, `width_mm`,
-`height_mm`, `shape`, `issuer`, `quantity`; with `show_photos`, `photos`
+`height_mm`, `shape`, `issuer`, `quantity`, and (v0.37.0) `piece_count`,
+`packaging`, `has_box`, `has_coa` (empty or false on anything but a set;
+`count_in_stack` is never shown); with `show_photos`, `photos`
 (`id`, `angle`, `has_thumbnail`); with `show_grades`, `grade_label`,
 `grade_details`, `designations`, `cac_sticker`, `cert_service`; with
 `show_certs` (off by default), `cert_number`, which looks a slab up in

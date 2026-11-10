@@ -120,7 +120,10 @@ def comps_estimate(db: Session, item: Item) -> EstimateResult:
         source=f"comps:{count} sale{'s' if count != 1 else ''}",
         estimated_value=(per_piece * item.quantity).quantize(Decimal("0.01")),
         currency=currency,
-        confidence=_confidence(count, spread, item.grade is not None, older),
+        # A set has no grade by design, so it isn't marked down for one.
+        confidence=_confidence(
+            count, spread, item.grade is not None or item.type == "mint_set", older
+        ),
         sample_size=count,
         details={
             "median": float(per_piece),
