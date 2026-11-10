@@ -62,14 +62,14 @@ src/
                       above the setup, sign-in, and boot screens),
                       failedNotice.ts (carries the
                       failed-sign-ins count from the sign-in page to the app)
-  dashboard/          the customisable dashboard: registry.tsx (every widget
-                      type, its catalogue entry, default size and options),
+  dashboard/          the customizable dashboard: registry.tsx (every widget
+                      type, its catalog entry, default size and options),
                       widgets/ (one file per group, including showcase.tsx:
                       piece of the day, oldest/newest, on this day, the
                       photo mosaic, and most valuable), WidgetFrame.tsx (the
                       card, lazy mount, per-widget error), data.ts (the
                       per-page request cache), options.ts, edit.tsx (edit
-                      mode, the drag, the catalogue and options dialogs)
+                      mode, the drag, the catalog and options dialogs)
   pages/              one file per route: Dashboard, ItemList (/collection
                       and /collection/:id, the list with the inspector),
                       QuickAdd (/items/add, the lookup-first add),
@@ -78,7 +78,8 @@ src/
     item-form/          the item form's parts: model.ts (form state,
                         toPayload, fromItem, the designation and problem
                         lists, and the bullion-only helpers
-                        presetBullionFineness and suggestDenomination),
+                        presetBullionFineness and suggestDenomination, and
+                        suggestSetName for a proof or mint set),
                         NumistaFill.tsx, PcgsFill.tsx
     settings/           Settings, routed into sections (v0.30.2): shared.tsx
                         (the section list, Section, SettingRow, the
@@ -105,7 +106,12 @@ src/
                         hidden behind a "Show empty fields" toggle; a
                         fact's forType takes one item type or a list of
                         them, so a field (weight, shape, serial number…)
-                        can be offered to two of the three types
+                        can be offered to some of the four types
+    item-types.tsx      the one place a type is described (v0.37.0):
+                        TYPE_INFO (each type's singular and plural labels
+                        and stand-in icon), ITEM_TYPES, TypeIcon, and for
+                        proof and mint sets typeBadge, setKind, and
+                        packagingLine
     icons.tsx           inline SVG icons
     controls.tsx        FileButton (a file picker that looks like a button)
                         and Menu
@@ -403,6 +409,16 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   `item-facts.tsx` with an `edit` spec (field, kind, the raw stored value)
   becomes an `EditableValue` when the page passes `onSave`, which PATCHes
   that one field. A new editable fact needs the spec and nothing else.
+- **A type is described once**, in `components/item-types.tsx`'s
+  `TYPE_INFO` (v0.37.0): the form, the list filter, bulk edit, the import
+  default, the type breakdown, and the item and share pages read it, and a
+  `Record<ItemType, ...>` refuses to compile without an entry for a new
+  type. Quick add keeps its own list (`QUICK_TYPES`), since its lookups
+  can't fill a set.
+- **A set's title is built in five places** that must agree (year, issuing
+  mint else country, set name): the backend's `Item.label` and
+  `_name_key`, `ItemList.tsx`'s row, the item hero, `shareItemLabel`, and
+  the report.
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 
@@ -417,7 +433,8 @@ number getting its badge and its size and printer showing on the item page,
 a wishlist coin showing its target price, an
 undated piece taking ND with no year, a bar or round getting a suggested
 product name and showing up on the Stack page, a silver piece showing its
-fine ounces on the Stack page, the
+fine ounces on the Stack page, a silver proof set showing its fine weight
+and reaching the Stack page only once ticked to count, the
 security headers, choosing a theme (it applies, survives a reload from the
 server, and goes back), every Settings section, an in-app restore of a backup
 taken a moment earlier, and, last of all, changing the admin's password and
