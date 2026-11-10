@@ -18,7 +18,10 @@ from app.auth.permissions import permission, require
 from app.db import get_db
 from app.models import CatalogRef, Grade, Item, ItemEvent, ItemSet, PriceEstimate, Tag
 from app.schemas import (
+    BULK_YEAR_REQUIRED,
     SET_YEAR_REQUIRED,
+    YEAR_MAX,
+    YEAR_MIN,
     YEAR_REQUIRED,
     BulkResult,
     BulkUpdate,
@@ -965,9 +968,18 @@ def _apply_struck_date(item: Item, fields: dict) -> None:
             and merged["struck_calendar"]
             and merged["struck_year"] is not None
         ):
-            fields["year"] = calendars.to_gregorian(
+            year = calendars.to_gregorian(
                 merged["struck_calendar"], merged["struck_year"], merged["struck_era"]
             )
+            # A year the client sends is range-checked by the schema; this
+            # one never passed through it (a mistyped Hebrew or Minguo year
+            # converts to a year nothing accepts).
+            if year == 0 or not YEAR_MIN <= year <= YEAR_MAX:
+                raise ValueError(
+                    f"The date as struck works out to the year {year}, outside "
+                    f"{YEAR_MIN} to {YEAR_MAX}. Check the calendar and the year."
+                )
+            fields["year"] = year
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     # The year rule, against the item as it will be; bullion is exempt, and
@@ -1058,6 +1070,11 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         year = fields.get("year")
         if any((year if "year" in fields else i.year) is None or i.year_nd for i in items):
             raise HTTPException(status_code=422, detail=SET_YEAR_REQUIRED)
+    elif fields.get("type") in ("coin", "note"):
+        # The year-or-ND rule for a bar becoming a coin or a note: a bar may
+        # have neither, and ND is per piece, so it can't be supplied here.
+        if "year" not in fields and any(i.year is None and not i.year_nd for i in items):
+            raise HTTPException(status_code=422, detail=BULK_YEAR_REQUIRED)
     for item in items:
         touched = {f for f, value in fields.items() if getattr(item, f) != value}
         for field, value in fields.items():

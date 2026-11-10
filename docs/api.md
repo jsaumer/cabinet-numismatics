@@ -265,7 +265,23 @@ id is missing or in the trash. `set` validates like an update, so `priority`
 `replacement_note` or `serial_number` recomputes `serial_traits`. Of a set's
 own fields only `count_in_stack` is accepted in a bulk `set` (v0.37.0; it
 is ignored for anything but a set), and a bulk change of `type` to
-`mint_set` is 422 for an item with no year or with `year_nd`.
+`mint_set` is 422 for an item with no year or with `year_nd`. A bulk change
+of `type` to `coin` or `note` is 422 when a selected bar or round has neither
+a year nor ND, unless the same `set` gives a `year`.
+
+In a `PATCH` or a bulk `set`, leaving a field out keeps it and `null` empties
+it. The fields that are never empty (`type`, `status`, `country`,
+`denomination`, `year_nd`, `strike`, `grade_plus`, `grade_star`,
+`replacement_note`, `quantity`, `currency`, `has_box`, `has_coa`,
+`count_in_stack`) answer 422 to `null`. Numbers and texts are bounded by
+what their columns hold, and anything past a bound is 422: `weight_g` under
+100,000 g, prices and fees under 10,000,000,000, `quantity` up to
+2,147,483,647, a tag up to 50 characters. A value the database still has no
+room for is 422 as well ("A value is too large or too long to store").
+
+An item is read back as it is stored: the input rules are checked when a
+value is written, never again when it is read, so a row an older release or
+an import let through still lists and opens, and can be corrected.
 
 Grading fields: `strike` (`business` default, `proof`, `specimen`),
 `grade_plus`, `grade_star`, `designations` (list; `PL`, `DMPL`, `CAM`, `DCAM`,
@@ -520,7 +536,9 @@ supersedes an item whose latest estimate is manual, or from another source.
 **Saving an owned item** (create, update, "Add a run", and an import) adds a
 melt estimate from the cached spot price only, never a network call, skipped
 when the piece doesn't qualify (metal, weight, fineness), the cache is
-stale, or the inputs haven't changed since its last melt estimate. The same
+stale, the inputs haven't changed since its last melt estimate, or its newest
+estimate is a typed-in value or another source's (a melt value never buries
+either, on a save as on a refresh). The same
 12h loop also refreshes Numista and/or PCGS when their own cadence is
 switched on in Settings (each off by default).
 
@@ -1557,6 +1575,8 @@ displays both.
 
 - **Timestamps** are ISO 8601 UTC (`timestamptz`).
 - **Money** fields carry an explicit ISO 4217 `currency` alongside the amount.
+  A currency is three letters and is stored upper case: `usd` is accepted and
+  saved as `USD`, anything else is 422.
 - **IDs** are UUIDs for items/photos/estimates/documents; sales, checklists,
   edit-history events, and reference tables use integers.
 - **Errors** follow a consistent JSON shape: `{ "detail": "..." }`, matching

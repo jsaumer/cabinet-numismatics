@@ -34,6 +34,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -587,6 +588,12 @@ def run(
             db.rollback()
             detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
             errors.append({"row": c.row, "error": str(detail)})
+            continue
+        except SQLAlchemyError:
+            # One row the database refuses (a value with no room in its
+            # column) is that row's error, not the end of the import.
+            db.rollback()
+            errors.append({"row": c.row, "error": "A value in this row is too large to store"})
             continue
         created += 1
         for angle, data in c.photos:

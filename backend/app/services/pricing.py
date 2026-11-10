@@ -396,8 +396,13 @@ def melt_on_save(db: Session, item: Item) -> PriceEstimate | None:
     refresh catches it later; no fetch happens here, ever). Skipped, too,
     when the piece already has a melt estimate with the same inputs (metal,
     weight, fineness, quantity), so an edit that changes nothing
-    melt-relevant adds no duplicate row. The caller commits."""
+    melt-relevant adds no duplicate row, and when its newest estimate is the
+    owner's own or another source's: a melt value must never bury either,
+    the same rule the scheduled refresh keeps. The caller commits."""
     if item.status != "owned":
+        return None
+    newest = item.estimates[0] if item.estimates else None
+    if newest is not None and not newest.source.startswith("melt:"):
         return None
     result = melt_from_cache(db, item)
     if result is None:

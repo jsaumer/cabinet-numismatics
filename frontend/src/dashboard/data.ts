@@ -1,6 +1,7 @@
-// One request cache per page view, so widgets that want the same request make
-// it once: five breakdowns with the same scope, or three widgets reading the
-// settings. Cleared by "Refresh melt values" and after a layout is saved.
+// One request cache per visit to the dashboard, so widgets that want the same
+// request make it once: five breakdowns with the same scope, or three widgets
+// reading the settings. Emptied when the page is opened (`forgetData`), and
+// by "Refresh melt values" and a saved layout (`invalidateData`).
 
 import { useEffect, useState } from "react";
 
@@ -19,6 +20,14 @@ export function fetchOnce<T>(key: string, load: () => Promise<T>): Promise<T> {
     if (cache.get(key) === pending) cache.delete(key);
   });
   return pending;
+}
+
+/** Start a visit with nothing cached. The cache outlives the page (it is
+ * this module's), and what the last visit fetched may be out of date: a piece
+ * added, edited, or deleted since. Called before the page's first render, so
+ * nothing is on screen to refetch. */
+export function forgetData() {
+  cache.clear();
 }
 
 /** Throw the page's data away and refetch what is on screen. */
