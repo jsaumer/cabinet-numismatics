@@ -114,7 +114,8 @@ and data migrations.
 ## Conventions
 
 - **Docs travel with the change.** If you alter behavior, update every
-  affected document in the same commit: `README.md` (features),
+  affected document in the same commit: `docs/features.md` (the full
+  feature list; `README.md` carries only a short version of it),
   `docs/api.md`, `docs/data-model.md`, `docs/roadmap.md`,
   `docs/implementation-notes.md`, `frontend/README.md`, and the topic doc it
   touches, plus `CHANGELOG.md`. They are expected to match the code.
