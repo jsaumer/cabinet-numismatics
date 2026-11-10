@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { api, money, ShareItem, ShareItemPhoto, sharePhotoUrl } from "../../api";
-import { BullionIcon, CoinIcon, NoteIcon } from "../../components/icons";
+import { packagingLine, TypeIcon, typeBadge } from "../../components/item-types";
 import { shareItemLabel } from "./ShareGrid";
 
 /** Keeps the page behind the lightbox from scrolling while it's open, the
@@ -88,10 +88,6 @@ interface Group {
 
 const filled = (value: ReactNode) => value !== null && value !== undefined && value !== "";
 
-function typeIcon(item: ShareItem) {
-  return item.type === "coin" ? <CoinIcon /> : item.type === "bullion" ? <BullionIcon /> : <NoteIcon />;
-}
-
 /** One shared piece: its photos (in the lightbox), the title and grade the
  * hero shows on the item page, and everything else in the same grouped-facts
  * style, built only from what the allowlist actually sent (a field absent
@@ -138,14 +134,25 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
           ? `${item.height_mm} mm tall`
           : null;
 
+  const isSet = item.type === "mint_set";
   const groups: Group[] = [
+    {
+      title: "The set",
+      facts: isSet
+        ? [
+            { label: "Issuing mint", value: item.issuer },
+            { label: "Pieces", value: item.piece_count },
+            { label: "Packaging", value: packagingLine(item) },
+          ]
+        : [],
+    },
     {
       title: "Identity",
       facts: [
         { label: "Series", value: item.series },
         { label: "Variety", value: item.variety },
         { label: "Mint mark", value: item.mint_mark },
-        { label: "Issuer", value: item.issuer },
+        { label: "Issuer", value: isSet ? null : item.issuer },
         { label: "Quantity", value: item.quantity !== 1 ? item.quantity : null },
       ],
     },
@@ -175,7 +182,7 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
       ],
     },
     {
-      title: "Physical",
+      title: isSet ? "Precious metal" : "Physical",
       facts: [
         { label: "Composition", value: item.composition },
         { label: "Weight", value: item.weight_g != null ? `${item.weight_g} g` : null },
@@ -211,12 +218,12 @@ export default function SharePiece({ token, shareName }: { token: string; shareN
               </button>
             ))
           ) : (
-            <div className="share-thumb-empty large">{typeIcon(item)}</div>
+            <div className="share-thumb-empty large"><TypeIcon type={item.type} /></div>
           )}
         </div>
         <div className="detail-header">
           <h1>{shareItemLabel(item)}</h1>
-          <span className={`badge ${item.type}`}>{item.type}</span>
+          <span className={`badge ${item.type}`}>{typeBadge(item.type)}</span>
         </div>
         {item.grade_label && (
           <p className="hero-grade">

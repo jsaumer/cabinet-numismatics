@@ -2,12 +2,20 @@
 
 import type { SpotAtPurchaseSource } from "./stack";
 
-export type ItemType = "coin" | "note" | "bullion";
+export type ItemType = "coin" | "note" | "bullion" | "mint_set";
 export type ItemStatus = "owned" | "sold" | "wishlist";
 export type Angle = "obverse" | "reverse" | "edge" | "other";
 export type Strike = "business" | "proof" | "specimen";
 export type CacSticker = "green" | "gold";
 export type Priority = 1 | 2 | 3; // high, medium, low
+/** How complete a set's mint packaging is; null means not recorded. */
+export type Packaging = "sealed" | "complete" | "incomplete";
+
+export const PACKAGING_LABELS: Record<Packaging, string> = {
+  sealed: "Sealed",
+  complete: "Complete",
+  incomplete: "Incomplete",
+};
 
 export const PRIORITY_LABELS: Record<Priority, string> = { 1: "High", 2: "Medium", 3: "Low" };
 
@@ -118,6 +126,12 @@ export interface Item {
   sold_fees: number | null;
   sold_to: string | null;
   sale_proceeds: number | null;
+  // Proof and mint sets (v0.37.0)
+  piece_count: number | null;
+  packaging: Packaging | null;
+  has_box: boolean;
+  has_coa: boolean;
+  count_in_stack: boolean;
   set: SetInfo | null;
   custom_fields: Record<string, string> | null;
   cert_service: string | null;
@@ -297,6 +311,11 @@ export interface ItemPayload {
   spot_at_purchase: number | null;
   sold_fees: number | null;
   sold_to: string | null;
+  piece_count: number | null;
+  packaging: Packaging | null;
+  has_box: boolean;
+  has_coa: boolean;
+  count_in_stack: boolean;
   status: ItemStatus;
   country: string;
   denomination: string;

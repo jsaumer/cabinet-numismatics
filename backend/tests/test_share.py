@@ -38,6 +38,10 @@ BASE_KEYS = {
     "shape",
     "issuer",
     "quantity",
+    "piece_count",
+    "packaging",
+    "has_box",
+    "has_coa",
 }
 GRADE_KEYS = {
     "grade_label",

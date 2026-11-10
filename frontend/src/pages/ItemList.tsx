@@ -7,11 +7,14 @@ import {
   ItemPage,
   METAL_LABELS,
   money,
+  PACKAGING_LABELS,
+  Packaging,
   photoUrl,
   PRIORITY_LABELS,
 } from "../api";
 import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
+import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 import ItemDetail from "./ItemDetail";
 import { detectMetal } from "./item-form/model";
@@ -82,13 +85,13 @@ const WISHLIST_SORTS = [
 // Filters behind "More…"; any of them in the URL opens it.
 const ADVANCED_KEYS = [
   "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
-  "fancy", "serial_trait", "target_reached",
+  "fancy", "serial_trait", "target_reached", "packaging",
 ];
 
 const FILTER_KEYS = [
   "type", "status", "strike", "country", "metal", "year", "q", "tag", "set_id",
   "year_min", "year_max", "nd", "grade_min", "grade_max", "value_min", "value_max",
-  "fancy", "serial_trait", "target_reached",
+  "fancy", "serial_trait", "target_reached", "packaging",
 ] as const;
 
 const WIDE = "(min-width: 1100px)";
@@ -129,6 +132,7 @@ export default function ItemList() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkStorage, setBulkStorage] = useState("");
   const [bulkPriority, setBulkPriority] = useState("");
+  const [bulkStack, setBulkStack] = useState("");
   const [bulkAddTag, setBulkAddTag] = useState("");
   const [bulkRemoveTag, setBulkRemoveTag] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -146,11 +150,12 @@ export default function ItemList() {
     setBulkBusy(true);
     setError(null);
     try {
-      const set: Record<string, string | number> = {};
+      const set: Record<string, string | number | boolean> = {};
       if (bulkType) set.type = bulkType;
       if (bulkStatus) set.status = bulkStatus;
       if (bulkPriority) set.priority = Number(bulkPriority);
       if (bulkStorage.trim()) set.storage_location = bulkStorage.trim();
+      if (bulkStack) set.count_in_stack = bulkStack === "true";
       await api.bulkUpdate({
         ids: [...selected],
         set: Object.keys(set).length ? (set as never) : undefined,
@@ -162,6 +167,7 @@ export default function ItemList() {
       setBulkStatus("");
       setBulkStorage("");
       setBulkPriority("");
+      setBulkStack("");
       setBulkAddTag("");
       setBulkRemoveTag("");
       set0(); // refetch
@@ -332,9 +338,9 @@ export default function ItemList() {
       <div className="wb-filters">
         <select aria-label="Type" value={get("type")} onChange={(e) => set("type", e.target.value)}>
           <option value="">All types</option>
-          <option value="coin">Coins</option>
-          <option value="note">Notes</option>
-          <option value="bullion">Bars and rounds</option>
+          {ITEM_TYPES.map((t) => (
+            <option key={t} value={t}>{TYPE_INFO[t].many}</option>
+          ))}
         </select>
         <select aria-label="Metal" value={get("metal")} onChange={(e) => set("metal", e.target.value)}>
           <option value="">Any metal</option>
@@ -440,6 +446,15 @@ export default function ItemList() {
             </select>
           </label>
           <label className="field">
+            Set packaging
+            <select value={get("packaging")} onChange={(e) => set("packaging", e.target.value)}>
+              <option value="">All</option>
+              {(Object.keys(PACKAGING_LABELS) as Packaging[]).map((p) => (
+                <option key={p} value={p}>{PACKAGING_LABELS[p]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
             Wish-list target
             <select value={get("target_reached")}
               onChange={(e) => set("target_reached", e.target.value)}>
@@ -462,9 +477,9 @@ export default function ItemList() {
       <span><b>{selected.size}</b> selected</span>
       <select aria-label="Set type" value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
         <option value="">Type unchanged</option>
-        <option value="coin">Coin</option>
-        <option value="note">Note</option>
-        <option value="bullion">Bar or round</option>
+        {ITEM_TYPES.map((t) => (
+          <option key={t} value={t}>{TYPE_INFO[t].one}</option>
+        ))}
       </select>
       <select aria-label="Set status" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
         <option value="">Status unchanged</option>
@@ -479,6 +494,12 @@ export default function ItemList() {
         <option value="1">High</option>
         <option value="2">Medium</option>
         <option value="3">Low</option>
+      </select>
+      <select aria-label="Set stack" value={bulkStack} onChange={(e) => setBulkStack(e.target.value)}
+        title="Whether a proof or mint set's precious metal counts in the bullion stack; other pieces ignore it">
+        <option value="">Stack unchanged</option>
+        <option value="true">Count sets in the stack</option>
+        <option value="false">Leave sets out of the stack</option>
       </select>
       <input aria-label="Add tag" value={bulkAddTag} placeholder="Add tag" list="tag-options"
         onChange={(e) => setBulkAddTag(e.target.value)} />
@@ -552,10 +573,15 @@ export default function ItemList() {
             <ul className="wb-rows">
               {items.map((item) => {
                 const metal = item.composition ? detectMetal(item.composition) : null;
+                // Mirrors the backend's routers/items._name_key (sort=name).
                 const title =
                   item.type === "bullion"
                     ? [item.issuer || item.country, item.denomination].filter(Boolean).join(" ")
-                    : `${item.year_label}${item.mint_mark ? `-${item.mint_mark}` : ""} ${item.denomination}`;
+                    : item.type === "mint_set"
+                      ? [item.year_label, item.issuer || item.country, item.denomination]
+                          .filter(Boolean)
+                          .join(" ")
+                      : `${item.year_label}${item.mint_mark ? `-${item.mint_mark}` : ""} ${item.denomination}`;
                 const sub = [
                   item.type === "bullion" ? null : item.series,
                   item.country,
@@ -599,7 +625,12 @@ export default function ItemList() {
                         </span>
                         {sub && <span className="s">{sub}</span>}
                       </span>
-                      <span className="wb-grade">{item.grade_label ?? ""}</span>
+                      {/* A set has no grade: its packaging stands in. */}
+                      <span className="wb-grade">
+                        {item.type === "mint_set"
+                          ? item.packaging ? PACKAGING_LABELS[item.packaging] : "–"
+                          : item.grade_label ?? ""}
+                      </span>
                       <span className="wb-value num">
                         {wishlistView ? (
                           <>

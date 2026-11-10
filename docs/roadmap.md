@@ -7,8 +7,8 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (October 2026): v0.36.0 (photos for the demo collection,
-after color themes for the workbench layout) is the latest published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.37.0 (proof and mint sets, with Numista's
+2026 terms) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -136,6 +136,12 @@ The heart of the app: describing what you own, accurately and flexibly.
   keep diameter), printer, and watermark; a demonetization date for coins
   and notes alike. Filled from Numista too. From the data-entry pass, not
   in the original roadmap. **Shipped in v0.29.0.**
+- ✔ **[Core]** Proof and mint sets as an item type of their own: one item
+  per set as the mint issued it (proof, uncirculated, or specimen), with
+  the issuing mint, pieces, packaging, a melt value from the precious metal
+  in it, and a place in the bullion stack only when ticked; Numista's
+  export imports each set as one. From the data-entry pass.
+  **Shipped in v0.37.0**, see [SPEC_0370](specs/SPEC_0370.md).
 - **[Nice]** Grading submissions: service, submission number, tier, fees
   (into cost basis), dates, result, and old → new cert. Phase 5.9.
   **Parked**: nothing is being submitted.
@@ -394,7 +400,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   sitting: README quick start plus `deployment.md` (secrets, reverse proxy +
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: `scripts/seed_demo.py` seeds a
-  16-item demo collection (with public domain photos from Wikimedia
+  17-item demo collection (with public domain photos from Wikimedia
   Commons, from v0.36.0); screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
@@ -404,7 +410,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0022` (and `a0001`–`a0002`
+  upgrades: Alembic since Phase 0, revisions `0001`–`0023` (and `a0001`–`a0002`
   for the sign-in chain), applied by the backend on startup since v0.11.1.
 
 ---
@@ -785,6 +791,11 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.36.0: the demo collection has photos, public domain and CC0 images
   from Wikimedia Commons fetched through the URL import while the seed
   runs, so the screenshots (and the website to come) show real pieces.
+- ✔ v0.37.0: proof and mint sets. A set is bought, kept, and sold as one
+  thing, and Cabinet had no way to say so: its coins grouped in a Set had
+  no value of their own, and a set entered as a Coin asked for a grade and
+  a mint mark it doesn't have. Released with Numista's 2026 terms: no
+  Numista value on a share link, and its sales records on the free plan.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -1299,7 +1310,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0022`, and `a0001`–`a0002` for the sign-in chain), never
+  revision (`0001`–`0023`, and `a0001`–`a0002` for the sign-in chain), never
   create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection

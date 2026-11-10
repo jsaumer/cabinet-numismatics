@@ -6,7 +6,7 @@ grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
 **Migrations:** two Alembic chains. The collection (`backend/alembic/`,
-schema `public`) is at revision `0022`; sign-in data (`backend/alembic_auth/`,
+schema `public`) is at revision `0023`; sign-in data (`backend/alembic_auth/`,
 schema `cabinet_auth`, from v0.30.0) is at `a0002`. The backend applies both
 on startup, collection first, in one transaction. What each release added is
 in [implementation-notes.md](implementation-notes.md).
@@ -119,16 +119,16 @@ by the application, not as native postgres enum types.
 | Column             | Type          | Notes                                   |
 |--------------------|---------------|-----------------------------------------|
 | `id`               | uuid PK       |                                         |
-| `type`             | enum          | `coin` \| `note` \| `bullion` (v0.31.0); indexed |
+| `type`             | enum          | `coin` \| `note` \| `bullion` (v0.31.0) \| `mint_set` (v0.37.0); indexed |
 | `status`           | enum          | `owned` \| `sold` \| `wishlist`; indexed |
 | `country`          | text          | indexed                                 |
-| `denomination`     | text          | e.g. "25 cents", "10 dollars"           |
-| `year`             | int null      | issue year; indexed; null on an undated piece (`year_nd`), where a given value is the attributed year |
+| `denomination`     | text          | e.g. "25 cents", "10 dollars"; a set's name ("Silver Proof Set") |
+| `year`             | int null      | issue year; indexed; null on an undated piece (`year_nd`), where a given value is the attributed year; always set on a proof or mint set |
 | `year_nd`          | bool          | the piece carries no date                |
 | `mint_mark`        | text null     | coins only                              |
 | `series`           | text null     | series / variety name                   |
 | `variety`          | text null     | die variety, overdate…                  |
-| `strike`           | enum          | `business` \| `proof` \| `specimen`     |
+| `strike`           | enum          | `business` \| `proof` \| `specimen`; a set's kind (proof, uncirculated, specimen set) |
 | `composition`      | text null     | e.g. "90% silver"                       |
 | `weight_g`         | numeric(9,4) null | grams; enables melt value (Phase 3); four decimal places since v0.28.0 (a troy ounce is 31.1035 g) |
 | `fineness`         | numeric null  | 0–1, e.g. 0.9000                        |
@@ -138,7 +138,7 @@ by the application, not as native postgres enum types.
 | `height_mm`        | numeric(7,2) null | notes (and anything not round)          |
 | `edge`             | text null     | reeded, plain, lettered…                |
 | `shape`            | text null     | round, polygonal…                       |
-| `mintage`          | bigint null   | mintage, or print run for a note        |
+| `mintage`          | bigint null   | mintage, print run for a note, or sets issued for a set |
 | `die_axis`         | smallint null | coins: degrees 0–359; `0` medal, `180` coin alignment |
 | `struck_calendar`  | text null     | the calendar of a non-Gregorian date as struck: a key of `services/calendars.CALENDARS` (`hijri`, `japanese`…) |
 | `struck_year`      | int null      | the year as written on the piece, in that calendar; `year` stays Gregorian |
@@ -157,7 +157,7 @@ by the application, not as native postgres enum types.
 | `serial_number`    | text null     | notes                                   |
 | `prefix_block`     | text null     | notes                                   |
 | `signatures`       | text null     | notes                                   |
-| `issuer`           | text null     | notes: issuing bank or authority        |
+| `issuer`           | text null     | notes: issuing bank or authority; bullion: refiner or mint; sets: the issuing mint ("United States Mint") |
 | `replacement_note` | bool          | notes: replacement / star note          |
 | `charter_number`   | text null     | notes: National Bank Note charter       |
 | `bank_city`        | text null     | notes                                   |
@@ -166,6 +166,11 @@ by the application, not as native postgres enum types.
 | `printer`          | text null     | notes: printing firm (e.g. BEP, De La Rue) |
 | `watermark`        | text null     | notes: watermark description             |
 | `demonetized_on`   | date null     | coins and notes alike: when it stopped being legal tender |
+| `piece_count`      | smallint null | sets (v0.37.0, `0023`): every piece in the set, 1–100 |
+| `packaging`        | varchar(12) null | sets: `sealed` \| `complete` \| `incomplete`; null when not recorded |
+| `has_box`          | bool          | sets: the outer box is kept; default false |
+| `has_coa`          | bool          | sets: the certificate of authenticity is kept; default false |
+| `count_in_stack`   | bool          | sets: its precious metal counts in the bullion stack; default false, ignored for other types |
 | `serial_traits`    | text null     | server-set fancy-serial traits, stored comma-wrapped (`,radar,binary,`) so one trait is a `LIKE '%,radar,%'`; null when none. The API returns a list |
 | `quantity`         | int           | default 1                               |
 | `acquisition_date` | date null     |                                         |

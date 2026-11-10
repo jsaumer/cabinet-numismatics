@@ -186,7 +186,8 @@ The counts are owned pieces (sold and wish-list items are left out, as on
 the dashboard), and the value follows Settings → value strategy. Homepage
 has no currency format, so `prefix` is the symbol of your display currency.
 Other fields the same response carries: `counts.owned`, `counts.wishlist`,
-`counts.bullion`, `cost_basis`, `unrealized_gain`, `estimated_items`.
+`counts.bullion`, `counts.mint_sets` (v0.37.0: proof and mint sets),
+`cost_basis`, `unrealized_gain`, `estimated_items`.
 
 `siteMonitor` needs no token: anonymous health answers `{"status":"ok"}`.
 Homepage fetches from its own server, not your browser. If Cabinet sits
@@ -208,7 +209,7 @@ so scraping more often than that gains nothing.
 |--------|--------|---------|
 | `cabinet_info` | `version`, `schema` | Always 1 |
 | `cabinet_schema_up_to_date` | | 1 when the database is at the revision this build expects |
-| `cabinet_items` | `status`, `type` | Items, trash excluded |
+| `cabinet_items` | `status`, `type` | Items, trash excluded; `type` is `coin`, `note`, `bullion`, or `mint_set` (v0.37.0) |
 | `cabinet_items_in_trash` | | Items in the trash |
 | `cabinet_photos`, `cabinet_documents` | | Photos (trash included) and attached documents |
 | `cabinet_collection_value` | `currency` | Owned items' value, per the value strategy, in the display currency |
@@ -223,7 +224,7 @@ so scraping more often than that gains nothing.
 | `cabinet_refresh_last_run_timestamp_seconds` | `source` | Last scheduled refresh |
 | `cabinet_refresh_last_run_items` | `source`, `outcome` | Its updated / skipped / failed items |
 | `cabinet_estimate_attempts` | `source`, `outcome` | Each item's latest automatic attempt (`ok`, `not_applicable`, `unavailable`) |
-| `cabinet_stack_fine_ounces` | `metal` | Fine troy ounces of owned bullion (the same set the Stack page reports); no network call |
+| `cabinet_stack_fine_ounces` | `metal` | Fine troy ounces of owned bullion (the same set the Stack page reports, so a proof or mint set only when it is ticked to count); no network call |
 | `cabinet_share_links` | | Share links that exist (each works only while sharing is on) |
 | `cabinet_share_opens_total` | | Times those links have been opened (manifest requests; a revoked link's opens go with it) |
 | `cabinet_alert_failing` | `alert` | 1 while that check is failing |

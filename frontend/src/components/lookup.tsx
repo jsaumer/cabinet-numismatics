@@ -2,13 +2,16 @@ import { Item } from "../api";
 
 /** Outbound lookups for an item: eBay's sold listings for the same coin or
  * note, PCGS Photograde for judging a grade by eye, CoinFacts when a PCGS
- * number is known, and a web search for a note's Friedberg or Pick number.
+ * number is known (a coin's or a set's), Numista's page for a set's Numista
+ * set number, and a web search for a note's Friedberg or Pick number.
  * Links only: no request leaves the browser until
  * one is clicked. */
 export function LookupLinks({ item }: { item: Item }) {
+  const isSet = item.type === "mint_set";
   const query = [
     item.year,
     item.mint_mark ? `${item.mint_mark}` : null,
+    isSet ? item.issuer || item.country : null,
     item.denomination,
     item.series,
     item.grade_label,
@@ -34,11 +37,21 @@ export function LookupLinks({ item }: { item: Item }) {
   if (item.type === "coin") {
     links.push(["https://www.pcgs.com/photograde", "PCGS Photograde", "Reference photos for each grade"]);
   }
-  if (pcgsNumber && item.type === "coin") {
+  if (pcgsNumber && (item.type === "coin" || isSet)) {
     links.push([
       `https://www.pcgs.com/coinfacts/coin/${encodeURIComponent(pcgsNumber.ref_code.trim())}`,
       "CoinFacts",
-      "PCGS's page for this coin",
+      isSet ? "PCGS's page for this set" : "PCGS's page for this coin",
+    ]);
+  }
+  // A Numista set number, written S2077 or just 2077.
+  const numistaSet = isSet ? refFor("numista_set") : undefined;
+  const setNumber = numistaSet?.ref_code.trim().replace(/^s\s*#?\s*/i, "");
+  if (setNumber && /^\d+$/.test(setNumber)) {
+    links.push([
+      `https://en.numista.com/S${setNumber}`,
+      `Numista set S${setNumber}`,
+      "Numista's page for this set",
     ]);
   }
   if (friedberg) {
