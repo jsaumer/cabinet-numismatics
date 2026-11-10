@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError
 
 from app import __version__
 from app.auth import setup as auth_setup
@@ -262,6 +263,19 @@ async def _validation_error(request: Request, exc: RequestValidationError):
         ]
         return JSONResponse({"detail": fields}, status_code=422)
     return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(DataError)
+async def _value_out_of_range(request: Request, exc: DataError):
+    """The last line behind the schemas' bounds: a value Postgres has no room
+    for (a number past its column, a text past its length) is the caller's
+    to fix, so it is a 422 and never a bare 500. The session's own teardown
+    rolls the transaction back; the detail never repeats the value."""
+    logger.warning("%s %s: the database refused a value", request.method, request.url.path)
+    return JSONResponse(
+        {"detail": "A value is too large or too long to store. Check the numbers and try again."},
+        status_code=422,
+    )
 
 
 @app.exception_handler(ReauthRequired)

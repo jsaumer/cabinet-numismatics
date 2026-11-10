@@ -186,6 +186,13 @@ rules that bite most often:
 - Every new `price_estimates` row goes through `pricing.add_estimate` (it
   notices a wish-list target). `serial_traits` and `population_as_of` are
   server-set, on every path that changes their inputs (`items._sync_derived`).
+- Reading an item never validates it: `ItemOut` is built from `ItemBase`'s
+  fields without their rules (`schemas._ItemRead`), so no stored row can
+  500 a list page. Rules belong on input models only, every input is
+  bounded by its column (SQLite won't catch a missing bound; see
+  `tests/test_hardening.py`), a currency input is `schemas.Currency`, and
+  `pricing.melt_on_save` never adds a melt value above a typed-in one or
+  another source's. See "Review fixes" in the implementation notes.
 - `item.year` can be `None`: an undated piece is `year_nd` true, with an
   optional attributed year. Guard `None` anywhere that does arithmetic on
   it, and print `year_label` (`"1922"`, `"ND"`, `"ND (1922)"`), never `year`

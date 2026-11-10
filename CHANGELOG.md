@@ -8,6 +8,41 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+Found by a top-to-bottom review on 9 November 2026 and reproduced on a
+running stack before they were fixed.
+
+### Fixed
+
+- **One bulk edit could take the collection list down.** Changing the type
+  of a bar or round with no year to Coin or Note in a bulk edit was saved,
+  and from then on the list page and the piece's own page answered with a
+  server error until the row was repaired through the API. The bulk edit now
+  refuses it with a message (give the piece a year, or tick ND, first), and
+  reading an item no longer re-applies the input rules at all: whatever is
+  stored lists and opens, so no future rule or older row can lock a page.
+- **A typed-in value could be buried under a melt value.** Editing a piece's
+  metal, weight, or fineness added a melt estimate as its newest value even
+  when the newest one was the owner's own or a price source's, so a key
+  date typed in at $5,000 showed as $41.09 in the list and the totals. A
+  save now leaves such a piece alone, the rule the scheduled refresh
+  already kept.
+- **The dashboard showed old totals after a piece was added.** Coming back
+  to the dashboard without reloading the page showed the figures from the
+  last visit, so a first piece still read "Nothing to report yet". Each
+  visit now fetches fresh figures.
+- **Server errors for values the database has no room for.** A weight, a
+  price, a quantity, or a tag past what its column holds answered 500 on
+  Postgres, and so did `null` for a field that can't be empty (a `PATCH`
+  with `"country": null`). All are 422 with a message now, a date as struck
+  that converts to a year outside -700 to 2100 is refused on an update as
+  it was on a create, and one such row in an import is that row's error
+  instead of the end of the import.
+- **A currency sent in lower case** (`usd`, through the API) was stored as
+  written and the piece then dropped out of every total. Currencies are
+  three letters, stored upper case, on items, estimates, and sales alike.
+
 ## [0.37.2] - 2026-11-09
 
 ### Changed

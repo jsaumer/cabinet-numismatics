@@ -3071,6 +3071,60 @@ sets live (a loose 1998-P quarter beside the 1981 proof set):
   and dropped the other. Duplicates are removed at import (`_dedupe`), as
   before. The synthetic export's loose quarter now has the real shape.
 
+## Review fixes (unreleased, after v0.37.2)
+
+A full review on 9 November 2026 reproduced five bugs on a throwaway stack
+(real Postgres); these are the rules their fixes left. No migration.
+
+- **Reading an item never validates it.** `ItemOut` no longer inherits
+  `ItemBase`; it extends `_ItemRead`, built by `create_model` from
+  `ItemBase`'s fields with their types and defaults and none of their rules
+  (ranges, lengths, validators, the year-or-ND rule). A new field on
+  `ItemBase` reaches the output by itself; a field only the server sets goes
+  on `ItemOut`. Never put a rule on an output model: one stored row that
+  breaks it turns every list page holding it into a 500, which is how a
+  bulk type change locked the collection list. `Literal` types are kept, so
+  a type or status the code has never heard of still fails loudly.
+- **Bulk edit checks the year rule for the type it sets.** To `mint_set` as
+  before; to `coin` or `note`, a selected piece with neither a year nor ND
+  (only a bar can be) is 422 `BULK_YEAR_REQUIRED` unless the same `set`
+  gives a year. A new type with a year rule needs its branch there, since
+  bulk edit skips `_apply_struck_date`.
+- **A converted year is range-checked where it is converted.**
+  `_apply_struck_date` refuses a date as struck that works out to year 0 or
+  outside `YEAR_MIN` to `YEAR_MAX` (the constants every year field uses);
+  on create the schema's own field rule already did.
+- **`NEVER_NULL` is derived, not listed.** It is every `ItemBase` field
+  whose type has no `None`, and `ItemUpdate` answers 422 to an explicit
+  `null` for any of them (a `PATCH` and a bulk `set` alike). A new required
+  field is covered when it is added to `ItemBase`.
+- **Every input is bounded by its column**, with the constants at the top of
+  `schemas.py` (`INT4_MAX`, `MONEY_MAX`, `WEIGHT_MAX_G`, `MINTAGE_MAX`,
+  `TagName`). SQLite raises nothing for a number or a text past its column,
+  so the tests can't find a missing bound; `tests/test_hardening.py` pins
+  the ones there are, and a new numeric or text field needs its bound and a
+  line there. Behind them, `main.py` turns a `sqlalchemy.exc.DataError`
+  into a 422 that repeats nothing of the statement, and `importing.run`
+  treats a row the database refuses as that row's error.
+- **`schemas.Currency` is the one currency input type**: trimmed, upper
+  case, three ASCII letters, else 422. Every schema that accepts a currency
+  uses it (items, estimates, sales, the run, import defaults); a new one
+  must too, because totals, the wish-list gap, and the converter all compare
+  currencies as written.
+- **`melt_on_save` keeps the refresh's rule.** It returns early when the
+  item's newest estimate isn't a melt estimate, before it reads the spot
+  cache, so a save never puts a melt value above a typed-in one or another
+  source's. A piece whose newest estimate is melt, or that has none, is
+  priced as before. Tests backdate the first estimate
+  (`test_valuation._backdate_estimates`): SQLite keeps whole seconds.
+- **The dashboard's request cache is per visit.** `Dashboard` calls
+  `forgetData()` in a state initializer, ahead of its own first `useData`
+  and every widget's, because the cache is module-level and outlived the
+  page. Anything else that reuses `dashboard/data.ts` outside the dashboard
+  has to decide when its data goes stale the same way. The e2e test for it
+  returns to the dashboard through the sidebar, never `page.goto`, which is
+  why the old tests couldn't see the bug.
+
 ## Releases
 
 
