@@ -8,6 +8,20 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Changed
+
+- **A shorter README.** It now says what Cabinet is and who it is for,
+  lists the features in six short groups and its limits in one, and starts
+  from the published images (`docker compose pull`, then `up -d
+  --no-build`). The full feature list moved to
+  [docs/features.md](docs/features.md), unchanged, with a new table of how
+  Cabinet compares with OpenNumismat, CoinManage, and Numista. The
+  exposure advisory is word for word what it was, in its own section after
+  the quick start, and the full list of environment variables is in
+  [docs/architecture.md](docs/architecture.md#configuration).
+
 ## [0.37.3] - 2026-11-09
 
 Found by a top-to-bottom review on 9 November 2026 and reproduced on a
