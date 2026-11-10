@@ -1,26 +1,28 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, ItemType, money, ShareItem, ShareManifest, sharePhotoUrl } from "../../api";
-import { BullionIcon, CoinIcon, NoteIcon } from "../../components/icons";
+import { api, money, ShareItem, ShareManifest, sharePhotoUrl } from "../../api";
+import { TypeIcon } from "../../components/item-types";
 
 const PAGE_SIZE = 100;
 
 /** The same convention item-hero.tsx uses for an item's title: bullion
- * leads with its issuer or country, everything else with country,
- * denomination, year, and the mint mark. */
+ * leads with its issuer or country, a set with its year, issuer or country,
+ * and name, everything else with country, denomination, year, and the mint
+ * mark. */
 export function shareItemLabel(item: ShareItem): string {
   if (item.type === "bullion") {
     return [item.issuer || item.country, item.denomination, item.year_label]
       .filter(Boolean)
       .join(" ");
   }
+  if (item.type === "mint_set") {
+    return [item.year_label, item.issuer || item.country, item.denomination]
+      .filter(Boolean)
+      .join(" ");
+  }
   const mint = item.mint_mark ? ` "${item.mint_mark}"` : "";
   return `${item.country} ${item.denomination}, ${item.year_label}${mint}`;
-}
-
-function typeIcon(type: ItemType) {
-  return type === "coin" ? <CoinIcon /> : type === "bullion" ? <BullionIcon /> : <NoteIcon />;
 }
 
 function matches(item: ShareItem, q: string): boolean {
@@ -90,7 +92,7 @@ export default function ShareGrid({ token, manifest }: { token: string; manifest
                 {photo ? (
                   <img src={sharePhotoUrl(token, photo.id, "thumb")} alt={photo.angle ?? "photo"} />
                 ) : (
-                  <div className="share-thumb-empty">{typeIcon(item.type)}</div>
+                  <div className="share-thumb-empty"><TypeIcon type={item.type} /></div>
                 )}
               </div>
               <div className="share-card-body">

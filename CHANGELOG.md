@@ -8,9 +8,56 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.37.1] - 2026-11-09
+
+### Fixed
+
+- **A coin imported from Numista's export** kept its nickname in the
+  denomination (`¼ Dollar "Washington Quarter"` instead of `¼ Dollar`)
+  when the export had no Face value column, and lost its type's catalog
+  number (KM# 164a) when the issue had references of its own. The
+  denomination now comes from the title, with the nickname as the series,
+  and both reference columns are read.
+
+## [0.37.0] - 2026-11-09
+
+### Added
+
+- **Proof and mint sets**, a fourth item type
+  ([SPEC_0370](docs/specs/SPEC_0370.md), migration `0023`): one item for a
+  set as the mint issued it, proof, uncirculated, or specimen. A set has
+  its issuing mint (the authority, such as the United States Mint), its
+  year of issue (required; never ND), a set name suggested from its kind
+  and metal (with the names already used offered as you type), how many
+  pieces it holds, its packaging (sealed, complete, or incomplete, and
+  whether the box and certificate are kept), and the number of sets issued.
+  It takes no grade, and neither Numista nor PCGS prices a set (their APIs
+  have none to give); the sales log and a typed-in value still work. The
+  silver or gold in a set gives it a melt value, and it counts in the
+  bullion stack only when ticked. The list marks a set with its own shape,
+  shows its packaging in the Grade column, and filters by type and
+  packaging; bulk edit can tick or untick the stack. A Numista set number
+  (`S2077`) links to its page, and a PCGS set number to CoinFacts. The
+  dashboard counts sets, the type breakdown and the metrics gauge include
+  them, and the data-health widget lists a set with no issuing mint.
+- Numista's collection export brings each set in as one proof or mint set,
+  grouped by its "From set" title wherever its rows are sorted, with the
+  coins listed in its notes ("Contents: N#… year mint, …") and the price
+  summed over them. The preview says what the export can't carry (the
+  issuing mint, the Numista set number, the metal), and a checkbox on each
+  set imports it as its coins instead. A spreadsheet's Type column reading
+  "proof set", "mint set", "uncirculated set", or "specimen set" makes a set.
+- The demo collection gains a 2019 Silver Proof Set, with the United States
+  Mint's own public domain photo (17 items now).
 
 ### Changed
+
+- The CSV and Excel exports carry a set's `piece_count`, `packaging`,
+  `has_box`, `has_coa`, and `count_in_stack`. An export from an older
+  version imports as before; **an export holding a set doesn't import into
+  v0.36.0 or older**, which refuse the type.
+- A share link shows a set's pieces and packaging. Whether it counts in
+  the stack is never shown.
 
 - Numista's auction sales work with a free key: Numista opened its sales
   records to the free plan in September 2026. Settings, the sales log, the
@@ -23,6 +70,8 @@ applies them itself on startup; for earlier releases, run
 
 ### Fixed
 
+- The import preview printed a proof or specimen coin's grade as Mint State
+  (`MS-60` from Numista's UNC) when it would be saved as `PR-60`.
 - A share link with values on could show a value from Numista, or a comps
   median built on Numista's auction sales, to anyone holding the link.
   Numista's API license lets an individual keep its data for a private
@@ -1992,6 +2041,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.1...HEAD
-[0.9.1]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.9.0...v0.9.1
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.37.1...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0

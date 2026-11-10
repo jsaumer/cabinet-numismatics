@@ -30,9 +30,11 @@ def _owned(db: Session) -> list[Item]:
 
 def quality_stats(db: Session, currency: str, strategy: str, preferred_source: str | None) -> dict:
     """Certified vs. raw counts and value, and a breakdown by grading
-    service, for owned items. "Certified" means a cert service or number."""
+    service, for owned items. "Certified" means a cert service or number.
+    Sets are left out: nothing certifies or grades a set as a unit, so they
+    would only lower the certified share (SPEC_0370)."""
     conv = Converter(db, currency)
-    owned = _owned(db)
+    owned = [item for item in _owned(db) if item.type != "mint_set"]
     certified = {"items": 0, "value": 0.0}
     raw = {"items": 0, "value": 0.0}
     by_service: dict[str, dict] = defaultdict(lambda: {"count": 0, "estimated_value": 0.0})
@@ -106,7 +108,13 @@ def value_spread(db: Session, currency: str, strategy: str, preferred_source: st
 # key, label, and a predicate (item) -> bool for each data-health check.
 _CHECKS = [
     ("no_photo", "No photo", lambda i: not i.photos),
-    ("no_grade", "No grade", lambda i: i.grade_id is None),
+    # A set has no grade by design; its issuing mint is what it can miss.
+    ("no_grade", "No grade", lambda i: i.grade_id is None and i.type != "mint_set"),
+    (
+        "no_issuing_mint",
+        "A set with no issuing mint",
+        lambda i: i.type == "mint_set" and not (i.issuer or "").strip(),
+    ),
     ("no_cost", "No cost basis", lambda i: i.cost_basis is None),
     ("no_value", "No value estimate", lambda i: not i.estimates),
     (
@@ -124,8 +132,8 @@ _CHECKS = [
 
 def data_health(db: Session) -> dict:
     """Owned items missing something worth having: a photo, a grade, a cost,
-    a value estimate, weight/fineness for a precious metal, storage, or a
-    catalogue reference. Each check lists the first 5 items."""
+    a value estimate, weight/fineness for a precious metal, storage, a
+    catalog reference, or for a set its issuing mint. Each check lists the first 5 items."""
     owned = (
         db.execute(
             select(Item)

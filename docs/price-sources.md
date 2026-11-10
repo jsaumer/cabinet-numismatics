@@ -170,7 +170,7 @@ Requirements and limits:
   self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
   does not cover publishing the data, making it available to third parties,
   or running a public service, which is why a share link never shows a
-  value from Numista (v0.36.1). Applications must also name Numista as the
+  value from Numista (v0.37.0). Applications must also name Numista as the
   source and show the N# beside a catalog search result (§4): Cabinet labels
   a value "Numista value" and every search hit carries its N#. A stale
   entry is used when the upstream fails. An item missing its prerequisites

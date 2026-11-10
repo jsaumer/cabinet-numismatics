@@ -6,14 +6,14 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.36.0-informational)
+![Version](https://img.shields.io/badge/version-0.37.1-informational)
 
 A self-hosted, single-user web application for cataloging a coin and paper
 money collection, managing photos of each item, and tracking estimated market
 value over time. Runs as a small Docker Compose stack; no external accounts
 or API keys required.
 
-**Status: v0.36.0 released.** 1.0 will mean a stable HTTP API; until then
+**Status: v0.37.1 released.** 1.0 will mean a stable HTTP API; until then
 the API may still change. See the [roadmap](docs/roadmap.md) for what's
 built and what's next, and the [changelog](CHANGELOG.md) for release detail.
 
@@ -72,6 +72,14 @@ Dark is the default; the header toggle switches to light and remembers it.
   in grams or troy ounces; the product name is suggested from weight,
   metal, and shape until you type your own. Filled in from Numista's
   bullion catalog too.
+- **Proof and mint sets**: a fourth item type for a set as the mint issued
+  it (proof, uncirculated, or specimen), kept as one piece: the issuing
+  mint, the year, a set name suggested from its kind and metal, how many
+  pieces it holds, and its packaging (sealed, complete, or incomplete, with
+  or without the box and certificate). The silver or gold in it gives it a
+  melt value, and it counts in the bullion stack only if you tick it. Enter
+  a set either as one set or as its coins, never both, or its coins count
+  twice.
 - **Dates as struck**: a coin dated in another calendar (Islamic, Persian,
   Thai Buddhist, Hebrew, Japanese eras, Vikram Samvat, Saka, Minguo, Chula
   Sakarat, Rattanakosin, Ethiopian) keeps the year as written, and the
@@ -205,7 +213,8 @@ Dark is the default; the header toggle switches to light and remembers it.
 - **Bullion stack**: a Stack page with fine troy ounces, melt value, cost per
   ounce (also the break-even spot price), gain or loss, and the premium paid
   over spot at purchase, by metal and per item, scopeable by tag, listing
-  what it leaves out and why (no weight, no fineness). Purchase-day spot is
+  what it leaves out and why (no weight, no fineness); a proof or mint set
+  counts only when ticked. Purchase-day spot is
   looked up automatically for purchases from 2 March 2024 and can be typed
   in for older ones; spot-price threshold alerts fire through the existing
   webhook.
@@ -231,7 +240,9 @@ Dark is the default; the header toggle switches to light and remembers it.
 - Import from other tools, with a preview first: your Numista collection
   (straight from your account), Numista's export file, OpenNumismat
   collections with their photos, or any spreadsheet with its columns matched
-  to Cabinet's fields. Re-importing skips what's already here.
+  to Cabinet's fields. The sets in Numista's export come in as one proof or
+  mint set each, with their coins listed in the notes, or as their coins if
+  you choose. Re-importing skips what's already here.
 - Printable insurance report with photos, certs, provenance, and totals,
   exported to PDF via the browser's print dialog.
 
@@ -337,7 +348,7 @@ for a signed-in browser. After pulling a new version, run
 whether the schema is current. To run the published images instead of
 building, see [docs/deployment.md](docs/deployment.md).
 
-**Want something to look at first?** Load a small demo collection (16 items
+**Want something to look at first?** Load a small demo collection (17 items
 across several countries, decades, and grades, with value history, and
 public domain photos from Wikimedia Commons that Cabinet fetches while it
 seeds; `--no-photos` skips them). Mint a
@@ -384,7 +395,7 @@ from `.env.example`).
 | `TRUSTED_ASSERTION_ISSUER` | Optional: the `iss` the gateway's assertion must carry |
 | `TRUSTED_ASSERTION_AUDIENCE` | Optional: the `aud` the gateway's assertion must carry; never empty |
 | `SSO_CA_FILE`     | Optional: extra CA certificates trusted for a single sign-on provider or trusted-header gateway behind a local certificate authority |
-| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.36.0` |
+| `TAG`             | Optional, default `latest`: the image tag Compose names its builds with and the Swarm stack pulls, e.g. `0.37.1` |
 
 External data sources (both free, keyless, and only contacted when needed,
 with cached fallbacks): gold-api.com for metal spot prices and

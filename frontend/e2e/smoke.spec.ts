@@ -469,6 +469,49 @@ test("a silver piece counts toward the stack", async ({ page }) => {
   await deleteForGood(page, url, country);
 });
 
+// SPEC_0370: a set's silver gives it a fine weight (and so a melt value,
+// which needs a spot price; pytest covers that, since this suite makes no
+// network call), but it counts in the stack only once ticked.
+test("a silver proof set has its fine weight, and counts in the stack only when ticked", async ({ page }) => {
+  acceptDialogs(page);
+  const mint = `E2E Mint ${Date.now()}`;
+  await page.goto("/items/new?type=mint_set");
+  await expect(selectIn(page, /^Type/).locator("option:checked")).toHaveText("Proof or mint set");
+  await expect(selectIn(page, /^Kind/).locator("option:checked")).toHaveText("Proof set");
+  await page.getByLabel("Country *").fill("United States");
+  await page.getByLabel("Issuing mint *").fill(mint);
+  await page.getByLabel("Year of issue *").fill("2023");
+  await page.getByLabel("Pieces in the set").fill("10");
+  await selectIn(page, /^Metal/).selectOption("silver");
+  await expect(page.getByLabel("Set name *")).toHaveValue("Silver Proof Set");
+  await selectIn(page, /^Precious metal/).selectOption("oz");
+  await page.getByLabel("Precious metal (oz)").fill("3");
+  await page.getByLabel("Fineness", { exact: true }).fill("0.999");
+  const stackBox = page.getByLabel("Count in the bullion stack");
+  await expect(stackBox).not.toBeChecked();
+  await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
+  const url = new URL(page.url()).pathname;
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(`2023 ${mint} Silver Proof Set`);
+  await expect(page.getByText("2.997 oz")).toBeVisible(); // 3 oz of .999 silver
+
+  // Unticked: not in the stack, and not listed as left out either.
+  await page.goto("/stack");
+  await expect(page.getByText(mint)).toHaveCount(0);
+
+  await page.goto(`${url}/edit`);
+  await page.getByLabel("Count in the bullion stack").check();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`${url}$`));
+
+  await page.goto("/stack");
+  await expect(page.getByRole("heading", { level: 2, name: "Silver" })).toBeVisible();
+  await expect(page.getByRole("row", { name: new RegExp(mint) })).toContainText("2.997");
+
+  await deleteForGood(page, url, mint);
+});
+
 test("delete a stored backup through the password dialog", async ({ page }) => {
   test.setTimeout(120_000);
   acceptDialogs(page);
