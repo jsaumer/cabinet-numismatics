@@ -7,9 +7,9 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.37.1 (proof and mint sets, with Numista's
-2026 terms, and a fix to the Numista export import) is the latest
-published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.37.2 (proof and mint sets, with Numista's
+2026 terms, a fix to the Numista export import, and Python 3.15) is the
+latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -800,6 +800,8 @@ pieces turned up, each shipped as a small release:
 - ✔ v0.37.1: a coin from Numista's export kept its nickname in the
   denomination (`¼ Dollar "Washington Quarter"`) and lost the KM# in the
   export's Reference column; found importing the owner's own export.
+- ✔ v0.37.2: the backend image on Python 3.15, CI testing on it, and
+  dependency updates.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
