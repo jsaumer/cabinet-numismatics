@@ -646,7 +646,7 @@ the one Debian ships for the image's release (the build fails if
 in the image's own Python:
 
 ```bash
-docker run --rm -v "$PWD/backend:/src" -w /src python:3.14-slim sh -c \
+docker run --rm -v "$PWD/backend:/src" -w /src python:3.15-slim sh -c \
   "pip install -q pip-tools && pip-compile -q --generate-hashes --strip-extras --no-header -o requirements.txt pyproject.toml"
 ```
 

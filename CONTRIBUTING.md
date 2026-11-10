@@ -141,7 +141,7 @@ and data migrations.
 `.github/workflows/ci.yml`, on every push to `main` and every pull request:
 
 - **backend**: `ruff check`, `ruff format --check`, and `pytest` on Python
-  3.10 (the floor in `pyproject.toml`) and 3.14 (what the image runs).
+  3.10 (the floor in `pyproject.toml`) and 3.15 (what the image runs).
 - **frontend**: `npm ci` and `npm run build` (typecheck and build) on
   Node 22.
 - **stack**: builds and starts the compose stack with the CI-only mock
