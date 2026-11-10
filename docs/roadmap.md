@@ -931,7 +931,13 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   Sign-in, and a share page are new since), read as a stranger installing
   for the first time: the
   exposure advisory first, then Compose in one sitting, then the Swarm
-  file. Last, so it describes the 1.0 build.
+  file. Last, so it describes the 1.0 build. A first pass on 9 November
+  2026 condensed the README to what a newcomer needs (what it is, the
+  feature groups, its limits, a quick start from the published images,
+  the exposure advisory after it) and moved the full feature list, with
+  a comparison against OpenNumismat, CoinManage, and Numista, to
+  [features.md](features.md); the screenshots and the final read-through
+  are still owed.
 - Then v1.0.0 itself: the version bump, a changelog entry that states
   the API stability promise, a GitHub Release, and the `latest` images.
   No code change of its own.

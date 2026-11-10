@@ -1,7 +1,9 @@
 # Screenshots
 
-These illustrate the README. They are not used by the application. Every
-page is captured twice, dark first because dark is Cabinet's default:
+These illustrate the README, which shows four of them (the dashboard, the
+collection, and a piece in dark and in light) and links here for the rest.
+They are not used by the application. Every page is captured twice, dark
+first because dark is Cabinet's default:
 
 | Files | Page |
 |-------|------|

@@ -43,7 +43,7 @@ docker-compose.yaml      single-host stack (build + run)
 deploy/docker-stack.yaml Swarm stack (pulled images)
 .env.example / .env (gitignored)
 README.md, CLAUDE.md (this file), CHANGELOG.md
-docs/                    architecture, data-model, api, price-sources,
+docs/                    features, architecture, data-model, api, price-sources,
                          deployment, security, backup-restore, monitoring,
                          live-validation, roadmap, implementation-notes,
                          claude-code; specs/ holds build contracts;
@@ -61,7 +61,9 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 
 - Proper git project with maintained documentation. When behavior changes,
   update every affected document in the same commit, not only the changelog:
-  `README.md` (features), `docs/api.md`, `docs/roadmap.md` (what shipped,
+  `docs/features.md` (the full feature list, and its comparison table
+  when a row changes), `README.md` (the short version: a bullet only when
+  the feature is worth one), `docs/api.md`, `docs/roadmap.md` (what shipped,
   what's next), `docs/implementation-notes.md`, `frontend/README.md`, and
   the topic doc it touches. Before cutting a release, reread those against
   the diff since the last tag; the owner expects the docs to match the
