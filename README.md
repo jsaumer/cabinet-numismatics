@@ -451,7 +451,7 @@ Run from Git Bash on Windows. Copy backups off the machine. See
   the Playwright smoke tests against a running stack. See
   [frontend/README.md](frontend/README.md).
 
-CI runs ruff and the backend test suite on Python 3.10 and 3.14, a frontend
+CI runs ruff and the backend test suite on Python 3.10 and 3.15, a frontend
 typecheck and build, and a full compose stack job on every push and pull
 request: the schema migrating itself, an API smoke test, a backup → restore
 drill (with `restore.sh`, then from inside the app), and Playwright tests of
