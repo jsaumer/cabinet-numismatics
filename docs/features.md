@@ -188,6 +188,8 @@ most often use instead.
   key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
+  A text cell that a spreadsheet would run as a formula is exported as plain
+  text.
 - Deleting is recoverable: items go to a trash with their photos, documents,
   values, and history, and restore exactly as they were; the trash empties
   itself after 30 days (adjustable).
