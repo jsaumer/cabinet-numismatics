@@ -3,7 +3,7 @@ import io
 import json
 import uuid
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -251,6 +251,37 @@ def _check_grade(db: Session, grade_id: int | None) -> None:
 def _check_set(db: Session, set_id: int | None) -> None:
     if set_id is not None and db.get(ItemSet, set_id) is None:
         raise HTTPException(status_code=422, detail=f"Unknown set_id {set_id}")
+
+
+def _changed(old, new) -> bool:
+    """Whether `new` would change the stored `old`. A stored Decimal is
+    compared at its own scale: JSON brings 31.1035 as a float, which never
+    equals Decimal("31.1035"), so a form that sent every field back unchanged
+    recorded an edit to each number and re-stamped whatever hangs off one."""
+    if isinstance(old, Decimal) and isinstance(new, int | float) and not isinstance(new, bool):
+        try:
+            return old != Decimal(str(new)).quantize(Decimal(1).scaleb(old.as_tuple().exponent))
+        except InvalidOperation:
+            return True
+    return old != new
+
+
+# What a spreadsheet program reads as the start of a formula. A cell that
+# begins with one is written to the CSV behind an apostrophe (the usual guard),
+# and Cabinet's own import takes that apostrophe off again.
+FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    if isinstance(value, str) and value.startswith(FORMULA_STARTS):
+        return "'" + value
+    return value
+
+
+def _csv_unsafe(value):
+    if isinstance(value, str) and value.startswith("'") and value[1:].startswith(FORMULA_STARTS):
+        return value[1:]
+    return value
 
 
 def _jsonable(value):
@@ -554,7 +585,8 @@ def export_csv(
         buf.seek(0)
         buf.truncate(0)
         for item in rows:
-            writer.writerow(_export_row(item, strategy, preferred_source, converter))
+            row = _export_row(item, strategy, preferred_source, converter)
+            writer.writerow([_csv_safe(value) for value in row])
             yield buf.getvalue()
             buf.seek(0)
             buf.truncate(0)
@@ -602,6 +634,11 @@ def export_xlsx(
     for item in rows:
         row = _export_row(item, strategy, preferred_source, converter)
         ws.append([str(v) if isinstance(v, uuid.UUID) else v for v in row])
+        # openpyxl stores any text that starts with "=" as a formula. These
+        # are the collection's own words (a note, a variety), never formulas.
+        for cell in ws[ws.max_row]:
+            if cell.data_type == "f":
+                cell.data_type = "s"
     for column, header in zip(ws.columns, CSV_COLUMNS, strict=True):
         width = max(len(header), *(len(str(c.value or "")) for c in column))
         ws.column_dimensions[column[0].column_letter].width = min(width + 2, 40)
@@ -727,7 +764,9 @@ def _resolve_grade(db: Session, scale: str, code: str) -> tuple[Grade, str | Non
 def _row_to_payload(row: dict, db: Session) -> tuple[ItemCreate, int | None]:
     """Map a CSV row (export format) to an ItemCreate + resolved grade_id."""
     data: dict = {
-        k: v for k, v in row.items() if k and k not in IMPORT_IGNORED and v not in (None, "")
+        k: _csv_unsafe(v)
+        for k, v in row.items()
+        if k and k not in IMPORT_IGNORED and v not in (None, "")
     }
     # "ND", "ND (1951)", or an empty cell (an older export has no `year_nd`).
     year, undated = importing.parse_year(data.pop("year", None))
@@ -941,7 +980,7 @@ def update_item(item_id: uuid.UUID, payload: ItemUpdate, db: Session = Depends(g
     _apply_struck_date(item, fields)
     for field, value in fields.items():
         old = getattr(item, field)
-        if old != value:
+        if _changed(old, value):
             changes[field] = [_jsonable(old), _jsonable(value)]
         setattr(item, field, value)
     _sync_derived(item, changes)
@@ -1076,7 +1115,7 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
         if "year" not in fields and any(i.year is None and not i.year_nd for i in items):
             raise HTTPException(status_code=422, detail=BULK_YEAR_REQUIRED)
     for item in items:
-        touched = {f for f, value in fields.items() if getattr(item, f) != value}
+        touched = {f for f, value in fields.items() if _changed(getattr(item, f), value)}
         for field, value in fields.items():
             setattr(item, field, value)
         _sync_derived(item, touched)

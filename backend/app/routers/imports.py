@@ -5,6 +5,7 @@ while the column mapping or defaults change, then imported. The Numista
 account import needs no file: it reads the key owner's collection.
 """
 
+import csv
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
@@ -151,6 +152,14 @@ def _read(upload_id: str, options: ImportOptions, db: Session):
                     mapping=mapping,
                     fields=[ImportField(key=k, label=label) for k, label, _, _ in formats.FIELDS],
                 )
+    except csv.Error as exc:
+        # A cell past the csv module's limit, or a NUL byte: not a text file
+        # this can read row by row.
+        if reader is not None:
+            reader.close()
+        raise HTTPException(
+            status_code=422, detail=f"The file can't be read as a spreadsheet: {exc}"
+        ) from None
     except (formats.FormatError, sqlite3.DatabaseError, UnicodeDecodeError) as exc:
         if reader is not None:
             reader.close()

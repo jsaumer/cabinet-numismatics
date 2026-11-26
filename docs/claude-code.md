@@ -42,7 +42,7 @@ or Playwright outside a container.
 Claude Code reads a `CLAUDE.md` file at the repository root at the start of
 every session and treats it as persistent context. This repo ships one:
 architecture, repo layout, conventions, build and test commands, the current
-status, and the rules that bite most often. It has grown to about 350
+status, and the rules that bite most often. It has grown to about 400
 lines; keep it from growing further, and move area rules to
 docs/implementation-notes.md. It is loaded into context every session, and
 shorter, concrete instructions are followed more reliably.

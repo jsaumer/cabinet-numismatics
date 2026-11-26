@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { MoonIcon, SunIcon } from "./components/icons";
+import { PageErrorBoundary } from "./components/error-boundary";
 import { Logo } from "./components/logo";
 import { Sidebar } from "./components/sidebar";
 import { applyPalette, applyTheme, initialTheme } from "./components/theme";
@@ -39,6 +40,19 @@ function Home() {
 /** Shown while the boot check (GET /api/auth/state, then GET /api/auth/me)
  * is still running, and while a restore is in progress: no nav chrome, just
  * the brand, since there is nothing from the collection to show yet. */
+/** An address that names no page. */
+function NotFound() {
+  return (
+    <div className="card">
+      <h1>There is no page here</h1>
+      <p className="muted">The address may be mistyped, or the page has moved.</p>
+      <p>
+        <Link to="/collection">Go to the collection</Link> · <Link to="/">Dashboard</Link>
+      </p>
+    </div>
+  );
+}
+
 function BootScreen({ text }: { text: string }) {
   return (
     <div className="auth-page">
@@ -126,6 +140,7 @@ function AuthedApp({
   setTheme: (fn: (t: "light" | "dark") => "light" | "dark") => void;
 }) {
   const { me, signOut } = useAuth();
+  const location = useLocation();
 
   // The server holds the theme; the copy in this browser only covers the
   // moments before sign-in. A failed read keeps whatever is showing.
@@ -174,6 +189,7 @@ function AuthedApp({
       <main>
         <FailedSignInsNotice />
         <ConfirmReturnNotice />
+        <PageErrorBoundary resetKey={location.pathname}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/collection" element={<ItemList />} />
@@ -194,7 +210,9 @@ function AuthedApp({
           <Route path="/items/:id/edit" element={<ItemForm />} />
           <Route path="/setup" element={<Navigate to="/" replace />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
+        </PageErrorBoundary>
       </main>
       </div>
     </>
@@ -263,6 +281,11 @@ function Gate() {
   if (status === "loading") return <BootScreen text="Loading…" />;
   if (status === "restoring") {
     return <BootScreen text="A restore is running. This page checks again every few seconds." />;
+  }
+  if (status === "unreachable") {
+    return (
+      <BootScreen text="Cabinet isn't answering yet. It may still be starting; this page checks again every few seconds." />
+    );
   }
   if (status === "setup") {
     return (

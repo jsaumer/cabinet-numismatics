@@ -293,6 +293,14 @@ def test_inspect_rejects_bad_archives(client, coin, fake_dump, tmp_path):
         "schema revision": _rewrite(
             good, work / "norev.zip", manifest=lambda m: m.update(schema_revision=None)
         ),
+        # The archive's own format: a later one is refused by name, before a
+        # member is read as if it were today's.
+        "archive format 2": _rewrite(
+            good, work / "format2.zip", manifest=lambda m: m.update(format_version=2)
+        ),
+        "format version is unreadable": _rewrite(
+            good, work / "formatx.zip", manifest=lambda m: m.update(format_version="1")
+        ),
     }
     for expected, path in cases.items():
         resp = _upload(client, path)
@@ -301,6 +309,14 @@ def test_inspect_rejects_bad_archives(client, coin, fake_dump, tmp_path):
         assert isinstance(detail, str) and expected in detail, detail
     # nothing rejected stays staged
     assert list((backups / ".restore-staging").iterdir()) == []
+
+
+def test_an_archive_that_names_no_format_version_reads_as_the_first(client, coin, fake_dump):
+    _, _, backups = _dirs()
+    good = backups / _stored(client)
+    plain = backups / "cabinet-backup-20260102-000000.zip.age"
+    _rewrite(good, plain, manifest=lambda m: m.pop("format_version"))
+    assert client.post(f"/api/restore/inspect?name={plain.name}").status_code == 200
 
 
 def test_inspect_rejects_unsafe_tar_members(client, fake_dump, tmp_path):

@@ -274,11 +274,13 @@ def pg_tool(name: str, server_major: int) -> str:
                 return str(PG_CLIENT_ROOT / str(major) / name)
         raise BackupError(
             f"PostgreSQL {server_major} is newer than this image's clients "
-            f"({', '.join(map(str, majors)) or 'none'}); use scripts/backup.sh instead."
+            f"({', '.join(map(str, majors)) or 'none'}). Upgrade Cabinet to a release "
+            "that carries a client for it; until then, dump the database with the "
+            "server's own pg_dump."
         )
     found = shutil.which(name)  # running outside the container image
     if found is None:
-        raise BackupError(f"{name} is not installed; use scripts/backup.sh instead.")
+        raise BackupError(f"{name} is not installed: backups run inside the backend image.")
     return found
 
 
@@ -533,6 +535,17 @@ def verify_archive(path: Path) -> dict:
                 archive_keys.verify(manifest, sums)
             except (archive_keys.NotOurs, archive_keys.KeyUnavailable) as exc:
                 raise BackupError(str(exc)) from None
+            # Only now is the manifest known to be this deployment's own, so
+            # only now does its version mean anything. An archive that says
+            # nothing (none do today) is read as version 1.
+            version = manifest.get("format_version", 1)
+            if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+                raise BackupError("Not a Cabinet backup archive: its format version is unreadable.")
+            if version > FORMAT_VERSION:
+                raise BackupError(
+                    f"This archive was made by a newer Cabinet (archive format {version}; this "
+                    f"one reads up to {FORMAT_VERSION}). Upgrade Cabinet first, then restore."
+                )
             # Exactly the members the MAC covers, each once, and nothing else:
             # zipfile reads the last of two same-named entries and unzip keeps
             # the first, so an extra or doubled member could be restored by a

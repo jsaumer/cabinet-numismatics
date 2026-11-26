@@ -407,7 +407,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,270 tests as of v0.33.4) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,400 tests as of v0.37.5) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.

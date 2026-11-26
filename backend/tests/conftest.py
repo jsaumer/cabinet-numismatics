@@ -66,9 +66,11 @@ def _fresh_monitoring_state():
     """Alert outcomes, the metrics cache, the sign-in throttles, and the
     sharing switch live in memory, per process."""
     from app.auth import audit, notify, oidc, throttle
-    from app.services import alerts, metrics, restore, share
+    from app.services import alerts, currency, metrics, pricing, restore, share
 
     alerts.reset_memory()
+    currency.reset_memory()
+    pricing.reset_memory()
     metrics.reset_cache()
     restore.reset_memory()
     share.reset_memory()

@@ -136,11 +136,18 @@ def check(*buckets: tuple[str, str]) -> None:
         raise Throttled(longest)
 
 
-def attempt(*buckets: tuple[str, str]) -> None:
+def attempt(*buckets: tuple[str, str], count_global: bool = False) -> None:
     """Check these buckets and, in the same step under the lock, count this
     attempt as a failure in each: requests queued behind the password check
     all see the attempts ahead of them, so a burst can't all read the old
-    count. `succeed` takes it back; a failure has nothing more to count."""
+    count. `succeed` takes it back; a failure has nothing more to count.
+
+    With `count_global` the global limit is part of the same step, in that
+    order: a bucket that must wait refuses first, spending nothing of the
+    global limit (or one hammered username would use it up for everyone),
+    and an attempt the global limit refuses is counted in no bucket (or a
+    flood of made-up names and addresses, nearly all of it refused, would
+    still fill the map and push the real account's bucket out of it)."""
     _apply_reset_flag()
     t = common.monotonic()
     with _lock:
@@ -151,6 +158,12 @@ def attempt(*buckets: tuple[str, str]) -> None:
                 longest = max(longest, _wait(kind, entry, t))
         if longest > 0:
             raise Throttled(longest)
+        if count_global:
+            while _checks and t - _checks[0] >= 60:
+                _checks.popleft()
+            if len(_checks) >= GLOBAL_PER_MINUTE:
+                raise Throttled(_checks[0] + 60 - t)
+            _checks.append(t)
         for kind, value in buckets:
             key = _key(kind, value)
             entry = _live(key, t) or _Entry()

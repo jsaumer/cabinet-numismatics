@@ -133,13 +133,23 @@ def test_import_photo_from_url(client, coin, monkeypatch):
     assert client.post(url, json={"url": "https://example.com/page"}).status_code == 415
 
 
+class _Peer:
+    def __init__(self, address):
+        self.address = address
+
+    def get_extra_info(self, name):
+        return (self.address, 443) if name == "server_addr" else None
+
+
 class FakeResponse:
     """Just enough of an httpx streaming response for fetch_remote_image."""
 
-    def __init__(self, status=200, body=b"", location=None):
+    def __init__(self, status=200, body=b"", location=None, peer="93.184.216.34"):
         self.status_code = status
         self.body = body
         self.headers = {"location": location} if location else {}
+        # The address the connection was made to, as httpx reports it.
+        self.extensions = {"network_stream": _Peer(peer)} if peer else {}
 
     @property
     def is_redirect(self):
@@ -220,6 +230,54 @@ def test_fetch_remote_image_refuses_the_local_network(monkeypatch):
     _serve(monkeypatch, {"https://a.example/x": FakeResponse(302, location="http://internal/s")})
     with pytest.raises(ValueError, match="private"):
         photo_store.fetch_remote_image("https://a.example/x")
+
+
+def test_fetch_remote_image_checks_the_address_it_connected_to(monkeypatch):
+    """DNS rebinding: the name answers the check with a public address and
+    the connection with a private one. The connection's own address decides,
+    before the body is read."""
+    monkeypatch.setattr(photo_store.urllib.request, "getproxies", lambda: {})
+    _resolve(monkeypatch, {"rebind.example": "93.184.216.34"})
+    read = []
+
+    class Inside(FakeResponse):
+        def iter_bytes(self):
+            read.append(True)
+            yield b"what the inside answered"
+
+    for peer in ("10.0.0.5", "127.0.0.1", "172.18.0.3", "::1", "64:ff9b::a00:5", None):
+        _serve(monkeypatch, {"http://rebind.example/p.jpg": Inside(200, peer=peer)})
+        with pytest.raises(ValueError, match="private"):
+            photo_store.fetch_remote_image("http://rebind.example/p.jpg")
+        assert read == [], peer
+
+    # A NAT64 address maps onto any IPv4 address: refused at the look-up too.
+    _resolve(monkeypatch, {"nat64.example": "64:ff9b::c0a8:105"})
+    with pytest.raises(ValueError, match="private"):
+        photo_store.fetch_remote_image("http://nat64.example/p.jpg")
+
+    # Behind an outbound proxy the peer is the proxy; the look-up is the check.
+    _resolve(monkeypatch, {"rebind.example": "93.184.216.34"})
+    monkeypatch.setattr(photo_store.urllib.request, "getproxies", lambda: {"http": "http://p:3128"})
+    _serve(monkeypatch, {"http://rebind.example/p.jpg": FakeResponse(200, b"ok", peer="10.0.0.9")})
+    assert photo_store.fetch_remote_image("http://rebind.example/p.jpg") == b"ok"
+
+
+def test_an_image_with_too_many_pixels_is_refused_not_a_500(client, coin, monkeypatch):
+    from PIL import Image
+
+    url = f"/api/items/{coin['id']}/photos"
+    monkeypatch.setattr(photo_store, "MAX_PIXELS", 60 * 40 - 1)
+    over = client.post(url, files={"file": ("big.png", image_bytes(), "image/png")})
+    assert over.status_code == 415
+    assert "too large" in over.json()["detail"]
+
+    # Past Pillow's own ceiling it raises an error of its own, which escaped.
+    monkeypatch.setattr(photo_store, "MAX_PIXELS", 64_000_000)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 100)
+    bomb = client.post(url, files={"file": ("bomb.png", image_bytes(), "image/png")})
+    assert bomb.status_code == 415
+    assert "too large" in bomb.json()["detail"]
 
 
 def test_fetch_remote_image_limits(monkeypatch):

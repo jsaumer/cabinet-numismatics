@@ -423,7 +423,7 @@ def refuse_auth(dump: Path, server_major: int) -> None:
             raise RestoreError(AUTH_REFUSED)
 
 
-def _server_major(engine: Engine) -> int:
+def server_major(engine: Engine) -> int:
     with engine.connect() as conn:
         return (conn.dialect.server_version_info or (0,))[0]
 
@@ -1315,7 +1315,7 @@ def _run(restore_id: str, entry: dict, engine: Engine) -> None:
 
             _step("database")
             dump = extract_dump(archive, restore_id)
-            refuse_auth(dump, _server_major(engine))  # again, from the file about to be used
+            refuse_auth(dump, server_major(engine))  # again, from the file about to be used
             if _swaps_photos(manifest):
                 # The archive's photos may carry metadata: the pass after the
                 # swap cleans them, and a restart before then runs one too.

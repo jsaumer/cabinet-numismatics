@@ -195,6 +195,12 @@ rules that bite most often:
   `tests/test_hardening.py`), a currency input is `schemas.Currency`, and
   `pricing.melt_on_save` never adds a melt value above a typed-in one or
   another source's. See "Review fixes" in the implementation notes.
+- An outbound fetch that failed is not retried for two minutes (rates and
+  spot prices; stale stands in), a free-text export cell goes through
+  `items._csv_safe`, history rows come from `items._changed`, and
+  `restore.sh` restores the database only through
+  `python -m app.cli restore-database`, never `pg_restore` itself. See
+  "Review fixes, second batch" in the implementation notes.
 - `item.year` can be `None`: an undated piece is `year_nd` true, with an
   optional attributed year. Guard `None` anywhere that does arithmetic on
   it, and print `year_label` (`"1922"`, `"ND"`, `"ND (1922)"`), never `year`

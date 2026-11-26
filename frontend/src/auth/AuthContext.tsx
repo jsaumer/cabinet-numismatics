@@ -3,7 +3,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useState 
 import { api, ApiError, AuthState, Me, setUnauthorizedHandler } from "../api";
 import { storeFailedNotice } from "./failedNotice";
 
-export type AuthStatus = "loading" | "restoring" | "setup" | "anon" | "authed";
+export type AuthStatus = "loading" | "restoring" | "unreachable" | "setup" | "anon" | "authed";
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -52,9 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("restoring");
         return;
       }
-      // A dropped connection or a restarting proxy: treat it the same as a
-      // restore in progress and try again shortly.
-      setStatus("restoring");
+      // Anything else (a dropped connection, the proxy's 502 while the
+      // backend is still starting or migrating): try again shortly, and say
+      // that, not that a restore is running.
+      setStatus("unreachable");
       return;
     }
     try {
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [check]);
 
   useEffect(() => {
-    if (status !== "restoring") return;
+    if (status !== "restoring" && status !== "unreachable") return;
     const timer = window.setTimeout(check, RESTORE_RETRY_MS);
     return () => window.clearTimeout(timer);
   }, [status, check]);

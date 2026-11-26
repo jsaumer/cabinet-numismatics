@@ -17,7 +17,15 @@ if [ "${1:-}" = "--data-only" ]; then
 fi
 DEST="${1:-backups}"
 mkdir -p "$DEST"
-NAME="cabinet-backup-$(date -u +%Y%m%d-%H%M%S)$([ ${#FLAGS[@]} -gt 0 ] && echo -data).zip.age"
+# The suffix is set on its own: inside the name's command substitution, a
+# test that fails (a full backup) made the assignment fail, and set -e then
+# ended the script without a word. Full backups wrote nothing from v0.30.0
+# to v0.37.4.
+SUFFIX=""
+if [ ${#FLAGS[@]} -gt 0 ]; then
+  SUFFIX="-data"
+fi
+NAME="cabinet-backup-$(date -u +%Y%m%d-%H%M%S)$SUFFIX.zip.age"
 PARTIAL="$DEST/$NAME.partial"
 trap 'rm -f "$PARTIAL"' EXIT
 

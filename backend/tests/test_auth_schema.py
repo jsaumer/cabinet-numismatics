@@ -138,12 +138,20 @@ def test_restores_take_the_collection_only():
     "script, needle",
     [
         ("backup.sh", "write-archive"),  # the backend dumps, with the same exclusion
-        ("restore.sh", "--schema=public"),
-        ("restore.sh", "cabinet_auth"),  # the refusal
+        # The script hands the database to the backend, whose own command
+        # refuses sign-in data and restores `public` only (the tests above and
+        # in test_archives.py); it must never run pg_restore itself again.
+        ("restore.sh", "python -m app.cli restore-database"),
     ],
 )
 def test_the_scripts_follow_the_same_rules(script, needle):
     assert needle in (REPO / "scripts" / script).read_text(encoding="utf-8")
+
+
+def test_restore_script_never_restores_the_database_itself():
+    lines = (REPO / "scripts" / "restore.sh").read_text(encoding="utf-8").splitlines()
+    commands = [line for line in lines if not line.lstrip().startswith("#")]
+    assert not any("pg_restore" in line for line in commands)
 
 
 def test_new_archives_say_auth_is_excluded(client, coin, monkeypatch):

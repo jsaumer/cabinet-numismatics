@@ -290,7 +290,21 @@ export default function ItemList() {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
-      if (document.querySelector("dialog[open], .modal-backdrop")) return;
+      // Every overlay (the lightbox, the photo editor, a confirm dialog) is
+      // marked as a modal dialog; while one is open the keys are its own.
+      if (document.querySelector('dialog[open], [aria-modal="true"]')) return;
+      // Beside the list the keys move through it. On a narrow screen there
+      // is no inspector, and a row opens the piece's own page, so J and K
+      // would leave the list: they do nothing there.
+      const beside = wide;
+      // Enter on a focused button, link, or tab is that control's, not the
+      // list's (it used to open the piece's page as well). A row's own link
+      // is the exception: on the selected row Enter opens the full page, and
+      // on another row the link selects it, as a click would.
+      const row = t?.closest<HTMLElement>(".wb-row") ?? null;
+      const onOtherRow = row !== null && row.id !== `row-${selectedId}`;
+      const onControl =
+        row === null && !!t?.closest('button, a, summary, [role="tab"], [role="button"]');
       const move = (to: number) => {
         const next = items[Math.max(0, Math.min(items.length - 1, to))];
         if (next) {
@@ -299,9 +313,13 @@ export default function ItemList() {
           document.getElementById(`row-${next.id}`)?.scrollIntoView({ block: "nearest" });
         }
       };
-      if (e.key === "j" || e.key === "ArrowDown") move(selectedIndex + 1);
-      else if (e.key === "k" || e.key === "ArrowUp") move(selectedIndex < 0 ? 0 : selectedIndex - 1);
-      else if (e.key === "Enter" && selectedId) navigate(`/items/${selectedId}`);
+      if (beside && (e.key === "j" || e.key === "ArrowDown")) move(selectedIndex + 1);
+      else if (beside && (e.key === "k" || e.key === "ArrowUp"))
+        move(selectedIndex < 0 ? 0 : selectedIndex - 1);
+      else if (e.key === "Enter" && selectedId && !onControl && !onOtherRow) {
+        e.preventDefault();
+        navigate(`/items/${selectedId}`);
+      }
       else if (e.key === "e" && selectedId) navigate(`/items/${selectedId}/edit`);
       else if (e.key === "n") navigate("/items/add");
       else if (e.key === "Escape" && selectedId) navigate(`/collection${search}`, { replace: true });

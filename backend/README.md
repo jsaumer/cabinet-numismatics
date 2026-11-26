@@ -15,7 +15,7 @@ the heartbeat (`app/services/scheduled.py`).
 backend/
 ├── Dockerfile, docker-entrypoint.sh
 ├── pyproject.toml, requirements.txt   # requirements.txt is hash-pinned; see below
-├── alembic.ini, alembic/              # collection schema (public), heads at 0022
+├── alembic.ini, alembic/              # collection schema (public), heads at 0023
 ├── alembic_auth.ini, alembic_auth/    # sign-in schema (cabinet_auth), heads at a0002
 ├── tests/                             # pytest suite, SQLite, no network
 ├── scripts/                           # check_sources.py: probe a live price API
@@ -40,7 +40,7 @@ Two independent Alembic chains, both run from `backend/` with
 `DATABASE_URL` set:
 
 ```bash
-alembic upgrade head                       # collection (schema public), head 0022
+alembic upgrade head                       # collection (schema public), head 0023
 alembic upgrade head -c alembic_auth.ini   # sign-in (schema cabinet_auth), head a0002
 ```
 

@@ -3125,6 +3125,77 @@ A full review on 9 November 2026 reproduced five bugs on a throwaway stack
   returns to the dashboard through the sidebar, never `page.goto`, which is
   why the old tests couldn't see the bug.
 
+## Review fixes, second batch (v0.37.5)
+
+The rest of what the 9 November 2026 review reproduced. No migration.
+
+- **`restore.sh` restores the database through the backend.**
+  `python -m app.cli restore-database` reads a dump on stdin, spools it in
+  staging (the `.cli-` prefix, so `empty_staging` leaves it to the
+  command), runs `restore.refuse_auth`, `restore.restore_database` (the
+  client matching the server, `public` only), `restore.migrate`, and
+  `restore._after_database` (the marker rows and unusable secrets). Like
+  the other archive commands it needs no claimed instance. The script must
+  never call `pg_restore` itself again (`tests/test_auth_schema.py` pins
+  that), and it restarts the backend afterwards because the running
+  process holds caches of the old database (the sharing switch, metrics,
+  alerts); the proxy is restarted after it, since nginx holds the old
+  container's address under Compose.
+- **Under `set -e`, an assignment fails when its command substitution
+  does.** `backup.sh` built the archive's name with
+  `$([ ... ] && echo -data)` inside it, so a full backup (the test false)
+  ended the script silently from v0.30.0 to v0.37.4. Neither script is
+  ever only read by a test now: `test_ci_tooling.py` runs `backup.sh`
+  with a stand-in `docker`, and `stack-smoke.sh backup-restore` runs both
+  kinds for real and verifies the archives. `restore.sh` no longer sources
+  `.env` (compose's file, not a shell script), and the smoke script waits
+  for health after it, since it restarts the backend and the proxy.
+- **`backup.verify_archive` checks `format_version` right after the MAC.**
+  Absent reads as 1; anything above `backup.FORMAT_VERSION` is refused with
+  an "upgrade first" message. Raising `FORMAT_VERSION` is how a future
+  change to the archive's layout keeps an older build from misreading it.
+- **Outbound failures are remembered for two minutes**
+  (`currency.FAILURE_BACKOFF_S`, `pricing.SPOT_FAILURE_BACKOFF_S`): after a
+  failed fetch the stale row is served without trying again, so a page
+  with five currencies waits once, not five times per request.
+  `Converter` also memoizes a currency for its own lifetime. Both modules
+  have `reset_memory()`, called by conftest per test; a new in-memory
+  backoff needs the same.
+- **`items._changed(old, new)` decides whether a field changed**, comparing
+  a `Decimal` at the column's stored scale, in `update_item` and
+  `bulk_update` alike. A new path that writes history asks it too.
+- **Export cells go through `items._csv_safe`** (CSV: an apostrophe before
+  `FORMULA_STARTS`; XLSX: the cell's type forced to text), and
+  `_row_to_payload` takes the apostrophe off (`_csv_unsafe`), so a round
+  trip gives the same text back. A new export column of free text is
+  covered because the guard runs over every cell, not a list of columns.
+- **`throttle.attempt(..., count_global=True)` is one locked step**: the
+  buckets' waits first, then the global limit, then the counts. A waiting
+  bucket spends no global slot, and an attempt the global limit refuses is
+  counted in no bucket. Don't split it back into two calls: checked
+  apart, either one username can exhaust the global limit or a burst can
+  race past it.
+- **A URL import checks the peer** (`photos._require_public_peer`, from
+  the response's `network_stream` extension, before the body is read),
+  failing closed when the address can't be read, and skipped only when an
+  outbound proxy is configured (`urllib.request.getproxies()`), where the
+  peer is the proxy. Tests give `FakeResponse` a `peer`.
+- **`photos.MAX_PIXELS`** (64 million) is checked in `open_validated`
+  from the header's size, before any decode, and Pillow's own
+  `DecompressionBombError` is turned into the same refusal.
+- **`crypto._create_exclusively`** writes a generated key to a partial
+  file and `os.link`s it into place (an exclusive create where links
+  aren't supported), then always reads the file back, so two processes
+  can't end up with different keys; `get_cipher` builds under a lock.
+- **The frontend has a last resort for each way a page can fail**:
+  `components/error-boundary.tsx`'s `PageErrorBoundary` around the routes
+  (reset by the path, so navigating away recovers), a `*` route
+  (`NotFound`), `ItemDetail`'s "No such piece" for a 404 or a malformed
+  id, and the boot check's `unreachable` state, retried like `restoring`.
+  The collection list's key handler stands aside for any open dialog
+  (`dialog[open], [aria-modal="true"]`), moves the selection only when
+  `wide`, and takes Enter only from the page itself or the selected row.
+
 ## Releases
 
 

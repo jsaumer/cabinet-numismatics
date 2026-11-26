@@ -765,7 +765,7 @@ before relying on it:
 ## 5. Scheduled backups
 
 A backup is only real once it's automatic. The simplest way: Settings →
-Backups → **Schedule** daily or weekly, set how many to keep, and mount the
+Backups → **Schedule** daily or weekly, set how long to keep them, and mount the
 backup directory (`/data/backups`) on storage that isn't this host's disk
 (see section 3). Click **Back up now** once to confirm the directory is
 writable; the last run's outcome stays visible there.
@@ -776,7 +776,7 @@ database, photos, and documents together:
 ```cron
 # 03:15 daily, keeping the last 30 days
 15 3 * * * cd /srv/cabinet-numismatics && ./scripts/backup.sh /srv/backups/cabinet >> /var/log/cabinet-backup.log 2>&1
-45 3 * * * find /srv/backups/cabinet -maxdepth 1 -type d -mtime +30 -exec rm -rf {} +
+45 3 * * * find /srv/backups/cabinet -maxdepth 1 -type f -name 'cabinet-backup-*.zip.age' -mtime +30 -delete
 ```
 
 Copy backups off the host, and back up `.env` separately: it holds the

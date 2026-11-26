@@ -14,7 +14,7 @@ Contributions that keep it simple are very welcome.
   has its own sign-in (one admin, scoped API tokens; roadmap Phase 7, P8
   A1) and single sign-on (OpenID Connect, GitHub, and a trusted-header
   mode; P8 A2, v0.33.0). Talk to us before starting on authentication work.
-- **Questions**: open a discussion or issue; there's no separate forum.
+- **Questions**: open an issue; there's no separate forum.
 
 ## Development setup
 
@@ -50,7 +50,7 @@ python scripts/seed_demo.py --token cabinet_...
 ```bash
 cd backend
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"   # Windows: .venv\Scripts\pip
-pytest                 # about 1,270 tests, no database required
+pytest                 # about 1,400 tests, no database required
 ruff check .           # lint
 ruff format .          # format
 ```
