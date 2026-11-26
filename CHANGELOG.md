@@ -10,6 +10,14 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+### Security
+
+- **`opentelemetry-api` 1.45.2** in the backend lockfile (was 1.45.1, which
+  FastAPI brings in). 1.45.1 has a medium-severity denial-of-service
+  advisory in how it parses a `traceparent` header
+  (GHSA-mf5v-w3w3-f6cg); the weekly dependency audit had failed on it
+  since 16 November. Nothing else in the lockfile changed.
+
 ### Changed
 
 - **A shorter README.** It now says what Cabinet is and who it is for,
