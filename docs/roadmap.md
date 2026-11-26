@@ -7,9 +7,10 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.37.3 (proof and mint sets, with Numista's
-2026 terms, a fix to the Numista export import, Python 3.15, and five
-fixes from a full review) is the latest published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.37.4 (proof and mint sets, with Numista's
+2026 terms, a fix to the Numista export import, Python 3.15, five
+fixes from a full review, and a dependency advisory fixed) is the latest
+published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -808,6 +809,10 @@ pieces turned up, each shipped as a small release:
   showed old totals after a piece was added, a value too large for its
   column was a 500 on Postgres, and a lower-case currency dropped a piece
   out of the totals.
+- ✔ v0.37.4: `opentelemetry-api` raised in the lockfile past a
+  denial-of-service advisory the weekly audit had flagged, and the README
+  condensed, with the full feature list and a comparison with other tools
+  moved to [features.md](features.md).
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
