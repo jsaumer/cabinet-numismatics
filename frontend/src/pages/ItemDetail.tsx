@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import {
   api,
+  ApiError,
   CalendarReference,
   ItemDetail as ItemDetailData,
   ItemEvent,
@@ -41,6 +42,7 @@ export default function ItemDetail({
   const [tab, setTab] = useState<Tab>("overview");
   const [item, setItem] = useState<ItemDetailData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [numistaSales, setNumistaSales] = useState(false);
@@ -72,7 +74,16 @@ export default function ItemDetail({
   const reload = useCallback(() => {
     if (!id) return;
     setError(null);
-    api.getItem(id).then(setItem).catch((e: Error) => setError(e.message));
+    setMissing(false);
+    api
+      .getItem(id)
+      .then(setItem)
+      .catch((e: Error) => {
+        // No piece with that id (404), or an address that isn't an id at
+        // all (422): say so, not the server's validation text.
+        if (e instanceof ApiError && (e.status === 404 || e.status === 422)) setMissing(true);
+        else setError(e.message);
+      });
   }, [id]);
 
   // A new piece in the inspector starts clean: no old item, no old history.
@@ -94,6 +105,20 @@ export default function ItemDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded, tab, id, events]);
 
+  if (missing) {
+    return (
+      <div className="card">
+        <h1>No such piece</h1>
+        <p className="muted">
+          It may have been deleted for good, or the address is mistyped. A piece in the trash still
+          opens from there.
+        </p>
+        <p>
+          <Link to="/collection">Back to the collection</Link> · <Link to="/trash">Open the trash</Link>
+        </p>
+      </div>
+    );
+  }
   if (error) return <p className="error">{error}</p>;
   if (!item) return <p className="muted">Loading…</p>;
 

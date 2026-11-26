@@ -13,6 +13,11 @@
 # backend's, or a key file on this host: AGE_IDENTITY=key.txt (needs `age`).
 # Unencrypted archives from before v0.30.0 can't be restored by any path.
 #
+# The database step is the backend's own (python -m app.cli restore-database),
+# so an archive from an older release is migrated to this build's schema, and
+# the script ends by restarting the backend and the proxy. The stack has to
+# be running.
+#
 # Unlike the in-app restore, this script puts back the archive's share links
 # and sharing switch, not the live ones (v0.32.0; see docs/backup-restore.md),
 # so it ends by saying to check Settings, Sharing. The archive's photos may
@@ -21,7 +26,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SRC="${1:?usage: restore.sh <archive.zip.age>}"
-set -a; [ -f .env ] && . ./.env; set +a
+# .env is docker compose's to read, never this shell's: the script needs
+# nothing from it now that the backend restores the database, and a value
+# with a space or a Windows line ending in it used to stop the script here.
 
 if [ ! -f "$SRC" ]; then
   echo "$SRC is not a file. Directory backups from before v0.30.0 can't be restored." >&2
@@ -67,19 +74,16 @@ unzip -o -q "$PLAIN" -d "$DIR"
 echo "Archive verified"
 [ -f "$DIR/db.dump" ] || { echo "No db.dump in $SRC" >&2; exit 1; }
 
-# In-app archives are dumped with the client matching the server's major
-# version, so the db image's own pg_restore reads them.
-# Sign-in data (the cabinet_auth schema, v0.30.0) is never restored. Cabinet's
-# own dumps leave it out, so a dump that holds any is refused before anything
-# changes, and only the collection's schema is restored either way.
-LISTING=$(docker compose exec -T db pg_restore --list < "$DIR/db.dump")
-if printf '%s\n' "$LISTING" | grep -v '^;' | grep -qw cabinet_auth; then
-  echo "$SRC contains sign-in data, which Cabinet never restores. It was not made" \
-    "by Cabinet's own backup: nothing restored" >&2
-  exit 1
-fi
-docker compose exec -T db pg_restore -U "${DB_USER:?set in .env}" -d "${DB_NAME:?set in .env}" \
-  --schema=public --clean --if-exists < "$DIR/db.dump"
+# The backend replaces the database, the same way the in-app restore does:
+# tables the archive predates are dropped first, the dump goes in as one
+# transaction (pg_restore --schema=public, so sign-in data in cabinet_auth is
+# never touched, and a dump that holds any is refused before anything
+# changes), and the migrations then bring it to this build's schema. Without
+# that last step an archive from an older release left a database the
+# running backend could not read.
+docker compose exec -T backend python -m app.cli restore-database < "$DIR/db.dump" \
+  || { echo "The database step failed; the message above says what state it is in." \
+       "Photos and documents were not touched." >&2; exit 1; }
 
 if [ -f "$DIR/photos.tar.gz" ]; then
   # Without the photo marker, the share view cleans each photo as it serves
@@ -107,6 +111,29 @@ if [ -f "$DIR/documents.tar.gz" ]; then
   docker compose exec -T backend sh -c 'chown -R "$(stat -c %u:%g /data/documents)" /data/documents'
 else
   echo "No documents.tar.gz: documents left unchanged"
+fi
+
+# The running backend still holds what it knew about the old database (the
+# sharing switch, cached figures, open connections), so start it afresh and
+# wait for it; the proxy follows, since it looks the backend's address up
+# only when it starts.
+echo "Restarting the backend"
+docker compose restart backend > /dev/null
+ready=""
+for _ in $(seq 1 60); do
+  if docker compose exec -T backend python -c \
+    'import sys, urllib.request; sys.exit(0 if urllib.request.urlopen("http://localhost:8000/api/health", timeout=3).status == 200 else 1)' \
+    > /dev/null 2>&1; then
+    ready=yes
+    break
+  fi
+  sleep 2
+done
+docker compose restart proxy > /dev/null
+if [ -z "$ready" ]; then
+  echo "The backend did not answer within two minutes of restarting:" \
+    "check 'docker compose logs backend'." >&2
+  exit 1
 fi
 
 echo "Restored from $SRC"

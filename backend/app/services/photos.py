@@ -29,6 +29,7 @@ import shutil
 import socket
 import threading
 import time
+import urllib.request
 import uuid
 import zlib
 from pathlib import Path
@@ -117,17 +118,35 @@ def path_of(key: str) -> Path:
     return _root() / key
 
 
+# The largest image decoded, in pixels: room for a 61 megapixel camera frame
+# or a banknote scanned at 1,200 dpi. A file's size says nothing of this: a
+# few megabytes of a flat color can decode to hundreds of megabytes, several
+# times over (the upright copy, the re-encode, the thumbnail), inside a
+# container with a gigabyte of memory.
+MAX_PIXELS = 64_000_000
+TOO_MANY_PIXELS = (
+    "The image is too large: more than 64 megapixels. Save a smaller copy and add that."
+)
+
+
 def open_validated(data: bytes) -> tuple[Image.Image, str]:
     """Open upload bytes as an EXIF-corrected image plus its format name;
     ValueError if not a real, supported image."""
     try:
         probe = Image.open(io.BytesIO(data))
         fmt = probe.format
+        width, height = probe.size
         probe.verify()  # integrity check; invalidates the handle
+    except Image.DecompressionBombError as exc:
+        # Pillow's own ceiling (about 179 megapixels): not one of the errors
+        # below, so it used to escape as a 500.
+        raise ValueError(TOO_MANY_PIXELS) from exc
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError("File is not a readable image") from exc
     if fmt not in FORMATS:
         raise ValueError(f"Unsupported image format {fmt!r}; use JPEG, PNG, or WebP")
+    if width * height > MAX_PIXELS:
+        raise ValueError(TOO_MANY_PIXELS)
     img = Image.open(io.BytesIO(data))
     return ImageOps.exif_transpose(img), fmt
 
@@ -800,18 +819,52 @@ class RemoteImageUnavailable(Exception):
     """The URL could not be fetched: network error or timeout."""
 
 
+PRIVATE_REFUSED = "Importing from private or local network addresses isn't allowed"
+# NAT64 prefixes map onto any IPv4 address, private ones included, and read
+# as public themselves.
+_NAT64 = (ipaddress.ip_network("64:ff9b::/96"), ipaddress.ip_network("64:ff9b:1::/48"))
+
+
+def _is_public(address: str) -> bool:
+    try:
+        found = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    if found.version == 6:
+        if found.ipv4_mapped is not None:
+            found = found.ipv4_mapped
+        elif any(found in network for network in _NAT64):
+            return False
+    return found.is_global
+
+
 def _require_public_host(host: str, port: int) -> None:
     """Refuse hosts resolving to private, loopback, link-local, or other
     non-public addresses, so an import can't reach the LAN or the stack's own
-    services. (A DNS answer that changes between this check and the fetch
-    isn't covered, which is acceptable for a single-user app behind its own proxy.)"""
+    services. The connection is checked again once it is made
+    (`_require_public_peer`): this look-up and the fetch's own are two."""
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
         raise ValueError(f"Can't resolve {host}") from exc
     for info in infos:
-        if not ipaddress.ip_address(info[4][0]).is_global:
-            raise ValueError("Importing from private or local network addresses isn't allowed")
+        if not _is_public(str(info[4][0])):
+            raise ValueError(PRIVATE_REFUSED)
+
+
+def _require_public_peer(resp) -> None:
+    """The address the fetch actually connected to, by the same rule, before
+    a byte of the body is read. A name can answer the check above with a
+    public address and the connection with a private one (DNS rebinding);
+    this is the answer that counts. An address that can't be told is refused.
+    Behind an outbound proxy the peer is the proxy, which does the
+    connecting, so there is nothing here to check."""
+    if urllib.request.getproxies():
+        return
+    stream = getattr(resp, "extensions", {}).get("network_stream")
+    peer = stream.get_extra_info("server_addr") if stream is not None else None
+    if not peer or not _is_public(str(peer[0])):
+        raise ValueError(PRIVATE_REFUSED)
 
 
 def fetch_remote_image(url: str) -> bytes:
@@ -833,6 +886,7 @@ def fetch_remote_image(url: str) -> bytes:
                 follow_redirects=False,
                 headers={"User-Agent": REMOTE_USER_AGENT},
             ) as resp:
+                _require_public_peer(resp)
                 if resp.is_redirect:
                     url = urljoin(url, resp.headers.get("location", ""))
                     continue

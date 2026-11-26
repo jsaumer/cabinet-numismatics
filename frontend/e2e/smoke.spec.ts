@@ -156,12 +156,30 @@ test("the collection finds it by search, opens it beside the list, and Enter ope
   await expect(inspector.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
   await inspector.getByRole("tab", { name: "Value" }).click();
   await expect(inspector.getByRole("tab", { name: "Value" })).toHaveAttribute("aria-selected", "true");
+  // Enter on the focused tab is the tab's own: it used to open the piece's
+  // page as well, which made the inspector unusable from the keyboard.
+  await page.keyboard.press("Enter");
+  await expect(inspector.getByRole("tab", { name: "Value" })).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(new RegExp(`/collection/${id}\\?q=`));
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/collection\?q=/);
   await page.keyboard.press("j"); // the keyboard selects the first match again
   await expect(inspector.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(itemUrl);
+});
+
+test("an address that names nothing says so", async ({ page }) => {
+  // An id that isn't one, and a well-formed id no piece has.
+  for (const id of ["4", "00000000-0000-0000-0000-000000000000"]) {
+    await page.goto(`/items/${id}`);
+    await expect(page.getByRole("heading", { level: 1, name: "No such piece" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to the collection" })).toBeVisible();
+  }
+  await page.goto("/no/such/page");
+  await expect(page.getByRole("heading", { level: 1, name: "There is no page here" })).toBeVisible();
+  // The shell is still there to leave by.
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 });
 
 test("the Piece, Grade, and Value headings sort the list both ways", async ({ page }) => {
@@ -291,8 +309,10 @@ test("trash it, restore it, then delete it for good", async ({ page }) => {
   );
   await expect(page.getByText("Deleted 1 item for good.")).toBeVisible();
 
+  // gone for good: the page says so, not a bare error (v0.37.5)
   await page.goto(itemUrl);
-  await expect(page.locator("p.error")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("No such piece");
+  await expect(page.getByRole("link", { name: "Back to the collection" })).toBeVisible();
 });
 
 // These two make and remove their own items, under names the tests above don't match.

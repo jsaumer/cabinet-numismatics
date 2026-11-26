@@ -3,6 +3,7 @@ keyless, ECB daily rates). Same cache discipline as spot prices: 24h TTL,
 stale beats nothing, unavailable means the amount is excluded (never guessed).
 """
 
+import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
@@ -13,6 +14,20 @@ from app.models import ExchangeRate
 
 CACHE_TTL = timedelta(hours=24)
 RATE_API = "https://api.frankfurter.dev/v1/latest"
+# After a failed fetch the pair is left alone this long: without it, a rate
+# the service doesn't carry (or an upstream that is down) cost one request,
+# with its five-second timeout, for every amount on every page.
+FAILURE_BACKOFF_S = 120
+_failed: dict[tuple[str, str], float] = {}  # pair -> time.monotonic() of the failure
+
+
+def reset_memory() -> None:
+    _failed.clear()
+
+
+def _failed_recently(pair: tuple[str, str]) -> bool:
+    at = _failed.get(pair)
+    return at is not None and time.monotonic() - at < FAILURE_BACKOFF_S
 
 
 class RateUnavailable(Exception):
@@ -49,10 +64,17 @@ def get_rate(db: Session, base: str, quote: str, fetch: bool = True) -> Decimal 
     now = datetime.now(timezone.utc)
     if cached is not None and now - _as_utc(cached.fetched_at) < CACHE_TTL:
         return Decimal(cached.rate)
+    stale = Decimal(cached.rate) if cached is not None else None  # beats nothing
+    if _failed_recently((base, quote)):
+        return stale
     try:
         rate = fetch_rate(base, quote)
     except RateUnavailable:
-        return Decimal(cached.rate) if cached is not None else None
+        if len(_failed) > 1000:  # pairs come from the data; keep the memory small
+            _failed.clear()
+        _failed[(base, quote)] = time.monotonic()
+        return stale
+    _failed.pop((base, quote), None)
     if cached is None:
         cached = ExchangeRate(base=base, quote=quote, source="frankfurter.app")
         db.add(cached)
@@ -74,6 +96,7 @@ class Converter:
         self.fetch = fetch  # False: cached rates only, never a request
         self.converted = 0
         self.excluded = 0
+        self._rates: dict[str, Decimal | None] = {}  # one lookup per currency
 
     def convert(self, amount: float | Decimal | None, currency: str) -> float | None:
         """Amount in display currency, or None (and counted) if no rate."""
@@ -81,7 +104,9 @@ class Converter:
             return None
         if currency == self.display:
             return float(amount)
-        rate = get_rate(self.db, currency, self.display, fetch=self.fetch)
+        if currency not in self._rates:
+            self._rates[currency] = get_rate(self.db, currency, self.display, fetch=self.fetch)
+        rate = self._rates[currency]
         if rate is None:
             self.excluded += 1
             return None

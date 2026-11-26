@@ -19,14 +19,16 @@ Commands (v0.30.0):
     verify-archive PATH|-     check a decrypted archive was made with this key
     write-archive --name N    write an encrypted archive to stdout (backup.sh)
     strip-photo-metadata      remove EXIF, GPS, and the rest from stored photos
+    restore-database          replace the collection with a pg_dump from stdin (restore.sh)
                               (after restore.sh put back an archive's photos)
 
 Started as root (as `docker compose exec` does), a command first drops to
 the app's own user (PUID:PGID), so any file it writes keeps its owner.
 Nothing here prints a secret except `backup-key show`, which exists to.
 The account and backup-key commands refuse until Cabinet is set up, and
-each change is audited as `cli`; the archive commands and
-`strip-photo-metadata` serve the scripts, which work before setup too.
+each change is audited as `cli`; the archive commands,
+`strip-photo-metadata`, and `restore-database` serve the scripts, which work
+before setup too.
 """
 
 import argparse
@@ -424,6 +426,46 @@ def strip_photo_metadata(_args) -> int:
     return 0
 
 
+def restore_database(_args) -> int:
+    """For restore.sh: the pg_dump on stdin replaces the collection's database
+    the way the in-app restore does it. Tables the dump predates go first,
+    the dump is restored in one transaction, and the migrations then bring it
+    to this build's schema, so an archive from an older release leaves a
+    database the backend can read. Sign-in data is never touched. The caller
+    has verified the archive; a dump holding sign-in data is still refused."""
+    from app.db import engine
+    from app.services import backup, restore, schema
+
+    fd, name = tempfile.mkstemp(dir=backup.staging_dir(), prefix=backup.CLI_PREFIX)
+    spooled = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as out:
+            while chunk := sys.stdin.buffer.read(backup.CHUNK):
+                out.write(chunk)
+        restore.refuse_auth(spooled, restore.server_major(engine))
+        restore.restore_database(spooled)
+    except (restore.RestoreError, backup.BackupError, OSError) as exc:
+        return _fail(f"database not restored: {exc}")
+    finally:
+        spooled.unlink(missing_ok=True)
+    try:
+        restore.migrate(engine)
+    except Exception as exc:  # whatever a migration raises
+        return _fail(
+            "The database is the archive's, but bringing it to this build's schema "
+            f"failed: {exc}. Restart the backend to try again."
+        )
+    cleared = restore._after_database(engine)
+    head, _ = schema.script_revisions()
+    print(f"Database restored, at schema {head}.")
+    if cleared:
+        print(
+            "Stored secrets this deployment can't decrypt were cleared: "
+            f"{', '.join(cleared)}. Enter them again in Settings."
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli", description=__doc__.split("\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -472,6 +514,9 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser(
         "strip-photo-metadata", help="remove EXIF, GPS, and the rest from stored photos"
     ).set_defaults(run=strip_photo_metadata)
+    commands.add_parser(
+        "restore-database", help="a pg_dump on stdin replaces the collection, then migrates"
+    ).set_defaults(run=restore_database)
 
     args = parser.parse_args(argv)
     _drop_privileges()

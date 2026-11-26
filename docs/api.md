@@ -257,7 +257,10 @@ values up to 500). CSV import consumes the export format; derived columns
 are ignored, rows whose `id` already exists are skipped (so
 re-importing an export never duplicates the collection), and per-row failures
 are reported without aborting the rest; it answers `created`, `skipped`, and
-`errors` (`row`, `error`). `POST /api/items/bulk` takes `ids` (1–500), `set`
+`errors` (`row`, `error`). From v0.37.5 a text cell that a spreadsheet would
+run as a formula (one starting with `=`, `+`, `-`, `@`, a tab, or a carriage
+return) is written to the CSV with an apostrophe in front, which the import
+takes off again, and to the Excel file as plain text; numbers are untouched. `POST /api/items/bulk` takes `ids` (1–500), `set`
 (item fields applied to every item; tags and catalog refs inside it are
 ignored), `add_tags`, and `remove_tags`, and answers `updated`; 404 when any
 id is missing or in the trash. `set` validates like an update, so `priority`
@@ -454,10 +457,14 @@ include the file keys; the files themselves are served by nginx at
 
 URL import fetches the image on the server: http(s) only, public addresses
 only (a host resolving to a private, loopback, or link-local address is
-refused, and so is a redirect to one), up to three redirects, 25 MB at most. It
+refused, and so is a redirect to one), up to three redirects, 25 MB at most.
+From v0.37.5 the address the connection actually reached is checked as well,
+so a name that resolves to a public address for the check and a private one
+for the fetch is refused too. It
 then validates and stores it exactly like an upload: 422 for a URL that isn't
 allowed or doesn't return a file, 502 when it can't be reached, 415 when the
-file isn't a supported image. Replacing an image (what the in-browser editor
+file isn't a supported image. An image of more than 64 million pixels is
+refused (415), uploaded or fetched: a small file can decode into gigabytes. Replacing an image (what the in-browser editor
 saves) writes it under a new file name, so cached copies of the old image
 aren't shown, and deletes the old files.
 
@@ -716,7 +723,7 @@ layout; add them from "Edit dashboard".
 | `GET`    | `/api/tags`         | List tags with usage counts                    |
 | `GET`    | `/api/sets`         | List sets/lots with item counts                |
 | `POST`   | `/api/sets`         | Create a set (409 on duplicate name)           |
-| `PATCH`  | `/api/sets/{id}`    | Rename / edit a set                            |
+| `PATCH`  | `/api/sets/{id}`    | Rename / edit a set; `409` when another set has the name |
 | `DELETE` | `/api/sets/{id}`    | Delete a set (items are detached, not deleted) |
 | `GET`    | `/api/reference/serial-traits` | The fancy-serial traits, in order   |
 | `GET`    | `/api/reference/calendars`     | Calendars for a date as struck, and the Japanese eras |
@@ -1005,7 +1012,7 @@ because `sandbox` stops Chrome's built-in PDF viewer rendering at all.
 |----------|----------------------------------------|-------------------------------------------|
 | `GET`    | `/api/items/{id}/comparables`          | The item's logged sales, newest first     |
 | `POST`   | `/api/items/{id}/comparables`          | Log a sale                                |
-| `PATCH`  | `/api/comparables/{sale_id}`           | Change a sale, or leave it out (`included`) |
+| `PATCH`  | `/api/comparables/{sale_id}`           | Change a sale, or leave it out (`included`); `422` for an explicit `null` in the date, venue, price, currency, or `included` |
 | `DELETE` | `/api/comparables/{sale_id}`           | Remove a sale                             |
 | `POST`   | `/api/items/{id}/comparables/numista`  | Add Numista's recorded auction sales (paid Numista API plan) |
 
@@ -1527,7 +1534,7 @@ a saved threshold), and the share view's `sharing_switched`,
 | `POST`   | `/api/checklists`                       | Create with a slot list     |
 | `POST`   | `/api/checklists/generate`              | Generate slots that fill themselves |
 | `GET`    | `/api/checklists/{id}`                  | Detail with slots           |
-| `PATCH`  | `/api/checklists/{id}/slots/{slot_id}`  | Check/uncheck or link item  |
+| `PATCH`  | `/api/checklists/{id}/slots/{slot_id}`  | Check/uncheck or link item; `422` when no such item exists |
 | `DELETE` | `/api/checklists/{id}`                  | Delete a checklist          |
 
 `POST /api/checklists` takes `name` (up to 100 characters) and `slots` (1–500

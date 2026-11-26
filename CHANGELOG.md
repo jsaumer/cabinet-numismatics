@@ -8,6 +8,96 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+The second batch from the 9 November 2026 review: recovery, the remaining
+server errors, and hardening. No migration.
+
+### Fixed
+
+- **`scripts/backup.sh` writes full backups again.** Since v0.30.0 the
+  script run with no flags (a full backup, and what the cron example in
+  the deployment guide runs) wrote nothing and said nothing: it ended
+  with exit code 1 before reaching the backend. Only `--data-only` worked.
+  **If you back up with this script from cron, you have no full archives
+  from it since upgrading to v0.30.0: take one now.** Backups made in
+  Settings, scheduled or by hand, were never affected. No check ran the
+  script; a test and the CI drill do now.
+- **`scripts/restore.sh` restores an archive from an older release.** The
+  script put the archive's database back and stopped, leaving an older
+  schema under a newer backend until something restarted it, and it ran
+  `pg_restore` from the database container, whose version need not match
+  the dump. It now hands the dump to the backend
+  (`python -m app.cli restore-database`), which restores it the way the
+  in-app restore does (the matching client, `public` only, sign-in data
+  refused), brings the schema to this build's, and clears stored secrets
+  this deployment's key can't read; then the script restarts the backend
+  and the proxy and waits for the app to answer. It no longer reads
+  `.env` into the shell (it needs nothing from it now), which a value with
+  a space or a Windows line ending in it used to stop. The Swarm steps in
+  [docs/backup-restore.md](docs/backup-restore.md) changed the same way.
+- **An archive from a newer Cabinet is refused before anything is read.**
+  The manifest's `format_version` was written and never checked; a later
+  format now answers "made by a newer Cabinet, upgrade first" in the app,
+  the script, and `verify-archive`.
+- **Four server errors are now proper answers**: renaming a set to a name
+  another set has (409), linking a checklist slot to an item that doesn't
+  exist (422), importing a spreadsheet with a cell the CSV reader refuses
+  (422), and clearing a sale's `included` flag with `null` (422).
+- **Pages no longer stall for minutes when the exchange-rate or spot-price
+  service is down.** Every currency on a page used to wait out its own
+  timeout, on every request. A failed fetch is now remembered for two
+  minutes (the cached rate stands in, as before), and one request looks a
+  currency up once.
+- **Saving a piece without changing it adds nothing to its history.** A
+  cost of `12.5` saved over a stored `12.50` was recorded as an edit, so
+  the history filled with changes that weren't.
+- **The collection list's keys.** Enter on a focused button, tab, or link
+  no longer opens a different piece than the one it was pressed on; J, K,
+  and the arrows do nothing on a narrow screen, where there is no
+  selection to move; and no shortcut fires behind an open dialog.
+- **No more blank pages.** An address that names nothing says so, a piece
+  that isn't there says "No such piece" instead of an error, a page that
+  fails to draw shows what went wrong with the rest of the app still
+  usable, and a backend that isn't answering yet shows a waiting screen
+  that retries, not an empty window.
+
+### Security
+
+- **Exports can't carry a formula into a spreadsheet.** A text cell
+  beginning with `=`, `+`, `-`, `@`, a tab, or a carriage return is
+  written to the CSV behind an apostrophe (taken off again on import) and
+  to the Excel file as plain text, so a note or a seller's name imported
+  from somewhere else can't run when the export is opened.
+- **Photo import from a URL checks the address it actually reached.** The
+  host was checked when it was resolved and the fetch resolved it again,
+  so a name that answered differently the second time could reach a
+  private address (DNS rebinding). The connection's own peer address is
+  now checked before the answer is read, and NAT64 forms of a private
+  address are refused.
+- **An image over 64 million pixels is refused**, uploaded or fetched,
+  before it is decoded: a file of a few kilobytes could otherwise ask for
+  gigabytes of memory.
+- **A sign-in attempt that is already waiting no longer spends the global
+  limit.** Hammering one username could use up the limit shared by every
+  username and keep the owner out from a new device; the per-username
+  wait is now decided first, in the same step.
+- **The generated encryption key can't be written twice.** Two processes
+  starting together on a fresh volume could each generate a key and the
+  second overwrite the first; the file is now created exclusively and
+  read back.
+
+### Changed
+
+- **Documentation corrected against the code**: the host cron example in
+  the deployment guide pruned folders, which matched none of the
+  single-file archives made since v0.30.0, so nothing was ever removed;
+  retention is described as by age; stale version examples, migration
+  heads, test and photo counts, and a pointer to Discussions (which are
+  off) are fixed. A backup refused because the database server is newer
+  than the image's clients no longer says to use `scripts/backup.sh`,
+  which has gone through the same backend since v0.30.0.
+
 ## [0.37.4] - 2026-11-26
 
 ### Security

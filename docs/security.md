@@ -150,9 +150,14 @@ fenced: only http(s), only hosts that resolve to public addresses (private,
 loopback, link-local (including cloud metadata at 169.254.169.254), and other
 non-global addresses are refused, at every redirect hop), at most three
 redirects, 25 MB, and 15 seconds, and the result must still pass the same
-image validation as an upload. A DNS answer that changes between the check
-and the fetch is not covered; for a single-user app behind its own proxy
-that is an accepted gap.
+image validation as an upload. From v0.37.5 the address the connection
+actually reached is checked too, before a byte of the answer is read, so a
+DNS answer that changes between the check and the fetch (DNS rebinding) is
+refused; NAT64 addresses that embed a private one are refused as well. The
+check needs to know the peer: behind an outbound HTTP proxy (`HTTPS_PROXY`)
+the peer is the proxy, so there the check on the resolved name is all there
+is. An image of more than 64 million pixels is refused before it is decoded,
+uploaded or fetched.
 
 ## Authentication & network exposure
 

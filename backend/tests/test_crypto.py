@@ -228,6 +228,61 @@ def test_generated_key_file_is_owner_only(tmp_path, monkeypatch):
         crypto.reset_cache()
 
 
+def test_a_generated_key_never_replaces_one_that_is_there(tmp_path, monkeypatch):
+    """The check for an existing key can wrongly say there is none (a stale
+    file handle on a network share), or another process can create it in the
+    meantime. Replacing it would silently lose every stored secret."""
+    path = tmp_path / "state" / "secret.key"
+    monkeypatch.setenv("SECRET_KEY", "")
+    monkeypatch.setenv("SECRET_KEY_FILE", str(path))
+    get_settings.cache_clear()
+    crypto.reset_cache()
+    try:
+        token = crypto.encrypt("value")
+        first = path.read_bytes()
+
+        # A second process starts, and its look for the file misses it.
+        crypto.reset_cache()
+        real = type(path).is_file
+        monkeypatch.setattr(
+            type(path), "is_file", lambda self: False if self == path else real(self)
+        )
+        assert crypto.decrypt(token) == "value"  # the key on disk was read, not replaced
+        assert path.read_bytes() == first
+        assert [p.name for p in path.parent.iterdir()] == ["secret.key"]  # no partial left
+    finally:
+        get_settings.cache_clear()
+        crypto.reset_cache()
+
+
+def test_two_first_uses_at_once_end_with_one_key(tmp_path, monkeypatch):
+    import threading
+
+    path = tmp_path / "state" / "secret.key"
+    monkeypatch.setenv("SECRET_KEY", "")
+    monkeypatch.setenv("SECRET_KEY_FILE", str(path))
+    get_settings.cache_clear()
+    crypto.reset_cache()
+    try:
+        tokens = []
+        start = threading.Barrier(8)
+
+        def first_use():
+            start.wait()
+            tokens.append(crypto.encrypt("value"))
+
+        threads = [threading.Thread(target=first_use) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        crypto.reset_cache()  # as after a restart: only the file's key is left
+        assert [crypto.decrypt(token) for token in tokens] == ["value"] * 8
+    finally:
+        get_settings.cache_clear()
+        crypto.reset_cache()
+
+
 def test_invalid_key_is_reported_clearly(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", base64.urlsafe_b64encode(b"too-short").decode())
     get_settings.cache_clear()

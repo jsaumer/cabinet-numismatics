@@ -56,7 +56,13 @@ def update_set(set_id: int, payload: SetCreate, db: Session = Depends(get_db)):
     row = db.get(ItemSet, set_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Set not found")
-    row.name = payload.name.strip()
+    name = payload.name.strip()
+    taken = db.execute(
+        select(ItemSet.id).where(ItemSet.name == name, ItemSet.id != set_id)
+    ).scalar_one_or_none()
+    if taken is not None:  # the same answer as creating one: names are unique
+        raise HTTPException(status_code=409, detail=f"Set {name!r} already exists")
+    row.name = name
     row.notes = payload.notes
     db.commit()
     db.refresh(row)

@@ -434,6 +434,8 @@ backup_restore() {
     exit 1
   fi
   ./scripts/restore.sh "$backup_age"
+  # the script restarts the backend and then the proxy
+  wait_for_health
   apif "$BASE/api/items/$id" > /dev/null
   adminf "$BASE/api/documents/$doc/file" -o "$restored_pdf"
   cmp "$receipt" "$restored_pdf"
@@ -441,6 +443,28 @@ backup_restore() {
   rm -f "$receipt" "$backup_age" "$restored_pdf"
 
   password_and_token_still_work
+
+  # scripts/backup.sh from the host, both kinds: each writes one encrypted
+  # archive the backend's key verifies. (A full backup wrote nothing, and
+  # said nothing, from v0.30.0 to v0.37.4, and no check ran the script.)
+  host_backups="$STATE_DIR/host-backups"
+  rm -rf "$host_backups"
+  ./scripts/backup.sh "$host_backups"
+  sleep 1  # archive names are to the second
+  ./scripts/backup.sh --data-only "$host_backups"
+  test "$(find "$host_backups" -name 'cabinet-backup-*.zip.age' ! -name '*-data.zip.age' | wc -l)" = 1
+  test "$(find "$host_backups" -name 'cabinet-backup-*-data.zip.age' | wc -l)" = 1
+  for archive in "$host_backups"/cabinet-backup-*.zip.age; do
+    sync "$archive" 2>/dev/null || sync
+    docker compose exec -T backend python -m app.cli decrypt-archive < "$archive" > "$plain"
+    docker compose exec -T backend python -m app.cli verify-archive - < "$plain"
+    case "$archive" in
+      *-data.zip.age) ! unzip -l "$plain" | grep -q photos.tar.gz ;;
+      *) unzip -l "$plain" | grep -q photos.tar.gz ;;
+    esac
+  done
+  rm -rf "$host_backups" "$plain"
+  echo "scripts/backup.sh wrote a full and a data-only archive"
 
   adminf -X POST "$BASE/api/backups" | "$PY" -c '
 import json, sys

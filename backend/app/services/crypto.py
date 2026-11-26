@@ -13,6 +13,8 @@ publicly, which would expose the key over HTTP.
 
 import logging
 import os
+import secrets
+import threading
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
@@ -24,6 +26,7 @@ logger = logging.getLogger(__name__)
 PREFIX = "enc:v1:"  # marks an encrypted value; anything else is legacy plaintext
 
 _cipher: MultiFernet | None = None
+_cipher_lock = threading.Lock()
 
 
 def reset_cache() -> None:
@@ -43,33 +46,63 @@ def _load_key_material() -> list[bytes]:
     if path.is_file():
         return [path.read_bytes().strip()]
 
-    key = Fernet.generate_key()
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Create with owner-only permissions rather than chmod-after-write, so the
-    # key is never briefly world-readable.
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as fh:
-        fh.write(key)
-    logger.warning(
-        "SECRET_KEY not set; generated one at %s. Set SECRET_KEY in .env to control "
-        "key management and survive loss of this volume.",
-        path,
-    )
-    return [key]
+    if _create_exclusively(path, Fernet.generate_key()):
+        logger.warning(
+            "SECRET_KEY not set; generated one at %s. Set SECRET_KEY in .env to control "
+            "key management and survive loss of this volume.",
+            path,
+        )
+    # Whatever the file holds now is the key: this process's, or the one
+    # another process (a container command at first start) created first.
+    return [path.read_bytes().strip()]
+
+
+def _create_exclusively(path: Path, key: bytes) -> bool:
+    """Write the key file only if there is none, whole or not at all: it is
+    written under another name (owner-only from the start, never briefly
+    world-readable) and hard-linked into place, which fails when the name is
+    taken. An existing key is never replaced, even when the check above
+    wrongly said there was none; replacing it would silently lose every
+    stored secret. True if this call created it."""
+    partial = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(4)}.partial")
+    fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(key)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.link(partial, path)
+        except FileExistsError:
+            return False
+        except OSError:
+            # A filesystem without hard links: create-if-absent the plain way.
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                return False
+            with os.fdopen(fd, "wb") as fh:
+                fh.write(key)
+        return True
+    finally:
+        partial.unlink(missing_ok=True)
 
 
 def get_cipher() -> MultiFernet:
     global _cipher
     if _cipher is None:
-        keys = _load_key_material()
-        try:
-            _cipher = MultiFernet([Fernet(k) for k in keys])
-        except (ValueError, TypeError) as exc:
-            raise RuntimeError(
-                "SECRET_KEY is not a valid Fernet key. Generate one with: "
-                'python -c "from cryptography.fernet import Fernet; '
-                'print(Fernet.generate_key().decode())"'
-            ) from exc
+        with _cipher_lock:  # two first uses at once must end with one key
+            if _cipher is None:
+                keys = _load_key_material()
+                try:
+                    _cipher = MultiFernet([Fernet(k) for k in keys])
+                except (ValueError, TypeError) as exc:
+                    raise RuntimeError(
+                        "SECRET_KEY is not a valid Fernet key. Generate one with: "
+                        'python -c "from cryptography.fernet import Fernet; '
+                        'print(Fernet.generate_key().decode())"'
+                    ) from exc
     return _cipher
 
 

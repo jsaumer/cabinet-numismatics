@@ -202,8 +202,7 @@ def _check_password(
     if device is not None and not devices.reserve(db, device):
         device = None  # its attempts are used up: throttled like anyone
     if device is None:
-        throttle.attempt(("user", key), ("addr", address))
-        throttle.check_global()
+        throttle.attempt(("user", key), ("addr", address), count_global=True)
     stored = account.password_hash if account is not None and account.is_active else None
     if passwords.verify(stored, password, reserved=device is not None):
         throttle.succeed("user", key)

@@ -259,6 +259,54 @@ def test_throttled_sign_in_does_no_argon2_work(db, owner, clock, monkeypatch):
         accounts.sign_in(db, "owner", PASSWORD, BROWSER)
 
 
+def test_a_flood_the_global_limit_refuses_cannot_evict_the_account(db, owner, clock, monkeypatch):
+    """Thousands of sign-ins under made-up names from made-up addresses: all
+    but the first sixty a minute are refused by the global limit. Refused
+    attempts used to be counted in their buckets anyway, which filled the map
+    and pushed the real account's wait out of it."""
+    monkeypatch.setattr(passwords, "verify", lambda *a, **k: False)
+    for _ in range(6):
+        with pytest.raises((accounts.WrongPassword, throttle.Throttled)):
+            accounts.sign_in(db, "owner", "wrong password!", BROWSER)
+    waiting = throttle.wait("user", "owner")
+    assert waiting > 0
+
+    before = throttle.size()
+    refused = 0
+    for n in range(throttle.MAX_KEYS + 500):
+        flood = Client(address=f"198.51.{n // 250}.{n % 250}", user_agent="curl")
+        try:
+            accounts.sign_in(db, f"nobody{n}", "x", flood)
+        except throttle.Throttled:
+            refused += 1
+        except accounts.WrongPassword:
+            pass
+    assert refused >= throttle.MAX_KEYS  # nearly all of it
+    assert throttle.size() <= before + 2 * 60  # only checks that ran left a trace
+    assert throttle.wait("user", "owner") == waiting
+
+
+def test_a_waiting_bucket_spends_nothing_of_the_global_limit(db, owner, clock, monkeypatch):
+    """The other order of the same two checks: one hammered username must not
+    use the global limit up for everyone else."""
+    monkeypatch.setattr(passwords, "verify", lambda *a, **k: False)
+    for _ in range(200):
+        with pytest.raises((accounts.WrongPassword, throttle.Throttled)):
+            accounts.sign_in(db, "owner", "wrong password!", BROWSER)
+    elsewhere = Client(address="203.0.113.7", user_agent="Firefox")
+    with pytest.raises(accounts.WrongPassword):  # checked, not refused
+        accounts.sign_in(db, "someone-else", "x", elsewhere)
+
+
+def test_an_attempt_the_global_limit_refuses_is_not_held_against_the_owner(clock):
+    for _ in range(60):
+        throttle.check_global()
+    with pytest.raises(throttle.Throttled):
+        throttle.attempt(("user", "owner"), ("addr", "192.0.2.10"), count_global=True)
+    assert throttle.wait("user", "owner") == 0 and throttle.wait("addr", "192.0.2.10") == 0
+    assert throttle.size() == 0
+
+
 def test_reset_flag_clears_the_running_throttles(clock):
     for _ in range(8):
         throttle.fail("user", "owner")

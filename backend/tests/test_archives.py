@@ -642,6 +642,81 @@ def test_decrypt_and_verify_commands(client, coin, fake_dump, monkeypatch, capsy
     assert "not made with your backup key" in capsys.readouterr().err
 
 
+class _Stdin:
+    def __init__(self, data=b""):
+        self.buffer = io.BytesIO(data)
+
+
+@pytest.fixture()
+def database_step(monkeypatch):
+    """The pieces `restore-database` strings together, recorded, not run."""
+    from app.services import restore
+
+    calls = []
+    monkeypatch.setattr(restore, "server_major", lambda engine: 16)
+    monkeypatch.setattr(restore, "refuse_auth", lambda path, major: calls.append("refuse"))
+
+    def replace(path, on_drop=None):
+        # The dump is in private staging, whole, while the database step runs.
+        assert path.parent == _staging() and path.read_bytes() == b"a pg_dump"
+        calls.append("database")
+
+    monkeypatch.setattr(restore, "restore_database", replace)
+    monkeypatch.setattr(restore, "migrate", lambda engine: calls.append("migrate"))
+    monkeypatch.setattr(restore, "_after_database", lambda engine: calls.append("after") or [])
+    monkeypatch.setattr(sys, "stdin", _Stdin(b"a pg_dump"))
+    return calls
+
+
+def test_restore_database_command_migrates_what_it_restores(client, database_step, capsys):
+    """restore.sh's database step: an archive from an older release has to end
+    at this build's schema, or the running backend can't read it."""
+    assert cli.main(["restore-database"]) == 0
+    assert database_step == ["refuse", "database", "migrate", "after"]
+    assert list(_staging().iterdir()) == []  # the spooled dump is gone
+    assert "Database restored" in capsys.readouterr().out
+
+
+def test_restore_database_command_names_cleared_secrets(client, database_step, monkeypatch, capsys):
+    from app.services import restore
+
+    monkeypatch.setattr(restore, "_after_database", lambda engine: ["Numista API key"])
+    assert cli.main(["restore-database"]) == 0
+    assert "Numista API key" in capsys.readouterr().out
+
+
+def test_restore_database_command_refuses_sign_in_data(client, database_step, monkeypatch, capsys):
+    from app.services import restore
+
+    def refuse(path, major):
+        raise restore.RestoreError(restore.AUTH_REFUSED)
+
+    monkeypatch.setattr(restore, "refuse_auth", refuse)
+    assert cli.main(["restore-database"]) == 1
+    assert database_step == []  # the database was never touched
+    assert "not restored" in capsys.readouterr().err
+    assert list(_staging().iterdir()) == []
+
+
+def test_restore_database_command_says_when_only_the_migration_failed(
+    client, database_step, monkeypatch, capsys
+):
+    from app.services import restore
+
+    def broken(engine):
+        raise RuntimeError("revision 9999 is unknown")
+
+    monkeypatch.setattr(restore, "migrate", broken)
+    assert cli.main(["restore-database"]) == 1
+    assert database_step == ["refuse", "database"]
+    err = capsys.readouterr().err
+    assert "the archive's" in err and "Restart the backend" in err
+
+
+def test_restore_database_command_works_before_setup(unclaimed_client, database_step):
+    assert cli.main(["restore-database"]) == 0
+
+
 # --- from the stage 5 review --------------------------------------------------------
 
 

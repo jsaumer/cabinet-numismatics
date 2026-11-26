@@ -230,3 +230,240 @@ def test_a_row_the_database_refuses_does_not_end_the_import(client, monkeypatch)
     assert body["created"] == 2
     assert [e["row"] for e in body["errors"]] == [2]
     assert client.get("/api/items").json()["total"] == 2
+
+
+# --- the last 500s the review listed ---------------------------------------------
+
+
+def test_renaming_a_set_to_a_taken_name_is_a_conflict(client):
+    first = client.post("/api/sets", json={"name": "Type set"}).json()
+    second = client.post("/api/sets", json={"name": "Morgans"}).json()
+    clash = client.patch(f"/api/sets/{second['id']}", json={"name": " Type set "})
+    assert clash.status_code == 409
+    assert "already exists" in clash.json()["detail"]
+    # Its own name, and a new one, are both fine.
+    assert client.patch(f"/api/sets/{first['id']}", json={"name": "Type set"}).status_code == 200
+    renamed = client.patch(f"/api/sets/{second['id']}", json={"name": "Morgan dollars"})
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Morgan dollars"
+
+
+def test_a_slot_cannot_be_linked_to_a_piece_that_is_not_there(client, coin):
+    checklist = client.post("/api/checklists", json={"name": "Run", "slots": ["1964"]}).json()
+    slot = checklist["slots"][0]
+    url = f"/api/checklists/{checklist['id']}/slots/{slot['id']}"
+    missing = client.patch(url, json={"item_id": str(uuid.uuid4())})
+    assert missing.status_code == 422
+    assert missing.json()["detail"] == "No item with that id"
+    linked = client.patch(url, json={"item_id": coin["id"]})
+    assert linked.status_code == 200 and linked.json()["item_id"] == coin["id"]
+
+    client.delete(f"/api/items/{coin['id']}")  # in the trash: not there to link either
+    other = client.post("/api/checklists", json={"name": "Other", "slots": ["1965"]}).json()
+    trashed = client.patch(
+        f"/api/checklists/{other['id']}/slots/{other['slots'][0]['id']}",
+        json={"item_id": coin["id"]},
+    )
+    assert trashed.status_code == 422
+
+
+def test_a_csv_cell_past_the_readers_limit_is_a_422_at_preview(client):
+    """The csv module refuses a cell over 131,072 characters. (It refused a
+    NUL byte too until Python 3.11; that one is left to whichever Python
+    runs, and to the per-row guard in the import itself.)"""
+    cell = "x" * 140_000
+    body = f"type,country,denomination,year,notes\ncoin,France,1 franc,1960,{cell}\n".encode()
+    upload = client.post("/api/imports", files={"file": ("big.csv", body, "text/csv")})
+    assert upload.status_code == 201, upload.text
+    preview = client.post(
+        f"/api/imports/{upload.json()['upload_id']}/preview", json={"format": "cabinet"}
+    )
+    assert preview.status_code == 422
+    assert "can't be read as a spreadsheet" in preview.json()["detail"]
+
+
+def test_a_sale_cannot_have_its_included_flag_emptied(client, coin):
+    sale = client.post(
+        f"/api/items/{coin['id']}/comparables",
+        json={"sold_on": "2026-01-05", "venue": "eBay", "price": 40},
+    )
+    assert sale.status_code == 201, sale.text
+    emptied = client.patch(f"/api/comparables/{sale.json()['id']}", json={"included": None})
+    assert emptied.status_code == 422
+    left_out = client.patch(f"/api/comparables/{sale.json()['id']}", json={"included": False})
+    assert left_out.status_code == 200 and left_out.json()["included"] is False
+
+
+# --- one dead upstream costs one request, not one per amount ---------------------
+
+
+def test_a_rate_that_cannot_be_fetched_is_asked_for_once(client, monkeypatch):
+    """Five pieces priced in a currency the rate service doesn't carry used to
+    cost five requests (five seconds each when it is down) for every stats
+    call the dashboard makes."""
+    from app.services import currency
+
+    calls = []
+
+    def unavailable(base, quote):
+        calls.append((base, quote))
+        raise currency.RateUnavailable("not carried")
+
+    monkeypatch.setattr(currency, "fetch_rate", unavailable)
+    for year in range(1960, 1965):
+        _create(client, {**COIN, "year": year, "currency": "ARS", "acquisition_price": 10})
+
+    stats = client.get("/api/stats/collection", params={"currency": "USD"}).json()
+    assert stats["excluded_other_currency"] == 5  # still excluded and counted, never guessed
+    assert calls == [("ARS", "USD")]
+    client.get("/api/stats/collection", params={"currency": "USD"})
+    client.get("/api/stats/breakdowns", params={"currency": "USD"})
+    assert len(calls) == 1  # and left alone for a while after failing
+
+    # Once the wait is over it is tried again.
+    monkeypatch.setattr(currency.time, "monotonic", lambda: 10**9)
+    client.get("/api/stats/collection", params={"currency": "USD"})
+    assert len(calls) == 2
+
+
+def test_a_rate_that_works_is_fetched_once_and_clears_the_wait(client, monkeypatch):
+    from decimal import Decimal
+
+    from app.services import currency
+
+    answers = iter([currency.RateUnavailable("down"), Decimal("0.75")])
+    calls = []
+
+    def flaky(base, quote):
+        calls.append((base, quote))
+        answer = next(answers)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(currency, "fetch_rate", flaky)
+    for year in (1960, 1961):
+        _create(client, {**COIN, "year": year, "currency": "CAD", "acquisition_price": 100})
+
+    assert client.get("/api/stats/collection").json()["excluded_other_currency"] == 2
+    currency.reset_memory()  # the wait over
+    stats = client.get("/api/stats/collection").json()
+    assert stats["cost_basis"] == 150 and stats["excluded_other_currency"] == 0
+    assert calls == [("CAD", "USD"), ("CAD", "USD")]
+    assert currency._failed == {}
+
+
+def test_a_failed_spot_fetch_is_not_repeated_for_every_item(client, monkeypatch):
+    from app.services import pricing
+
+    calls = []
+
+    def down(metal):
+        calls.append(metal)
+        raise pricing.SpotUnavailable("gold-api is down")
+
+    monkeypatch.setattr(pricing, "fetch_spot_price", down)
+    silver = {**COIN, "composition": "90% silver", "weight_g": 26.73, "fineness": 0.9}
+    for year in range(1921, 1926):
+        _create(client, {**silver, "year": year})
+
+    result = client.post("/api/estimates/refresh?source=melt").json()
+    assert result["failed"] == 5 and result["updated"] == 0
+    assert calls == ["silver"]
+
+
+# --- exports a spreadsheet program can't read as formulas ---------------------------
+
+FORMULA_LOOKING = {
+    "notes": '=HYPERLINK("http://example.com","click")',
+    "variety": "+1 over 2",
+    "series": "-dash first",
+    "acquired_from": "@dealer",
+}
+
+
+def test_csv_export_guards_cells_that_look_like_formulas(client):
+    import csv
+    import io
+
+    _create(client, {**COIN, **FORMULA_LOOKING})
+    text = client.get("/api/items/export.csv").content.decode("utf-8-sig")
+    [row] = list(csv.DictReader(io.StringIO(text)))
+    for field, value in FORMULA_LOOKING.items():
+        assert row[field] == "'" + value, field
+    assert row["country"] == COIN["country"]  # ordinary text is left as it is
+
+
+def test_xlsx_export_stores_them_as_text_not_formulas(client):
+    import io
+
+    from openpyxl import load_workbook
+
+    _create(client, {**COIN, **FORMULA_LOOKING})
+    sheet = load_workbook(io.BytesIO(client.get("/api/items/export.xlsx").content)).active
+    header = [cell.value for cell in sheet[1]]
+    notes = sheet.cell(row=2, column=header.index("notes") + 1)
+    assert notes.value == FORMULA_LOOKING["notes"]
+    assert notes.data_type == "s"  # "f" would be a live formula
+
+
+@pytest.mark.parametrize("extension", ["csv", "xlsx"])
+def test_the_guard_survives_cabinets_own_round_trip(client, extension):
+    item = _create(client, {**COIN, **FORMULA_LOOKING})
+    exported = client.get(f"/api/items/export.{extension}").content
+    client.delete(f"/api/items/{item['id']}?permanent=true")
+
+    upload = client.post(
+        "/api/imports", files={"file": (f"cabinet-items.{extension}", exported, "text/csv")}
+    )
+    assert upload.status_code == 201, upload.text
+    run = client.post(f"/api/imports/{upload.json()['upload_id']}/run", json={})
+    assert run.status_code == 200 and run.json()["created"] == 1, run.text
+    [copy] = client.get("/api/items").json()["items"]
+    for field, value in FORMULA_LOOKING.items():
+        assert copy[field] == value, field
+
+
+# --- a save that changes nothing records nothing ----------------------------------
+
+
+def test_sending_the_same_numbers_back_is_not_an_edit(client):
+    """The item form sends every field on each save. JSON floats never equal
+    the stored Decimals, so an unchanged save used to add a history row and
+    relabel an automatic purchase-day spot price as typed in."""
+    item = _create(
+        client,
+        {
+            **COIN,
+            "composition": "Silver .999",
+            "weight_g": 31.1035,
+            "fineness": 0.999,
+            "acquisition_price": 12.1,
+            "acquisition_fees": 0.3,
+            "diameter_mm": 40.6,
+        },
+    )
+    db = _session()
+    try:
+        row = db.get(Item, uuid.UUID(item["id"]))
+        row.spot_at_purchase, row.spot_at_purchase_source = 31.4567, "auto"
+        db.commit()
+    finally:
+        db.close()
+    before = client.get(f"/api/items/{item['id']}").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()
+
+    numbers = ("weight_g", "fineness", "acquisition_price", "acquisition_fees", "diameter_mm")
+    same = {key: before[key] for key in (*numbers, "spot_at_purchase")}
+    assert client.patch(f"/api/items/{item['id']}", json=same).status_code == 200
+    after = client.get(f"/api/items/{item['id']}").json()
+    assert client.get(f"/api/items/{item['id']}/history").json() == history
+    assert after["spot_at_purchase_source"] == "auto"
+
+    # A real change is still recorded, with both values.
+    client.patch(f"/api/items/{item['id']}", json={"weight_g": 31.2})
+    latest = client.get(f"/api/items/{item['id']}/history").json()[0]
+    assert latest["changes"] == {"weight_g": [31.1035, 31.2]}
+
+    # And the same holds for a bulk edit, which re-stamps what hangs off a field.
+    client.post("/api/items/bulk", json={"ids": [item["id"]], "set": {"quantity": 1}})
+    assert client.get(f"/api/items/{item['id']}").json()["spot_at_purchase_source"] == "auto"

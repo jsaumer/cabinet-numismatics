@@ -12,6 +12,7 @@ whole lot), so per-piece values are multiplied by quantity.
 """
 
 import re
+import time
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -30,6 +31,17 @@ CACHE_TTL = timedelta(hours=12)
 
 # gold-api.com: free, keyless, USD per troy ounce.
 SPOT_API = "https://api.gold-api.com/price/{symbol}"
+# After a failed spot fetch the metal is left alone this long (the same rule
+# as exchange rates in currency.py), so a refresh over many items waits out
+# one timeout, not one per item.
+SPOT_FAILURE_BACKOFF_S = 120
+_spot_failed: dict[str, float] = {}  # metal -> time.monotonic() of the failure
+
+
+def reset_memory() -> None:
+    _spot_failed.clear()
+
+
 METAL_SYMBOLS = {"gold": "XAU", "silver": "XAG", "platinum": "XPT", "palladium": "XPD"}
 
 # Metal detection and fineness parsing (P11, v0.31.0): one rule each, shared
@@ -308,12 +320,23 @@ def get_spot_price(db: Session, metal: str) -> SpotPrice:
     now = datetime.now(timezone.utc)
     if cached is not None and now - _as_utc(cached.fetched_at) < CACHE_TTL:
         return cached
+    failed_at = _spot_failed.get(metal)
+    if failed_at is not None and time.monotonic() - failed_at < SPOT_FAILURE_BACKOFF_S:
+        # The last fetch just failed: don't ask again for every item of a
+        # refresh, each waiting out the timeout.
+        if cached is not None:
+            return cached
+        raise SpotUnavailable(
+            f"Spot price fetch for {metal} failed a moment ago; it is tried again shortly"
+        )
     try:
         price = fetch_spot_price(metal)
     except SpotUnavailable:
+        _spot_failed[metal] = time.monotonic()
         if cached is not None:
             return cached  # stale beats nothing
         raise
+    _spot_failed.pop(metal, None)
     if cached is None:
         cached = SpotPrice(metal=metal, currency="USD", source="gold-api.com")
         db.add(cached)

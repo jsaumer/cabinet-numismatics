@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.permissions import permission
 from app.db import get_db
-from app.models import Checklist, ChecklistSlot
+from app.models import Checklist, ChecklistSlot, Item
 from app.schemas import (
     ChecklistCreate,
     ChecklistDetail,
@@ -152,6 +152,11 @@ def update_slot(
         if not payload.filled:
             slot.item_id = None
     if payload.item_id is not None:
+        # An id that names no piece (or one in the trash) is the caller's
+        # mistake, said here; the foreign key would only say it as a 500.
+        known = db.execute(select(Item.id).where(Item.id == payload.item_id)).scalar_one_or_none()
+        if known is None:
+            raise HTTPException(status_code=422, detail="No item with that id")
         slot.item_id = payload.item_id
         slot.filled = True
     db.commit()

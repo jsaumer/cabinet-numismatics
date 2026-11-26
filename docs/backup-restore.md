@@ -93,6 +93,11 @@ or temporary file ever touches the backup directory. Inside, once decrypted:
 | `manifest.json` | format version, app version, schema revision, server and `pg_dump` versions, created-at, whether photos and documents are included, counts (items, of which in the trash, photos, documents, estimates), `auth_excluded: true` (informational: the dump's own table of contents is what a restore checks), size + SHA-256 of each member, and `mac_recipient` + `mac` (below) |
 | `SHA256SUMS` | the same checksums in `sha256sum -c` format |
 
+The archive format is version 1, named in the manifest. From v0.37.5 a build
+refuses an archive whose manifest names a later format, the way it refuses
+one from a newer schema, so a future format can never be misread by an
+older Cabinet.
+
 **Tamper evidence.** age authenticates what it encrypts, but anyone who
 knows the public key could encrypt a new archive to it. So the manifest
 carries `mac_recipient` (the public key of the backup key that made the
@@ -117,9 +122,11 @@ command, which is what `restore.sh` does.
 The backend image carries PostgreSQL 14–18 clients and dumps with the one
 matching the server's major version, so an archive restores with that
 server's own `pg_restore`. (A newer `pg_dump` writes settings an older server
-rejects on restore.) Against a server newer than 18 the in-app backup
-refuses and points at `backup.sh`, which uses the db container's own
-`pg_dump`.
+rejects on restore.) Against a server newer than 18 every backup refuses,
+`backup.sh` included, since from v0.30.0 the script asks the backend to
+write the archive; until a Cabinet release carries that client, dump with
+the server's own `pg_dump` (`docker compose exec db pg_dump ...`), which
+gives a plain dump, not a Cabinet archive.
 
 ## The backup key
 
@@ -213,7 +220,10 @@ With the compose stack running:
 
 The script asks the backend to write the archive (`python -m app.cli
 write-archive`), so it is the same encrypted kind as the app's, recorded like
-any other, and only ciphertext reaches the host.
+any other, and only ciphertext reaches the host. (From v0.30.0 to v0.37.4
+the first two forms, a full backup, wrote nothing and ended with exit code
+1 without a message; if a cron job of yours ran the script in that time,
+check that its archives exist.)
 
 On Windows run the scripts from Git Bash. `backups/` is gitignored; copy
 backups somewhere off the machine (NAS, cloud): a backup on the same disk as
@@ -504,16 +514,24 @@ and the checksums before touching anything, and refuses a plain `.zip` or a
 has no `RESTORE OLDER` step: it restores whichever genuine archive you give
 it, and prints the date the archive was made.
 
-**Destructive**: this replaces the current database contents (`pg_restore
---schema=public --clean`), all photo files, and all documents with the
-backup's state. Sign-in data is kept: the script refuses, before changing
-anything, a dump whose table of contents holds anything in `cabinet_auth`,
-and restores only the collection's schema. The
-stack must be running, and restoring an archive needs `unzip` and
-`sha256sum` on the host. After a restore, the app reflects the backup
-immediately, with no restart needed. The backend runs unprivileged while
-`docker compose exec` enters as root, so the script gives the extracted
-files to whoever owns the volume. Unlike the in-app restore, the script
+**Destructive**: this replaces the current database contents, all photo
+files, and all documents with the backup's state. The database step is the
+backend's own (`python -m app.cli restore-database`, from v0.37.5), the same
+one the in-app restore runs: tables the archive predates are dropped first,
+the dump is restored in one transaction (`pg_restore --schema=public`), and
+the migrations then bring it to this build's schema, so an archive from an
+older release works. Sign-in data is kept: a dump whose table of contents
+holds anything in `cabinet_auth` is refused before anything changes, and
+only the collection's schema is restored. The stack must be running, and
+restoring an archive needs `unzip` and `sha256sum` on the host. **The script
+ends by restarting the backend, then the proxy**, and waits for the backend
+to answer: until then the running backend still holds what it knew about
+the old database. (Before v0.37.5 the script ran `pg_restore` in the
+database container and restarted nothing, which left an archive from an
+older release unmigrated: every item query failed until the backend was
+restarted by hand.) The backend runs unprivileged while `docker compose
+exec` enters as root, so the script gives the extracted files to whoever
+owns the volume. Unlike the in-app restore, the script
 takes no safety backup and doesn't pause the app: take a backup first if
 the current state matters, and don't use the app while it runs.
 
@@ -550,9 +568,8 @@ archives can't be opened.
 
 ### On a Swarm
 
-`restore.sh` drives `docker compose`, so on a Swarm run its steps by hand
-(the database step on the node running the `db` task, the photo and document
-steps on the node running the `backend` task):
+`restore.sh` drives `docker compose`, so on a Swarm run its steps by hand,
+all of them on the node running the `backend` task:
 
 ```bash
 backend=$(docker ps -q -f name=cabinet_backend)
@@ -562,10 +579,8 @@ docker exec -i "$backend" python -m app.cli decrypt-archive \
 docker exec -i "$backend" python -m app.cli verify-archive - < "$tmp/backup.zip"
 unzip -q "$tmp/backup.zip" -d "$tmp/restore"
 cd "$tmp" && (cd restore && sha256sum -c SHA256SUMS)
-db=$(docker ps -q -f name=cabinet_db)
-# must print nothing: a dump holding sign-in data is not Cabinet's own
-docker exec -i "$db" pg_restore --list < restore/db.dump | grep -v '^;' | grep -w cabinet_auth
-docker exec -i "$db" sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --schema=public --clean --if-exists' < restore/db.dump
+# refuses sign-in data, restores in one transaction, then migrates
+docker exec -i "$backend" python -m app.cli restore-database < restore/db.dump
 docker exec "$backend" python -c 'from app.services import photos; photos.remove_marker()'
 docker exec "$backend" sh -c 'find /data/photos -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/photos' < restore/photos.tar.gz
@@ -574,14 +589,17 @@ docker exec "$backend" python -m app.cli strip-photo-metadata
 docker exec "$backend" sh -c 'find /data/documents -mindepth 1 -delete'
 docker exec -i "$backend" sh -c 'tar xzf - -C /data/documents' < restore/documents.tar.gz
 docker exec "$backend" sh -c 'chown -R "$(stat -c %u:%g /data/documents)" /data/documents'
+docker service update --force cabinet_backend    # start the backend afresh
 ```
 
 These are the same commands the script runs; they are rehearsed under
 Compose, not on a multi-node Swarm. `docker exec` enters as root, which is
 why the `chown` lines hand the files back to the volume's owner (on NFS
 with root squash they may fail; fix the ownership on the server instead).
-Skip the photo and document steps for a data-only archive. Then check
-Settings → Sharing, as above.
+Skip the photo and document steps for a data-only archive. The last line
+restarts the backend, as the script does (a Swarm's proxy finds the new task
+by the service's address, so it needs no restart). Then check Settings →
+Sharing, as above.
 
 ## Photo metadata
 

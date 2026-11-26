@@ -17,7 +17,7 @@ from app.services.pricing import NotApplicable, SourceUnavailable
 
 router = APIRouter(tags=["comparables"])
 
-REQUIRED = ("sold_on", "venue", "price", "currency")
+REQUIRED = ("sold_on", "venue", "price", "currency", "included")
 MONEY = ("price", "fees")
 
 
