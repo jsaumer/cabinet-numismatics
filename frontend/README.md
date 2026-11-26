@@ -419,6 +419,13 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   mint else country, set name): the backend's `Item.label` and
   `_name_key`, `ItemList.tsx`'s row, the item hero, `shareItemLabel`, and
   the report.
+- **No page ends blank** (v0.37.5): `components/error-boundary.tsx`'s
+  `PageErrorBoundary` wraps the routes (reset by the path, so navigating
+  away recovers), a `*` route says there is no page there, `ItemDetail`
+  shows "No such piece" for a 404 or a malformed id, and the boot check's
+  `unreachable` state shows a waiting screen that retries. The collection
+  list's keys move the selection only on a wide screen, and Enter is taken
+  only from the page itself or the selected row.
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 

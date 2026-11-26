@@ -7,9 +7,9 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.37.4 (proof and mint sets, with Numista's
-2026 terms, a fix to the Numista export import, Python 3.15, five
-fixes from a full review, and a dependency advisory fixed) is the latest
+**Status (November 2026): v0.37.5 (proof and mint sets, with Numista's
+2026 terms, a fix to the Numista export import, Python 3.15, two batches
+of fixes from a full review, and a dependency advisory fixed) is the latest
 published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
@@ -813,6 +813,13 @@ pieces turned up, each shipped as a small release:
   denial-of-service advisory the weekly audit had flagged, and the README
   condensed, with the full feature list and a comparison with other tools
   moved to [features.md](features.md).
+- ✔ v0.37.5: the second batch from the 9 November 2026 review, checked on
+  a running stack. The host backup script had written no full backup
+  since v0.30.0 (found during that check), the restore script left an
+  older archive's schema under a newer backend, four requests were server
+  errors, a price service being down stalled every page, and exports,
+  the URL photo import, the sign-in limit, and the generated key were
+  hardened.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

@@ -8,7 +8,7 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.37.5] - 2026-11-26
 
 The second batch from the 9 November 2026 review: recovery, the remaining
 server errors, and hardening. No migration.
@@ -2197,5 +2197,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.37.4...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.37.5...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
