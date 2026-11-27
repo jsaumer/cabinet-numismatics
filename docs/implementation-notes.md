@@ -494,7 +494,7 @@ docs/backup-restore.md. What a change here has to respect:
   test, which is last in `smoke.spec.ts` on purpose.
 - **Not covered** (as of v0.26.0; v0.26.1 met NFS live): NFS volumes. An
   archive from a genuinely older release was restored by hand on the
-  v0.39.0 build and is in CI from the release after v0.41.0
+  v0.39.0 build and is in CI from v0.42.0
   (`scripts/ci/upgrade-restore-test.sh`, below under "Small items before
   1.0"). The
   manifest isn't in `SHA256SUMS`, so verification catches corruption only.
@@ -3429,7 +3429,7 @@ supported way to start.
 - **The database gets no `env_file`** in the source file any more: `.env`
   holds keys that have no business in the Postgres container.
 
-## Small items before 1.0 (after v0.41.0)
+## Small items before 1.0 (v0.42.0)
 
 Row 25 of the 1.0 checklist: five small things, no migration, no API
 change.

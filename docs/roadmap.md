@@ -7,11 +7,13 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.41.0 (the first run: a one-file install from
-the published images, and a readable page where a wrong address got an
-empty reply; v0.40.0 before it added arm64 images with build provenance,
-v0.39.0 settled four contract decisions, and v0.38.0 added a CI check
-against breaking the API) is the latest published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.42.0 (small items from the 1.0 checklist: the
+web interface says when it and the server are different releases, a web
+app manifest, and CI restoring an older release's archive; v0.41.0 before
+it was the first run, a one-file install from the published images and a
+readable page for a wrong address, v0.40.0 added arm64 images with build
+provenance, v0.39.0 settled four contract decisions, and v0.38.0 added a
+CI check against breaking the API) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -411,7 +413,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,480 tests as of v0.41.0) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,490 tests as of v0.42.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -846,6 +848,12 @@ pieces turned up, each shipped as a small release:
   page where a wrong address used to get an empty reply, plain http on a
   trusted LAN as a supported way to start, a page on HTTPS without a
   public address, and CI walking the README's quick start.
+- ✔ v0.42.0: row 25, the small items. The web interface carries its own
+  version and says so on every page when the server is another release, a
+  web app manifest for "Add to Home Screen", CI upgrading from the newest
+  release and from v0.30.0 and restoring each one's archive in the app,
+  the tests on `httpx2`, and signing in going back to the page that asked
+  for it.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -992,7 +1000,7 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
   switches to the built images, claims the instance, and checks both
   migration chains (the collection and `cabinet_auth`) reach head with the
-  item intact. From the release after v0.41.0 the same job also upgrades
+  item intact. From v0.42.0 the same job also upgrades
   from the newest published release and from v0.30.0
   (`scripts/ci/upgrade-restore-test.sh`), each time restoring the old
   release's own archive in the app afterwards.
@@ -1092,7 +1100,7 @@ v0.26.0.
   count, newest three kept. During the run everything but health and the
   restore status answers 503, and health doesn't touch the database. An
   archive from a genuinely older release (v0.30.0) was restored by hand on
-  the v0.39.0 build and is restored in CI from the release after v0.41.0;
+  the v0.39.0 build and is restored in CI from v0.42.0;
   NFS was first tried live in v0.26.1; see
   [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 - ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
