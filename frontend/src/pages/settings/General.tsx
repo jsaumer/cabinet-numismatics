@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { SourceStatus, ValueStrategy } from "../../api";
+import { useDemo } from "../../components/demo-notice";
 import { ThemePicker } from "../../components/theme-picker";
 import { Section, SavedTick, SettingRow, useSavedTick, useSettings } from "./shared";
 
@@ -133,6 +134,30 @@ export default function GeneralSection() {
         </select>
         <SavedTick shown={retentionSaved} />
       </SettingRow>
+
+      <DemoRow />
     </Section>
+  );
+}
+
+/** Only while demo pieces exist: the way to remove them, for a browser where
+ * the dashboard's notice was dismissed. */
+function DemoRow() {
+  const { status, busy, error, remove } = useDemo();
+  if (!status || status.items === 0) return null;
+  return (
+    <SettingRow
+      label="Demo collection"
+      help={`${status.items} demo piece${status.items === 1 ? "" : "s"} loaded. Removing deletes them for good and leaves everything you entered.`}
+    >
+      <button type="button" disabled={busy} onClick={remove}>
+        {busy ? "Removing…" : "Remove the demo collection"}
+      </button>
+      {error && (
+        <span className="error" role="alert">
+          {error}
+        </span>
+      )}
+    </SettingRow>
   );
 }

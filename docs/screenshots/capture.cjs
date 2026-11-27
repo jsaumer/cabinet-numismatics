@@ -63,6 +63,8 @@ async function signIn(page) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
     // Cabinet keeps the chosen theme in localStorage; dark is its default.
     await context.addInitScript((t) => localStorage.setItem("theme", t), theme);
+    // The demo collection's notice, hidden the way "Keep it for now" hides it.
+    await context.addInitScript(() => localStorage.setItem("cabinet.demo.dismissed", "1"));
     const page = await context.newPage();
     if (mode !== "signin" && mode !== "share") {
       await signIn(page);

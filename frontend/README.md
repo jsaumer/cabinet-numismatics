@@ -47,7 +47,10 @@ public/               served at the site root, copied into dist/ as is
 src/
   main.tsx, App.tsx   entry; the boot gate (setup/sign-in/restoring/signed in),
                       the header (search, Add piece, theme toggle, account),
-                      the sidebar shell, and routes
+                      the sidebar shell, and routes. main.tsx builds a data
+                      router with one catch-all route around App: that is
+                      what lets components/unsaved.ts block a navigation;
+                      the pages are still <Routes> inside App
   styles.css          the one stylesheet, design tokens first
   api/                the API client; import everything from "../api"
     types/              response and payload types by area (items, settings,
@@ -458,7 +461,30 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 
+## The first run (after v0.42.0)
+
+- `components/welcome.tsx` is what an empty collection shows, on the
+  dashboard and the collection page: add a piece (the quick add, the one
+  "add" destination), import, or load the demo collection.
+- `components/demo-notice.tsx` has the notice a loaded demo shows and
+  `useDemo`, which Settings → General reuses for its removal row.
+- `components/unsaved.ts`'s `useUnsavedGuard(dirty)` asks before a
+  navigation or a reload loses work, on the item form, the quick add, and
+  an edited dashboard. Call its `allow()` before navigating after a save.
+- `components/display-currency.ts` is where a new piece's currency comes
+  from.
+- On the item form every control bound to a field carries
+  `data-field="<api name>"`. A save the server refuses is named by reading
+  the label around that control, marked with `aria-invalid`, and listed
+  beside the Save buttons; a new field needs the attribute too.
+
 ## End-to-end tests
+
+`e2e/first-run.spec.ts` covers the welcome state, the demo's button and
+notice, the display currency, a refused save, the unsaved-changes guard,
+and the quick add's "No date" and lookups. Where it needs an empty
+collection or a Numista key it answers those requests itself.
+
 
 `e2e/smoke.spec.ts` drives the real pages in Chromium: the dashboard, adding
 an item, recording a value, rearranging the dashboard and resetting it, the

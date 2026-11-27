@@ -8,15 +8,25 @@
 // ../auth/ConfirmDialog.tsx; client.ts never imports from ../auth so the
 // two sides can't import each other in a circle. See frontend/README.md.
 
+/** One field the server refused, by its API name, with the reason. */
+export interface FieldError {
+  field: string;
+  message: string;
+}
+
 export class ApiError extends Error {
   status: number;
   retryAfter: number | null;
+  /** A validation answer's fields, in the order the server listed them;
+   * empty for any other error. A form names them by their labels. */
+  fields: FieldError[];
 
-  constructor(message: string, status: number, retryAfter: number | null) {
+  constructor(message: string, status: number, retryAfter: number | null, fields: FieldError[] = []) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryAfter = retryAfter;
+    this.fields = fields;
   }
 }
 
@@ -38,9 +48,15 @@ export function setReauthHandler(fn: ReauthHandler | null) {
   onReauthRequired = fn;
 }
 
-async function readError(resp: Response): Promise<{ message: string; reauth: boolean }> {
+/** Pydantic prefixes a validator's own message; a person doesn't need it. */
+const reason = (msg: string | undefined) => (msg ?? "").replace(/^Value error, /, "");
+
+async function readError(
+  resp: Response,
+): Promise<{ message: string; reauth: boolean; fields: FieldError[] }> {
   let detail: string | undefined;
   let reauth = false;
+  const fields: FieldError[] = [];
   try {
     const body = await resp.json();
     if (typeof body.detail === "string") {
@@ -51,14 +67,15 @@ async function readError(resp: Response): Promise<{ message: string; reauth: boo
       detail = body.detail
         .map((e: { loc?: (string | number)[]; msg?: string }) => {
           const field = (e.loc ?? []).filter((p) => p !== "body").join(".");
-          return field ? `${field}: ${e.msg}` : e.msg;
+          fields.push({ field, message: reason(e.msg) });
+          return field ? `${field}: ${reason(e.msg)}` : reason(e.msg);
         })
         .join("; ");
     }
   } catch {
     /* non-JSON error body */
   }
-  return { message: detail || `HTTP ${resp.status}`, reauth };
+  return { message: detail || `HTTP ${resp.status}`, reauth, fields };
 }
 
 export interface ReqOptions {
@@ -88,7 +105,7 @@ export async function req<T>(url: string, init?: RequestInit, opts?: ReqOptions)
     return new Promise<T>(() => {});
   }
 
-  const { message, reauth } = await readError(resp);
+  const { message, reauth, fields } = await readError(resp);
 
   if (resp.status === 403 && reauth && !opts?.raw && !opts?.retried && onReauthRequired) {
     await onReauthRequired(); // throws "Confirmation canceled." if the visitor cancels
@@ -96,7 +113,7 @@ export async function req<T>(url: string, init?: RequestInit, opts?: ReqOptions)
     return req<T>(url, init, { ...opts, retried: true });
   }
 
-  throw new ApiError(message, resp.status, retryAfter);
+  throw new ApiError(message, resp.status, retryAfter, fields);
 }
 
 export const json = (method: string, body: unknown): RequestInit => ({

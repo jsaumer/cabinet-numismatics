@@ -7,6 +7,8 @@ import { EXPOSURE_GUIDANCE_URL } from "../auth/exposureWarning";
 export interface SetupCheck {
   key: string;
   text: ReactNode;
+  /** Something is broken, not merely still switched off: shown in red. */
+  failure?: boolean;
 }
 
 const DISMISS_KEY = "cabinet.setup.dismissed";
@@ -35,10 +37,11 @@ export function useSetupDismissed(): { dismissed: boolean; dismiss: () => void }
   };
 }
 
-/** What's still switched off on a fresh install. The caller supplies the
- * three requests it reads, so the dashboard fetches each of them once. */
+/** What's broken, then what's still switched off on a fresh install. The
+ * caller supplies the three requests it reads, so the dashboard fetches each
+ * of them once. An empty collection isn't on the list: the welcome state
+ * (components/welcome.tsx) says that. */
 export function setupChecks(
-  itemCount: number,
   settings: AppSettings,
   backups: BackupList | null,
   health: Health | null,
@@ -47,6 +50,7 @@ export function setupChecks(
   if (health && health.schema.status !== "ok") {
     list.push({
       key: "schema",
+      failure: true,
       text: (
         <>
           The database schema is <b>{health.schema.status}</b>. See Settings → About.
@@ -57,10 +61,22 @@ export function setupChecks(
   if (health && health.documents !== "ok") {
     list.push({
       key: "documents",
+      failure: true,
       text: (
         <>
           Document storage isn't a mounted volume, so uploads are refused. Bind{" "}
           <code>/data/documents</code> (docs/deployment.md §2).
+        </>
+      ),
+    });
+  }
+  if (backups && !backups.key.saved && !backups.key.supplied) {
+    list.push({
+      key: "backup_key",
+      text: (
+        <>
+          Every backup is encrypted, and the key has no recovery. Save it from{" "}
+          <Link to="/settings/backups">Settings → Backups</Link>.
         </>
       ),
     });
@@ -89,20 +105,10 @@ export function setupChecks(
   if (backups?.last_run && !backups.last_run.ok) {
     list.push({
       key: "backup_failed",
+      failure: true,
       text: (
         <>
           The last backup failed: {backups.last_run.error} (<Link to="/settings/backups">Settings</Link>).
-        </>
-      ),
-    });
-  }
-  if (backups && !backups.key.saved && !backups.key.supplied) {
-    list.push({
-      key: "backup_key",
-      text: (
-        <>
-          Every backup is encrypted, and the key has no recovery. Save it from{" "}
-          <Link to="/settings/backups">Settings → Backups</Link>.
         </>
       ),
     });
@@ -140,39 +146,34 @@ export function setupChecks(
       </>
     ),
   });
-  if (itemCount === 0) {
-    list.push({
-      key: "empty",
-      text: (
-        <>
-          The collection is empty. <Link to="/items/new">Add an item</Link>, or{" "}
-          <Link to="/import">import</Link> from Numista, OpenNumismat, or a spreadsheet.
-        </>
-      ),
-    });
-  }
-  return list;
+  // What's broken first; the rest keeps its order.
+  return [...list.filter((c) => c.failure), ...list.filter((c) => !c.failure)];
 }
 
-/** The checks as a list, with the way to hide them for good. The card around
- * it is the dashboard widget's. */
+/** The checks as a list under their heading, with the way to hide the ones
+ * that are only switched off. The card around it is the dashboard widget's. */
 export function SetupList({
   checks,
   onDismiss,
 }: {
   checks: SetupCheck[];
-  onDismiss: () => void;
+  onDismiss?: () => void;
 }) {
   return (
     <>
+      <h2>Before you rely on it</h2>
       <ul>
         {checks.map((c) => (
-          <li key={c.key}>{c.text}</li>
+          <li key={c.key} className={c.failure ? "setup-failure" : undefined}>
+            {c.text}
+          </li>
         ))}
       </ul>
-      <button type="button" className="link-button" onClick={onDismiss}>
-        Don't show this again
-      </button>
+      {onDismiss && (
+        <button type="button" className="link-button" onClick={onDismiss}>
+          Don't show this again
+        </button>
+      )}
     </>
   );
 }

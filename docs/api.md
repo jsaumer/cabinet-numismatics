@@ -1373,6 +1373,40 @@ as `bronze`. `PUT` (admin, but not fresh, like the dashboard layout) takes
 it, and it is not part of `GET`/`PUT /api/settings`. Light or dark is not
 here: that stays a per-browser choice on the header's toggle.
 
+## Demo collection
+
+| Method   | Path        | Purpose                                              |
+|----------|-------------|------------------------------------------------------|
+| `GET`    | `/api/demo` | How many demo pieces there are, and the photo fetch  |
+| `POST`   | `/api/demo` | Load the demo collection into an empty collection    |
+| `DELETE` | `/api/demo` | Delete the demo's pieces for good, and nothing else  |
+
+From the release after v0.42.0. Seventeen pieces (coins, notes, two bars, a
+proof set, a sold piece, a wish-list piece) with values and photos, for
+looking around before any real data is entered.
+
+`GET` (read) answers `{"items": 17, "photos": {"state": "running", "total":
+22, "fetched": 5, "failed": 0}}`. `items` counts the demo's pieces, the
+trash included, and is 0 when no demo is loaded. `photos.state` is `idle`
+(none asked for, or none under way since the backend started), `running`,
+or `done`; the counts are kept in memory, so a restart mid-way reports
+`idle` and the photos fetched so far stay.
+
+`POST` (write) answers 201 with the same shape once the pieces and their
+values are there. The photos follow on a background thread, never on the
+request: public domain and CC0 images from Wikimedia Commons, fetched one
+at a time through the URL import's own checks (about a minute for all 22).
+A photo that can't be fetched is counted in `failed`, never an error.
+`?photos=false` skips them. It answers 409 unless the collection holds no
+piece at all, while demo pieces sit in the trash, or while another load or
+removal is running, so the demo never mixes with a real collection.
+
+`DELETE` (admin, fresh, since it deletes for good) removes every demo
+piece, the trash included, with its photos and values, and answers
+`{"removed": 17}`. A piece entered by hand or imported is never touched,
+whatever was added beside the demo. Nothing marks a demo piece in any other
+answer: it is an ordinary item everywhere else in the API.
+
 ## Settings
 
 | Method | Path             | Purpose                                          |

@@ -235,8 +235,48 @@ assert schema["status"] == "ok", schema
   echo "bootstrap done: write/read/metrics tokens minted"
 }
 
+# The demo collection: loaded into an empty collection with one call, and
+# removed with another that takes nothing else. Without its photos, so CI
+# reaches no outside host. On a stack that already holds pieces (a rerun)
+# only the refusal can be checked.
+demo() {
+  echo "== demo collection =="
+  test "$(status_of "$BASE/api/demo")" = 401
+  test "$(status_of -X POST "$BASE/api/demo")" = 401
+  test "$(status_of -X POST -H "Authorization: Bearer $READ_TOKEN" "$BASE/api/demo")" = 403
+  if [ "$(apif "$BASE/api/items?limit=1" | field total)" != 0 ]; then
+    test "$(status_of -X POST -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/demo?photos=false")" = 409
+    echo "the collection isn't empty: loading the demo was refused, as it should be"
+    return 0
+  fi
+  test "$(apif "$BASE/api/demo" | field items)" = 0
+  apif -X POST "$BASE/api/demo?photos=false" | "$PY" -c '
+import json, sys
+body = json.load(sys.stdin)
+assert body["items"] == 17, body
+assert body["photos"] == {"state": "idle", "total": 0, "fetched": 0, "failed": 0}, body
+'
+  test "$(apif "$BASE/api/items?limit=1" | field total)" = 17
+  test "$(apif "$BASE/api/items?type=mint_set&limit=1" | field total)" = 1
+  # a second load is refused, and so is one into a collection of your own
+  test "$(status_of -X POST -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/demo?photos=false")" = 409
+  # a piece of the owner's own, which the removal must leave alone
+  mine=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d '{"type":"coin","country":"Demo test","denomination":"1 mine","year":2026}' | field id)
+  # removing deletes for good: never a token, and the admin needs a recent password
+  test "$(status_of -X DELETE -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/demo")" = 403
+  test "$(fresh -X DELETE "$BASE/api/demo" | field removed)" = 17
+  test "$(apif "$BASE/api/demo" | field items)" = 0
+  test "$(apif "$BASE/api/items?limit=1" | field total)" = 1
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/items/$mine")" = 200
+  fresh -X DELETE "$BASE/api/items/$mine?permanent=true" -o /dev/null
+  test "$(apif "$BASE/api/items?limit=1" | field total)" = 0
+  echo "the demo collection loads into an empty collection and leaves nothing behind"
+}
+
 smoke() {
   load_tokens
+  demo
   echo "== smoke =="
   # no interactive docs page; the schema stays. Anonymous gets 401 (the gate
   # refuses an unlisted path before routing even runs); a signed-in caller

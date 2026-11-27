@@ -37,8 +37,9 @@ stack needs. Cabinet needs a sign-in: nothing but the setup page is served
 until the admin exists. Open the app and enter the setup code from
 `docker compose logs backend` (or the `SETUP_CODE` you set), or claim it
 directly with `POST /api/auth/setup`. To load sample data for a populated
-dashboard, mint a write-scoped API token (`POST /api/auth/tokens`, or reuse
-the one `scripts/ci/stack-smoke.sh bootstrap` mints), then:
+dashboard, press "Load the demo collection" on the empty dashboard, or mint
+a write-scoped API token (`POST /api/auth/tokens`, or reuse the one
+`scripts/ci/stack-smoke.sh bootstrap` mints), then:
 
 ```bash
 python scripts/seed_demo.py --token cabinet_...

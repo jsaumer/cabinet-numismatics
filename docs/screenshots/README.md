@@ -57,7 +57,9 @@ BASE=http://localhost:8090 STACK_SMOKE_STATE=/tmp/cabinet-shots-smoke \
 COOKIES=/tmp/cabinet-shots-smoke/cookies.txt
 ```
 
-Seed the demo collection. `scripts/seed_demo.py` needs only the standard
+Seed the demo collection. `scripts/seed_demo.py` asks Cabinet to load it
+(`POST /api/demo`, the route behind the "Load the demo collection" button)
+and waits for the photos; it needs only the standard
 library, so any working Python 3 does (on Windows, `python3` is often a
 non-functional Microsoft Store stub; use `python` if `python3 --version`
 doesn't print a real version). Running it inside the backend container
@@ -152,9 +154,11 @@ they were Windows paths too, silently breaking the bind mounts.
   the 17 pieces (the two bullion pieces have none), so the stack needs to
   reach `upload.wikimedia.org` while it seeds; Commons refuses bursts, so
   the photos take about a minute. `--no-photos` skips them.
-- The value-over-time chart needs estimates recorded on different days;
-  freshly seeded demo data is all one day, so that card shows its
-  single-data-point message.
+- The demo's values are recorded on different days (from the release after
+  v0.42.0), so the value-over-time chart draws a line.
+- A loaded demo shows a "This is the demo collection" notice on the
+  dashboard and the collection page; `capture.cjs` sets the key that hides
+  it (`cabinet.demo.dismissed`), as "Keep it for now" does.
 - Never point any of this at your main development stack. `bootstrap`'s
   claim step only works once per stack anyway (a claimed stack signs in
   instead), but the settings and backup calls above are real writes, and

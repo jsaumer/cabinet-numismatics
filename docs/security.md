@@ -589,8 +589,10 @@ Rules that go with the table:
   (`api.gold-api.com`, `api.frankfurter.dev`), the keyless purchase-day spot
   lookup for the bullion stack (`cdn.jsdelivr.net`, falling back to
   `*.currency-api.pages.dev`), to Numista and PCGS once you give them a key,
-  to the alert webhook and heartbeat URLs you save, and to a photo URL you
-  ask for, all with timeouts, and the price and rate lookups with cached
+  to the alert webhook and heartbeat URLs you save, to a photo URL you
+  ask for, and to `upload.wikimedia.org` for the demo collection's photos
+  when you press "Load the demo collection" (never otherwise), all with
+  timeouts, and the price and rate lookups with cached
   fallbacks. The collection is never sent outward: a price source receives
   only the catalog number, PCGS number or cert number, and grade being
   looked up; the purchase-day lookup sends only a date and a metal code. From v0.33.0, outbound requests also go to each configured single sign-on provider's discovery document, token endpoint, and key set, and to GitHub's profile endpoint for the `github` kind, and to a trusted-header gateway's key set: nothing beyond the protocol's own parameters (a code, a state value, a key id) ever leaves, and none of it carries collection data either.

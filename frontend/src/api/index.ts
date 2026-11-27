@@ -10,7 +10,7 @@ export * from "./types/auth";
 export * from "./types/share";
 export { api } from "./calls";
 export { ApiError, setReauthHandler, setUnauthorizedHandler } from "./client";
-export type { ReqOptions } from "./client";
+export type { FieldError, ReqOptions } from "./client";
 
 import type { ItemType } from "./types/items";
 

@@ -14,8 +14,10 @@ import {
 } from "../api";
 import { FreshLink } from "../auth/FreshLink";
 import { Menu } from "../components/controls";
+import { DemoNotice } from "../components/demo-notice";
 import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
 import { TraitBadges, useSerialTraits } from "../components/serial-traits";
+import { Welcome } from "../components/welcome";
 import ItemDetail from "./ItemDetail";
 import { detectMetal } from "./item-form/model";
 
@@ -201,6 +203,11 @@ export default function ItemList() {
     api.collectionStats().then(setStats).catch(() => setStats(null));
   }, [page]); // refresh totals when the list data changes
 
+  // Fetch the list again: the demo collection was loaded, finished its
+  // photos, or was removed.
+  const [reloads, setReloads] = useState(0);
+  const reload = () => setReloads((n) => n + 1);
+
   const sort = params.get("sort") ?? "-created_at";
   const offset = Number(params.get("offset") ?? "0");
 
@@ -232,7 +239,7 @@ export default function ItemList() {
       api.listItems(query).then(setPage).catch((e: Error) => setError(e.message));
     }, 250); // debounce text input
     return () => clearTimeout(timer);
-  }, [params, sort, offset]);
+  }, [params, sort, offset, reloads]);
 
 
   const hasFilters = FILTER_KEYS.some((k) => params.get(k));
@@ -550,14 +557,15 @@ export default function ItemList() {
         )}
         {filters}
         {bulk}
+        <DemoNotice onChange={reload} />
         {error && <p className="error">{error}</p>}
-        {page && items.length === 0 && (
+        {page && items.length === 0 && (stats?.counts.total === 0 ? (
+          <Welcome onLoaded={reload} />
+        ) : (
           <div className="empty">
-            {page.total === 0 && !hasFilters
-              ? "No items yet. Add the first piece of your collection, or import one."
-              : "Nothing matches these filters."}
+            {page.total === 0 && !hasFilters ? "No pieces here yet." : "Nothing matches these filters."}
           </div>
-        )}
+        ))}
         {items.length > 0 && (
           <>
             <div className="wb-colhead">

@@ -34,7 +34,12 @@ export default function AddRun() {
   useEffect(() => {
     api
       .getSettings()
-      .then((s) => setConfigured(s.sources.some((x) => x.key === "numista" && x.configured)))
+      .then((s) => {
+        setConfigured(s.sources.some((x) => x.key === "numista" && x.configured));
+        // The run starts in the display currency, unless one was typed.
+        const display = s.display_currency?.toUpperCase();
+        if (display) setShared((sh) => (sh.currency === "USD" ? { ...sh, currency: display } : sh));
+      })
       .catch(() => setConfigured(false));
     api.listSets().then(setSets).catch(() => setSets([]));
   }, []);
