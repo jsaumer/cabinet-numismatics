@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CatalogRef, Checklist, Item
 from app.models.item import item_catalog_refs
+from app.services.refs import stored_form
 
 MAX_SLOTS = 500
 
@@ -36,6 +37,7 @@ def owned_by_issue(
     by the ORM listener."""
     stmt = select(Item).where(Item.status == "owned")
     if norm(catalog) and norm(ref):
+        catalog, ref = stored_form(catalog, ref)
         stmt = stmt.where(
             Item.id.in_(
                 select(item_catalog_refs.c.item_id)

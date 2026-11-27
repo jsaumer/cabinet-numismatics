@@ -142,7 +142,9 @@ and data migrations.
 `.github/workflows/ci.yml`, on every push to `main` and every pull request:
 
 - **backend**: `ruff check`, `ruff format --check`, and `pytest` on Python
-  3.10 (the floor in `pyproject.toml`) and 3.15 (what the image runs).
+  3.10 (the floor in `pyproject.toml`) and 3.15 (what the image runs). The
+  suite includes the API contract check: the build's OpenAPI schema against
+  `docs/openapi.json`, the last release's (see "Changing the API" below).
 - **frontend**: `npm ci` and `npm run build` (typecheck and build) on
   Node 22.
 - **stack**: builds and starts the compose stack with the CI-only mock
@@ -232,6 +234,28 @@ running them this way never touches one you already have.
 runtime dependencies, and Trivy scans of both images (high and critical,
 fixable only). It is separate from CI so a newly published CVE doesn't block
 an unrelated change.
+
+## Changing the API
+
+`docs/openapi.json` is the schema of the last release, and
+`tests/test_api_contract.py` fails when the build breaks a client written
+against it: a removed path, operation, parameter, field, or listed value, a
+changed type, an input that became required. The rules, and what the check
+cannot see, are under "Stability policy" in [docs/api.md](docs/api.md).
+
+- **An addition** (a new endpoint, parameter, or response field) passes as
+  it is. Leave `docs/openapi.json` alone; a release writes it again.
+- **A breaking change** is refused from v1.0.0 on without a new major
+  version. Before 1.0, when it has to happen: put the old and new forms in
+  `CHANGELOG.md`, then in `backend/` run
+  `python -m tests.api_contract update --allow-breaking` and commit the
+  rewritten schema with the change.
+- **A release** runs `python -m tests.api_contract update` in the pull
+  request that bumps the version; a test fails until the committed schema
+  names the new version.
+
+`python -m tests.api_contract check` prints the breaking changes without
+running the rest of the suite.
 
 ## Pull requests
 

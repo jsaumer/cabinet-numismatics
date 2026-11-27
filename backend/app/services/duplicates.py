@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import CatalogRef, Item
 from app.models.item import item_catalog_refs
+from app.services.refs import stored_form
 
 LIMIT = 10
 
@@ -36,7 +37,9 @@ def find_similar(
     cert = _norm(cert_number)
     if cert:
         conditions.append(func.lower(func.trim(Item.cert_number)) == cert)
-    wanted_refs = {(_norm(c), _norm(r)) for c, r in refs or [] if _norm(c) and _norm(r)}
+    # In the form a reference is stored in: `numista:1234` finds `N#1234`.
+    stored = (stored_form(c, r) for c, r in refs or [])
+    wanted_refs = {(_norm(c), _norm(r)) for c, r in stored if _norm(c) and _norm(r)}
     for catalog, code in wanted_refs:
         conditions.append(
             Item.id.in_(

@@ -36,6 +36,29 @@ in a response, or a new value where a field already lists several (a source
 name, a status) may arrive in any release, so clients should ignore fields
 they don't know. Error messages (`detail`) are for people, not for matching.
 
+**The check behind it.** [openapi.json](openapi.json) in this folder is the
+schema of the last release, the same document a running Cabinet serves at
+`/api/openapi.json`. CI compares every build with it
+(`backend/tests/api_contract.py`, run with the test suite) and fails on:
+
+- a path, an operation, or a parameter that is gone;
+- a field gone from a request or a response;
+- a changed type: a response may only narrow (a field that was never `null`
+  can't start being `null`), a request may only widen (what was accepted
+  stays accepted);
+- a listed value (`coin`, `owned`) that is no longer listed, or a request
+  field that starts listing its values;
+- a request field or parameter that became required, or a response field
+  that may now be missing;
+- a success status (`200`, `201`, `204`) an operation no longer answers.
+
+Additions pass. The check reads structure, so it cannot see a narrowed
+range, length, or pattern, or a field that keeps its shape and changes its
+meaning: those are breaking changes all the same, and the policy above
+covers them. Error statuses and error bodies are outside it. The committed
+schema is written again with each release, and from v1.0.0 the tool that
+writes it refuses a breaking change unless the major version went up.
+
 Renamed for v0.30.0, the one pass made before 1.0:
 
 | Before | Now |
@@ -224,6 +247,13 @@ or note ("1932-D 25 cents", "ND (1921) 50 pfennig"), the refiner (else the
 country) and product name for a bar or round, and the year, issuing mint
 (else the country), and set name for a proof or mint set ("2019 United
 States Mint Silver Proof Set").
+
+**How the text filters match.** `q`, `country`, and `tag` ignore capitals,
+and none of them has a wildcard: a `%` or `_` is the character typed
+(`q=50%` finds "50% off", not "500"). `q` matches anywhere in a field;
+`country` and `tag` match the whole value. A tag is one whatever the
+capitals, here and in every other `tag` parameter (`/api/stats/breakdowns`,
+`/api/stack`), and a name that is no tag matches nothing.
 The response is
 `items`, `total`, `limit`, and `offset`. Each item includes its primary
 photo/thumbnail keys (`primary_photo_key`, `primary_thumb_key`) and its latest
@@ -253,7 +283,13 @@ bulk `set` (a bulk `year` stays as it is, and can't be cleared without it).
 Item payloads accept `tags` (list of names, get-or-create), `catalog_refs`
 (list of `{catalog, ref_code}`), `grade_id`, `set_id` (an unknown one is 422),
 and `custom_fields` (up to 20 name → text pairs; names up to 50 characters,
-values up to 500). CSV import consumes the export format; derived columns
+values up to 500). A tag is one whatever the capitals (v0.38.0): sending
+`silver` to a collection that has `Silver` uses that tag, and the answer
+spells it the way it was first typed. A catalog name is trimmed and kept in
+lower case, and a `numista` reference has one form, `N#<digits>`: `1234`,
+`n#1234`, `N# 1234`, and `N-1234` are all saved as `N#1234`, and anything
+that isn't the type's number is `422`. Other catalogs keep what was typed.
+CSV import consumes the export format; derived columns
 are ignored, rows whose `id` already exists are skipped (so
 re-importing an export never duplicates the collection), and per-row failures
 are reported without aborting the rest; it answers `created`, `skipped`, and
@@ -480,7 +516,12 @@ aren't shown, and deletes the old files.
 
 Estimates are append-only: each `POST .../estimates` adds a timestamped record
 (`estimated_value`, `currency`, `source`, optional `confidence` 0–1, optional
-`note` up to 500 characters), never overwriting history. The one exception is
+`note` up to 500 characters), never overwriting history. `source` says where
+a typed-in value came from (`manual` when left out, trimmed, up to 100
+characters). It can't be a price source's own name, `melt`, `numista`,
+`pcgs`, or `comps`, alone or before a colon, in any capitals (`422`): that
+is how a source's own estimates are told apart, so "PCGS price guide" is
+fine and "pcgs: dealer said" is not. The one exception is
 a value typed in by hand, which `DELETE .../estimates/{estimate_id}` removes
 (`204`): a mistake shouldn't have to stay in the chart. An estimate from a
 price source (`melt`, `numista`, `pcgs`, `comps`) is `409`, and one that
@@ -720,7 +761,7 @@ layout; add them from "Edit dashboard".
 | Method   | Path                | Purpose                                        |
 |----------|---------------------|------------------------------------------------|
 | `GET`    | `/api/grades`       | List grade scales and codes (`?scale=` filter) |
-| `GET`    | `/api/tags`         | List tags with usage counts                    |
+| `GET`    | `/api/tags`         | List tags with usage counts; one per name, whatever the capitals |
 | `GET`    | `/api/sets`         | List sets/lots with item counts                |
 | `POST`   | `/api/sets`         | Create a set (409 on duplicate name)           |
 | `PATCH`  | `/api/sets/{id}`    | Rename / edit a set; `409` when another set has the name |
@@ -756,7 +797,9 @@ answers up to
 ten items that match on any of them, each with `id`, `label`, `grade_label`,
 `status`, `in_trash`, and the `reason` (`same cert number`, `same pcgs
 reference`, `same country, denomination, year, and mint mark`). Matching
-ignores case and spacing; trashed items are included and listed last. With
+ignores case and spacing, and a Numista reference is read in any accepted
+spelling (`numista:1234` finds `N#1234`); trashed items are included and
+listed last. With
 nothing to go on it answers `[]`. The import preview runs the same check
 and notes lookalikes in a row's `messages`.
 

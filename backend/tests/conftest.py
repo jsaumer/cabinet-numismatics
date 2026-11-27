@@ -2,6 +2,8 @@ import base64
 import io
 import os
 import tempfile
+import uuid
+from decimal import Decimal
 
 # Point PHOTO_DIR somewhere disposable before app.config is imported,
 # so the lifespan hook doesn't create a photos/ dir in the repo.
@@ -30,6 +32,25 @@ from app.models.auth import SCHEMA as AUTH_SCHEMA
 from app.models.auth import AuthBase
 from app.models.grades_seed import seed_rows
 from app.services import crypto
+
+
+def source_estimate(item_id, *, estimated_value, source, currency="USD") -> str:
+    """An estimate as a price source leaves it, written straight to the test
+    database: the API refuses a typed-in value under a source's own name
+    (`schemas.RESERVED_SOURCES`), which is the only way these rows used to
+    be faked."""
+    from app.models import PriceEstimate
+
+    db = next(app.dependency_overrides[get_db]())
+    row = PriceEstimate(
+        item_id=uuid.UUID(str(item_id)),
+        source=source,
+        estimated_value=Decimal(str(estimated_value)),
+        currency=currency,
+    )
+    db.add(row)
+    db.commit()
+    return str(row.id)
 
 
 @pytest.fixture(autouse=True)

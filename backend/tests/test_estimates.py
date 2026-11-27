@@ -8,7 +8,7 @@ from app.db import get_db
 from app.main import app
 from app.models import PriceEstimate
 from app.services import currency
-from tests.conftest import COIN
+from tests.conftest import COIN, source_estimate
 
 
 def _session():
@@ -63,10 +63,7 @@ def test_list_shows_latest_value(client, coin):
 
 
 def test_list_shows_latest_value_source_for_preferred_strategy(client, coin):
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
-    )
+    source_estimate(coin["id"], estimated_value=100.0, source="numista:N#1 XF")
     client.post(
         f"/api/items/{coin['id']}/estimates",
         json={"estimated_value": 150.0, "source": "manual"},  # newer, but not preferred
@@ -94,10 +91,7 @@ def test_csv_export(client, coin):
 
 
 def test_value_strategy_preferred_source_with_fallback(client, coin):
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
-    )
+    source_estimate(coin["id"], estimated_value=100.0, source="numista:N#1 XF")
     client.post(
         f"/api/items/{coin['id']}/estimates",
         json={"estimated_value": 150.0, "source": "manual"},  # newer, but not preferred
@@ -124,14 +118,10 @@ def test_value_strategy_average_mixed_currency(client, coin, monkeypatch):
         raise currency.RateUnavailable("no rate")
 
     monkeypatch.setattr(currency, "fetch_rate", fake_rate)
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "currency": "USD", "source": "melt:silver @ 0.01/g"},
+    source_estimate(
+        coin["id"], estimated_value=100.0, currency="USD", source="melt:silver @ 0.01/g"
     )
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 200.0, "currency": "CAD", "source": "numista:N#1 XF"},
-    )
+    source_estimate(coin["id"], estimated_value=200.0, currency="CAD", source="numista:N#1 XF")
     client.put("/api/settings", json={"value_strategy": "average"})  # display currency stays USD
 
     entry = client.get("/api/items").json()["items"][0]
@@ -145,18 +135,11 @@ def test_value_strategy_average_excludes_manual_and_dedupes(client, coin):
         f"/api/items/{coin['id']}/estimates",
         json={"estimated_value": 1000.0, "source": "manual"},
     )
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "source": "melt:silver @ 0.01/g"},
-    )
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 50.0, "source": "numista:N#1 XF"},
-    )
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 60.0, "source": "numista:N#1 UNC"},  # supersedes the numista above
-    )
+    source_estimate(coin["id"], estimated_value=100.0, source="melt:silver @ 0.01/g")
+    source_estimate(coin["id"], estimated_value=50.0, source="numista:N#1 XF")
+    source_estimate(
+        coin["id"], estimated_value=60.0, source="numista:N#1 UNC"
+    )  # supersedes the numista above
 
     # Estimates created in quick succession can land in the same second; pin an
     # explicit order so "most recent per source" is deterministic in the test.
@@ -182,9 +165,8 @@ def test_value_strategy_average_falls_back_when_nothing_converts(client, coin, m
         raise currency.RateUnavailable("offline")
 
     monkeypatch.setattr(currency, "fetch_rate", unavailable)
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "currency": "CAD", "source": "melt:silver @ 0.01/g"},
+    source_estimate(
+        coin["id"], estimated_value=100.0, currency="CAD", source="melt:silver @ 0.01/g"
     )
     client.put("/api/settings", json={"value_strategy": "average"})  # display currency is USD
 
@@ -194,10 +176,7 @@ def test_value_strategy_average_falls_back_when_nothing_converts(client, coin, m
 
 
 def test_csv_export_respects_value_strategy(client, coin):
-    client.post(
-        f"/api/items/{coin['id']}/estimates",
-        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
-    )
+    source_estimate(coin["id"], estimated_value=100.0, source="numista:N#1 XF")
     client.post(
         f"/api/items/{coin['id']}/estimates",
         json={"estimated_value": 150.0, "source": "manual"},

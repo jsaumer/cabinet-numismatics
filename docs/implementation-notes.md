@@ -3196,6 +3196,75 @@ The rest of what the 9 November 2026 review reproduced. No migration.
   (`dialog[open], [aria-modal="true"]`), moves the selection only when
   `wide`, and takes Enter only from the page itself or the selected row.
 
+## The API contract check and the last input rules (v0.38.0)
+
+Rows 17 and 13 of the 1.0 checklist from the 9 November 2026 review.
+Migration `0024`.
+
+- **`docs/openapi.json` is the last release's schema, not the build's.**
+  `backend/tests/api_contract.py` holds the comparison
+  (`breaking_changes(old, new)`) and the command; `test_api_contract.py`
+  runs it against `app.openapi()` in the ordinary suite, so the two
+  required backend jobs are the CI check and the ruleset needed no new
+  job name. It is a comparison of meaning, never of text: `pip install -e`
+  in CI may resolve another FastAPI or Pydantic than the lockfile, and two
+  versions can print the same schema differently.
+- **What it flags** is listed in docs/api.md ("The check behind it"). The
+  direction matters: a response may only narrow, a request may only widen,
+  so `string` to `string | null` breaks a response and is fine in a
+  request. `integer` counts as a `number`. Several object shapes in one
+  `anyOf` are matched by component name. Error statuses are not compared.
+- **What it can't see** is a narrowed range, length, or pattern, and a
+  changed meaning. All four input rules below are invisible to it, which
+  is why they were made now and are in the changelog as breaking.
+- **The committed schema changes in two cases only**: a release (`update`
+  in the PR that bumps the version; `test_the_committed_document_is_this_version`
+  fails until then, which is the reminder), and a breaking change that is
+  meant (`update --allow-breaking`, before 1.0 only; from 1.0.0 the
+  command refuses unless the major version is above the committed one).
+  Don't run `update` for an addition between releases: the committed file
+  would stop being the last release's.
+- **The version comes from `pyproject.toml`** (`project_version()`), not
+  the installed package's metadata: an editable install made before a
+  version bump still reports the old one (the dev machine's said 0.37.1).
+- **A typed-in estimate can't use a price source's name.**
+  `schemas.RESERVED_SOURCES` (kept equal to `pricing.ADAPTER_NAMES` by a
+  test; schemas can't import pricing) is checked against the text before
+  the first colon, trimmed and in any capitals. `pricing.source_key` is
+  unchanged and still exact, so rows stored before the rule read as they
+  did. Tests that need a source's estimate without running an adapter use
+  conftest's `source_estimate`, which writes the row; posting one through
+  the API was the old way and is now a 422.
+- **`items._like` escapes `\`, `%`, and `_`**, and every `ilike` in the
+  list filters passes `escape="\\"`. A new text filter does the same.
+  `serial_trait` needs none: it is checked against the known traits first.
+- **A tag is one per name whatever the capitals.** `services/tags.py`'s
+  `find` and `resolve` are the only lookups, both through SQL's
+  `lower(name)`, the expression the unique index (`uq_tags_name_lower`) is
+  on, so Python never folds case and can't disagree with the database
+  about a non-ASCII letter. The list's `tag=`, `/api/stats/breakdowns`,
+  `/api/stack`, and bulk add and remove all match by the tag found, not by
+  its spelling; `stack.in_scope` takes the stored name, which
+  `stack_figures` resolves first. The first spelling is kept; there is no
+  rename.
+- **A Numista reference is stored as `N#<digits>`.** `services/refs.py`
+  has the one parser (`numista_ref`) and `stored_form`, which
+  `resolve_catalog_refs`, the duplicate check, and
+  `checklists.owned_by_issue` all go through, so a question asked as
+  `numista:1234` finds `N#1234`. `schemas.CatalogRefIn` normalizes and
+  refuses anything that isn't a number; `CatalogRefOut` no longer inherits
+  from it and has no rules, and the two fill answers (`NumistaType`,
+  `PcgsCert`) use the output model, since reading never validates.
+  `numista.type_id_for` still reads the digits of whatever is stored.
+- **Migration `0024` carries a frozen copy of the parser** (a test compares
+  the two on a list of spellings; when the rule changes, the copy stays and
+  a new migration reaches existing rows). It merges tags that differ by
+  case into the earliest and rewrites or merges Numista references, taking
+  the duplicate link away first where one item held both spellings, since
+  both link tables have the pair as their primary key.
+  `tests/test_input_rules.py` runs it on SQLite through alembic's
+  `Operations`; `stack-smoke.sh smoke` checks the rules on Postgres.
+
 ## Releases
 
 

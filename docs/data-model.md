@@ -6,7 +6,7 @@ grades and catalog numbers, caches for market data, and a key/value settings
 table.
 
 **Migrations:** two Alembic chains. The collection (`backend/alembic/`,
-schema `public`) is at revision `0023`; sign-in data (`backend/alembic_auth/`,
+schema `public`) is at revision `0024`; sign-in data (`backend/alembic_auth/`,
 schema `cabinet_auth`, from v0.30.0) is at `a0002`. The backend applies both
 on startup, collection first, in one transaction. What each release added is
 in [implementation-notes.md](implementation-notes.md).
@@ -282,7 +282,11 @@ goes.
 ### tags / item_tags
 Free-form labels for arbitrary grouping (`tags.id`, unique `tags.name`;
 `item_tags` joins item ↔ tag, both cascade). Tags are created on first use
-via item payloads; tags no item uses remain listed with count 0.
+via item payloads; tags no item uses remain listed with count 0. From
+v0.38.0 (`0024`) a tag is one per name whatever the capitals: a unique index
+on `lower(name)` (`uq_tags_name_lower`), every lookup through
+`services/tags.py`, and the spelling first typed is the one kept. The
+migration merged tags that differed only by case into the earliest.
 
 ### spot_prices (cache)
 Per-metal spot price cache for melt estimates (`metal` PK, `price_per_gram`,
@@ -328,6 +332,13 @@ Catalog numbers used to match items to external price sources.
 | `id`        | int PK |                                                |
 | `catalog`   | text   | e.g. `krause`, `numista`, `redbook`            |
 | `ref_code`  | text   | the catalog's identifier; unique per catalog   |
+
+`catalog` is stored trimmed and in lower case. A `numista` reference is
+stored as `N#<digits>` (v0.38.0, `0024`, `services/refs.py`), whatever
+spelling it arrived in, so pricing, the duplicate check, checklists, and
+"Add a run" match the same text; the migration rewrote existing rows and
+merged the ones that became equal. A Numista reference from before the rule
+that isn't a number is left as it was.
 
 ### item_catalog_refs (join)
 Associates an item with one or more catalog references.

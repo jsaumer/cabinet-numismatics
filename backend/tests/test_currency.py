@@ -10,7 +10,7 @@ from app.db import get_db
 from app.main import app
 from app.models import PriceEstimate
 from app.services import currency, pricing
-from tests.conftest import COIN
+from tests.conftest import COIN, source_estimate
 
 SILVER = {
     **COIN,
@@ -101,10 +101,7 @@ def test_value_history(client):
 
 def test_value_history_strategy_aware(client):
     a = _create(client, COIN)
-    client.post(
-        f"/api/items/{a['id']}/estimates",
-        json={"estimated_value": 100.0, "source": "numista:N#1 XF"},
-    )
+    source_estimate(a["id"], estimated_value=100.0, source="numista:N#1 XF")
     client.post(
         f"/api/items/{a['id']}/estimates",
         json={"estimated_value": 200.0, "source": "manual"},  # newer, but not preferred

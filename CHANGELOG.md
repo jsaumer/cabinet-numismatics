@@ -8,6 +8,53 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+The API contract check, and the last inputs tightened while a stricter rule
+is still free. Migration `0024`, applied on startup.
+
+### Changed (breaking for API clients)
+
+Four inputs are stricter. None changes a path or a field, so each is
+listed here with the old and new behavior:
+
+- **A typed-in value can't use a price source's name as its `source`.**
+  `POST /api/items/{id}/estimates` answers `422` when `source` is `melt`,
+  `numista`, `pcgs`, or `comps`, alone or before a colon, in any capitals.
+  Before, a value typed in as "pcgs: dealer said" counted as PCGS's own in
+  the reports and the scheduled refresh, and could not be deleted. Write
+  the source another way ("PCGS price guide"). Values already stored are
+  left as they are.
+- **`%` and `_` in a search are the characters typed.** In `q` and
+  `country` on `GET /api/items` they were wildcards, so `q=50%` also found
+  "500" and `q=MS_65` found "MS-65". A client that relied on the wildcard
+  no longer gets one.
+- **A tag is one whatever the capitals.** `Silver` and `silver` were two
+  tags that the list's `tag=` filter merged and the dashboard and the stack
+  kept apart. Now a tag sent in other capitals is the existing tag, spelled
+  the way it was first typed, and every `tag` parameter (`/api/items`,
+  `/api/stats/breakdowns`, `/api/stack`, bulk edit's `add_tags` and
+  `remove_tags`) reads it the same way. The migration merges tags that
+  differ only by case into the one entered first; every piece keeps the
+  tag.
+- **A Numista reference has one form, `N#<digits>`.** `1234`, `n#1234`,
+  `N# 1234`, and `N-1234` are all saved as `N#1234`, and a `numista`
+  reference that isn't the type's number is `422`. Before, each was stored
+  as typed: pricing found the type either way, while the duplicate
+  warning, checklists, and "Add a run" compared the text and missed a
+  piece entered as `1234`. The migration rewrites the references already
+  stored (one that isn't a number is left alone).
+
+### Added
+
+- **A check against breaking the API by accident.** `docs/openapi.json` is
+  now the schema of the last release, and CI compares every build with it:
+  a removed path, operation, parameter, field, or listed value, a changed
+  type, or an input that became required fails the build, and an addition
+  passes. [docs/api.md](docs/api.md) lists exactly what counts under
+  "Stability policy", and what the check cannot see. This is what will
+  keep 1.x from breaking a script or a dashboard tile.
+
 ## [0.37.5] - 2026-11-26
 
 The second batch from the 9 November 2026 review: recovery, the remaining

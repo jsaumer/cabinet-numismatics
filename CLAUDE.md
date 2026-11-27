@@ -131,7 +131,7 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 ## Current status & next step
 
 Released as v0.37.5: roadmap Phase 7 is complete, migrations
-`0001`–`0023` and `a0001`–`a0002`. v0.27.1 fixed two bugs found entering real pieces: a year is
+`0001`–`0023` and `a0001`–`a0002` (`0024` is merged for v0.38.0, not yet released). v0.27.1 fixed two bugs found entering real pieces: a year is
 now optional (an ND checkbox with an optional attributed year), and a
 same-year Numista variety with no prices no longer blocks the one that has
 them. v0.29.0 added note details (width/height, printer, watermark,
@@ -201,6 +201,22 @@ rules that bite most often:
   `restore.sh` restores the database only through
   `python -m app.cli restore-database`, never `pg_restore` itself. See
   "Review fixes, second batch" in the implementation notes.
+- **The API contract** (v0.38.0): `docs/openapi.json` is the last release's
+  schema, and `backend/tests/api_contract.py` (run by
+  `tests/test_api_contract.py`) fails the suite on a removed path,
+  operation, parameter, field, or listed value, a changed type, or a newly
+  required input. An addition needs nothing. A breaking change that is
+  meant (before 1.0 only) is `python -m tests.api_contract update
+  --allow-breaking` in `backend/` plus a changelog entry with the old and
+  new forms; from 1.0.0 the tool refuses without a new major version. Every
+  release PR runs `python -m tests.api_contract update`, since a test
+  fails while the committed schema names another version.
+- A tag is one per name whatever the capitals (`services/tags.py`, the
+  unique index on `lower(name)`), and a Numista reference is stored as
+  `N#<digits>` (`services/refs.py`; `schemas.CatalogRefIn` refuses anything
+  else, `CatalogRefOut` has no rules). A typed-in estimate's `source` can't
+  be a price source's name (`schemas.RESERVED_SOURCES`), and a LIKE filter
+  escapes what was typed (`items._like`).
 - `item.year` can be `None`: an undated piece is `year_nd` true, with an
   optional attributed year. Guard `None` anywhere that does arithmetic on
   it, and print `year_label` (`"1922"`, `"ND"`, `"ND (1922)"`), never `year`
@@ -362,10 +378,11 @@ same paragraph is copied verbatim into security.md, README.md, SECURITY.md,
 and `.env.example`. Review briefs and reviews stay local (gitignored), as
 they have since v0.33.0's spec was reviewed.
 **v0.34.0 (14 October 2026)** shipped the workbench layout: a sidebar shell, the collection as a list with the selected piece in an inspector, facts edited in place, and a lookup-first quick add at `/items/add`; see "The workbench layout" in the implementation notes. v0.34.1 put the dashboard first in the sidebar and made the list's Piece, Grade, and Value headings sort it (`sort=name` mirrors the row title). v0.35.0 added four color themes (Bronze, Silver, Album, Ledger) chosen in Settings → General and saved through `/api/appearance`; a theme lives in five places that must agree, see "Color themes" in the implementation notes. v0.35.2 made the logo and tab icon follow the theme (files written by `scripts/theme_icons.py`). v0.36.0 gave the demo collection public domain photos from Wikimedia Commons (`scripts/seed_demo.py`, `--no-photos` to skip) and a URL import that names itself (`photos.REMOTE_USER_AGENT`). v0.37.0 added proof and mint sets as a fourth item type (SPEC_0370, migration `0023`; Numista's export imports each set as one, by its "From set" title) and carried Numista's 2026 terms (no Numista value on a share link, sales records on the free plan); see "Proof and mint sets" and "Numista's 2026 terms" in the implementation notes. v0.37.1 fixed the Numista export import's denomination (the title's, without the nickname) and read both of its reference columns. v0.37.2 moved the backend image (and CI's top Python) to 3.15. v0.37.3 fixed five bugs a full review (9 November 2026) reproduced on a running stack: a bulk type change that made the list page a 500, a melt value burying a typed-in one, a stale dashboard, 500s for values with no room in their column, and lower-case currencies; see "Review fixes" in the implementation notes. v0.37.4 raised `opentelemetry-api` in the lockfile past a denial-of-service advisory the weekly audit flagged, and carried the condensed README with `docs/features.md` (the full feature list and a comparison with OpenNumismat, CoinManage, and Numista). v0.37.5 was the review's second batch (26 November 2026): `scripts/backup.sh` had written no full backup since v0.30.0, `scripts/restore.sh` now restores through the backend and migrates, four 500s became answers, failed rate and spot fetches back off, and exports, the URL photo import, the sign-in limit, and the generated key were hardened; see "Review fixes, second batch" in the implementation notes.
-**Next, in order:** the road to v1.0.0's remaining items (a CI check
-against a breaking OpenAPI change, "Add a run" and the Numista banknote
-mapping confirmed against a live account, and a README and quick-start
-pass), then v1.0.0 itself; labels, a phone app, and more accounts are
+**Next, in order:** the road to v1.0.0's remaining items ("Add a run" and
+the Numista banknote mapping confirmed against a live account, and a README
+and quick-start pass), then v1.0.0 itself; the CI check against a breaking
+OpenAPI change and the last input rules are built for v0.38.0 (see "The API
+contract check and the last input rules" in the implementation notes); labels, a phone app, and more accounts are
 optional. Research and propose each before building, as always. Before
 that, the roadmap's Phase 5.9 was demoted
 on 19 September 2026 from a release train to one next item plus unordered
@@ -378,7 +395,9 @@ Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version, plus
 `latest` on a stable tag only; nothing before v0.10.2 is published). A
 release candidate is tagged `v1.0.0-rc.1` with pyproject at `1.0.0rc1`;
-the job refuses a tag that doesn't match pyproject's version. The live homelab instance pins those
+the job refuses a tag that doesn't match pyproject's version. The release
+PR also rewrites `docs/openapi.json` (`python -m tests.api_contract update`
+in `backend/`; a test fails until it names the new version). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; the backend
 migrates on startup, so an upgrade there is just a tag bump.
 **The GitHub Releases list is curated** (the owner's decision, 18 October

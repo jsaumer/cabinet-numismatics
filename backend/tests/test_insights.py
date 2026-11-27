@@ -4,7 +4,7 @@ import io
 
 from openpyxl import load_workbook
 
-from tests.conftest import COIN
+from tests.conftest import COIN, source_estimate
 
 
 def _create(client, payload):
@@ -104,10 +104,7 @@ def test_gains(client):
 
 def test_breakdowns_and_gains_respect_value_strategy(client):
     item = _create(client, {**COIN, "acquisition_price": 100.0, "tags": ["silver"]})
-    client.post(
-        f"/api/items/{item['id']}/estimates",
-        json={"estimated_value": 130.0, "source": "numista:N#1 XF"},
-    )
+    source_estimate(item["id"], estimated_value=130.0, source="numista:N#1 XF")
     client.post(
         f"/api/items/{item['id']}/estimates",
         json={"estimated_value": 200.0, "source": "manual"},  # newer, but not preferred
