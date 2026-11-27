@@ -164,7 +164,12 @@ and data migrations.
   no login), switches to the images built from the commit under test, claims
   the instance, and checks both migration chains reached head and the item
   is still there. Runs `scripts/ci/upgrade-test.sh`, independent of the
-  `stack` job's compose project.
+  `stack` job's compose project. Then, twice, `scripts/ci/upgrade-restore-test.sh`:
+  from the newest published release (`latest`) and from v0.30.0, it claims
+  the old release, enters a piece with a photo and a document, writes a
+  backup there, switches to the build, and restores that backup in the app.
+  The job keeps its old name because the ruleset on `main` requires a check
+  by it.
 - **arm64**: builds and starts the stack on a native arm64 runner and runs
   every smoke phase through the proxy, so what differs by architecture (the
   wheels in the lockfile, the `pg_dump` clients, `age`, nginx) is tested on
@@ -247,7 +252,16 @@ that is the authorize page's address the browser is sent to.
 ```bash
 COMPOSE_PROJECT_NAME=cabinet-upgrade CABINET_PORT=8082 scripts/ci/upgrade-test.sh
 docker compose -p cabinet-upgrade down -v
+
+# from a published release (default `latest`), ending with its archive restored
+COMPOSE_PROJECT_NAME=cabinet-upgrade-restore CABINET_PORT=8083 \
+  scripts/ci/upgrade-restore-test.sh 0.30.0
+docker compose -p cabinet-upgrade-restore down -v
 ```
+
+`upgrade-restore-test.sh` pulls the release it starts from, which replaces a
+`latest` you built locally with the published one, and tags its own build
+`under-test`.
 
 Both scripts prefer variables you export in the shell over anything in
 `.env` (compose does too), so they never need their own `.env` file, and

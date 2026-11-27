@@ -487,13 +487,15 @@ bodies and long requests; see
   database was restored, the file swap was refused, and the files were put
   back. The swap is renames within one volume, and `.nfs*` placeholder files
   (an NFS client's stand-ins for open files) are skipped.
-- **An archive made by an older release**: tried by hand on 26 November
-  2026, not yet in CI. A stack from the published v0.30.0 images (the first
-  with encrypted archives, collection revision `0021`) wrote an archive,
-  was upgraded to the v0.39.0 build, and restored that archive from this
-  page: the database came back and migrated to `0024`, on local volumes.
-  CI still exercises the older-revision path only with an archive whose
-  manifest was rewritten to an older revision.
+- **An archive made by an older release** is restored in CI on every
+  change (`scripts/ci/upgrade-restore-test.sh`): a stack from the published
+  v0.30.0 images (the first with encrypted archives, collection revision
+  `0021`) writes an archive, is upgraded to the build under test, and that
+  archive is restored from this page's own calls. The piece, its photo, and
+  its document come back, the database is migrated to the current
+  revision, and a share link made after the archive still opens. The same
+  runs from the newest published release. On local volumes only; nothing
+  in CI is NFS.
 - Rehearsed in CI on every push, against real Postgres (see Notes). If it
   goes wrong, or the app won't start, use the script below.
 

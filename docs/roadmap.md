@@ -992,7 +992,10 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
   switches to the built images, claims the instance, and checks both
   migration chains (the collection and `cabinet_auth`) reach head with the
-  item intact.
+  item intact. From the release after v0.41.0 the same job also upgrades
+  from the newest published release and from v0.30.0
+  (`scripts/ci/upgrade-restore-test.sh`), each time restoring the old
+  release's own archive in the app afterwards.
 - A README and quick-start pass (the screenshots were captured at v0.30.0
   and predate 0.33.1's header change; the sign-in page, Settings →
   Sign-in, and a share page are new since), read as a stranger installing
@@ -1089,7 +1092,8 @@ v0.26.0.
   count, newest three kept. During the run everything but health and the
   restore status answers 503, and health doesn't touch the database. An
   archive from a genuinely older release (v0.30.0) was restored by hand on
-  the v0.39.0 build; NFS was first tried live in v0.26.1; see
+  the v0.39.0 build and is restored in CI from the release after v0.41.0;
+  NFS was first tried live in v0.26.1; see
   [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 - ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
   items, a wish-list view sorted by either, the gap between target and the

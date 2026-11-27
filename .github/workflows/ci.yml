@@ -190,9 +190,13 @@ jobs:
         run: docker compose down -v
 
   upgrade:
+    # Three upgrades now, not one: from v0.29.1 (before sign-in), from the
+    # newest published release, and from v0.30.0, the last two each ending
+    # with the old release's own archive restored in the app. The name is
+    # kept as it was because the ruleset on main requires a check by it.
     name: Upgrade test (v0.29.1 -> this commit)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Write a throwaway .env
@@ -219,13 +223,41 @@ jobs:
           CABINET_PORT: "8082"
         run: scripts/ci/upgrade-test.sh
 
+      - name: Upgrade from the newest release, then restore its archive
+        # `latest` on the registry is the newest stable release: on an
+        # ordinary pull request the one this commit builds on, on a release's
+        # own pull request the one before it. The instance is claimed and
+        # filled on that release (a piece, a tag, a reference, a photo, a
+        # document, a token), a backup is written there, the images built
+        # here take over, and then that backup is restored through the app.
+        env:
+          COMPOSE_PROJECT_NAME: cabinet-upgrade-latest
+          CABINET_PORT: "8083"
+        run: scripts/ci/upgrade-restore-test.sh latest
+
+      - name: Upgrade from v0.30.0, then restore its archive
+        # The oldest release whose archives can be restored (the first with
+        # sign-in and encrypted backups). Its database is from before share
+        # links existed, so the restore has to migrate it and still keep the
+        # link made since.
+        env:
+          COMPOSE_PROJECT_NAME: cabinet-upgrade-0300
+          CABINET_PORT: "8084"
+        run: scripts/ci/upgrade-restore-test.sh 0.30.0
+
       - name: Dump logs on failure
         if: failure()
-        run: docker compose -p cabinet-upgrade logs
+        run: |
+          for project in cabinet-upgrade cabinet-upgrade-latest cabinet-upgrade-0300; do
+            docker compose -p "$project" logs || true
+          done
 
       - name: Tear down
         if: always()
-        run: docker compose -p cabinet-upgrade down -v
+        run: |
+          for project in cabinet-upgrade cabinet-upgrade-latest cabinet-upgrade-0300; do
+            docker compose -p "$project" down -v || true
+          done
 
   arm64:
     name: Compose stack on arm64 (build + smoke)

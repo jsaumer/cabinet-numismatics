@@ -11,6 +11,9 @@ WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/. .
+# vite.config.ts reads the release's version from here (../backend from
+# /src) and bakes it into the page, for the version check in the app.
+COPY backend/pyproject.toml /backend/pyproject.toml
 RUN npm run build
 
 FROM nginx:1.31-alpine

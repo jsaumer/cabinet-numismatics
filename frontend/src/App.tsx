@@ -1,10 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
 
 import { MoonIcon, SunIcon } from "./components/icons";
 import { PageErrorBoundary } from "./components/error-boundary";
 import { Logo } from "./components/logo";
 import { DataCredits } from "./components/data-credits";
+import { VersionNotice } from "./components/version-notice";
 import { Sidebar } from "./components/sidebar";
 import { applyPalette, applyTheme, initialTheme } from "./components/theme";
 import { isThemeKey } from "./themes";
@@ -13,6 +22,7 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AuthBrand } from "./auth/Brand";
 import { CONFIRM_MARKER, ConfirmDialogHost } from "./auth/ConfirmDialog";
 import { FailedNotice, takeFailedNotice } from "./auth/failedNotice";
+import { safeNext } from "./auth/next";
 import { ssoErrorMessage } from "./auth/ssoErrors";
 import Checklists from "./pages/Checklists";
 import Dashboard from "./pages/Dashboard";
@@ -133,6 +143,15 @@ function ConfirmReturnNotice() {
   );
 }
 
+/** The sign-in page's address, once signed in. The moment a sign-in
+ * succeeds the signed-in app renders at /login?next=..., before the sign-in
+ * page's own navigation has run, so this route decides where the owner
+ * lands: back where they were sent from, not always the dashboard. */
+function AfterSignIn() {
+  const [params] = useSearchParams();
+  return <Navigate to={safeNext(params.get("next"))} replace />;
+}
+
 function AuthedApp({
   theme,
   setTheme,
@@ -188,6 +207,7 @@ function AuthedApp({
       <div className="shell">
       <Sidebar />
       <main>
+        <VersionNotice />
         <FailedSignInsNotice />
         <ConfirmReturnNotice />
         <PageErrorBoundary resetKey={location.pathname}>
@@ -210,7 +230,7 @@ function AuthedApp({
           <Route path="/items/:id" element={<ItemDetail />} />
           <Route path="/items/:id/edit" element={<ItemForm />} />
           <Route path="/setup" element={<Navigate to="/" replace />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<AfterSignIn />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </PageErrorBoundary>

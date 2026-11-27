@@ -8,6 +8,49 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+Small items from the 1.0 checklist. No migration, and nothing in the API
+changes.
+
+### Added
+
+- **The web interface says when it and the server are different releases.**
+  The page now carries the version it was built from. Settings → About
+  shows it beside the server's, and a notice appears on every page when
+  the two differ, with a Reload button: a tab left open across an upgrade
+  is fixed by reloading, and if the notice stays, the proxy image and the
+  backend image are on different tags. (A deployment once ran a proxy one
+  release behind its backend with nothing to say so.)
+- **A web app manifest**, so "Add to Home Screen" on a phone, or "Install"
+  in a desktop browser, opens Cabinet in a window of its own with its icon.
+  Browsers offer it only over HTTPS (or on `localhost`); nothing works
+  offline, and the app is otherwise the same.
+- **CI upgrades from two more releases, and restores their archives.**
+  `scripts/ci/upgrade-restore-test.sh` starts a published release, claims
+  it, enters a piece with a tag, a reference, a photo, and a document,
+  mints a token, and writes a backup there; switches to the build; checks
+  the password, the token, and the piece; then restores that backup in the
+  app and checks again, with a share link made in between. The upgrade job
+  runs it from the newest published release and from v0.30.0, the oldest
+  whose archives can be restored. Until now an archive from an older
+  release had only been restored by hand.
+
+### Changed
+
+- **The test suite runs Starlette's test client on `httpx2`**, as Starlette
+  now asks; with only `httpx` every run warned that support was going away.
+  A development dependency only (`pip install -e ".[dev]"` again to pick it
+  up); the image and its lockfile are unchanged. `httpx2` has no release
+  for Python 3.10, where the tests still run on `httpx` and still warn.
+
+### Fixed
+
+- **Signing in returns to the page that asked for it.** A session that ran
+  out sent you to the sign-in page with the address you were on, and
+  signing in then always landed on the dashboard. Found while checking
+  the version notice.
+
 ## [0.41.0] - 2026-11-26
 
 The first run. The usual way to try a self-hosted app is Docker on a

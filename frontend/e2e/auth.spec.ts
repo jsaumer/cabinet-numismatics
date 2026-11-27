@@ -30,6 +30,23 @@ test("visiting a page while signed out goes to sign-in, with next", async ({ pag
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
 
+test("signing in goes back to the page that asked for it", async ({ page }) => {
+  await page.goto("/pricing");
+  await expect(page).toHaveURL(/\/login\?next=%2Fpricing/);
+  await page.getByLabel("Username").fill(CABINET_USER);
+  await page.getByLabel("Password").fill(CABINET_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Pricing" })).toBeVisible();
+  await expect(page).toHaveURL(/\/pricing$/);
+  // An address outside the app is never followed.
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.goto("/login?next=https%3A%2F%2Fexample.com%2F");
+  await page.getByLabel("Username").fill(CABINET_USER);
+  await page.getByLabel("Password").fill(CABINET_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+});
+
 test("a wrong password, then the right one, shows the failed-attempts notice", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Username").fill(CABINET_USER);

@@ -6,7 +6,8 @@ first look. Before you rely on it, put HTTPS in front. Over plain http:
 - your password, and the cookie that keeps you signed in, cross your
   network readable by anything else on it;
 - browsers switch off some features outside HTTPS: taking a photo with the
-  webcam and the Copy buttons don't work (they do on `localhost`).
+  webcam, the Copy buttons, and installing Cabinet as an app ("Add to Home
+  Screen") don't work (they do on `localhost`).
 
 None of the three ways below needs Cabinet to be reachable from the
 internet, and none should make it so. Cabinet is for private networks; see

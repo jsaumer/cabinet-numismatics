@@ -844,6 +844,12 @@ once, or Compose goes on using the local build.
 From source it is `git pull` then `docker compose up --build -d`, which
 runs whatever is on the branch you pulled, released or not.
 
+Both images move together: the proxy image holds the web interface, built
+for the backend of the same release. If one is left behind (two pinned tags
+and only one changed), every page says so in a notice at the top, and
+Settings → About shows the two versions. A browser tab left open across an
+upgrade shows the same notice until it is reloaded.
+
 **PostgreSQL** is pinned to major 16 in every file, and an upgrade of
 Cabinet never changes it. Don't change the image's major version in place:
 a major version can't read another's data folder. Moving to a newer one

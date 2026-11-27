@@ -514,6 +514,48 @@ test("every Settings section renders, with the version", async ({ page }) => {
   await expect(page.getByRole("link", { name: /^\d+\.\d+\.\d+$/ })).toBeVisible();
 });
 
+test("the page and the server are the same release, and it says so when they aren't", async ({ page }) => {
+  // As built: one version, shown twice, and no notice.
+  await page.goto("/settings/about");
+  const server = (await page.getByRole("link", { name: /^\d+\.\d+\.\d+/ }).innerText()).trim();
+  const facts = page.locator("dl.facts > div");
+  await expect(facts.filter({ hasText: "Web interface" }).locator("dd")).toHaveText(server);
+  await expect(page.getByText(/^This page is Cabinet/)).toHaveCount(0);
+
+  // A backend on another release (the proxy's tag was left behind, or this
+  // tab was open across an upgrade): the answer is changed on its way back.
+  await page.route("**/api/health", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({ response, json: { ...body, version: "99.0.0" } });
+  });
+  await page.goto("/");
+  const notice = page.getByRole("status").filter({ hasText: "This page is Cabinet" });
+  await expect(notice).toContainText(`This page is Cabinet ${server} and the server is 99.0.0.`);
+  await expect(notice.getByRole("button", { name: "Reload the page" })).toBeVisible();
+  await notice.getByRole("link", { name: "Settings, About" }).click();
+  await expect(facts.filter({ hasText: "Web interface" }).locator("dd")).toHaveText(
+    `${server} (the server is 99.0.0)`,
+  );
+  await expect(page.getByText("The web interface and the server are different releases.")).toBeVisible();
+  await page.unroute("**/api/health");
+});
+
+test("the web app manifest and its icons are served", async ({ page, request }) => {
+  await page.goto("/");
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/manifest.webmanifest");
+  const response = await request.get("/manifest.webmanifest");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["content-type"]).toContain("application/manifest+json");
+  const manifest = await response.json();
+  expect(manifest.display).toBe("standalone");
+  for (const icon of manifest.icons) {
+    const file = await request.get(icon.src);
+    expect(file.status(), icon.src).toBe(200);
+    expect(file.headers()["content-type"]).toBe("image/png");
+  }
+});
+
 test("an undated piece takes ND with no year", async ({ page }) => {
   acceptDialogs(page);
   const country = `E2E nd ${Date.now()}`;
