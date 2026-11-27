@@ -264,8 +264,9 @@ Expect these, and don't file them as findings:
   the port is reachable at all**: Cabinet's own nginx terminates no TLS by
   design. A reachable C-2 is a deployment question (why is the port
   published on the node?), not a Cabinet defect.
-- Requests with an unknown `Host` header get no response at all (nginx's
-  `444`), which a scanner reports as a connection reset; expected.
+- Requests with an unknown `Host` header get one static page saying so
+  (`421`, from v0.41.0). Before that they got no response at all (nginx's
+  `444`), which a scanner reported as a connection reset. Either is expected.
 - The sign-in, setup, and trusted endpoints answer `413` past 8 KiB and
   `429` once the scanner's address is throttled; also expected.
 

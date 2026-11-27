@@ -6,7 +6,7 @@
 # hosts.conf: the server_name of Cabinet's one real server block: the hosts
 # of PUBLIC_ORIGINS (the names browsers use) plus ALLOWED_HOSTS (internal
 # names such as cabinet_proxy, localhost, or a LAN name). Any other Host gets
-# no answer at all (444, the default server).
+# one static page saying so (421, the default server), never the app.
 #
 # cabinet-identity.conf (v0.33.0): one proxy_set_header line for every
 # identity header a forward-auth or SSO gateway adds, each set to "" so a

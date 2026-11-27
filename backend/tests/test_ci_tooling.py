@@ -151,3 +151,116 @@ def test_the_tags_a_release_pushes(tmp_path, tag, prerelease, expected):
         block = text.split(f"{image}<<EOF\n", 1)[1].split("EOF", 1)[0].split()
         assert block == [f"ghcr.io/owner/cabinet-numismatics-{image}:{t}" for t in expected]
     assert f"version={tag[1:]}\n" in text
+
+
+# --- the three ways to run the stack stay in step (v0.41.0) ---------------------
+
+COMPOSE_FILES = {
+    "source": REPO / "docker-compose.yaml",  # builds; reads .env
+    "images": REPO / "deploy" / "docker-compose.yaml",  # pull and run, one file
+    "swarm": REPO / "deploy" / "docker-stack.yaml",
+}
+# Supplied another way in one of the files, on purpose.
+NOT_IN_SOURCE = {"AUTO_MIGRATE", "PUID", "PGID", "TZ", "REESTIMATE_DAYS", "SECRET_KEY",
+                 "RESTORE_ENABLED", "RESTORE_MAX_GB"}  # fmt: skip
+NOT_IN_SWARM = {"AUTH_INSECURE_HTTP", "SETUP_CODE", "SETUP_CODE_FILE", "BACKUP_KEY_FILE",
+                "BACKUP_KEY", "AUTO_MIGRATE"}  # fmt: skip
+
+
+def _environment(service: dict) -> set[str]:
+    """The variable names a service is given, whichever way the file lists them."""
+    env = service.get("environment") or {}
+    if isinstance(env, list):
+        return {entry.split("=", 1)[0] for entry in env}
+    return set(env)
+
+
+def _compose(name: str) -> dict:
+    yaml = pytest.importorskip("yaml")
+    return yaml.safe_load(COMPOSE_FILES[name].read_text(encoding="utf-8"))
+
+
+def test_the_pull_and_run_file_needs_nothing_beside_it():
+    """deploy/docker-compose.yaml is the README's quick start: one file in an
+    empty folder. It can't build, read an env file, or mount a host path, and
+    the only setting it insists on is the database password."""
+    text = COMPOSE_FILES["images"].read_text(encoding="utf-8")
+    stack = _compose("images")
+    assert set(stack["services"]) == {"backend", "proxy", "db"}
+    for name, service in stack["services"].items():
+        assert "build" not in service and "env_file" not in service, name
+        for volume in service.get("volumes", []):
+            assert not volume.startswith(("/", ".", "~")), f"{name}: {volume}"
+    assert set(re.findall(r"\$\{(\w+):\?", text)) == {"DB_PASSWORD"}
+    # The same images the release publishes and the other two files name.
+    for name in ("backend", "proxy"):
+        image = stack["services"][name]["image"]
+        assert image == f"ghcr.io/jsaumer/cabinet-numismatics-{name}:${{TAG:-latest}}"
+        assert _compose("source")["services"][name]["image"] == image
+        assert _compose("swarm")["services"][name]["image"] == image
+    # Where it answers by default, and the cookie setting that goes with it.
+    env = stack["services"]["backend"]["environment"]
+    assert env["PUBLIC_ORIGINS"] == "${PUBLIC_ORIGINS:-http://localhost}"
+    assert env["AUTH_INSECURE_HTTP"] == "${AUTH_INSECURE_HTTP:-true}"
+    assert stack["services"]["proxy"]["environment"]["PUBLIC_ORIGINS"] == env["PUBLIC_ORIGINS"]
+
+
+def test_a_setting_one_compose_file_passes_the_others_pass_too():
+    """A variable added to one file and forgotten in another is a setting that
+    silently does nothing for whoever runs the other."""
+    images = _environment(_compose("images")["services"]["backend"])
+    source = _environment(_compose("source")["services"]["backend"])
+    swarm = _environment(_compose("swarm")["services"]["backend"])
+    # The source file also hands the backend all of .env, so it may list fewer.
+    assert source - images == set()
+    assert images - source == NOT_IN_SOURCE
+    assert swarm - images == set()
+    assert images - swarm == NOT_IN_SWARM
+    for name in COMPOSE_FILES:
+        proxy = _environment(_compose(name)["services"]["proxy"])
+        assert proxy == {"PUBLIC_ORIGINS", "ALLOWED_HOSTS", "TRUSTED_ASSERTION_HEADER"}, name
+    # The database is given its three settings and no file of secrets.
+    assert "env_file" not in _compose("source")["services"]["db"]
+
+
+def test_a_wrong_address_gets_a_page_and_nothing_of_the_app():
+    """The default server answers one static page (421). It proxies nothing,
+    serves no file, and never repeats what the client sent: the page is one
+    nginx string with no variable in it."""
+    conf = (REPO / "proxy" / "nginx.conf").read_text(encoding="utf-8")
+    start = conf.index("listen 80 default_server;")
+    block = conf[start : conf.index("\nserver {", start)]
+    assert "return 421" in block and "444" not in block
+    for directive in ("proxy_pass", "root ", "try_files", "alias "):
+        assert directive not in block, directive
+    page = block[block.index('return 421 "') + len('return 421 "') :]
+    page = page[: page.index('";')]
+    assert "$" not in page and '"' not in page
+    assert "PUBLIC_ORIGINS" in page and "ALLOWED_HOSTS" in page
+    assert "Content-Security-Policy \"default-src 'none'\"" in block
+    assert 'Cache-Control "no-store"' in block
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_every_shell_script_is_committed_executable():
+    """CI and the docs run the scripts under scripts/ by path. The mode that
+    counts is the one in git's index, not the one on disk: this repository
+    came from a Windows machine with `core.fileMode` off, where a `chmod`
+    never reaches a commit (use `git update-index --chmod=+x`). A script
+    committed 100644 fails its job with "Permission denied" before its first
+    line. (The images' own scripts are made executable by their Dockerfiles.)"""
+    listed = subprocess.run(
+        ["git", "ls-files", "-s", "--", "scripts"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode != 0 or not listed.stdout.strip():
+        pytest.skip("not a git checkout")
+    scripts = {}
+    for line in listed.stdout.splitlines():
+        mode, _hash, _stage, path = line.split(maxsplit=3)
+        if path.endswith(".sh"):
+            scripts[path] = mode
+    assert "scripts/ci/quick-start-test.sh" in scripts
+    assert {path for path, mode in scripts.items() if mode != "100755"} == set()

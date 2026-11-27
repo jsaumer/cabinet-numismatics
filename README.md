@@ -122,15 +122,18 @@ You need Docker with Compose v2 on an amd64 or arm64 machine. Cabinet uses about
 200 MB of memory at idle.
 
 ```bash
-git clone https://github.com/jsaumer/cabinet-numismatics.git
-cd cabinet-numismatics
-cp .env.example .env              # change DB_PASSWORD; the rest suits this machine
-docker compose pull               # the published images
-docker compose up -d --no-build
+mkdir cabinet && cd cabinet
+curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/deploy/docker-compose.yaml
+echo "DB_PASSWORD=$(openssl rand -hex 16)" > .env
+docker compose up -d
 ```
 
-1. Open http://localhost/. Until it is claimed, Cabinet serves nothing but
-   its setup page.
+That [one file](deploy/docker-compose.yaml) is the whole install: nothing to
+clone and nothing to build. In Portainer, Dockge, or a NAS's container
+manager, paste it in as a stack and set `DB_PASSWORD` there.
+
+1. Open http://localhost/ on the same machine. Until it is claimed, Cabinet
+   serves nothing but its setup page.
 2. Read the one-time setup code from the log, then enter it with the
    username and password you want. That account is the only one.
 
@@ -142,27 +145,48 @@ docker compose up -d --no-build
    backups. Every archive is encrypted with that key, and a lost key has no
    recovery.
 
-**Running it on a server?** The sample `.env` answers only at
-`http://localhost`, and any other address gets no response. Set
-`PUBLIC_ORIGINS` to the exact address you will type, for example
-`https://cabinet.home.example`, remove `AUTH_INSECURE_HTTP`, and put Cabinet
-behind your reverse proxy with HTTPS. The
-[deployment guide](docs/deployment.md) covers that, single sign-on, storage
-on a NAS, and a [Swarm stack file](deploy/docker-stack.yaml).
+**On a server, opened from another computer?** Cabinet answers only at the
+address it was told to expect, and any other gets a short page saying so.
+Add the exact address you will type to `.env`, then run `docker compose up
+-d` again:
 
-**Building from source?** `docker compose up --build` does it all; no Node
-or Python is needed on the host.
+```
+PUBLIC_ORIGINS=http://nas.local:8080
+CABINET_PORT=8080
+```
+
+A name or an IP address both work (`http://192.168.1.50:8080`). This is
+plain http, so your password crosses your network unencrypted: fine for a
+first look on a home network you trust, not for keeps.
+[HTTPS on a private network](docs/https-private-network.md) has three ways
+to add HTTPS that need no public address.
+
+**Port 80 already taken?** Set `CABINET_PORT=8080` and name the port in
+`PUBLIC_ORIGINS` too (`http://localhost:8080`). The two have to agree.
+
+**Nothing loads, or the wrong thing does?** A page titled "Cabinet isn't
+set up to answer at this address" means the address in your browser isn't
+the one in `PUBLIC_ORIGINS`. A "502 Bad Gateway" means the backend didn't
+start; `docker compose logs backend` ends with the reason.
+
+**Building from source?** Clone the repository, `cp .env.example .env`, and
+`docker compose up --build`. No Node or Python is needed on the host.
 
 **Want something to look at first?** Create a write token in Settings →
-Account, then load 17 demo pieces with photos:
+Account, then, from a clone of the repository, load 17 demo pieces with
+photos:
 
 ```bash
 python scripts/seed_demo.py --token cabinet_...
 ```
 
-**Upgrading:** run the `pull` and `up` lines again, or pin a release with
-`TAG=0.40.0` in `.env`. The backend migrates the database itself on startup,
-and Settings → About shows the version and whether the schema is current.
+**Upgrading:** `docker compose pull && docker compose up -d`. Pin a release
+with `TAG=0.40.0` in `.env`; a version tag never changes. The backend
+migrates the database itself on startup, and Settings → About shows the
+version and whether the schema is current. The
+[deployment guide](docs/deployment.md) covers a lasting install: single
+sign-on, storage on a NAS, backups off the host, and a
+[Swarm stack file](deploy/docker-stack.yaml).
 
 ## Private networks only
 
@@ -235,6 +259,7 @@ off the machine.
 ## Documentation
 
 - **Running it:** [Deployment](docs/deployment.md) ·
+  [HTTPS on a private network](docs/https-private-network.md) ·
   [Backup and restore](docs/backup-restore.md) ·
   [Monitoring](docs/monitoring.md) · [Security](docs/security.md)
 - **Using it:** [Features](docs/features.md) ·

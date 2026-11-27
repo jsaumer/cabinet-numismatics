@@ -271,11 +271,32 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  quickstart:
+    name: Quick start (as the README says)
+    # The first run a newcomer has, walked by a script: the pull-and-run
+    # Compose file in an empty folder with only a database password set, the
+    # setup code read from the log, a wrong address, a LAN name over plain
+    # http, an https address, and .env.example unchanged beside the
+    # repository's own Compose file. The images are built from this commit
+    # first, under the names the files pull.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the images this commit would publish
+        run: |
+          cp .env.example .env
+          docker compose build
+
+      - name: Walk the quick start
+        run: scripts/ci/quick-start-test.sh
+
   publish:
     name: Publish images (GHCR)
     runs-on: ubuntu-latest
     timeout-minutes: 60 # arm64 is built under emulation
-    needs: [backend, frontend, stack, upgrade, arm64]
+    needs: [backend, frontend, stack, upgrade, arm64, quickstart]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read

@@ -169,6 +169,13 @@ and data migrations.
   every smoke phase through the proxy, so what differs by architecture (the
   wheels in the lockfile, the `pg_dump` clients, `age`, nginx) is tested on
   every pull request, not first at a release.
+- **quickstart**: builds the images, then runs
+  `scripts/ci/quick-start-test.sh`, which is the README's quick start as a
+  script: the pull-and-run Compose file in an empty folder with only a
+  database password, the setup code read from the log, a wrong address, a
+  LAN name over plain http, an https address, and `.env.example` unchanged
+  beside the repository's own Compose file. If you change the quick start
+  in the README, change the script with it.
 - **publish**: on a `v*` tag only, after the earlier jobs pass, checks the
   tag names the same version as `backend/pyproject.toml` (semver in the
   tag, PEP 440 in pyproject: `v1.0.0-rc.1` and `1.0.0rc1` agree), then

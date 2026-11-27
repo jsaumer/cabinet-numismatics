@@ -1,0 +1,161 @@
+# Cabinet from the published images: this one file is all you need.
+#
+#   mkdir cabinet && cd cabinet
+#   curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/deploy/docker-compose.yaml
+#   echo "DB_PASSWORD=$(openssl rand -hex 16)" > .env
+#   docker compose up -d
+#   docker compose logs backend | grep "setup code"
+#
+# Then open http://localhost/ on this machine. Nothing is built: both images
+# are pulled, for amd64 or arm64.
+#
+# Settings go in a `.env` file beside this one (or in your stack manager's
+# variables: Portainer, Dockge, and the like). Only DB_PASSWORD has to be
+# set. The three that decide where Cabinet answers:
+#
+#   On this machine (the defaults):
+#     PUBLIC_ORIGINS=http://localhost
+#
+#   On a server, opened from another machine on a network you trust:
+#     PUBLIC_ORIGINS=http://nas.local:8080     the exact address you will type
+#     CABINET_PORT=8080
+#     Plain http: your password crosses that network unencrypted. Fine for a
+#     first look on a home LAN; add HTTPS before you rely on it.
+#
+#   Behind your reverse proxy with HTTPS:
+#     PUBLIC_ORIGINS=https://cabinet.home.example
+#     AUTH_INSECURE_HTTP=false
+#     CABINET_PORT=8080
+#
+# Any other address gets a short page saying it isn't one Cabinet answers.
+# Cabinet is for private networks; do not expose it to the internet. See
+# https://github.com/jsaumer/cabinet-numismatics/blob/main/docs/deployment.md
+# for all of this, and docs/https-private-network.md for HTTPS without a
+# public address.
+#
+# The repository's own docker-compose.yaml builds from source instead;
+# deploy/docker-stack.yaml is this stack for a Docker Swarm.
+
+name: cabinet
+
+# Every service keeps its log to three 10 MB files.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  backend:
+    # Pin a release (TAG=0.41.0) once you rely on it: a version tag never
+    # changes, and `latest` moves with every release.
+    image: ghcr.io/jsaumer/cabinet-numismatics-backend:${TAG:-latest}
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-cabinet}:${DB_PASSWORD:?set DB_PASSWORD in .env to any long random string}@db:5432/${DB_NAME:-cabinet}
+      PHOTO_DIR: /data/photos
+      DOCUMENT_DIR: /data/documents
+      BACKUP_DIR: /data/backups
+      SECRET_KEY_FILE: /data/state/secret.key
+      # The exact address(es) browsers use, scheme and port included,
+      # comma-separated.
+      PUBLIC_ORIGINS: ${PUBLIC_ORIGINS:-http://localhost}
+      # Sign-in cookies that work over plain http. It must be false beside an
+      # https address, and the backend stops with a message saying so if it
+      # isn't.
+      AUTH_INSECURE_HTTP: ${AUTH_INSECURE_HTTP:-true}
+      # The one-time setup code. Unset, one is generated and printed in the
+      # backend's log; ignored once the admin exists.
+      SETUP_CODE: ${SETUP_CODE:-}
+      SETUP_CODE_FILE: ${SETUP_CODE_FILE:-}
+      # Encrypts the keys and addresses saved in Settings. Unset, one is
+      # generated on the state volume.
+      SECRET_KEY: ${SECRET_KEY:-}
+      # The key every backup is encrypted with. Unset, one is generated on
+      # the state volume; either way save a copy outside Cabinet:
+      #   docker compose exec backend python -m app.cli backup-key show
+      BACKUP_KEY_FILE: ${BACKUP_KEY_FILE:-}
+      BACKUP_KEY: ${BACKUP_KEY:-}
+      # The unprivileged user the backend runs as; match the owner of any
+      # folder you mount in place of a volume below.
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-UTC}
+      REESTIMATE_DAYS: ${REESTIMATE_DAYS:-7}
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      RESTORE_ENABLED: ${RESTORE_ENABLED:-true}
+      RESTORE_MAX_GB: ${RESTORE_MAX_GB:-20}
+      # Single sign-on through a gateway's signed header: all four or none
+      # (docs/deployment.md).
+      TRUSTED_ASSERTION_HEADER: ${TRUSTED_ASSERTION_HEADER:-}
+      TRUSTED_ASSERTION_JWKS_URL: ${TRUSTED_ASSERTION_JWKS_URL:-}
+      TRUSTED_ASSERTION_ISSUER: ${TRUSTED_ASSERTION_ISSUER:-}
+      TRUSTED_ASSERTION_AUDIENCE: ${TRUSTED_ASSERTION_AUDIENCE:-}
+      SSO_CA_FILE: ${SSO_CA_FILE:-}
+    volumes:
+      - photo_data:/data/photos
+      # Attached documents. Uploads are refused unless this is a real mount.
+      - document_data:/data/documents
+      # Backups. Point this at a NAS folder to get archives off this host.
+      - backup_data:/data/backups
+      # Generated keys and the last restore's record. Not the photo volume.
+      - backend_state:/data/state
+      # Private working space for restores; keep it on this host's own disk.
+      - staging_data:/data/staging
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    logging: *logging
+    restart: unless-stopped
+
+  proxy:
+    image: ghcr.io/jsaumer/cabinet-numismatics-proxy:${TAG:-latest}
+    ports:
+      # Change the port here and PUBLIC_ORIGINS has to name it too.
+      - "${CABINET_PORT:-80}:80"
+    environment:
+      # nginx answers the names in PUBLIC_ORIGINS, plus any in ALLOWED_HOSTS
+      # (a name only other containers use, such as cabinet-proxy-1 for a
+      # dashboard on the same Docker network).
+      PUBLIC_ORIGINS: ${PUBLIC_ORIGINS:-http://localhost}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      TRUSTED_ASSERTION_HEADER: ${TRUSTED_ASSERTION_HEADER:-}
+    volumes:
+      - photo_data:/usr/share/nginx/photos:ro
+    depends_on:
+      - backend
+    logging: *logging
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-cabinet}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env to any long random string}
+      POSTGRES_DB: ${DB_NAME:-cabinet}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cabinet} -d ${DB_NAME:-cabinet}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  photo_data:
+  document_data:
+  backup_data:
+  backend_state:
+  staging_data:

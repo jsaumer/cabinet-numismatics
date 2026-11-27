@@ -121,7 +121,7 @@ services:
       - "${CABINET_PORT:?set CABINET_PORT}:80"
     environment:
       # The Host names nginx answers: those of PUBLIC_ORIGINS, plus internal
-      # names (cabinet_proxy, a LAN name). Anything else gets no response.
+      # names (cabinet_proxy, a LAN name). Anything else gets a page saying so.
       - PUBLIC_ORIGINS=${PUBLIC_ORIGINS:?set PUBLIC_ORIGINS}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
       # The trusted-header mode's header (v0.33.0), the same value as the
