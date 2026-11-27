@@ -22,9 +22,8 @@ jobs:
         # The floor from pyproject and the version the container runs.
         python-version: ["3.10", "3.15"]
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -50,9 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -72,8 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Write a throwaway .env
         # Written from scratch rather than copied from .env.example, so there
         # is exactly one definition of each variable. SETUP_CODE is also
@@ -145,7 +142,7 @@ jobs:
         # and proxy with TRUSTED_ASSERTION_*), which e2e/sso.spec.ts uses.
         run: scripts/ci/stack-smoke.sh sso
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -178,7 +175,7 @@ jobs:
 
       - name: Keep the Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report
           path: frontend/playwright-report
@@ -197,8 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Write a throwaway .env
         # docker-compose.yaml reads the database settings from .env (the
         # stack job writes its own the same way). The v0.30.0 settings come
@@ -231,19 +227,62 @@ jobs:
         if: always()
         run: docker compose -p cabinet-upgrade down -v
 
+  arm64:
+    name: Compose stack on arm64 (build + smoke)
+    # A native arm64 runner: the images are built and started the way a
+    # Raspberry Pi or an Apple Silicon host would, and the smoke script runs
+    # through the proxy. What differs by architecture is what this covers:
+    # every wheel in the lockfile, the pg_dump and pg_restore clients, age,
+    # Pillow and the PDF library, and nginx. The amd64 "stack" job has the
+    # mock identity provider and Playwright; this one doesn't repeat them.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Write a throwaway .env
+        run: |
+          SETUP_CODE=5f8a2c9e1b7d4063a9e2f5c8b1d7e4a0
+          {
+            echo "DB_USER=cabinet"
+            echo "DB_PASSWORD=ci-$(openssl rand -hex 12)"
+            echo "DB_NAME=cabinet"
+            echo "SECRET_KEY=$(python3 -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+            echo "PUBLIC_ORIGINS=http://localhost"
+            echo "ALLOWED_HOSTS=localhost"
+            echo "AUTH_INSECURE_HTTP=true"
+            echo "SETUP_CODE=$SETUP_CODE"
+          } > .env
+          echo "SETUP_CODE=$SETUP_CODE" >> "$GITHUB_ENV"
+
+      - name: Build and start
+        run: |
+          docker compose up --build -d
+          docker compose exec -T backend uname -m | grep -q aarch64
+
+      - name: Smoke-test the stack through the proxy
+        # Every phase in order; "sso" skips itself without the mock provider.
+        run: scripts/ci/stack-smoke.sh all
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   publish:
     name: Publish images (GHCR)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [backend, frontend, stack, upgrade]
+    timeout-minutes: 60 # arm64 is built under emulation
+    needs: [backend, frontend, stack, upgrade, arm64]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.15"
 
@@ -264,18 +303,28 @@ jobs:
           if Version(tag) != Version(declared):
               raise SystemExit(f"tag v{tag} does not match pyproject version {declared}")
           print(f"tag v{tag} matches pyproject version {declared}")
+          version = Version(tag)
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"prerelease={str(Version(tag).is_prerelease).lower()}\n")
+              out.write(f"prerelease={str(version.is_prerelease).lower()}\n")
+              out.write(f"major={version.major}\n")
+              out.write(f"minor={version.minor}\n")
           PY
 
       # A prerelease (v1.0.0-rc.1, or v1.0.0rc1) is pushed under its own
-      # version only; "latest" moves on stable releases.
+      # version only; "latest" moves on stable releases. From 1.0.0 a stable
+      # release also moves its major tag (1) and its minor tag (1.2), so a
+      # deployment can follow fixes without following breaking changes.
+      # Before 1.0 a minor release may break, so there is no 0 or 0.39 tag.
+      # A version tag is never moved or deleted once pushed.
       - name: Image tags
         id: tags
         env:
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
+          MAJOR: ${{ steps.version.outputs.major }}
+          MINOR: ${{ steps.version.outputs.minor }}
         run: |
           version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           for image in backend proxy; do
             name="ghcr.io/${{ github.repository_owner }}/cabinet-numismatics-$image"
             {
@@ -283,28 +332,28 @@ jobs:
               echo "$name:$version"
               if [ "$PRERELEASE" = "false" ]; then
                 echo "$name:latest"
+                if [ "$MAJOR" -ge 1 ]; then
+                  echo "$name:$MAJOR"
+                  echo "$name:$MAJOR.$MINOR"
+                fi
               fi
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
           done
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push backend
-        uses: docker/build-push-action@v7
+      # Both images for amd64 and arm64, labeled, with provenance and an SBOM
+      # (.github/actions/build-images; images.yml runs the same build without
+      # pushing when a pull request touches what an image is built from).
+      - name: Build and push both images
+        uses: ./.github/actions/build-images
         with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.tags.outputs.backend }}
-
-      - name: Build and push proxy
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: frontend/Dockerfile
-          push: true
-          tags: ${{ steps.tags.outputs.proxy }}
+          push: "true"
+          version: ${{ steps.tags.outputs.version }}
+          backend-tags: ${{ steps.tags.outputs.backend }}
+          proxy-tags: ${{ steps.tags.outputs.proxy }}

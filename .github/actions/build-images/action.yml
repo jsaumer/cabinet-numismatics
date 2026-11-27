@@ -1,0 +1,99 @@
+name: Build Cabinet's images
+description: >
+  Builds the backend and proxy images for amd64 and arm64, with image labels,
+  build provenance, and an SBOM, and pushes them when asked. One set of steps
+  for the release (CI's publish job) and for the check a pull request gets
+  when it touches what an image is built from (images.yml).
+
+inputs:
+  push:
+    description: '"true" to push to the registry; anything else only builds'
+    required: false
+    default: "false"
+  version:
+    description: The version the images are labeled with (0.40.0, or a commit for a check)
+    required: true
+  backend-tags:
+    description: Tags for the backend image, one a line (empty for a check)
+    required: false
+    default: ""
+  proxy-tags:
+    description: Tags for the proxy image, one a line (empty for a check)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # arm64 is built under emulation on the amd64 runner. The proxy's Node
+    # build stage runs on the runner's own platform (its output is static
+    # files), so only the backend's installs and nginx's upgrade are emulated.
+    - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      with:
+        platforms: arm64
+
+    - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+    - name: When this build was made
+      id: stamp
+      shell: bash
+      run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+    # Labels sit on each platform's image; the annotations sit on the index
+    # that names both, which is what a registry page reads. Provenance
+    # (mode=max: the build's inputs and steps) and the SBOM are stored beside
+    # the image in the registry; docs/security.md says how to read them.
+    - name: Build the backend image
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: ./backend
+        platforms: linux/amd64,linux/arm64
+        push: ${{ inputs.push == 'true' }}
+        tags: ${{ inputs.backend-tags }}
+        provenance: mode=max
+        sbom: true
+        labels: |
+          org.opencontainers.image.title=Cabinet backend
+          org.opencontainers.image.description=Cabinet, a self-hosted coin and paper money collection manager: the API and background tasks
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/main/docs/deployment.md
+          org.opencontainers.image.licenses=MIT
+          org.opencontainers.image.version=${{ inputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ steps.stamp.outputs.created }}
+        annotations: |
+          index:org.opencontainers.image.title=Cabinet backend
+          index:org.opencontainers.image.description=Cabinet, a self-hosted coin and paper money collection manager: the API and background tasks
+          index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          index:org.opencontainers.image.licenses=MIT
+          index:org.opencontainers.image.version=${{ inputs.version }}
+          index:org.opencontainers.image.revision=${{ github.sha }}
+
+    - name: Build the proxy image
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: frontend/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: ${{ inputs.push == 'true' }}
+        tags: ${{ inputs.proxy-tags }}
+        provenance: mode=max
+        sbom: true
+        labels: |
+          org.opencontainers.image.title=Cabinet proxy
+          org.opencontainers.image.description=Cabinet, a self-hosted coin and paper money collection manager: nginx with the web interface
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}/blob/main/docs/deployment.md
+          org.opencontainers.image.licenses=MIT
+          org.opencontainers.image.version=${{ inputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.created=${{ steps.stamp.outputs.created }}
+        annotations: |
+          index:org.opencontainers.image.title=Cabinet proxy
+          index:org.opencontainers.image.description=Cabinet, a self-hosted coin and paper money collection manager: nginx with the web interface
+          index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          index:org.opencontainers.image.licenses=MIT
+          index:org.opencontainers.image.version=${{ inputs.version }}
+          index:org.opencontainers.image.revision=${{ github.sha }}

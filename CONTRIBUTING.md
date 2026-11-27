@@ -165,12 +165,29 @@ and data migrations.
   the instance, and checks both migration chains reached head and the item
   is still there. Runs `scripts/ci/upgrade-test.sh`, independent of the
   `stack` job's compose project.
+- **arm64**: builds and starts the stack on a native arm64 runner and runs
+  every smoke phase through the proxy, so what differs by architecture (the
+  wheels in the lockfile, the `pg_dump` clients, `age`, nginx) is tested on
+  every pull request, not first at a release.
 - **publish**: on a `v*` tag only, after the earlier jobs pass, checks the
   tag names the same version as `backend/pyproject.toml` (semver in the
   tag, PEP 440 in pyproject: `v1.0.0-rc.1` and `1.0.0rc1` agree), then
   pushes the backend and proxy images to GHCR under that version. `latest`
   moves only on a stable tag; a prerelease (whatever `packaging` reads as one,
   such as a release candidate) is published under its own version alone.
+  The images are built for amd64 and arm64 with labels, provenance, and an
+  SBOM by `.github/actions/build-images`.
+
+`.github/workflows/images.yml` runs that same build, without pushing, when
+a pull request touches what an image is built from (a Dockerfile, the
+lockfiles, `proxy/`, the build action itself), so a build that breaks on
+one platform shows up before a tag does.
+
+**Actions are pinned by commit.** Every `uses:` in a workflow names a full
+commit hash with the version in a comment (`actions/checkout@3d3c42e... #
+v7.0.1`); a test fails otherwise. Dependabot proposes updates in that
+form. To add an action by hand, resolve its release tag to a commit with
+`gh api repos/OWNER/REPO/commits/TAG --jq .sha`.
 
 ### Running the stack checks locally
 

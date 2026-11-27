@@ -102,7 +102,8 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 - Tests: in `backend/`, `pip install -e .[dev]` once, then `pytest`. Tests do
   not require a running database (in-memory SQLite, every outbound call
   mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.15, a
-  frontend typecheck, and a compose build/migrate/smoke job that drives the
+  frontend typecheck, the smoke script against the stack on a native arm64
+  runner (v0.40.0), and a compose build/migrate/smoke job that drives the
   API with curl (smoke test, backup → restore drill) and the pages with
   Playwright (`frontend/e2e/`, `npm run e2e` against a running stack,
   `BASE_URL` for another host). When an endpoint's or a page's behavior
@@ -414,7 +415,13 @@ Releases: pushing a `v*` tag runs CI's `publish` job, which pushes
 `ghcr.io/jsaumer/cabinet-numismatics-{backend,proxy}` (version, plus
 `latest` on a stable tag only; nothing before v0.10.2 is published). A
 release candidate is tagged `v1.0.0-rc.1` with pyproject at `1.0.0rc1`;
-the job refuses a tag that doesn't match pyproject's version. The release
+the job refuses a tag that doesn't match pyproject's version. From v0.40.0
+the images are built for amd64 and arm64 with labels, provenance, and an
+SBOM (`.github/actions/build-images`; `images.yml` runs the same build
+without pushing when a pull request touches a Dockerfile, a lockfile, or
+`proxy/`), every action in a workflow is pinned by commit hash (a test
+fails otherwise), and from 1.0.0 a stable tag also moves `1` and `1.0`.
+The release
 PR also rewrites `docs/openapi.json` (`python -m tests.api_contract update`
 in `backend/`; a test fails until it names the new version). The live homelab instance pins those
 tags, so a release reaches it only once the tag's images exist; the backend

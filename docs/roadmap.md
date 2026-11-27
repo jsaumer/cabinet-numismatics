@@ -870,9 +870,13 @@ for it, and new ones found while entering the collection outrank these.
 - **A user guide**: today's docs are operator and developer facing
   (deployment, API, architecture), not a walkthrough for someone using the
   app day to day. Noted in the 20 September 2026 review.
-- **Multi-architecture images**: the publish job builds `amd64` only; an
-  `arm64` build would cover a Raspberry Pi or Apple Silicon homelab host.
-  Noted in the 20 September 2026 review.
+- ✔ **Multi-architecture images**: the publish job built `amd64` only; an
+  `arm64` build covers a Raspberry Pi or Apple Silicon homelab host.
+  Noted in the 20 September 2026 review. **Built for v0.40.0** (rows 20 and
+  24 of the 1.0 checklist): both images for both platforms, CI building and
+  smoke-testing the stack on a native arm64 runner, every GitHub Action
+  pinned by commit, image labels, build provenance and an SBOM stored with
+  each image, and `1` and `1.0` tags from 1.0.0.
 - **Off-site backups**: push targets (S3/WebDAV/SFTP) were deferred under
   Phase 5.6; a mounted path (including a NAS bind) covers the homelab case
   without a new dependency. Noted again in the 20 September 2026 review.
