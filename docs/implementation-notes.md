@@ -3329,6 +3329,49 @@ approved on 26 November 2026. No migration.
   and `/username` are `admin`, not `fresh`, in SPEC_0300's appendix, and
   `test_gate` no longer carries an exception for them.
 
+## Images for arm64, and the release's supply chain (v0.40.0)
+
+Rows 20 and 24 of the 1.0 checklist.
+
+- **One build, two callers.** `.github/actions/build-images/action.yml` is
+  a composite action holding the two build steps: both platforms
+  (`linux/amd64,linux/arm64`), labels, index annotations, provenance
+  (`mode=max`), and an SBOM. CI's `publish` job calls it with `push: "true"`
+  after computing the tags; `images.yml` calls it with `push: "false"` on a
+  pull request that touches what an image is built from. It is a composite
+  action and not a reusable workflow on purpose: a reusable workflow that
+  can push would need `packages: write` declared on a job that pull
+  requests also run. Change the build in the action, never in a caller.
+- **arm64 is emulated at release and native in CI.** The release builds
+  arm64 under QEMU on the amd64 runner (slower, but one job and one
+  manifest). The `arm64` job in `ci.yml` runs on `ubuntu-24.04-arm`: it
+  builds with plain `docker compose` and runs every smoke phase, which is
+  what proves the lockfile's wheels, the `pg_dump` clients, `age`, and
+  nginx work there. `publish` needs it.
+- **The proxy's build stage is `FROM --platform=$BUILDPLATFORM`.** The
+  frontend compiles to static files, the same for every platform, so it is
+  built once on the builder's own platform; without it the Node build would
+  run under emulation for arm64. Keep any stage whose output is
+  platform-independent that way; never the final stage.
+- **A new compiled dependency has to have an arm64 wheel** for the image's
+  Python, or `pip install --require-hashes` tries to build it and fails
+  (there is no compiler in the image). The `arm64` job is what catches it.
+  `pip-compile --generate-hashes` already records every platform's hashes.
+- **Tags** are computed in the `publish` job's "Image tags" step, which
+  `test_ci_tooling.py` runs as a script: the version always; `latest` on a
+  stable release; `1` and `1.0` on a stable release from 1.0.0. No `0` or
+  `0.40` tag, since a 0.x minor may break. A version tag is never moved.
+- **Actions are pinned by commit hash**, with `# vX.Y.Z` beside it, in
+  every workflow and in the composite action; `test_every_action_is_pinned_by_commit`
+  fails on a tag. Dependabot's `github-actions` entry lists both
+  directories, since it doesn't look inside `.github/actions/` by itself.
+- **Nothing rebuilds a released image.** A base-image fix reaches users as
+  a patch release. docs/security.md says so, and says how to read the
+  provenance and the SBOM.
+- **Not checked on this machine**: the dev box has no arm64 emulation, so
+  the multi-platform build and the attestations were first run by
+  `images.yml` on the pull request that added them.
+
 ## Releases
 
 

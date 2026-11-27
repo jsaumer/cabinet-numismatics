@@ -663,3 +663,40 @@ CI on purpose: a CVE published against an unchanged base image shows up
 there without blocking a release that didn't cause it. The usual fix is a
 rebuild (the image applies Debian's pending updates) or regenerating the
 lockfile.
+
+### The published images
+
+From v0.40.0 a release's two images are built for `linux/amd64` and
+`linux/arm64` by one job (`.github/actions/build-images`), and each carries:
+
+- **Labels** (`org.opencontainers.image.*`): the source repository, the
+  version, the commit it was built from, when, and the license.
+- **Build provenance** (SLSA, `mode=max`: the build's inputs and steps) and
+  an **SBOM** (every package in the image), stored beside the image in the
+  registry. To read them:
+
+  ```bash
+  docker buildx imagetools inspect ghcr.io/jsaumer/cabinet-numismatics-backend:0.40.0 \
+    --format '{{ json .Provenance }}'
+  docker buildx imagetools inspect ghcr.io/jsaumer/cabinet-numismatics-backend:0.40.0 \
+    --format '{{ json .SBOM }}'
+  ```
+
+**Tags.** A version tag (`0.40.0`) is pushed once and never moved or
+deleted, so a deployment that pins one gets the same image every time.
+`latest` is the newest stable release. From 1.0.0 a stable release also
+moves `1` and `1.0`, for a deployment that wants fixes without breaking
+changes; before 1.0 a minor release may break, so there is no `0` or
+`0.40`. A release candidate is pushed under its own version only.
+
+**There are no silent rebuilds.** `latest` is the image its release built;
+nothing rebuilds it afterwards. When the weekly scan finds a fixable
+finding in a base image, the fix is a patch release, which you get by
+moving your tag. Pinning a version and watching the releases is the
+recommended way to run Cabinet.
+
+**The workflows.** Every GitHub Action the workflows use is pinned by
+commit hash, with its version in a comment beside it, so a tag moved on
+someone else's repository can't change what runs with this project's
+registry token; Dependabot proposes the updates. A test keeps it so
+(`backend/tests/test_ci_tooling.py`).

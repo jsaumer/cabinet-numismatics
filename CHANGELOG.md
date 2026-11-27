@@ -8,6 +8,34 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+Images for arm64, and a release you can check. No migration, no change to
+the app itself.
+
+### Added
+
+- **arm64 images.** Both images are now built for `linux/arm64` as well as
+  `linux/amd64`, so Cabinet runs on a 64-bit Raspberry Pi 4 or 5, an Apple
+  Silicon Mac, or an ARM server. Docker picks the right one from the same
+  tag. CI builds and smoke-tests the whole stack on a native arm64 runner
+  on every change.
+- **Provenance and an SBOM with every image.** Each published image carries
+  a record of how it was built and a list of every package in it, stored
+  beside it in the registry, and labels naming the source, the version, and
+  the commit. [docs/security.md](docs/security.md) shows how to read them.
+- **`1` and `1.0` image tags, from 1.0.0.** A stable release will also move
+  its major and its minor tag, for a deployment that wants fixes without
+  breaking changes. Until 1.0 there is only the exact version and `latest`.
+
+### Security
+
+- Every GitHub Action the workflows run is pinned by commit hash instead of
+  by a tag its owner could move, and a test keeps it so.
+- A pull request that touches a Dockerfile, a lockfile, or the proxy's
+  files now builds both images for both platforms in CI, so a build that
+  breaks on one of them shows up before a release tag does.
+
 ## [0.39.0] - 2026-11-26
 
 Four contract decisions before 1.0: what an item's answer carries, what

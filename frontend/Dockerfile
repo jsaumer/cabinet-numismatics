@@ -3,7 +3,10 @@
 # (not frontend/) so this can also COPY proxy/nginx.conf in, baked into the
 # image rather than bind-mounted: a bind-mounted host path can't be relied
 # on to exist across every node in a Swarm/multi-host deployment.
-FROM node:26-alpine AS build
+# The build stage runs on the builder's own platform, whatever the image is
+# for: its output is static files, the same for amd64 and arm64, so a
+# multi-platform build compiles the frontend once and never under emulation.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci

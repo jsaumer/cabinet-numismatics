@@ -36,7 +36,12 @@ updates:
     schedule:
       interval: monthly
 
+  # Actions are pinned by commit, with the version in a comment beside it;
+  # Dependabot moves both. The second directory is the shared image build,
+  # which the workflows call and which pins actions of its own.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/build-images
     schedule:
       interval: monthly

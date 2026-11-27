@@ -283,7 +283,7 @@ unfair, please [open an issue](https://github.com/jsaumer/cabinet-numismatics/is
 |---|---|---|---|---|
 | **What it is** | A web app you host yourself | An open-source desktop program | A commercial desktop program | An online catalog and collector community |
 | **Price** | Free (MIT) | Free (GPL-3.0) | $39.95 to $59.95, with optional paid yearly upgrades | Free |
-| **Runs on** | A Docker host (amd64), used from any browser | Windows, macOS, Linux | Windows 10 or 11; a separate, smaller Mac app | Any browser |
+| **Runs on** | A Docker host (amd64 or arm64), used from any browser | Windows, macOS, Linux | Windows 10 or 11; a separate, smaller Mac app | Any browser |
 | **Where your collection lives** | On your own server | In a file on your computer | In a file on your PC, with the vendor's cloud storage as a backup option | On Numista's servers |
 | **From a phone** | Yes, in the browser | To view only, through its web viewer; the Android companion is archived | No | Yes, in the browser |
 | **What it catalogs** | Coins, paper money, bars and rounds, and proof or mint sets, each as its own type | Coins, with 80+ customizable fields | Coins; paper money is a separate product (CurrencyManage) | Coins, banknotes, and exonumia |

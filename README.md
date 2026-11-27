@@ -107,7 +107,8 @@ OpenNumismat, CoinManage, and Numista.
 - **Bring your own keys.** There is no bundled catalog or price guide. Melt
   value needs no key; Numista and PCGS lookups use each service's free API
   key and stay inside its limits.
-- **amd64 images only** for now. There is no ARM build yet.
+- **amd64 and arm64 images** from v0.40.0, so a Raspberry Pi 4 or 5 (64-bit)
+  or an Apple Silicon host works. Earlier releases are amd64 only.
 - **English only**, with the Sheldon and PMG grading scales.
 - **Sized for a personal collection.** It is built and used at hundreds of
   pieces. At several thousand the lists stay quick, and the dashboard and
@@ -117,7 +118,7 @@ OpenNumismat, CoinManage, and Numista.
 
 ## Quick start
 
-You need Docker with Compose v2 on an amd64 machine. Cabinet uses about
+You need Docker with Compose v2 on an amd64 or arm64 machine. Cabinet uses about
 200 MB of memory at idle.
 
 ```bash

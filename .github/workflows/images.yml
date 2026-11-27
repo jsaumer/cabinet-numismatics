@@ -1,0 +1,39 @@
+name: Images
+
+# The release builds both images for amd64 and arm64, with provenance and an
+# SBOM, and only on a tag (CI's publish job). This runs the same build
+# without pushing whenever a pull request touches what an image is built
+# from, so a build that breaks on one platform shows up before a tag does.
+on:
+  pull_request:
+    paths:
+      - backend/Dockerfile
+      - backend/requirements.txt
+      - backend/docker-entrypoint.sh
+      - frontend/Dockerfile
+      - frontend/package.json
+      - frontend/package-lock.json
+      - proxy/**
+      - .github/actions/build-images/**
+      - .github/workflows/images.yml
+  workflow_dispatch:
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Images (amd64 + arm64 build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/build-images
+        with:
+          push: "false"
+          version: ${{ github.sha }}
