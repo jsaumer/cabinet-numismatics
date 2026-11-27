@@ -88,7 +88,7 @@ Useful in-session commands:
   and a deployment that pins those tags upgrades by changing the tag (the
   backend migrates on startup).
 - **What to build.** The road to v1.0.0 in [roadmap.md](roadmap.md) is
-  queued (a CI OpenAPI check, two live Numista confirmations, a README
+  queued (two live Numista confirmations, accessibility basics, a README
   pass); beyond that, work comes from friction the owner reports while
   entering the collection, and parked or tabled items are not built
   unprompted.

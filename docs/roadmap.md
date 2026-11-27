@@ -1,1448 +1,212 @@
-# Cabinet: Features & Roadmap
+# Cabinet: Roadmap
 
-Cabinet is a single-user, self-hosted numismatics collection manager. This
-document lists the full intended feature set and sequences it into phases. The
-guiding principle: reach a genuinely useful tool early (Phase 1–2), then deepen
-cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
-phases that matter for that (docs, packaging, polish) are called out explicitly
-rather than assumed.
+What is left before 1.0, what might come after, what was set aside or cut
+and why, and a short record of what shipped when.
 
-**Status (November 2026): v0.43.0 (the first-run pass from the 1.0
-checklist: a welcome state for an empty collection, a demo collection
-loaded and removed from one button, and a form that asks before it loses
-work and says why a save was refused; v0.42.0 before it was the
-checklist's small items, the web interface saying when it and the server
-are different releases, a web app manifest, and CI restoring an older
-release's archive; v0.41.0 was the first run on the install side, a one-file install from the published images and a
-readable page for a wrong address, v0.40.0 added arm64 images with build
-provenance, v0.39.0 settled four contract decisions, and v0.38.0 added a
-CI check against breaking the API) is the latest published release**, with versioned images published to GHCR from each
-tagged release and running on a homelab Docker Swarm. Phases 0–5 are
-built, pricing-program M1–M5 are done (settings
-backbone, the Numista and PCGS adapters, per-source value display with a
-configurable blended-value strategy, scheduled auto-refresh for both
-sources, and estimate provenance), in-app backup (Phase 5.6 B1 + B2) shipped
-in v0.12.0, and the open-source readiness track (Phase 6) is complete.
-**Phase 7** is the parity plan chosen by the owner on 20
-September 2026 from a survey of other collection tools; it includes
-application login, which reverses the earlier decision to ship v1.0.0
-without one. Its P1 and P3 to P6 (population, wish-list depth, paper money
-depth, fancy serial numbers, die axis and foreign dates) shipped together in
-v0.25.0, in-app restore (P2) in v0.26.0, the customizable dashboard
-(P10) in v0.27.0, and the bullion stack figures (P7) in v0.28.0; P10's
-"group C" widgets followed in v0.29.0, alongside note details and a
-regrouped item page from the data-entry pass; authentication's first part
-(P8, A1: one admin, sessions, scoped API tokens) shipped in v0.30.0; bars
-and rounds as a third item type (P11, [SPEC_0310](specs/SPEC_0310.md))
-shipped in v0.31.0; the share and showcase view (P9,
-[SPEC_0320](specs/SPEC_0320.md): a read-only link, tokens hashed and shown
-once, values a toggle off by default, a checklist link showing filled slots
-only) shipped in v0.32.0; single sign-on (P8, A2: OpenID Connect, a GitHub
-button, and a trusted-header mode for a gateway that already
-authenticates, [SPEC_0330](specs/SPEC_0330.md)) shipped in v0.33.0.
-**What's next**: nothing is queued from Phase 7, and v0.33.0 is validated
-live ([live-validation.md](live-validation.md)). The road to v1.0.0 has
-two items left, in this order: "Add a run" and the Numista banknote mapping
-confirmed against a live account; then a README and quick-start pass,
-alongside whatever entering the rest of the collection turns up. The third,
-a CI check against a breaking OpenAPI change, shipped in v0.38.0, with the
-last input rules tightened beside it; the four contract decisions that
-followed (what an item embeds, what today's fields will mean, the wider
-promise, and the third-party terms) shipped in v0.39.0.
-A ✔ marks shipped items below. A second review on 19 September 2026, with
-v0.21.0 live and the real collection still to be entered, surveyed what
-other coin-collection tools offer and re-planned everything unshipped into
-**Phase 5.9**. A third look the same day, after v0.22.0, asked whether the
-owner needs any of it (100–500 pieces to enter by hand, runs and singles,
-mostly held) and demoted the release train to **one next item and a list
-of candidates**, built only when real use asks for them. Since 20 September
-2026 the owner has been entering real pieces, and everything from v0.23.2 to
-v0.24.9, v0.27.1, and v0.29.0 came from that: see "From the data-entry pass"
-under Phase 5.9.
+This page is deliberately short. What Cabinet does today is in
+[features.md](features.md); what each release changed is in the
+[changelog](../CHANGELOG.md); the rules each release left behind for the
+code are in [implementation-notes.md](implementation-notes.md).
 
-**Target versions** on the unshipped items below assume each ships alone,
-following how this project actually bumps versions: new capability = minor,
-small fix/addition = patch. In practice several often land together in one
-release rather than one each: M2 (Numista), M3 (PCGS), the live price-source
-probe script, value differentiation/strategy, and scheduled refresh were all
-separate chunks of work but shipped together as v0.10.0. Treat these as
-illustrative sequencing, not a commitment.
+## Status
 
-Legend: **[MVP]** core to a usable tool · **[Core]** expected of a polished
-tool · **[Nice]** valuable but deferrable · **[OSS]** matters mainly if
-released publicly · **✔** shipped.
+**v0.43.0 is the latest release (November 2026).** Versioned images are
+published to GHCR from every tagged release, for amd64 and arm64.
 
----
+Everything planned through Phase 7 (the parity plan the owner chose on 20
+September 2026 from a survey of other collection tools) has shipped. Cabinet
+is in use on its author's own collection, and what is left before 1.0
+is checking and polish, not new capability.
 
-## 1. Cataloging
+## The road to v1.0.0
 
-The heart of the app: describing what you own, accurately and flexibly.
+1.0 means the HTTP API is stable: the
+[stability policy](api.md#stability-policy) says what that covers, and a
+check in the test suite compares every build with the last release's
+schema. Each item below is a patch or minor release of its own, and 1.0.0
+is cut when the list is done.
 
-- ✔ **[MVP]** Add / edit / delete items (coins and notes).
-- ✔ **[MVP]** Core fields: type, country, denomination, year, mint mark,
-  series, quantity, acquisition date, acquisition price + currency, free-text
-  notes.
-- ✔ **[MVP]** List view with sorting and basic filtering (type, country, year).
-- ✔ **[MVP]** Item detail view.
-- ✔ **[Core]** Item status: `owned` / `sold` / `wishlist`, with sold date and
-  realized price on sold items. Enables *realized* gain/loss reporting and
-  subsumes the separate wishlist feature.
-- ✔ **[Core]** Composition & weight: metal, weight (g), fineness as structured
-  fields, the melt-value prerequisite.
-- ✔ **[Core]** Grading: Sheldon (coins) and PMG (notes) scales, seeded into a
-  reference table by migration.
-- ✔ **[Core]** Certification tracking: grading service + cert number for
-  slabbed pieces (distinct from the grade; verifiable and insurance-relevant).
-- ✔ **[Core]** Acquisition source: where a piece came from (dealer, show,
-  auction, inheritance). Provenance in one field.
-- ✔ **[Core]** Catalog references: link items to Krause / Numista / Red Book
-  numbers for identification and price matching.
-- ✔ **[Core]** Search across notes, series, variety, cert numbers, catalog
-  refs, and tags.
-- ✔ **[Core]** Advanced / combined filters (grade ranges, latest-value ranges,
-  year ranges, tags, sets, status).
-- ✔ **[Core]** Tags / custom labels for arbitrary grouping.
-- ✔ **[Core]** Duplicate / clone an item to speed up entering similar pieces.
-- ✔ **[Nice]** Varieties & sub-types (die varieties, overdates) as a
-  structured, searchable field.
-- ✔ **[Nice]** Lots & sets: group items held or sold together; deleting a set
-  detaches items rather than deleting them.
-- ✔ **[Nice]** Storage/location tracking (which album, slab, box, safe).
-- ✔ **[Nice]** Custom user-defined fields (up to 20 per item, validated).
-- ✔ **[Nice]** Bulk edit across selected items (fields + add/remove tags).
-- ✔ **[Core]** Grading depth: strike type (business, proof, specimen) with proof
-  grades; designations (CAM/DCAM, PL/DMPL, RD/RB/BN, "+", star, CAC); "details"
-  grades with the problem (cleaned, damaged…); PMG's EPQ and star designations
-  and grades 1–3. See Phase 5.7 C1. **Target: v0.14.0.**
-- ✔ **[Core]** Physical and type fields (diameter, thickness, edge, shape,
-  mintage) and banknote fields: serial number, signatures, prefix/block,
-  replacement/star note, issuing bank. Phase 5.7 C2. **Target: v0.14.0.**
-- ✔ **[Core]** Acquisition and sale costs: fees, shipping, and tax in cost basis;
-  commission and venue on sale, so gains are net. Phase 5.7 C3.
-  **Target: v0.14.0.**
-- ✔ **[Nice]** Certificate verification links to PCGS, NGC, and PMG lookups.
-  Phase 5.7 C4. **Target: v0.14.0.**
-- ✔ **[Core]** Fill in an item from the Numista catalog by catalog number or
-  name search. Phase 5.7 C5. **Target: v0.15.0.**
-- ✔ **[Core]** Fill in an item from its PCGS cert number (type, date, mint,
-  grade, designation, variety), and a duplicate warning when an item with
-  the same reference, year, and mint already exists. Phase 5.9.
-  **Shipped in v0.22.0.**
-- ✔ **[Core]** Add a run: pick a catalog type, tick its issues, and get one
-  item per date and mint. Phase 5.9. **Shipped in v0.23.0.**
-- ✔ **[Core]** Wish-list target price and priority, alerted when an estimate
-  falls to the target. Phase 7, P3. **Shipped in v0.25.0.**
-- **[Nice]** Statuses beyond owned/sold/wishlist (watching, bidding,
-  ordered, for sale, for swap) with auction fields (house, lot, date, max
-  bid, result). Phase 5.9. **Parked**: the owner mostly holds.
-- ✔ **[Core]** Paper money depth: Friedberg and Pick references, National
-  Bank Note fields, series and signature combination with a report by
-  signature. Phase 7, P4. **Shipped in v0.25.0.**
-- ✔ **[Nice]** Fancy serial numbers detected from a note's serial (solids,
-  radars, repeaters, ladders, binaries, low numbers, date notes). Phase 7,
-  P5. **Shipped in v0.25.0.**
-- ✔ **[Nice]** Die axis, and the date as struck in its own calendar beside
-  the Gregorian year. Phase 7, P6. **Shipped in v0.25.0.**
-- ✔ **[Nice]** Note details: width and height for anything not round (coins
-  keep diameter), printer, and watermark; a demonetization date for coins
-  and notes alike. Filled from Numista too. From the data-entry pass, not
-  in the original roadmap. **Shipped in v0.29.0.**
-- ✔ **[Core]** Proof and mint sets as an item type of their own: one item
-  per set as the mint issued it (proof, uncirculated, or specimen), with
-  the issuing mint, pieces, packaging, a melt value from the precious metal
-  in it, and a place in the bullion stack only when ticked; Numista's
-  export imports each set as one. From the data-entry pass.
-  **Shipped in v0.37.0**, see [SPEC_0370](specs/SPEC_0370.md).
-- **[Nice]** Grading submissions: service, submission number, tier, fees
-  (into cost basis), dates, result, and old → new cert. Phase 5.9.
-  **Parked**: nothing is being submitted.
-- **[Nice]** Nested storage locations (safe → box → row) and a "verified on"
-  physical audit. Phase 5.9. **Candidate**: once there are a few hundred
-  pieces.
-- **[Nice]** Printable 2×2 inserts and slab/box labels with QR codes.
-  **Optional, Phase 7.**
-- **[Nice]** Variety references by scheme and number (FS, VAM, CONECA,
-  Overton…) with links to NGC VarietyPlus and VAMworld. Phase 5.9.
-  **Candidate.**
-- **[Nice]** Saved list views and a choice of list columns; print or export
-  any view. Phase 5.9. **Candidate**: once the list is long enough to need it.
+Left, in order:
 
-## 2. Photo management
+1. **"Add a run" confirmed against live Numista.** It was built and tested
+   against recorded answers; it needs one run with a real key.
+2. **The Numista banknote mapping confirmed against the live API** (size,
+   printer, watermark, demonetization, added in v0.29.0). It was written
+   without a key, so it reads every shape defensively and has never met a
+   real answer.
+3. **Accessibility basics** (planned as v0.44.0): one dialog component that
+   holds focus, errors announced to a screen reader, field outlines that
+   can be seen, readable input text, a title on every page, a skip link,
+   and an automated scan kept in the browser tests.
+4. **A README and quick-start pass**, read as a stranger installing for the
+   first time, with the screenshots retaken. Last, so it describes the 1.0
+   build.
+5. **v1.0.0 itself**: the version, a changelog entry stating the stability
+   promise, a release page, and the `1` and `1.0` image tags. No code
+   change of its own.
 
-- ✔ **[MVP]** Upload photos per item; store originals on the photo volume.
-- ✔ **[MVP]** Obverse / reverse designation; mark a primary image (first
-  upload becomes primary automatically).
-- ✔ **[Core]** Automatic thumbnail generation and EXIF-orientation correction;
-  uploads validated as real images (declared content-type is not trusted).
-- ✔ **[Core]** Multiple photos per item (obverse, reverse, edge, other).
-- ✔ **[Core]** Delete / reorder photos; change designation; primary promotion
-  on delete.
-- ✔ **[Nice]** In-browser crop / rotate / straighten.
-- ✔ **[Nice]** Drag-and-drop and paste-from-clipboard upload.
-- ✔ **[Nice]** Import a photo from a URL.
-- ✔ **[Nice]** Lightbox / zoom for close inspection.
-- ✔ **[Nice]** Webcam capture for direct photographing.
+Two questions are the owner's to send, and neither blocks 1.0: to Numista,
+whether catalog facts may appear on a share link, and to PCGS, whether a
+private collection is a use its API agreement covers. Until they are
+answered Cabinet takes the careful reading of both
+([data-sources.md](data-sources.md)).
 
-*(Those five were the "photo niceties" bundle, **shipped in v0.16.0**, with
-the dashboard becoming the home page.)*
+Done on the way here:
 
-- ✔ **[Nice]** Documents: receipts, certificates of authenticity, invoices,
-  and grading labels (PDFs included) attached to items (one document can be
-  shared by several), on their own volume, served only through the API, with
-  first-page thumbnails, and in backups. Phase 5.8. **Shipped in v0.19.0.**
+| What | Release |
+|---|---|
+| PCGS cert fill, grade parsing, and pricing confirmed against the live API | v0.24.5, v0.24.6 |
+| Sign-in: one admin, sessions, scoped API tokens, every route denied by default | v0.30.0 |
+| An API consistency pass and a written stability policy | v0.30.0 |
+| An upgrade test in CI, from the last release before sign-in | v0.30.0 |
+| Single sign-on (OpenID Connect, GitHub, a gateway's signed assertion), validated live against three providers | v0.33.0 |
+| A check that fails the build on a breaking API change, and the last input rules tightened | v0.38.0 |
+| Four contract decisions: what an item embeds, what today's fields will mean, the wider promise, third-party terms | v0.39.0 |
+| Images for arm64, build provenance, and an SBOM | v0.40.0 |
+| A one-file install from the published images, tested in CI as the README says it | v0.41.0 |
+| Upgrades from older releases tested with their own archives restored; the page says when it and the server are different releases | v0.42.0 |
+| The first-run pass: a welcome state, a demo collection from one button, a form that keeps your work | v0.43.0 |
 
-## 3. Market price / valuation
+## After 1.0
 
-See `price-sources.md` for the sourcing detail and caveats. Value estimates are
-guidance, not appraisals.
+Nothing here is scheduled. One is pulled when real use asks for it, and
+friction found while entering a real collection outranks all of it.
 
-- ✔ **[MVP]** Manual value entry: record a value you researched, with source,
-  date, and optional confidence, stored as a timestamped estimate.
-- ✔ **[Core]** Melt value: spot price × weight × fineness × quantity for
-  precious-metal items. Deterministic, high-confidence, ToS-clean: the
-  *first* automatic source, not the last. Metal detected from composition;
-  fineness falls back to a percentage in the composition text.
-- ✔ **[Core]** Estimate history retained per item (append-only), so value can
-  be tracked over time.
-- ✔ **[Core]** Collection total value with cost basis vs. estimate. The
-  multi-currency answer: convert at cached daily ECB rates; exclude and count
-  anything unconvertible. Never silently mix currencies.
-- ✔ **[Core]** On-demand estimate from comparables with a confidence score:
-  a per-item **sales log** (filled by hand from eBay sold listings and
-  auction archives, or from Numista's auction records, paid-plan only until
-  Numista opened them to the free plan in September 2026)
-  and a `comps` source taking the median of recent matching sales. No free
-  sold-price API exists for individuals; see price-sources.md.
-  **Shipped in v0.17.0.**
-- ✔ **[Nice]** Pluggable price-source adapters: the registry carries melt,
-  **Numista** (free key, coins + notes, prices by grade; pricing M2) and
-  **PCGS** (free token, US coins, price guide + Auction Prices Realized;
-  pricing M3), all sharing one contract, and comps (v0.17.0). eBay
-  Marketplace Insights is closed to new applicants, so eBay sales are logged
-  by hand into the sales log. See the Pricing
-  program phase below.
-- ✔ **[Nice]** Scheduled / periodic re-estimation: the same 12h loop refreshes
-  stale melt estimates (window set by `REESTIMATE_DAYS`; manual values are
-  never superseded), and (independently, per source, off by default)
-  Numista (7/14/30-day cadence, with the projected monthly call count shown
-  against its 2,000/month free tier) and PCGS (fixed weekly; 100 calls a day by
-  default, which Settings flags past 100 priceable items) once switched on
-  in Settings. Each source keeps
-  its own data current regardless of which source is currently an item's
-  overall-latest estimate, since `value_strategy` may prefer or average a
-  source that isn't "winning" right now. On-demand refresh from the
-  dashboard (melt) and per item (any source), with a success message and a
-  "time since" label on the item page.
-- ✔ **[Nice]** Currency conversion for multi-currency collections (daily ECB
-  rates, 24h cache, stale fallback).
-- ✔ **[Nice]** Value-over-time chart per item and per collection.
-- ✔ **[Nice]** Configurable blended-value strategy: a `value_strategy`
-  setting (latest / preferred source / average of sources) controls the
-  single value shown in the items list, CSV/XLSX export, and dashboard
-  totals, separate from the item page, which always shows every source's
-  own latest value as a chip.
-- ✔ **[Core]** PCGS pricing checked against the live API: auction lots are
-  dated by month, only sales from the last five years count (older ones are
-  shown, not counted), the price guide stands in otherwise, and the default
-  quota is 100 calls a day. **Shipped in v0.24.4 and v0.24.6.**
-- ✔ **[Nice]** PCGS population and eBay sold-listings / Photograde links on
-  the item page. Phase 5.9. Links **shipped in v0.22.0**; population on the
-  item page (Phase 7, P1) **shipped in v0.25.0**.
-- ✔ **[Core]** Bars and rounds as an item type of their own, with metal
-  detection that no longer counts nickel silver or Nordic gold as precious,
-  fineness read from the metal's own percentage, weight in troy ounces, and
-  bars from Numista's catalog. Phase 7, P11. **Shipped in v0.31.0**, see
-  [SPEC_0310](specs/SPEC_0310.md). As built: a Metal select, a g/oz weight
-  switch, a suggested product name, a `metal=` list filter, the Stack
-  page's "Left out" list, and a melt value from the moment a piece is
-  saved.
-- ✔ **[Nice]** Stack view for bullion: fine ounces by metal, premium over spot
-  at purchase, cost per ounce, break-even, and spot-price thresholds through
-  the alert webhook. Phase 7, P7 (was parked). **Shipped in v0.28.0.**
+**Candidates**
 
-## 4. Stats, reports & insights
-
-- ✔ **[Core]** Dashboard: counts, total cost basis, total estimated value,
-  and top-level breakdowns.
-- ✔ **[Core]** A customizable dashboard: choose, reorder, and size its cards,
-  with the layout saved on the server. Phase 7, P10. **Shipped in v0.27.0.**
-- ✔ **[Core]** Breakdowns by country, type, decade, grade, and tag, plus
-  acquisitions by year.
-- ✔ **[Core]** Cost-basis vs. estimated-value comparison: unrealized (owned)
-  *and* realized (sold) gain/loss, per item and in total.
-- ✔ **[Core]** Export the collection to CSV and Excel.
-- ✔ **[Nice]** Printable collection report: print-optimized HTML; the
-  browser's Print → PDF replaces a server-side PDF library on purpose
-  (lighter, and the user controls paper/margins).
-- ✔ **[Nice]** Charts: value by country/tag, items by decade/grade,
-  acquisitions over time, value over time.
-- ✔ **[Nice]** Completeness tracking against a target set (checklists with
-  progress, e.g. a date/mint run).
-- ✔ **[Nice]** Insurance report (itemized values, photos, certs, totals,
-  disclaimer).
-- ✔ **[Nice]** Registry-style sets: checklist slots generated from a catalog
-  type's issues or a year and mint range, matched automatically to owned
-  items, with a completion percentage and a "needed to complete" list.
-  Phase 5.9. **Shipped in v0.23.0**, with "Add a run".
-- **[Nice]** Tax lots and realized gains by year: several purchase and sale
-  records per item, partial sales, holding period, basis including fees,
-  FIFO or specific identification, and a Form 8949-style CSV. Phase 5.9.
-  **Parked**: nothing has been sold; cost basis with fees already exists.
-- **[Nice]** Insurance schedule (the insurer's per-item fields, a flag above
-  the scheduling threshold, appraisal records) and an estate packet (letter
-  of instruction, dealer contacts, where everything is). Phase 5.9.
-  **Candidate**: the insurance report and attached documents cover it today.
-
-## 5. Platform, data & operations
-
-Cross-cutting concerns that make the tool trustworthy and pleasant to run.
-
-- ✔ **[MVP]** Containerized deployment via Docker Compose (backend, proxy, db).
-- ✔ **[MVP]** Persistent storage for data and photos; config via `.env`.
-- ✔ **[MVP]** An auto-generated OpenAPI schema (`/api/openapi.json`; the
-  interactive Swagger page was turned off in v0.30.0, see Phase 7, P8).
-- ✔ **[Core]** Data import from CSV, round-tripping the export format with
-  per-row error reporting.
-- ✔ **[Core]** Backup / restore: one script for pg_dump + photo archive
-  together, documented **and rehearsed** (see backup-restore.md).
-- ✔ **[Nice]** Backup from inside the app: download the collection as one
-  `.zip` from Settings, and scheduled backups with retention. The scripts
-  stay as the disaster-recovery path. See Phase 5.6. **Shipped in v0.12.0**
-  (B1 download + B2 scheduled/retention).
-- ✔ **[Core]** Restore from inside the app: a stored or uploaded archive,
-  verified, with a summary, an automatic safety backup first, a typed
-  confirmation, and a deployment switch (`RESTORE_ENABLED`). Phase 5.6's
-  B3, built as Phase 7, P2. **Shipped in v0.26.0.**
-- ✔ **[Core]** Responsive UI that works on phone and tablet, not just desktop.
-- ✔ **[Core]** Data validation and sensible error messages (real image
-  validation, enum/range checks, actionable estimate errors).
-- ✔ **[Core]** Secrets handled to standard: price-source credentials are
-  Fernet-encrypted at rest with env-supplied keys and rotation support, and
-  are write-only through the API. See `security.md`.
-- ✔ **[Core]** Authentication: one admin with a first-run setup code,
-  database-backed sessions, and scoped API tokens, then single sign-on
-  (OpenID Connect and a trusted-header mode). **Phase 7, P8, A1 shipped for
-  v0.30.0**: one admin, sessions, and scoped API tokens, with every route
-  denied by default. **A2, single sign-on, shipped in v0.33.0**: OpenID
-  Connect against any provider, a GitHub button, and a trusted-header mode
-  for a gateway that already authenticates, with the provider's own
-  multi-factor check as the second factor and the local password kept as a
-  one-factor recovery credential; see [SPEC_0330](specs/SPEC_0330.md). An
-  authenticating reverse proxy (e.g. Traefik + Authentik forward-auth) in
-  front is now optional, kept for a door before the sign-in page or for the
-  trusted-header mode; Cabinet is still designed for private networks and
-  should not be exposed to the internet, whatever sits in front of it (see
-  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)).
-  A decision on 20 September 2026 to ship v1.0.0 without login was reversed
-  the same day, when the owner chose feature parity and a share view, which
-  needs the rest of the app closed first; the design was settled on 20 and
-  21 September 2026 and is in
-  [security.md](security.md#accounts-and-permissions).
-- ✔ **[Nice]** Share and showcase view: a read-only public link to a set, a
-  checklist, or the collection; the whole feature switched on or off in the
-  admin's Settings, off by default. Phase 7, P9. **Shipped in v0.32.0**, see
-  [SPEC_0320](specs/SPEC_0320.md). As built: the token is stored only as its
-  hash and shown once, with regenerate for a lost link; the estimated value
-  is a fifth toggle, off by default, and costs and gains are never shown; a
-  checklist link shows its filled slots only; and a forward-auth proxy kept
-  in front must exempt `/s/`, `/api/share/`, and `/robots.txt` or it blocks
-  the app's own share links.
-- ✔ **[Nice]** CI and published images: GitHub Actions runs ruff, pytest, a
-  frontend typecheck, and a compose build/migrate/smoke test on every push and
-  PR; a `v*` tag push additionally publishes the backend and proxy images to
-  GHCR (from v0.10.2). This landed on GitHub rather than the homelab Forgejo
-  originally planned.
-- ✔ **[Nice]** Import from other tools, with a preview: the user's own
-  Numista collection through the API, Numista's export file, OpenNumismat
-  collections (schema 9–11, photos included), and any spreadsheet through a
-  column mapping (which covers Colnect, uCoin, CoinSnap, and PCGS's registry,
-  whose headers couldn't be confirmed). Re-imports are deduplicated by
-  origin. **Shipped in v0.18.0.**
-- ✔ **[Nice]** Audit/history of edits to an item (append-only, field-level
-  diffs).
-- ✔ **[Nice]** Dark mode / theming (CSS variables, header toggle, validated
-  dark chart palette).
-- ✔ **[Core]** Safer delete: a trash with restore (one item or a selection),
-  keeping photos, documents, values, and history, emptied automatically
-  after 30 days (adjustable, or never). Phase 5.8. **Shipped in v0.20.0.**
-- ✔ **[Nice]** Alerts and metrics: a webhook (generic JSON, ntfy, Discord,
-  Slack, Gotify) for failed backups, rejected or exhausted price-source keys,
-  and failed refreshes, on change and on recovery; an Uptime Kuma heartbeat;
-  a Prometheus `/api/metrics` endpoint. Phase 5.8. **Shipped in v0.21.0.**
-- ✔ **[Core]** Hardening: a dashboard setup checklist (backups off, no alert
-  webhook, no source key), Playwright smoke tests in CI, current
-  screenshots, the three ~900-line frontend files split, a trimmed
-  CLAUDE.md, and a Swarm-ready stack file in the repo. Phase 5.9.
-  **Shipped in v0.21.1.**
-- ✔ **[Core]** A look of its own: a logo and browser-tab icon, a bronze
-  accent on warm surfaces, one Calibri-first system typeface, drawn icons in
-  place of emoji, dark by default with a remembered light mode, amounts shown
-  with their currency symbol, file pickers as buttons, a collection title
-  row with an export/import menu, and Import and the trash in the
-  navigation. No em dashes anywhere in the interface or the docs.
-  **Shipped in v0.24.0 to v0.24.3.**
-- ✔ **[Nice]** A Homepage (gethomepage.dev) tile: owned coins, owned notes,
-  and the estimated value from the existing `/api/stats/collection`, with
-  the logo served at `/logo-512.png`. See `monitoring.md`. **Shipped in
-  v0.24.2.**
-- **[Nice]** API call counter: requests sent to Numista and PCGS per month
-  and per day against editable limits, a reserve for manual lookups, a
-  spread-out PCGS refresh, and a cost preview before a run or an import.
-  Neither platform has a usage endpoint or quota headers (checked with real
-  keys), so it can only count Cabinet's own calls. **Tabled** by the owner
-  on 20 September 2026 until real use shows quota pressure.
-- **[Nice]** Coin-show mode: an installable mobile web app (PWA) with
-  quick-add from the phone camera and slab barcode/QR scanning (PCGS → cert
-  and grade, NGC → cert) feeding cert-first entry, tolerant of a bad
-  connection. **Optional, Phase 7** (the installable app with quick-add;
-  scanning would ride on it).
-- **[Nice]** Portability: Excel export with thumbnails, and an
-  OpenNumismat-compatible round-trip export with a photo archive. Phase
-  5.9. **Candidate**: CSV/XLSX export and rehearsed backups exist.
-
-## 6. Open-source readiness [OSS]
-
-Only relevant if Cabinet is released publicly, but cheap to keep in mind.
-
-- ✔ **[OSS]** LICENSE chosen and applied: MIT.
-- ✔ **[OSS]** CONTRIBUTING guide, issue/PR templates, code of conduct,
-  security policy.
-- ✔ **[OSS]** Setup docs good enough for a stranger to self-host in one
-  sitting: README quick start plus `deployment.md` (secrets, reverse proxy +
-  auth, storage, scheduled backups, upgrades).
-- ✔ **[OSS]** Seed/demo data and screenshots: a 17-item demo collection
-  (with public domain photos from Wikimedia Commons, from v0.36.0), loaded
-  by `scripts/seed_demo.py` and, from v0.43.0, by a button
-  on an empty Cabinet, and removed again in one step; screenshots are captured headlessly at a fixed
-  viewport, with the exact command recorded in `docs/screenshots/README.md`
-  so they can be regenerated rather than re-staged by hand.
-- ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,510 tests as of v0.43.0) on Python 3.10 and 3.15, a frontend typecheck, and a
-  full compose build with migrations and an API smoke test.
-- ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
-  reported by `GET /api/health` and in the OpenAPI spec.
-- ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0024` (and `a0001`–`a0002`
-  for the sign-in chain), applied by the backend on startup since v0.11.1.
-
----
-
-## Phased roadmap
-
-Each phase ends at a state that is usable on its own, so the tool is never
-"half-built and unusable" between milestones.
-
-### Phase 0: Foundations ✔
-Scaffolding so features have somewhere to live. From this phase on, Cabinet is
-built with Claude Code (see `claude-code.md`); commit the repo-root `CLAUDE.md`
-early so every session starts with full context.
-- Backend app skeleton (FastAPI), database models, migrations baseline.
-- Establish and record the test, lint, and migration commands in `CLAUDE.md`.
-- Frontend app skeleton (React + Vite) wired to the API.
-- Compose stack running end to end with the nginx proxy.
-- Health check. (CI was deferred at the time and arrived later on GitHub
-  Actions; see the Platform section.)
-*Exit: `docker compose up` serves an empty but working app.*
-
-### Phase 1: Usable catalog (MVP) ✔
-The point at which you can actually start entering your collection.
-- Item CRUD with core fields; list + detail views.
-- Basic sorting and filtering.
-- Photo upload with obverse/reverse and a primary image.
-- Manual value entry.
-- CSV export.
-*Exit: you can catalog real items with photos and see them back.*
-
-### Phase 2: Polished catalog ✔
-Schema-completing phase: add the fields that are cheap now and expensive after
-the whole collection is entered.
-- New item fields: status (owned/sold/wishlist + sold date/price), composition
-  + weight + fineness, certification (service + cert number), acquisition
-  source, storage/location.
-- Grading and catalog-reference reference tables + UI (seed Sheldon/PMG scales
-  via data migration).
-- Full-text search and advanced filters; list filter/sort state persisted in
-  the URL.
-- Tags, clone-item.
-- Thumbnails + EXIF correction (Pillow; also validate that uploads are real
-  images, not just a trusted content-type); multiple photos; reorder/designate.
-- CSV import + backup/restore that is documented **and rehearsed**: one script
-  for pg_dump + photo volume together, with a tested restore drill.
-- Responsive UI pass.
-*Exit: pleasant day-to-day cataloging; safe to trust with the whole collection.*
-
-### Phase 3: Valuation ✔
-Easiest-first ordering: melt value is deterministic and ToS-clean; sold-listing
-comps are the hardest integration, so they come last, not first.
-- Melt-value adapter (spot price × weight × fineness) as the first automatic
-  source; optional user-set confidence on manual entries.
-- Collection total value + cost basis vs. estimate, with the multi-currency
-  decision made explicitly (a declared display currency at Phase 3; upgraded
-  to daily-rate conversion in Phase 5A).
-- Adapter interface for further sources; confidence scoring.
-- Sold-listing comps integration as the stretch goal: deferred, then built
-  for **v0.17.0** as a hand-filled sales log with an optional paid Numista
-  feed, since no sold-price API is open to individuals.
-*Exit: the collection has trackable, sourced value estimates.*
-
-### Phase 4: Insights & reporting ✔
-- Dashboard and breakdowns (country, type, year, grade, tag).
-- Gain/loss view, realized (sold items) and unrealized; Excel export;
-  printable/insurance report (print-optimized HTML; the browser's
-  Print → PDF replaces a server-side PDF library on purpose: lighter, and the
-  user controls paper/margins).
-- Basic charts.
-*Exit: you can understand and report on the collection at a glance.*
-
-### Phase 5: Depth & niceties ✔
-Pull from the **[Nice]** items as desired, roughly in value order:
-- ✔ **5A (value depth):** scheduled re-estimation, currency conversion
-  (daily ECB rates), value-over-time charts.
-- ✔ **5B (catalog depth):** varieties/sub-types, sets/lots, custom fields,
-  bulk edit. (Wishlist is covered by item status from Phase 2.)
-- ✔ **5C (polish):** completeness checklists, dark mode, edit history.
-- ✔ **Photo niceties:** in-browser crop/turn/straighten, a zoomable lightbox,
-  drag-and-drop, clipboard paste, and URL import, and webcam capture.
-  **Shipped in v0.16.0.**
-
-### Phase 5.5: Pricing program (settings, sources, reports)
-Fully enable configurable price estimation: a settings surface, the two
-researched external sources, estimate provenance, and pricing-quality
-reports. Staged so each milestone is independently useful.
-
-- **M1: Settings backbone + page.** ✔ `app_settings` table and
-  `GET/PUT /api/settings` (secrets encrypted at rest, write-only, masked on
-  read; see `security.md`); a `/settings`
-  page with General (app-wide display currency, melt refresh cadence, melt
-  on/off), Price sources (Numista API key + toggle, PCGS token + toggle;
-  configurable ahead of their adapters), and Cached data (current spot
-  prices and exchange rates with fetch times). Display currency and
-  re-estimation cadence move from env/hardcoded into DB settings with env
-  fallback.
-- **M2: Numista adapter.** ✔ Coins *and* notes priced by `numista` catalog
-  ref + grade (free key, 2,000 req/month); upstream responses cached in
-  `source_cache` (revision `0009`, issues and prices 7d, stale-tolerant);
-  enabled only when a key is configured; medium confidence
-  (collector-swap-derived estimates, 0.60, or 0.45 when the exact grade bucket
-  isn't priced and the nearest lower one stands in). `POST
-  /api/items/{id}/estimates/auto?source=numista` (`.../estimate` until
-  v0.30.0).
-- **M3: PCGS adapter.** ✔ US coins by PCGS cert number, or PCGS number +
-  Sheldon grade. CoinFacts returns both numbers in one response: Auction
-  Prices Realized win when present (median of up to ten recent lots, 0.75, or
-  0.85 with five or more sales), price guide otherwise (0.60). Token from the
-  PCGS public API program, 100 calls/day by default (1,000 when this was
-  built), cached 7 days. Coins only:
-  PCGS Banknote responses carry no price fields.
-  `POST /api/items/{id}/estimates/auto?source=pcgs`.
-- **M4: Estimate provenance.** ✔ Each source's response summary is stored
-  alongside the estimate (`price_estimates.details`, revision `0010`) so a
-  value can be explained, not just asserted: melt's formula inputs and spot
-  price, Numista's matched issue and per-grade prices, PCGS's auction lots
-  and guide value, plus data age and a stale flag. The item page shows it
-  per value-history row and filters that history by source; manual entries
-  take an optional note. **Shipped in v0.11.0.**
-- **M5: Pricing reports.** ✔ A Pricing page with estimate coverage (items
-  lacking estimates and why: source off, missing prerequisite, what the
-  source said, fetch failed, or never tried), a stale-estimates view (one
-  age threshold, 7/30/90/365 days, plus estimates built from expired source
-  data), a per-source breakdown (including which source supplies each
-  item's shown value, and where sources disagree most), and
-  estimate-vs-reality accuracy (estimates standing on the sale date against
-  realized prices). "Why" needs history the estimates table can't hold (a
-  failure leaves no estimate), so every automatic attempt now records its
-  outcome per item and source (`estimate_attempts`, revision `0011`), and
-  each adapter's local checks became a `prerequisite()` the report can run
-  without spending a request. **Shipped in v0.13.0** (moved behind in-app backup, which went first once real data started going into the live
-  instance).
-
-*Exit: every priceable item has a sourced, explainable, configurable
-estimate, and you can see where pricing is thin.*
-
-### Phase 5.6: Backup from inside the app
-
-*Superseded in part by v0.30.0 (Phase 7, P8): every archive is encrypted
-with a backup key and carries a keyed MAC, restores decrypt only in a
-private staging volume, and plain archives can no longer be restored. The
-text below describes the feature as built in v0.12.0 and v0.26.0.*
-
-B1 + B2 ✔ **shipped in v0.12.0**, pulled ahead of pricing M5 once real data
-started going into the live instance. B3 restore was blocked on the auth
-decision until 20 September 2026, became Phase 7, P2, and ✔ **shipped in
-v0.26.0**.
-
-`scripts/backup.sh` needs a shell, the host, and Docker. That is the right
-tool for disaster recovery and the wrong one for "I just entered forty items
-and want a copy." Move the common case into the app; the scripts stay, and
-stay the documented recovery path.
-
-- ✔ **B1: Download a backup.** `GET /api/backup.zip` streams one archive
-  holding `db.dump`, `photos.tar.gz`, and a `manifest.json`: app version,
-  Alembic revision, item/photo counts, created-at, and a SHA-256 per member.
-  A button in Settings. The manifest is what makes an archive *checkable*
-  rather than merely present, and it is what B3 validates against.
-  `?photos=false` gives a small data-only archive for moving between machines.
-- ✔ **B2: Scheduled backups + retention.** Settings gains cadence (off /
-  daily / weekly) and how many to keep (how long to keep them, from
-  v0.30.1). The destination is the `BACKUP_DIR`
-  mount (`/data/backups`), set by the deployment rather than in Settings: an
-  unauthenticated page choosing where the backend writes and prunes files
-  was a worse idea than a fixed mount point. The same in-process scheduler that refreshes melt estimates runs
-  it and prunes the oldest; Settings reports last run, size, and outcome.
-  Pointing the destination at a NAS bind mount gets backups off the box with
-  no new service; see the "no cut services" rule in CLAUDE.md.
-- ✔ **B3: Restore from an upload.** Upload an archive, validate the manifest
-  (schema revision compatible, checksums intact), show what would change,
-  then restore behind an explicit typed confirmation. It was blocked on a
-  decision (restore is destructive and the app has no auth) until the owner
-  unblocked it on 20 September 2026: see **Phase 7, P2**, which added an
-  automatic safety backup and a deployment switch. **Shipped in v0.26.0.**
-
-Implementation notes:
-
-- The backend image had no postgres client, so B1 added one. It carries only
-  `pg_dump`/`pg_restore` for majors 14–18 and libpq, from the PostgreSQL apt
-  repository, and dumps with the client matching the server: pg_dump refuses
-  a newer server, and a *newer* pg_dump writes settings (`transaction_timeout`)
-  an older server rejects on restore, found by the restore drill against
-  Postgres 16. The full `postgresql-client` packages would have pulled in
-  ~50 MB of perl. The
-  alternative, dumping logically through SQLAlchemy to JSON, adds no
-  dependency but produces an archive `restore.sh` and `pg_restore` can't
-  read, which splits the format in two. One format is worth the megabytes.
-- **An unauthenticated `/api/backup.zip` hands the whole collection to
-  anyone who can reach the port.** That is acceptable behind the documented
-  deployment (trusted LAN, or Traefik + Authentik) and not acceptable if the
-  stack is ever exposed directly. Same caveat as the rest of the API, but
-  this endpoint concentrates everything into one request.
-- Archives are written to a temp file in the backup directory and then
-  sent, never built in memory, because photo volumes get large. nginx allows
-  `/api/backup*` 30 minutes, since the download starts only once the archive
-  is complete (which is also what lets a failed `pg_dump` return a clean
-  error instead of a truncated file). `restore.sh` accepts these archives and
-  checks `SHA256SUMS` before touching anything; CI rehearses it.
-
-Deferred unless wanted: passphrase-encrypted archives, and push targets
-(S3/WebDAV/SFTP). A mounted path covers the homelab case without new
-dependencies.
-
-*Exit: a backup is one click, happens on a schedule, and an archive can be
-trusted before it is restored.*
-
-### Phase 5.7: Catalog depth II and faster data entry
-
-**C1–C4 ✔ shipped in v0.14.0; C5 ✔ shipped in v0.15.0.** Added by the September 2026
-feature review and placed ahead of the photo niceties. The live collection is
-still empty, and the schema-complete-before-data-complete rule (see Notes on
-sequencing) says fields are cheap to add now and tedious once hundreds of
-items need revisiting.
-
-- ✔ **C1: Grading depth.** A strike type on each item (business, proof,
-  specimen) with proof grades on the Sheldon scale (PR/PF-60 to 70);
-  designations (CAM/DCAM, PL/DMPL, copper color RD/RB/BN, "+" grades, star
-  and CAC stickers); a "details" grade recording the problem (cleaned, damaged,
-  environmental…); PMG's EPQ and star designations and its missing grades 1–3.
-  The price adapters must respect them: PCGS keys proofs to their own numbers
-  and takes a `PlusGrade` flag, and a proof must never be priced as a
-  business strike.
-- ✔ **C2: Physical and type fields.** Diameter, thickness, edge, shape, and
-  mintage for coins; serial number, signatures, prefix/block,
-  replacement/star note, and issuing bank for notes. Searchable where it
-  matters (serial numbers especially) and round-tripped by CSV import/export;
-  today these end up in custom fields or notes.
-- ✔ **C3: Acquisition and sale costs.** Costs on the way in (buyer's premium,
-  shipping, tax) count toward cost basis; costs on the way out (commission,
-  listing fees) and the venue or buyer are recorded on sale. Unrealized and
-  realized gain, the dashboard, and the insurance report use net figures;
-  without this, gains read too optimistic. The accuracy report keeps the
-  gross sold price, since the estimates it judges are market prices.
-- ✔ **C4: Certificate verification links.** A link to the grading service's
-  own cert lookup (PCGS, NGC, PMG), built from the cert service and number
-  already stored. PCGS opens the certificate itself; NGC's and PMG's lookups
-  also ask for the grade, so those open the lookup page. No API involved.
-- ✔ **C5: Fill in an item from Numista.** Enter a Numista catalog number, or
-  search by name, and pre-fill country, denomination, years, composition,
-  weight, and diameter on the item form. Uses the configured key and the same
-  cache as pricing (catalog data 7 days), and fills exactly the fields melt
-  pricing needs. The biggest single time-saver when entering a real
-  collection by hand. It also adds the type's other catalog references and
-  lists its issues, so choosing one sets year, mint mark, and mintage; only
-  empty fields are filled.
-
-*Exit: an item record can describe any coin or note accurately (proofs,
-problem coins, and notes' own details included), gains are net of costs, and
-entering a cataloged piece takes seconds.*
-
-### Phase 5.8: Operations and quality of life
-
-From the same review. Each targets its own minor release after import
-mappings (v0.18.0); like Phase 5's bundles, they can be pulled in any order.
-
-- ✔ **Documents** (v0.19.0): receipts, certificates of authenticity, and
-  invoices attached to items, PDFs included, shareable between items. Served
-  through the API rather than the public photo path, on a volume of their own,
-  and included in backups.
-- ✔ **Safer delete** (v0.20.0): deleting an item moves it, with its photos,
-  documents, estimates, and history, to a trash with restore; deleting from
-  the trash, emptying it, or its automatic clear-out after the retention
-  period is the only permanent step.
-- ✔ **Alerts and metrics** (v0.21.0): a webhook (n8n, ntfy, Discord…) for
-  failed backups, a rejected or exhausted price-source key, and failed
-  scheduled refreshes, sent when each starts failing and when it recovers; an
-  hourly Uptime Kuma heartbeat; and a Prometheus `/api/metrics` endpoint with
-  item counts, collection value, backup age, and refresh outcomes.
-The rest of this phase (wish-list targets, checklist generation, realized
-gains by year, storage locations and labels, saved views, and the mobile
-web app) was re-planned into Phase 5.9 by the second review.
-
-*Exit: the collection's paperwork lives with it, mistakes are recoverable,
-and failures reach you instead of a log.*
-
-### Phase 5.9: Entering the real collection, then the money and the paperwork
-
-Added by a second review on 19 September 2026. v0.21.0 was live and healthy,
-and the collection it held had one item: the software was well ahead of the
-data. The review surveyed desktop tools (OpenNumismat, CoinManage, Carlisle,
-EzCoin, Coin Elite, Koillection), web and mobile tools (Numista, Colnect,
-uCoin, CoinSnap, Coinoscope, the PCGS and NGC registries and apps, Heritage,
-MyCollect), and what collectors track by hand (bullion stacks, tax lots,
-grading submissions, insurance schedules, estate packets). What fits a
-single-user, self-hosted tool is below, ordered so each release makes
-entering and using a real collection easier than the last. Sizes are
-relative to the pace so far: S about a day, M a few days, L a week.
-
-- ✔ **Hardening** (v0.21.1, M): a dashboard setup checklist that says what's
-  still off (scheduled backups, the alert webhook, a price-source key);
-  Playwright smoke tests in CI, since the frontend has none; screenshots
-  retaken (the current ones predate the dashboard home page, documents,
-  the trash, and alerts); `ItemDetail.tsx`, `ItemForm.tsx`, and `api.ts`
-  split; CLAUDE.md trimmed; a Swarm-ready stack file in the repo.
-- ✔ **Cert-first entry** (v0.22.0, M): fill the item form from a PCGS cert
-  number using the public API already used for pricing (type, date, mint,
-  denomination, grade, designation, variety); a duplicate warning on add
-  and import; eBay sold-listings and PCGS Photograde links on the item
-  page. NGC has no public API, so an NGC cert gets a lookup link only.
-**The third look (19 September 2026, after v0.22.0).** The list above this
-point was built from what other tools have, which makes a parity list, not
-a needs list. Asked directly, the owner's collection is 100–500 pieces to be
-entered by hand from scratch, part date/mint runs and part scattered
-singles, mostly held rather than traded, with no evidence yet of many slabs
-or bullion. Nothing unshipped is blocking that; what is needed first is not
-code: scheduled backups switched on, the Authentik middleware on the route
-if it's reachable beyond the LAN, and the first 25–50 real pieces entered,
-because the friction found doing that is the real roadmap. So the numbered
-train ends here:
-
-**Next** (19 September 2026): nothing is queued; the next item comes from
-entering the collection.
-
-- ✔ **Runs and registry sets** (v0.23.0, M–L). "Add a run": pick a Numista
-  type, tick its issues (already fetched for "Fill from Numista"), get one
-  item per date and mint; checklists generated from a type's issues or a
-  year and mint range, matched automatically to owned items, with a
-  completion percentage and a "needed to complete" list. The one candidate
-  the collection's makeup supports today: a run of fifty coins becomes one
-  form instead of fifty.
-
-**From the data-entry pass** (from 20 September 2026). What entering real
-pieces turned up, each shipped as a small release:
-
-- ✔ v0.23.2: the insurance report printed a stray dash beside a filled
-  Acquired field; a Numista "no reference" error now leads to the fix.
-- ✔ v0.24.0 to v0.24.3: the text and look pass (no em dashes, money as
-  money, icons, file-picker buttons, the collection title row, the bronze
-  look, the Calibri-style typeface, dark by default, the logo and favicon,
-  the Homepage tile, a header alignment fix).
-- ✔ v0.24.4: PCGS's daily limit corrected from 1,000 to 100, with a Settings
-  warning past 100 priceable items; the Numista license citation corrected
-  (§8.4, personal projects, permits the cache; §8.3 covers only metadata).
-- ✔ v0.24.5: a PCGS cert fill writes "United States" and drops a "P" the
-  coin doesn't carry, so it matches hand-entered pieces.
-- ✔ v0.24.6: PCGS's month-only lot dates are read, and one 2003 sale no
-  longer outvotes a guide value four times higher.
-- ✔ v0.24.7: the first date under a value chart was cut off.
-- ✔ v0.24.8: every document checked against the code and corrected; the
-  repo's Swarm stack file set a broken `DOCUMENT_DIR`.
-- ✔ v0.24.9: the header shifted sideways between a short page and one
-  that scrolls.
-- ✔ v0.27.1: two more found entering real pieces. A German notgeld note
-  Numista lists with no year could only be saved by typing year 0, which
-  broke its title and its pricing; year is now optional, with an ND
-  checkbox and an optional attributed year ("ND" or "ND (1951)"). A 1951
-  Military Payment Certificate has two same-year Numista issues, a rare
-  unpriced replacement note and the common priced one, and pricing always
-  took the first, so it failed; same-year issues are now ranked and tried
-  in turn until one prices.
-- ✔ v0.29.0: a note had nowhere to record its size, printer, or watermark
-  (the owner had been typing the printer into the free-text notes), and the
-  item page had grown into one grid of mostly dashes. Note details (size,
-  printer, watermark, demonetization date) filled from Numista too, and the
-  item page now leads with a hero (photo, title, grade, value) and groups
-  the rest into titled facts that hide when empty, with a toggle for the
-  full sheet. Ten more dashboard widgets from the "group C" survey.
-- ✔ v0.29.1: photos could only be deleted if they were the last one (each
-  delete button sat under the next tile's arrow), and a value typed in by
-  mistake could not be removed. Both fixed; a price source's values are
-  still kept.
-- ✔ v0.34.0: the owner found the interface read as generic and chose a
-  "workbench" layout from three options (workbench, catalog, holdings)
-  prototyped on 14 October 2026: a sidebar, and the collection as a list
-  with the selected piece open beside it, facts edited in place, and a
-  lookup-first quick add (one box for a name, a Numista number, or a PCGS
-  cert).
-- ✔ v0.34.1: the first look at 0.34.0 asked for the dashboard at the top
-  of the sidebar and list headings that sort: Piece A to Z by the row's
-  title, Grade and Value high to low, each flipping on a second click.
-- ✔ v0.35.0: color themes. Five were compared on the workbench screen,
-  light and dark, with contrast measured; the owner chose four (Bronze,
-  Silver, Album, Ledger; High contrast left out) as a picker in Settings,
-  saved on the server. The check also fixed Bronze's light muted text.
-- ✔ v0.35.1: American spelling throughout the interface and the docs
-  (color, catalog, customizable, demonetized), with the rule in CLAUDE.md.
-- ✔ v0.35.2: the logo and the browser-tab icon follow the color theme.
-- ✔ v0.36.0: the demo collection has photos, public domain and CC0 images
-  from Wikimedia Commons fetched through the URL import while the seed
-  runs, so the screenshots (and the website to come) show real pieces.
-- ✔ v0.37.0: proof and mint sets. A set is bought, kept, and sold as one
-  thing, and Cabinet had no way to say so: its coins grouped in a Set had
-  no value of their own, and a set entered as a Coin asked for a grade and
-  a mint mark it doesn't have. Released with Numista's 2026 terms: no
-  Numista value on a share link, and its sales records on the free plan.
-- ✔ v0.37.1: a coin from Numista's export kept its nickname in the
-  denomination (`¼ Dollar "Washington Quarter"`) and lost the KM# in the
-  export's Reference column; found importing the owner's own export.
-- ✔ v0.37.2: the backend image on Python 3.15, CI testing on it, and
-  dependency updates.
-- ✔ v0.37.3: five bugs a full review on 9 November 2026 reproduced on a
-  running stack. A bulk type change could make the collection list a
-  server error, a melt value could bury a typed-in one, the dashboard
-  showed old totals after a piece was added, a value too large for its
-  column was a 500 on Postgres, and a lower-case currency dropped a piece
-  out of the totals.
-- ✔ v0.37.4: `opentelemetry-api` raised in the lockfile past a
-  denial-of-service advisory the weekly audit had flagged, and the README
-  condensed, with the full feature list and a comparison with other tools
-  moved to [features.md](features.md).
-- ✔ v0.37.5: the second batch from the 9 November 2026 review, checked on
-  a running stack. The host backup script had written no full backup
-  since v0.30.0 (found during that check), the restore script left an
-  older archive's schema under a newer backend, four requests were server
-  errors, a price service being down stalled every page, and exports,
-  the URL photo import, the sign-in limit, and the generated key were
-  hardened.
-- ✔ v0.38.0: rows 17 and 13 of the same review's 1.0 checklist. Every
-  build is compared with the last release's API schema, and four inputs
-  were tightened while a stricter rule is still free: a typed-in value's
-  source, `%` and `_` in a search, tags in any capitals, and the form of a
-  Numista reference.
-- ✔ v0.39.0: rows 14, 15, 16, and 18 of the same checklist. An item's
-  answer carries its newest estimate per source and the history is a paged
-  route; `api.md` says what 1.0 promises beyond paths and fields; a share
-  link no longer shows a value made from PCGS's data; every page carries
-  PCGS's credit line once its data is held; and
-  [data-sources.md](data-sources.md) tells users what each service's terms
-  ask of them.
-- ✔ v0.40.0: rows 20 and 24, the first of the checklist's packaging tier.
-  Both images are built for arm64 as well as amd64 and tested on an arm64
-  runner, each carries labels, build provenance, and an SBOM, every GitHub
-  Action is pinned by commit, and a stable release from 1.0.0 will also
-  move `1` and `1.0` tags. Nine routine dependency updates rode along.
-- ✔ v0.41.0: row 19, the first run. One Compose
-  file that runs the published images from an empty folder, a readable
-  page where a wrong address used to get an empty reply, plain http on a
-  trusted LAN as a supported way to start, a page on HTTPS without a
-  public address, and CI walking the README's quick start.
-- ✔ v0.42.0: row 25, the small items. The web interface carries its own
-  version and says so on every page when the server is another release, a
-  web app manifest for "Add to Home Screen", CI upgrading from the newest
-  release and from v0.30.0 and restoring each one's archive in the app,
-  the tests on `httpx2`, and signing in going back to the page that asked
-  for it.
-- ✔ v0.43.0: row 21, the first-run pass. An empty collection shows three
-  ways to start where it showed a red box of chores; the demo collection
-  loads from one button into an empty collection and is removed with one;
-  every "add" link opens the quick add; a new piece starts in the display
-  currency; the setup checklist is a plain card with red kept for what is
-  broken; leaving unsaved work asks first; a refused save says why beside
-  the Save buttons, by the field's label; and three quick-add fixes (a
-  second lookup replacing the first, "No date", a bare year read as a
-  name).
-
-Confirmed against the real services along the way: the PCGS cert fill,
-grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
-run" against live Numista.
-
-**Candidates**: unordered, no targets; one is pulled when real use asks
-for it, and new ones found while entering the collection outrank these.
-
-- **Quick entry**: a phone-friendly quick-add, and possibly a grid for
-  typing several similar pieces at once. (The installable-PWA shell is the
-  small part.)
-- **Physical**: nested locations (safe → box → row), printable 2×2 inserts
-  and slab/box labels with QR codes, a "verified on" audit. Worth it past a
-  few hundred pieces; free-text storage is fine until then.
-- **A trash for photos and documents**: today deleting either is for good
-  (admin plus the password again since v0.30.0); a soft delete with restore
-  and the trash's retention would make it recoverable, as items are. Raised
-  by the v0.30.0 build reviews.
+- **Phone entry**: a quick add made for a phone camera, and scanning a
+  slab's barcode or QR code into the cert fill. Cabinet already installs as
+  an app; nothing works offline.
+- **Storage that knows where things are**: nested locations (safe, box,
+  row), a "last verified" date, and printable 2×2 inserts and slab or box
+  labels with a QR code back to the piece.
+- **A trash for photos and documents.** Deleting either is for good today;
+  pieces already have a trash with restore.
 - **Saved views** and a choice of list columns; print or export any view.
-- **Paperwork**: an insurance schedule with a flag above the insurer's
-  scheduling threshold and appraisal records; an estate packet; variety
-  reference fields with VarietyPlus/VAMworld links. (PCGS population on the
-  item page, once listed here, shipped in v0.25.0.)
-- **Portability**: Excel with thumbnails; an OpenNumismat-compatible
-  round-trip export with a photo archive.
-- ✔ **Layout**: an item page that leads with the photos and groups its facts
-  (identity, grade and cert, acquisition, physical) instead of one grid with
-  a dash for every empty field. Recommended in the September 2026 layout
-  review. **Shipped in v0.29.0** (the hero and grouped facts); Settings
-  split into sections remains a candidate.
-- **API call counter**: tabled by the owner; see section 5.
-- **A user guide**: today's docs are operator and developer facing
-  (deployment, API, architecture), not a walkthrough for someone using the
-  app day to day. Noted in the 20 September 2026 review.
-- ✔ **Multi-architecture images**: the publish job built `amd64` only; an
-  `arm64` build covers a Raspberry Pi or Apple Silicon homelab host.
-  Noted in the 20 September 2026 review. **Shipped in v0.40.0** (rows 20 and
-  24 of the 1.0 checklist): both images for both platforms, CI building and
-  smoke-testing the stack on a native arm64 runner, every GitHub Action
-  pinned by commit, image labels, build provenance and an SBOM stored with
-  each image, and `1` and `1.0` tags from 1.0.0.
-- **Off-site backups**: push targets (S3/WebDAV/SFTP) were deferred under
-  Phase 5.6; a mounted path (including a NAS bind) covers the homelab case
-  without a new dependency. Noted again in the 20 September 2026 review.
-  Encrypted archives moved into P8 (v0.30.0) on 21 September 2026.
-- **A keyed source for purchase-day spot before March 2024**: the stack's
-  free lookup (`history_start`) only reaches back to 2 March 2024; an
-  optional paid or keyed source could cover older purchases. Noted in the
-  20 September 2026 review.
+- **Paperwork**: an insurance schedule with the insurer's own fields and a
+  flag above the scheduling threshold, appraisal records, an estate packet,
+  and variety references by scheme (FS, VAM, Overton) with links.
+- **Portability**: Excel export with thumbnails, and an
+  OpenNumismat-compatible export with its photos.
+- **A user guide.** Today's documents are for the person running Cabinet
+  and the person changing it, not for the person using it day to day.
+- **Off-site backups** pushed to S3, WebDAV, or SFTP. A mounted path,
+  including a NAS, covers this today without a new dependency.
+- **Purchase-day spot prices before March 2024**, from an optional keyed
+  source. The free lookup starts there; older purchases take a typed
+  figure.
+- **More accounts**: the admin adding editors and viewers, with single
+  sign-on creating them. It would still be one shared collection; the
+  permission table for it is already written in
+  [security.md](security.md#accounts-and-permissions).
 
-The wish-list targets, population, and the stack view moved from here and
-from Parked into **Phase 7** on 20 September 2026; the targets and the
-population shipped in v0.25.0, the stack view in v0.28.0.
+**Parked.** Real features for a collector this owner isn't, revisited only
+if that changes:
 
-**Parked**: real features for a collector this owner isn't; revisit only
-if that changes.
+- Statuses beyond owned, sold, and wish list (watching, bidding, ordered,
+  for sale) with auction fields. The owner mostly holds.
+- Tax lots, partial sales, and realized gains by year with a Form
+  8949-style export. Nothing has been sold; cost basis with fees exists.
+- Grading submissions (service, tier, fees, dates, old and new cert).
+  Nothing is being submitted.
 
-- **Pipeline**: wish-list targets, watching/bidding/ordered/for-sale
-  statuses, auction fields. (Mostly holds.)
-- **Money**: tax lots, realized gains by year with a Form 8949-style CSV,
-  grading submissions. (Nothing sold or submitted; cost basis with fees
-  already exists.)
-- **Slab barcode/QR scanning.** (Not mostly slabs; the cert fill takes a
-  typed number.)
+**Tabled.** A counter of calls made to Numista and PCGS against their
+limits, with a cost preview before a run. Neither service reports usage, so
+it could only count Cabinet's own calls; set aside on 20 September 2026
+until real use shows quota pressure.
 
-**The road to v1.0.0.** 1.0 means the HTTP API is stable. On 20 September
-2026 it was first decided to ship 1.0 with no application login; later the
-same day the owner chose the Phase 7 parity plan, which includes
-authentication, and authentication changes every endpoint, so it has to
-land before the API is declared stable. v1.0.0 therefore follows Phase 7's
-P8 (and the data-entry review, if that finds nothing structural). With
-P8 complete in v0.33.0, what remains is validation and paperwork, no new
-capability; each unticked item below is a patch or minor release on its
-own, and 1.0.0 is cut when the list is ticked. The checklist:
+## Not planned, and why
 
-- ✔ Authentication (Phase 7, P8, A1: one admin, sessions, scoped API tokens,
-  a deny-by-default gate). **Shipped in v0.30.0** (see P8 below). Single
-  sign-on (A2: OpenID Connect, GitHub, and a trusted-header mode) **shipped
-  in v0.33.0**, completing the checklist item.
+- **Identifying or grading a coin from a photo.** It needs a hosted model
+  or a paid API, and the ANA's review disputes the grading and pricing of
+  the best-known app that does it.
+- **Swap matching, a marketplace, rankings, feeds.** They need a community;
+  Cabinet is one person's records.
+- **Competitive registries with awards.** Checklists give the completion
+  view without the competition.
+- **Several collections, or separate collections per user.** Tags and sets
+  divide one collection. More accounts, if they come, share it.
+- **Cloud sync.** Backups go to a mount you choose.
+- **A bundled price database sold as updates.** The sources Cabinet reads
+  are free with your own key, and current.
+- **A report designer.** Print styles, and saved views if they come, cover
+  it.
+- **Dealers, buyers, and loans as records of their own.** A text field for
+  where a piece came from has been enough.
+- **A second factor built into Cabinet.** Your identity provider's own
+  multi-factor check is the second factor; the local password stays a
+  recovery credential the container can always reset.
+- **Running on the open internet.** Cabinet is for private networks,
+  whatever sits in front of it; see
+  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks).
+- **Redis, object storage, a job queue.** One user doesn't need them: photos
+  are files on a volume, and background work runs in the backend process.
+- **A server-side PDF library.** Reports are print-ready pages; the
+  browser's own Print to PDF does the rest.
+- **LBMA prices.** Its series reaches back further than the free sources,
+  and its terms need a license to use it for valuation.
+- **Working offline.** A page cached in the browser is exactly what has to
+  come fresh from the server.
 
-- ✔ **v0.33.0 validated live** on 24 September 2026, per
-  [live-validation.md](live-validation.md): the upgrade, Authentik,
-  Google, and GitHub passed (three fixes became 0.33.2 to 0.33.4), the
-  OpenVAS scan found nothing against a Cabinet component, and the
-  trusted-header items stay owed to a deployment with a gateway in front
-  (SPEC_0330, "Owed to the owner's live check").
-- ✔ PCGS cert fill, grade parsing, and pricing confirmed against the live
-  API (v0.24.5 to v0.24.6).
-- "Add a run" confirmed against live Numista.
-- The Numista banknote field mapping (`size`, `size2`, `printers`,
-  `watermark`, `demonetization`, added in v0.29.0) confirmed against the
-  live API: it was built without a key on the dev machine, so it reads
-  every shape defensively and could not be tried against a real response.
-- ✔ The Numista bars-and-rounds exonumia shape (`object_type`, `mints`,
-  `size`/`size2`) confirmed against the live API by the owner's probe of
-  `types/430821` on 22 September 2026, so P11 (v0.31.0) needed no
-  defensive guess the way the banknote mapping above still does.
-- ✔ An API consistency pass while breaking changes are still free. **Folded
-  into P8's A1 (v0.30.0)**, decided 21 September 2026, with three changes
-  approved: the old `POST /api/items/import` goes, leaving `/api/imports` as
-  the one import path; `POST /api/estimates/refresh-melt` becomes
-  `POST /api/estimates/refresh?source=melt`; and
-  `POST /api/items/{id}/estimate` becomes
-  `POST /api/items/{id}/estimates/auto?source=`, so it no longer sits one
-  letter from the manual `POST .../estimates`. Then a written stability
-  policy in `api.md`. **Both built** for v0.30.0: the renames
-  and the policy are in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
-  sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
-  where a PATCH would read better.
-- ✔ A CI check that fails on a breaking change to the OpenAPI schema:
-  the committed `/api/openapi.json` of the last release compared with the
-  build's, failing on a removed path, operation, field, or enum value and
-  on a changed type, passing on additions; the stability policy in
-  `api.md` says which changes count. **Shipped in v0.38.0**:
-  `docs/openapi.json` is the last release's schema,
-  `backend/tests/api_contract.py` compares the build with it inside the
-  test suite (so both required backend jobs run it), and the tool that
-  rewrites the committed schema at each release refuses a breaking change
-  from 1.0.0 on unless the major version went up.
-- ✔ The last input rules, tightened while a stricter rule is still free
-  (the 9 November 2026 review's list). **Shipped in v0.38.0** (migration
-  `0024`): a typed-in value can't use a price source's name as its source,
-  `%` and `_` in a search are the characters typed, a tag is one whatever
-  the capitals, and a Numista reference is stored in one form, `N#<digits>`.
-- ✔ The four contract decisions from the same review, proposed and
-  approved on 26 November 2026. **Shipped in v0.39.0**: an item carries its
-  newest estimate per source and the history is its own paged route (with
-  `source_key` on every estimate, and the edit history paged the same
-  way); today's storage and purchase fields are kept, with what they will
-  mean beside richer records written down; the wider promise (statuses,
-  error bodies, environment variables, container commands, archives,
-  exports, upgrades, share links, metrics) is in `api.md`; and the
-  third-party terms were read again: Numista's seven days turned out not
-  to apply to a personal project, a share link no longer shows a value
-  made from PCGS's data, and [data-sources.md](data-sources.md) says what
-  each service asks of the person whose key it is. PCGS's API agreement
-  was then read from the owner's account: it forbids showing its data to
-  third parties and asks for a credit on every page that uses it, which
-  the app now shows once anything from PCGS is held. Still the owner's: a
-  question to Numista about catalog facts on a share link, and one to PCGS
-  about whether a private collection is a use its agreement covers.
-- ✔ A CI upgrade test: a database from an old release migrated to head.
-  **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
-  release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
-  switches to the built images, claims the instance, and checks both
-  migration chains (the collection and `cabinet_auth`) reach head with the
-  item intact. From v0.42.0 the same job also upgrades
-  from the newest published release and from v0.30.0
-  (`scripts/ci/upgrade-restore-test.sh`), each time restoring the old
-  release's own archive in the app afterwards.
-- A README and quick-start pass (the screenshots were captured at v0.30.0
-  and predate 0.33.1's header change; the sign-in page, Settings →
-  Sign-in, and a share page are new since), read as a stranger installing
-  for the first time: the
-  exposure advisory first, then Compose in one sitting, then the Swarm
-  file. Last, so it describes the 1.0 build. A first pass on 9 November
-  2026 condensed the README to what a newcomer needs (what it is, the
-  feature groups, its limits, a quick start from the published images,
-  the exposure advisory after it) and moved the full feature list, with
-  a comparison against OpenNumismat, CoinManage, and Numista, to
-  [features.md](features.md); the screenshots and the final read-through
-  are still owed.
-- Then v1.0.0 itself: the version bump, a changelog entry that states
-  the API stability promise, a GitHub Release, and the `latest` images.
-  No code change of its own.
+## What shipped
 
-In-app restore (Phase 5.6, B3; Phase 7, P2) shipped in v0.26.0, open like
-the rest of the app until P8 A1 made it admin-only in v0.30.0. The share
-view is Phase 7, P9, shipped as v0.32.0 ([SPEC_0320](specs/SPEC_0320.md)).
+Specifications, tests, and notes elsewhere in the repository refer to these
+phases by name, so the names are kept. The detail is in the changelog.
 
-Deliberately not planned, and why: image-based identification (paid or
-hosted ML; Numista's image search is a paid tier), swap matching, a
-marketplace, or social features (they need a community), a report designer
-(saved views plus print cover it), multiple collections and multiple users
-(tags and sets; single-user by design), cloud sync (backups go to a mount),
-AI grading, and dealers, buyers, or loans as their own records.
+| Phase | What | Release |
+|---|---|---|
+| 0 to 4 | Foundations, a usable catalog, the fields a whole collection needs, melt value and totals, the dashboard and reports | through v0.9.0 |
+| 5 | Currency conversion, value over time, sets, custom fields, bulk edit, checklists, dark mode, edit history | through v0.9.0 |
+| 6 | Open-source release: license, contributor docs, CI, a demo collection | v0.9.0 (public from v0.10.1, images from v0.10.2) |
+| 5.5 M1 to M3 | Settings, the Numista and PCGS price sources, a value per source and a blended one, scheduled refresh | v0.10.0 |
+| 5.5 M4 | Where each value came from, kept with it | v0.11.0 |
+| 5.6 B1, B2 | Backups from inside the app, on a schedule | v0.12.0 |
+| 5.5 M5 | Pricing reports: coverage, stale values, sources, accuracy | v0.13.0 |
+| 5.7 C1 to C4 | Grading depth, physical and note fields, costs in the gain, cert lookup links | v0.14.0 |
+| 5.7 C5 | Fill a piece from the Numista catalog | v0.15.0 |
+| 5 | Photo tools: crop, straighten, zoom, drop, paste, URL, webcam | v0.16.0 |
+| 3 | Comparable sales, logged by hand or from Numista | v0.17.0 |
+| – | Import from Numista, OpenNumismat, and any spreadsheet | v0.18.0 |
+| 5.8 | Documents attached to pieces | v0.19.0 |
+| 5.8 | A trash with restore | v0.20.0 |
+| 5.8 | Alerts, a heartbeat, and metrics | v0.21.0 |
+| 5.9 | Hardening: a setup checklist, browser tests in CI, a Swarm stack file | v0.21.1 |
+| 5.9 | Fill a piece from its PCGS cert number; duplicate warnings | v0.22.0 |
+| 5.9 | Add a run; checklists generated and matched to what's owned | v0.23.0 |
+| 5.9 | From the first weeks of real data entry: the look, the logo, money shown as money, PCGS fixes | v0.23.2 to v0.24.9 |
+| 7 P1, P3 to P6 | PCGS population, wish-list targets, paper money depth, fancy serials, die axis and other calendars | v0.25.0 |
+| 7 P2 (5.6 B3) | Restore from inside the app | v0.26.0 |
+| 7 P10 | A customizable dashboard | v0.27.0 |
+| 5.9 | Undated pieces; Numista varieties of one year | v0.27.1 |
+| 7 P7 | Bullion stack figures and spot-price alerts | v0.28.0 |
+| 5.9, 7 P10 | Note details, the item page regrouped, ten more dashboard widgets | v0.29.0 |
+| 7 P8 A1 | Sign-in and encrypted backups ([SPEC_0300](specs/SPEC_0300.md)) | v0.30.0 |
+| 7 P11 | Bars and rounds ([SPEC_0310](specs/SPEC_0310.md)) | v0.31.0 |
+| 7 P9 | Share links ([SPEC_0320](specs/SPEC_0320.md)) | v0.32.0 |
+| 7 P8 A2 | Single sign-on ([SPEC_0330](specs/SPEC_0330.md)) | v0.33.0 |
+| 5.9 | The workbench layout: a sidebar, list and inspector, edit in place, quick add | v0.34.0 |
+| 5.9 | Four color themes | v0.35.0 |
+| 5.9 | Photos for the demo collection | v0.36.0 |
+| 5.9 | Proof and mint sets ([SPEC_0370](specs/SPEC_0370.md)) | v0.37.0 |
+| Road to 1.0 | Fixes from a full review, in two batches | v0.37.3, v0.37.5 |
+| Road to 1.0 | See the table under "The road to v1.0.0" | v0.38.0 to v0.43.0 |
 
-*Exit: a real collection goes in quickly (by cert, by run, by scan) and
-the tool answers the money and paperwork questions a collector actually
-gets asked.*
+## How the order was decided
 
-### Phase 6: Open-source release [OSS] ✔ (v0.9.0)
-- ✔ MIT license, contributing guide, code of conduct, security policy, issue
-  and PR templates, Dependabot.
-- ✔ Hardened setup docs (`deployment.md`), CI on PRs, changelog + versioned
-  release, demo seed data, screenshots.
-- ✔ Migration story for upgrades (Alembic end to end).
-- Application-level authentication was deliberately left unbuilt through
-  this phase: proxy-level forward-auth (Traefik + Authentik) was the
-  documented path until it shipped as Phase 7, P8, A1 (v0.30.0).
-- ✔ The repository is public on GitHub (since v0.10.1); versioned images are
-  published to GHCR from v0.10.2.
-*Exit: a stranger can find, trust, deploy, and contribute to Cabinet.*
-
-### Phase 7: Parity with other collection tools
-
-Added 20 September 2026, with v0.24.9 live. A survey of fourteen product
-groups (OpenNumismat, Numista, the PCGS, NGC, and PMG registries and apps,
-CoinManage and CurrencyManage, EzCoin, Exact Change, Coin Elite, Colnect,
-uCoin, the camera-identification apps, Greysheet and the bullion trackers,
-Koillection, MyCollect and iCollect) was checked against Cabinet feature by
-feature. Cabinet already covers most of what three or more of them share,
-and is ahead on documents, the trash, estimate provenance, pricing reports,
-rehearsed backups, alerts, and being self-hosted with an API. The owner
-chose the gaps below to close. This is a deliberate change of goal from the
-third look's "build only what real use asks for": parity is now wanted, so
-items that were parked (the wish-list targets, the stack view) and the
-decision against application login are reopened here.
-
-In the proposed order; each was to ship alone as a minor release, and
-versions are illustrative. In the event P1 and P3 to P6 shipped together as
-v0.25.0 (one migration, `0018`), ahead of P2, which followed alone as
-v0.26.0.
-
-- ✔ **P1: Population on the item page** (S). PCGS population and population
-  higher, which the cert fill already fetches and then drops, kept with the
-  item (a migration), shown beside the grade with the date fetched, and
-  refreshed with the PCGS estimate at no extra request. PCGS, NGC, and PMG
-  all show it. **Shipped in v0.25.0.**
-- ✔ **P2: In-app restore** (M–L). Phase 5.6's B3, no longer blocked on
-  authentication (the owner's decision, 20 September 2026). The block was a
-  matter of principle more than of risk: anyone who can reach an open
-  Cabinet can already download the whole collection and delete every item
-  for good, so a restore page adds little to what a trusted network is
-  already trusted with. Placed second because it protects the data going
-  in now, and because every later item in this phase adds a migration, which
-  is when a quick way back matters most. Upload a Cabinet archive (or pick
-  one of the scheduled ones); the manifest and checksums are verified and
-  the schema revision checked (older archives are migrated forward after
-  the restore, newer ones refused); a summary shows what is there now
-  against what the archive holds; a **safety backup is taken automatically
-  first**, so a restore can itself be undone; then a typed confirmation. The
-  app goes into a short maintenance state while `pg_restore` runs and the
-  photo and document archives are unpacked. A deployment can switch the
-  page off (`RESTORE_ENABLED=false`), and it becomes admin-only when
-  authentication ships. `restore.sh` stays the disaster-recovery path for
-  when the app itself won't start, and CI's restore drill gains the in-app
-  route. **Shipped in v0.26.0**, no migration. As built: the archive's files
-  are unpacked beside the live ones first, the database is restored in one
-  transaction, and the files are swapped in by renames only after it
-  commits, so a failure before that changes nothing and a failed swap is
-  put back; a journal on the state volume finishes an interrupted swap on
-  the next start. Safety backups (`-prerestore`) sit outside the retention
-  count, newest three kept. During the run everything but health and the
-  restore status answers 503, and health doesn't touch the database. An
-  archive from a genuinely older release (v0.30.0) was restored by hand on
-  the v0.39.0 build and is restored in CI from v0.42.0;
-  NFS was first tried live in v0.26.1; see
-  [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
-- ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
-  items, a wish-list view sorted by either, the gap between target and the
-  current estimate, and an alert through the existing webhook when an
-  estimate falls to the target. Eight of the products have a wish list.
-  **Shipped in v0.25.0.** As built: the gap and the alert use the item's
-  newest estimate, in the item's own currency only (nothing is converted);
-  the alert is sent once, when an estimate first reaches the target; and
-  the target and priority stay with a piece after it is bought.
-- ✔ **P4: Paper money depth** (M). Friedberg and Pick numbers as first-class
-  catalog references with their own lookup links; National Bank Note
-  fields (charter number, bank, city, state); series and signature
-  combination as structured fields with a report grouped by signature;
-  plate and position letters. CurrencyManage is the benchmark. **Shipped in
-  v0.25.0.** As built: the lookup links are web searches, the bank is the
-  existing issuer field, and the report is a dashboard card over the
-  existing series and signatures fields.
-- ✔ **P5: Fancy serial numbers** (S–M). Detected from the serial number
-  already stored: solids, radars, repeaters and super repeaters, ladders,
-  binaries, low and high numbers, birthday and date notes, and star or
-  replacement notes, shown as badges, searchable, and listed on a report.
-  No product surveyed has this; it needs no outside data. **Shipped in
-  v0.25.0**, with super radars, trinaries, and double quads as well. As
-  built, a list filter (any fancy serial, or one trait) stands in for the
-  report.
-- ✔ **P6: Die axis and foreign dates** (S). Die axis in degrees or as coin or
-  medal alignment; the date as struck (Hijri, Japanese era, Thai Buddhist,
-  Hebrew, and so on) beside the Gregorian year, converted on entry, with the
-  calendar recorded. OpenNumismat has the first, Exact Change the second.
-  **Shipped in v0.25.0**, with eleven calendars; a year the owner types is
-  never replaced by the conversion.
-- ✔ **P7: Bullion stack figures** (M). Fine ounces by metal, premium over spot
-  at purchase (from the spot price on the acquisition date where known),
-  cost per ounce, break-even spot, and a spot-price threshold alert through
-  the webhook. Every stack tracker has these; this is the parked stack view.
-  **Shipped in v0.28.0**, migration `0020`. As built: purchase-day spot comes
-  from the public-domain fawazahmed0 currency-api (daily XAU/XAG/XPT/XPD from
-  2 March 2024, cached for ten years since a past day never changes); LBMA's
-  longer public series was ruled out because its terms need a license for
-  valuation use, so Cabinet does not use it, and gold-api.com's history needs
-  a key. Older purchases take a hand-typed figure, and a typed figure is
-  never overwritten by the backfill (`POST /api/stack/backfill`, and the
-  hourly loop, at most 20 a run). The stack is owned, untrashed items with a
-  detected precious metal, a weight, and a fineness, scopeable by tag or set;
-  money converts into one currency the way the collection totals do (an
-  unconvertible amount is left out and counted, ounces still count); the
-  premium paid stays in the item's own currency, so nothing has to convert.
-  Spot-price threshold alerts (`spot_alerts` in Settings, at most 12) reuse
-  `alerts.event`: one message on the crossing, silently re-armed when it
-  clears. A `stack` dashboard widget and a `cabinet_stack_fine_ounces{metal}`
-  metrics gauge. `items.weight_g` gained a fourth decimal place (a troy
-  ounce is 31.1035 g) in the same migration.
-- ✔ **P8: Authentication** (L, in two parts, with more accounts optional;
-  decisions of 20 and 21 September 2026 marked ◆). **A1 shipped in
-  v0.30.0** (built on the `p8-auth-a1` branch, PR 21); **A2 shipped in
-  v0.33.0**, after P11 and P9. A session lasts one
-  day from last use with a 7 day cap; CSRF is the `SameSite` cookie plus an
-  Origin check, not a token; photos go through nginx `auth_request` rather
-  than signed URLs; passwords use Argon2id (`argon2-cffi`, a new
-  dependency); nginx believes no forwarded header and Cabinet pins no
-  network ranges (addressing is the operator's), because it must work both
-  behind an authenticating proxy and directly reachable on a private
-  network (never the internet: see
-  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks));
-  and the session that
-  starts a restore keeps an in-memory grant so its progress page still
-  answers. The full design and the permission table are in
-  [security.md](security.md#accounts-and-permissions), and the build
-  contract is SPEC_0300, approved 21 September 2026 after four outside
-  reviews. **The API consistency pass from the 1.0 checklist below shipped
-  with A1**, since auth already touches every endpoint.
-  - **A1: One admin. Shipped.** ◆ Single user to start: just the admin,
-    onboarded when the app is initialized. A setup page appears while no
-    account exists and asks for ◆ a one-time **setup code the backend
-    prints in its log** at startup (or takes from an environment
-    variable), so nobody else can claim an open instance first. ◆ Login is
-    **always on**: there is no switch to turn it off. Sign-in with a
-    database-backed session cookie (HttpOnly, Secure over HTTPS,
-    SameSite) and an origin check on anything that changes data; the
-    password hashed with Argon2id; sign-in throttled per account and per
-    address; an Account section in Settings (change password and
-    username, see and end sessions, tokens, the audit log, and a notice
-    of failed sign-ins since the last visit); commands in the container to
-    reset a forgotten password, sign out everywhere, revoke tokens, and
-    show the account's status. The whole API is **denied by
-    default** behind one gate with a short allow-list (sign-in, setup, a
-    health check trimmed to "ok" for anonymous callers), tested against
-    every route in the OpenAPI document. Photos get the same check
-    through nginx's `auth_request`. The interactive API docs page
-    (`/api/docs`) is turned off, so no third-party script runs in the
-    signed-in page; `/api/openapi.json` stays, behind the login. ◆ **API
-    tokens with scopes** (`read`, `write`, `metrics`) shipped in this
-    first cut, created in Settings, shown once, stored hashed, so the
-    Homepage tile, Prometheus, the seed script, and CI keep working. The
-    credentials got a Postgres schema and migration chain of their own
-    (`cabinet_auth`): users (with a role and an external identity from
-    the start), sessions, tokens, known devices, and an audit log, never
-    in a backup and never touched by a restore. After Codex's reviews
-    (21 September 2026): the password is asked for again before a backup
-    download, an export, a restore, any settings change, and creating or
-    revoking a token; a password change or reset revokes every token;
-    `read` and `write` tokens last at most 7 days and can't export or
-    read documents; the alert webhook reports new-device sign-ins,
-    repeated failures, new tokens, downloads, and restores; and **every
-    backup archive is encrypted** with a backup key the owner keeps,
-    because an archive on a backup share was a readable copy of the whole
-    collection outside the login. Before v0.33.0, the recommended
-    deployment also kept an authenticating proxy (any forward-auth or
-    SSO gateway) in front, as a second door rather than a replacement for
-    Cabinet's own sign-in; from v0.33.0 that proxy is optional, since
-    Cabinet's own sign-in can use the same identity provider directly (see
-    P8, A2, below). The contract, with a walkthrough of setup,
-    password changes, and the break-glass reset, is in
-    [docs/specs/SPEC_0300.md](specs/SPEC_0300.md).
-    - ✔ **A2: Single sign-on.** OpenID Connect against any
-    provider (Authentik, Keycloak, Authelia, Entra ID, Google, and any
-    other standards-compliant issuer), signing in as the
-    admin through an identity linked to that account, a GitHub button
-    (GitHub has no ID token, so it reads the identity from GitHub's
-    profile endpoint instead), and a trusted-header
-    mode for a gateway that already authenticates, verifying a **signed
-    assertion** the gateway publishes rather than trusting a shared secret
-    or a bare address. **Shipped in v0.33.0**
-    ([SPEC_0330](specs/SPEC_0330.md), reviewed twice before any code, as
-    A1 and P9 were). As built: the owner decided against building any
-    second factor inside Cabinet, so **the identity provider's own
-    multi-factor check is the second factor**, and the local admin
-    password stays as a deliberately one-factor recovery credential a
-    provider outage or a lost phone can never lock out (no passkeys, TOTP,
-    or recovery codes in Cabinet itself; passkeys stay a possible later
-    item). Linking never happens on a first sign-in: an identity that
-    isn't already linked is sent back to sign in with the password and
-    link it from a fresh Settings session. Provider configuration lives in
-    `cabinet_auth`, never in a backup, so a restore onto a fresh machine
-    means re-entering every provider's client id and secret and relinking.
-    Recovery is always the container: `unlink-identity <id>` and
-    `disable-sso` join `reset-password`, `sign-out-everywhere`, and
-    `revoke-tokens`, all taking effect in the running backend at once, with
-    no restart. **The deployment guidance changed alongside it**: an
-    authenticating gateway in front is now optional rather than a
-    recommended second door, and deployment.md gained a hard exposure
-    advisory (Cabinet is for private networks; do not expose it to the
-    internet under any configuration, single sign-on included) that the
-    docs repeat verbatim wherever reaching Cabinet from outside comes up.
-    CI proves the OpenID Connect and GitHub flows, the trusted-header mode
-    through real nginx, and a long list of deliberately broken tokens and
-    replays, against a mock provider built for this release; Authentik,
-    Google, and GitHub were confirmed live on 24 September 2026
-    (live-validation.md); Entra ID and the trusted-header mode still need a
-    tenant or a gateway (see the build log in
-    [SPEC_0330](specs/SPEC_0330.md#18-build-log)).
-  - ◆ **More accounts are optional** (see the optional list below), not
-    part of this item: Cabinet stays single-user unless that is wanted.
-  - Authentication changes every endpoint, so it lands **before
-    v1.0.0** declares the API stable (adding it afterwards would be the
-    breaking change 1.0 promises not to make). ◆ It stayed at P8 in
-    the order, after the numismatic items; in-app restore (P2), open like
-    the rest of the app until A1, is admin-only from v0.30.0. On the first
-    start after upgrading an open install, nothing is served but the setup
-    page until the admin exists.
-  - **The permission table** (admin, editor, viewer, API tokens,
-    and share links, action by action, with the rules around it) is in
-    [security.md](security.md#accounts-and-permissions); only the admin
-    row is built, the editor and viewer rows stay optional.
-- ✔ **P11: Bars and rounds** (M). Added 22 September 2026, when the owner
-  asked how to put a bar in the stack and found nothing under Add: the stack
-  is worked out from ordinary items, so a bar had to be a Coin with a
-  required denomination, and then counted as a coin everywhere. The owner
-  chose a third item type, fully featured, as **v0.31.0**, moving single
-  sign-on back a release (to v0.33.0 once P9 took v0.32.0 as well).
-  `bullion` ("Bar or round") needs no migration: a
-  Metal select, fineness defaulting to .999, weight in grams or troy
-  ounces, refiner and serial, a suggested product name, its own count and
-  list filter, and Numista's "Bullion › Bar" exonumia in the fill and the
-  imports. The same look found two bugs, fixed with it: nickel silver,
-  German silver, Nordic gold, and plated metals read as precious, and
-  "Copper 10%, Silver 90%" read as .100 fine. Also: the pieces the stack
-  leaves out are listed, a `metal=` list filter, and a melt value for a new
-  piece without pressing a button. **Shipped in v0.31.0**: as built, the
-  year-or-ND rule and fancy serial traits don't apply to bullion, nothing
-  fetches a price on the save path (a melt estimate comes from the cached
-  spot price only), and the Numista exonumia shape was confirmed live
-  (`object_type`, see the build log). The contract is
-  [SPEC_0310](specs/SPEC_0310.md).
-- ✔ **P9: Share and showcase view** (M). A read-only public page for a set, a
-  checklist, or the whole collection, behind an unguessable link that can be
-  revoked, with a choice of what it shows (never costs, never storage
-  locations). **The whole feature is a switch in the admin's Settings, off
-  by default** (the owner's requirement, 20 September 2026): while it is
-  off, no link can be made, the public routes answer "not found" as if they
-  didn't exist, and links made earlier stop working without being deleted,
-  so switching it back on restores them. Settings lists every live link
-  with when it was last opened. **Shipped in v0.32.0** (planned 23 September
-  2026, [SPEC_0320](specs/SPEC_0320.md); A2 moves to v0.33.0): it is the
-  first deliberately public page, and everything else had to be closed
-  before one door is opened. As built: the token is stored only as its
-  SHA-256 and shown once, with regenerate replacing a lost link; the
-  estimated value is a fifth toggle (`show_values`), off by default, and
-  costs and gains are never shown under any toggle; a checklist link shows
-  its filled slots only, never a want list; a wrong, unknown, revoked, or
-  sharing-off token all answer the same `404`, slowed per address past 20;
-  and a forward-auth proxy kept in front (see
-  [deployment.md](deployment.md#sharing-and-the-forward-auth-exemption))
-  must exempt `/s/`, `/api/share/`, and `/robots.txt` from its own check, or
-  it blocks the app's own share links.
-
-- ✔ **P10: A customizable dashboard** (M–L). **Prioritized by the owner on 20
-  September 2026: next, now that in-app restore has shipped**, ahead of P7
-  to P9. The dashboard today is a fixed page; the owner wants to decide what
-  is on it.
-  Proposed: every card becomes a widget that can be shown or hidden,
-  reordered, and sized (full, half, or a third of the row); a catalog of
-  widgets to add (the value hero, value over time, value by country, tag,
-  decade, grade, acquisitions by year, gains, the notes report, the wish
-  list with targets reached, recent additions, fancy serials, pricing
-  coverage, backup and alert status); per-widget options where they make
-  sense (top N, a tag or set to scope it to, the time range); an "Edit
-  dashboard" mode with drag to reorder and a reset to the default layout;
-  the layout saved on the server in settings, so it follows the collection
-  rather than the browser. No new chart library: the widgets are the cards
-  that exist, made movable. To settle in its research: drag and drop without
-  a dependency (pointer events and keyboard moves), and how a saved layout
-  survives a release that adds or retires a widget. **Shipped in v0.27.0.**
-  As built: one ordered list of widget instances (twenty types, several
-  instances of one type allowed), each full, half, or a third in a
-  six-column grid; per-widget options, a title override, duplicate, and
-  remove; reorder by a hand-written pointer drag (no dependency), move
-  earlier/later buttons, and a keyboard path (Space or Enter to pick up,
-  arrows to move, Space or Enter to drop, Escape to cancel), all announced
-  through `aria-live`; nothing is saved until Save, and Cancel discards the
-  draft. The layout lives on its own endpoint
-  (`GET`/`PUT`/`DELETE /api/dashboard/layout`, stored under the
-  `dashboard_layout` setting), not `/api/settings`, so it is carried by
-  backups; reading is lenient (an unknown widget type or a bad option
-  quietly takes its default) and writing is strict (a `422` names the
-  widget and option), so a later release can retire a widget or narrow an
-  option without breaking a saved layout, and a version-migration hook is
-  in place for the day the document shape changes. The default layout
-  reproduces the dashboard exactly as it was, so nothing changes until the
-  owner edits it. The breakdown widget can scope to one tag or set
-  (`GET /api/stats/breakdowns` gained `tag` and `set_id`). Left for later:
-  the surveyed "group C" widgets (most valuable pieces, value by metal,
-  certified share, population highlights, data health, value spread,
-  showcase widgets, once P9 exists), which are candidates rather than a
-  commitment; bullion widgets arrive with P7. **The group C widgets shipped
-  in v0.29.0**: `most_valuable`, `piece_of_the_day`, `oldest_piece`,
-  `newest_acquisition`, `on_this_day`, `photo_mosaic`, `certified_share`,
-  `value_spread`, `population_highlights`, `data_health`, and a `metal`
-  dimension on `breakdown`, none in the default layout. Showcase widgets did
-  not wait for P9: they show only what the owner's own dashboard already
-  shows.
-
-**The order from here**: Phase 7 is complete (every item above is
-ticked); what's left is the road to v1.0.0, under Phase 5.9 above.
-
-Optional, after the above and only if still wanted:
-
-- **Labels**: printable 2×2 inserts and slab or box labels with a QR code
-  back to the item.
-- **Phone app**: an installable web app (PWA) with quick-add from the
-  camera; slab barcode scanning into the cert fill would ride on it.
-- **More accounts**: user maintenance by the admin (add, disable, reset a
-  password) and the editor and viewer roles, per the permission table in
-  [security.md](security.md#accounts-and-permissions), with single
-  sign-on then creating accounts and mapping a provider's groups to roles.
-  Moved here from P8 by the owner on 20 September 2026. Still one shared
-  collection: accounts would be logins, not separate collections.
-
-
-Surveyed and not planned, with the reason: identifying a coin from a photo
-(a hosted model or a paid API, and the ANA's review disputes CoinSnap's
-grading and pricing); swap matching, rankings, feeds, and marketplaces
-(they need a community); competitive registries with awards (checklists
-give the completion view); price databases sold as updates (the API-key
-sources are free and current).
-
-*Exit: nothing a collector expects from another tool is missing, notes are
-as well served as coins, and the collection can be shown to someone without
-handing them the keys.*
-
----
-
-## Notes on sequencing
-
-- **Auth was deliberately late, and shipped as P8 A1, then A2.** For
-  homelab deployment an authenticating reverse proxy (Traefik + Authentik
-  forward-auth) covered private networked use with zero application code
-  until A1 shipped, and single sign-on (A2, v0.33.0) then let that same
-  proxy's identity, or an OpenID Connect provider directly, sign in as the
-  admin. Login became Phase 7, P8 because a share view needs the rest of
-  the app closed first, and it landed before v1.0.0 because it changes
-  every endpoint. It is built to work both behind such a proxy and
-  directly reachable on a private network, since which one a deployment
-  uses is its own choice; neither is a reason to expose Cabinet to the
-  internet, which the deployment guide says plainly (see
-  [deployment.md](deployment.md#2-exposure-cabinet-is-for-private-networks)).
-- **Schema-complete before data-complete.** Phase 2 front-loaded every field
-  the collection would need (status, composition, certification, provenance)
-  because adding columns is cheap before the full collection is entered and
-  tedious after.
-- **Valuation before insights.** Reports about value are only meaningful once
-  estimates exist, so Phase 3 preceded Phase 4.
-- **Easiest price source first.** Melt value shipped before sold-listing
-  comps: it is deterministic, needs no external agreement, and covers the
-  bullion floor of most collections. Comps came last (v0.17.0).
-- **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0024`, and `a0001`–`a0002` for the sign-in chain), never
-  create-on-startup.
-- **The September 2026 review reordered what comes next.** Catalog depth
-  (Phase 5.7) went ahead of the photo niceties because the live collection
-  was still empty, the same reasoning that front-loaded Phase 2's fields.
-  That moved photo niceties to v0.16.0, sold-listing comps to v0.17.0, and
-  import mappings to v0.18.0; Phase 5.8's additions follow from v0.19.0.
-- **The third look (19 September 2026) ended the release train.** A survey
-  of other tools makes a parity list; the owner's actual collection
-  (100–500 pieces by hand, runs and singles, mostly held) supported one
-  next item ("Add a run" with generated checklists). Everything else is a
-  candidate or parked, and friction found while entering real pieces
-  outranks all of it.
-- **The second review (19 September 2026) put entry speed first.** With
-  v0.21.0 live and one item in it, the six unshipped items and the new ones
-  from the survey were ordered by how much each speeds up entering and
-  using a real collection: hardening, cert-first entry, runs and sets, the
-  pipeline, coin-show mode, then money, physical, paperwork, views, and an
-  optional stack view, with authentication, restore, and sharing as v1.0.0.
-- **External APIs get the same treatment:** keyless, cached in the database,
-  stale-tolerant, and never trusted with collection data (spot prices via
-  gold-api.com, exchange rates via frankfurter.dev).
-- **[Nice] items are intentionally unordered within Phase 5**, pulled by
-  preference, since this is a personal tool first. All four bundles are
-  in.
+- **Friction from real use comes first.** The owner has been entering a
+  real collection since 20 September 2026, and what that turned up has
+  outranked every plan made before it.
+- **Fields before data.** Adding a column is cheap before a collection is
+  entered and tedious after, so the catalog's fields were filled out early.
+- **The easiest honest price first.** Melt value is arithmetic, needs no
+  agreement with anyone, and is the floor of most collections; sold-price
+  comparables came last, because no sold-price API is open to individuals.
+- **Sign-in before a public page, and before 1.0.** A share link is a
+  deliberately open door, so everything else had to be closed first, and
+  sign-in touches every route, so it had to land before the API was called
+  stable.
+- **Every schema change is a migration.** Alembic from the first commit,
+  applied by the backend itself on startup since v0.11.1.
+- **Outside services are kept at arm's length.** Keyless where possible,
+  cached in the database, tolerant of a stale answer, and never sent
+  anything about the collection.

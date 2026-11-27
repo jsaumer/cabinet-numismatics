@@ -8,9 +8,10 @@ Contributions that keep it simple are very welcome.
 
 - **Bugs**: open an issue with steps to reproduce. If it involves data, say
   what the item looked like (no need to share photos).
-- **Features**: check [docs/roadmap.md](docs/roadmap.md) first: the intended
-  scope, what's built, and what's deliberately deferred are all recorded
-  there. Opening an issue before a large PR saves everyone time. Cabinet now
+- **Features**: check [docs/roadmap.md](docs/roadmap.md) first: what's
+  planned, what was set aside, and what was deliberately cut (and why) are
+  recorded there, and [docs/features.md](docs/features.md) lists what's
+  built. Opening an issue before a large PR saves everyone time. Cabinet now
   has its own sign-in (one admin, scoped API tokens; roadmap Phase 7, P8
   A1) and single sign-on (OpenID Connect, GitHub, and a trusted-header
   mode; P8 A2, v0.33.0). Talk to us before starting on authentication work.
