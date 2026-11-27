@@ -3372,6 +3372,56 @@ Rows 20 and 24 of the 1.0 checklist.
   the multi-platform build and the attestations were first run by
   `images.yml` on the pull request that added them.
 
+## The first run (v0.41.0)
+
+Row 19 of the 1.0 checklist. The review found the usual first run (Docker
+on a server, the browser on a laptop) ended in an empty reply with nothing
+to search for. Two decisions were the owner's, both on 26 November 2026: a
+wrong address gets a readable page, and plain http on a trusted LAN is a
+supported way to start.
+
+- **Three Compose files, one set of settings.**
+  `deploy/docker-compose.yaml` is the pull-and-run file: no `build`, no
+  `env_file`, no host path, every setting inline with a default, and
+  `DB_PASSWORD` the only one it insists on. `docker-compose.yaml` builds
+  from source and reads `.env`; `deploy/docker-stack.yaml` is the Swarm
+  form. `test_ci_tooling.py` compares the variables each passes the
+  backend and the proxy: a setting added to one has to be added to the
+  others, or named in the test's short lists of deliberate differences.
+- **`AUTH_INSECURE_HTTP` defaults to `true` in the pull-and-run file only**,
+  beside its default `PUBLIC_ORIGINS=http://localhost`, because the
+  backend's own default (`false`) gives cookies a plain-http browser
+  drops. An https address beside it stops the backend with a message that
+  names `AUTH_INSECURE_HTTP=false`; the quick-start test greps for those
+  words, so change the two together. The backend's default stays `false`.
+- **The default server answers 421 with one static page**, not 444. It is
+  one nginx string: no variable (so the Host is never echoed), no double
+  quote, no proxying, no file. A test reads the block for those; the page's
+  words are for someone whose `PUBLIC_ORIGINS` is wrong, so keep them
+  about the two settings. Anything that used to detect "wrong Host" by a
+  closed connection (curl exit 52) now reads a status.
+- **`CABINET_PORT` may carry a bind address** (`127.0.0.1:8080`), since it
+  is interpolated into the short port syntax in all three files. Keep it
+  that way: it is how the private-HTTPS page keeps the plain port off the
+  network.
+- **`scripts/ci/quick-start-test.sh` is the README's quick start as a
+  script.** When the README's commands change, change the script: the
+  empty folder, the one-line `.env`, the `grep "setup code"`. It uses the
+  images already present under `TAG` (CI's `quickstart` job builds them
+  first), each stack in its own project and temporary folder. Two shell
+  rules it learned the hard way: under `set -e` a bare `! command` asserts
+  nothing (use its `never`), and under `pipefail` a writer piped into
+  `grep -q` dies of SIGPIPE on a match, so output goes to a file and the
+  file is searched.
+- **A new setup code is generated on every start until the instance is
+  claimed**, so a script (or a person) must read it after the last
+  restart, never before.
+- **`docs/https-private-network.md` says what was tried.** The Caddy
+  `tls internal` route was run for real; Tailscale Serve and DNS-01 are
+  marked as not checked. Keep that honesty when editing it.
+- **The database gets no `env_file`** in the source file any more: `.env`
+  holds keys that have no business in the Postgres container.
+
 ## Releases
 
 

@@ -39,7 +39,9 @@ changelog entry when releasing.
 ## Repo layout
 
 ```
-docker-compose.yaml      single-host stack (build + run)
+docker-compose.yaml      single-host stack, built from source (reads .env)
+deploy/docker-compose.yaml  the same from the published images: one file,
+                         nothing beside it (the README's quick start)
 deploy/docker-stack.yaml Swarm stack (pulled images)
 .env.example / .env (gitignored)
 README.md, CLAUDE.md (this file), CHANGELOG.md
@@ -91,7 +93,10 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
 - Full stack: `docker compose up --build`, then nginx serves at
   http://localhost/ (no API docs page; the schema is `/api/openapi.json`).
   `PUBLIC_ORIGINS` is required (backend and proxy stop without it); nginx
-  answers only its Host names and 444s the rest. The frontend is
+  answers only its Host names, and any other gets one static page saying so
+  (421, v0.41.0; never the app). The three Compose files pass the same
+  settings (a test compares them), and `scripts/ci/quick-start-test.sh`
+  walks the README's first run in CI. The frontend is
   built inside the proxy image (multi-stage `frontend/Dockerfile`), so no host
   Node install is needed.
 - Frontend dev: `npm run dev` in `frontend/` (the Vite dev server proxies

@@ -246,13 +246,13 @@ smoke() {
   # GET /api/openapi.json is session-only; a token gets 403
   adminf "$BASE/api/openapi.json" > /dev/null
   test "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/openapi.json")" = 403
-  # nginx answers only its own Host names: anything else gets no
-  # response at all (444 closes the connection; curl exits 52)
-  set +e
-  curl -s -o /dev/null -H 'Host: elsewhere.example' "$BASE/"
-  rc=$?
-  set -e
-  test "$rc" = 52
+  # nginx answers only its own Host names: anything else gets one static
+  # page saying so (421, v0.41.0; no reply at all before), and nothing of
+  # the app under that name
+  test "$(status_of -H 'Host: elsewhere.example' "$BASE/")" = 421
+  test "$(status_of -H 'Host: elsewhere.example' "$BASE/api/health")" = 421
+  curl -s -H 'Host: elsewhere.example' -o "$STATE_DIR/wrong-host.html" "$BASE/"
+  grep -q 'PUBLIC_ORIGINS' "$STATE_DIR/wrong-host.html"
   # sign-in and setup take at most 8 KiB, refused by nginx itself
   test "$(head -c 9216 /dev/zero | curl -s -o /dev/null -w '%{http_code}' \
     -X POST --data-binary @- "$BASE/api/auth/login")" = 413

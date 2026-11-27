@@ -6,33 +6,68 @@ optionally a single sign-on provider or a gateway in front, scheduled
 backups, and upgrades.
 
 If you just want to try it, the quick start in the [README](../README.md) is
-enough.
+enough. For HTTPS without a public address, see
+[https-private-network.md](https-private-network.md).
 
 ## 1. Install
 
-```bash
-git clone https://github.com/jsaumer/cabinet-numismatics.git
-cd cabinet-numismatics
-cp .env.example .env
-```
+There are two Compose files, and they take the same settings:
+
+- **[deploy/docker-compose.yaml](../deploy/docker-compose.yaml)** runs the
+  published images. It is one file with every setting inline and a default
+  for each, so it works in an empty folder, or pasted into Portainer,
+  Dockge, or a NAS's container manager. Only `DB_PASSWORD` has to be set.
+  This is the one to use unless you are changing the code.
+
+  ```bash
+  mkdir cabinet && cd cabinet
+  curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/deploy/docker-compose.yaml
+  echo "DB_PASSWORD=$(openssl rand -hex 16)" > .env
+  ```
+
+- **`docker-compose.yaml`** at the top of the repository builds both images
+  from source and reads every setting from `.env`:
+
+  ```bash
+  git clone https://github.com/jsaumer/cabinet-numismatics.git
+  cd cabinet-numismatics
+  cp .env.example .env
+  ```
+
+Either way the settings live in `.env` beside the file. CI walks both on
+every change (`scripts/ci/quick-start-test.sh`).
 
 Edit `.env`:
 
 - `PUBLIC_ORIGINS` (required): the exact address browsers use to reach
   Cabinet, `scheme://host[:port]`, comma-separated if there is more than one,
   for example `https://cabinet.example.com`. Both the backend and the proxy
-  refuse to start without it, naming the variable. The sample,
-  `http://localhost,http://proxy`, suits the local stack only.
+  refuse to start without it, naming the variable. The published-image
+  file defaults it to `http://localhost`; the sample `.env`,
+  `http://localhost,http://proxy`, suits the local stack only. On a server
+  reached from another machine it is that machine's view of the address:
+  `http://nas.local:8080`, or `https://cabinet.home.example` behind a
+  reverse proxy.
 - `ALLOWED_HOSTS` (optional): extra Host names nginx answers besides those of
   `PUBLIC_ORIGINS`: internal names such as `cabinet_proxy` (for Homepage or
-  Prometheus on the same network) or a LAN name. **Any other Host gets no
-  response at all**, so a request by bare IP address, or by a name you didn't
-  list, is dropped. Names only: no scheme or port.
-- `AUTH_INSECURE_HTTP` (optional, default `false`): sign-in cookies without
-  `Secure`, for plain http. The sample sets it for the local stack; remove it
-  for any real deployment. It is refused when any `PUBLIC_ORIGINS` entry is
-  https.
+  Prometheus on the same network) or a LAN name. **Any other Host gets one
+  plain page saying this isn't an address Cabinet answers** (status 421,
+  from v0.41.0; no reply at all before that), so a request by bare IP
+  address, or by a name you didn't list, never reaches the app. Names only:
+  no scheme or port.
+- `AUTH_INSECURE_HTTP` (optional): sign-in cookies without `Secure`, for
+  plain http. `true` in the published-image file and in the sample `.env`,
+  since both start on plain http; **set it to `false` beside an https
+  address**, where the backend otherwise stops with a message saying so.
+  Plain http is a supported way to get started on this machine or on a
+  private network you trust; the password then crosses that network
+  unencrypted, so move to HTTPS before relying on it
+  ([https-private-network.md](https-private-network.md)).
 - `CABINET_PORT` (optional, default `80`): the port the proxy publishes.
+  When it isn't the scheme's own port, `PUBLIC_ORIGINS` has to name it too
+  (`http://localhost:8080`). It may carry an address to bind:
+  `127.0.0.1:8080` publishes on this machine only, for a reverse proxy on
+  the same host.
 - `BACKUP_KEY_FILE` (optional): a file of [age](https://age-encryption.org)
   identities, the backup key every archive is encrypted with, typically a
   Docker secret. Unset, Cabinet generates one on the state volume on its
@@ -75,17 +110,21 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional): pins the image tag, e.g. `TAG=0.40.0`. `--build` builds
-  locally whatever the tag; without `--build`, Compose pulls the published
-  image of that tag from GHCR instead.
+- `TAG` (optional, default `latest`): the image tag, e.g. `TAG=0.40.0`. The
+  published-image file pulls it; the source file's `--build` builds locally
+  whatever the tag and names the result with it.
 
-Then bring it up:
+Then bring it up (`--build` only with the source file):
 
 ```bash
-docker compose up --build -d
+docker compose up -d
 ```
 
-The app is at http://localhost/. **Set it up first**: until the admin
+The app is at the address in `PUBLIC_ORIGINS`: http://localhost/ on this
+machine by default. On a headless server, either open it from another
+machine at the address you set, or claim it first over an SSH port forward
+(`ssh -L 8080:localhost:8080 server`, with `PUBLIC_ORIGINS=http://localhost:8080`)
+and change the address afterwards. **Set it up first**: until the admin
 exists, the setup page is all Cabinet serves. It asks for the setup code,
 which is your `SETUP_CODE`, or, if you set none, the one in the log:
 
@@ -789,10 +828,28 @@ Kuma heartbeat in Settings → Alerts & metrics, and optionally scrape
 
 ## 6. Upgrades
 
+With the published images:
+
 ```bash
-git pull
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
+
+`latest` moves with every release. To choose when you upgrade, pin one in
+`.env` (`TAG=0.40.0`) and change the number when you are ready; a version
+tag is never moved. An image you once built locally keeps its name, so
+after switching from the source file to the published images run `pull`
+once, or Compose goes on using the local build.
+
+From source it is `git pull` then `docker compose up --build -d`, which
+runs whatever is on the branch you pulled, released or not.
+
+**PostgreSQL** is pinned to major 16 in every file, and an upgrade of
+Cabinet never changes it. Don't change the image's major version in place:
+a major version can't read another's data folder. Moving to a newer one
+means a dump and restore of the whole database with PostgreSQL's own tools
+(`pg_dumpall`), since Cabinet's backups leave the sign-in data out on
+purpose.
 
 The backend applies any new migrations on startup, before serving, all in one
 transaction. If one fails it rolls back and the backend refuses to start.
@@ -815,8 +872,10 @@ image plus that backup: an older Cabinet refuses an archive made by a newer
 one, and a newer one migrates an older archive after restoring it. The
 [CHANGELOG](../CHANGELOG.md) notes anything that needs attention.
 
-To pick up security fixes in the base images and dependencies without a code
-change, rebuild periodically:
+Security fixes in the base images reach the published images as a patch
+release (nothing rebuilds a released image; see
+[security.md](security.md#the-published-images)). Building from source,
+rebuild periodically to pick them up:
 
 ```bash
 docker compose build --pull && docker compose up -d

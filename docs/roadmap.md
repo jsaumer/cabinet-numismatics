@@ -840,6 +840,11 @@ pieces turned up, each shipped as a small release:
   runner, each carries labels, build provenance, and an SBOM, every GitHub
   Action is pinned by commit, and a stable release from 1.0.0 will also
   move `1` and `1.0` tags. Nine routine dependency updates rode along.
+- v0.41.0 (built, not yet released): row 19, the first run. One Compose
+  file that runs the published images from an empty folder, a readable
+  page where a wrong address used to get an empty reply, plain http on a
+  trusted LAN as a supported way to start, a page on HTTPS without a
+  public address, and CI walking the README's quick start.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

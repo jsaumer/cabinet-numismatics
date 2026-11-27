@@ -291,12 +291,13 @@ def check_startup(config: Settings) -> list[str]:
     if config.auth_insecure_http:
         if any(o.startswith("https://") for o in origins):
             raise ConfigError(
-                "AUTH_INSECURE_HTTP is only allowed when every PUBLIC_ORIGINS entry is "
-                "http; remove it for an https deployment"
+                "AUTH_INSECURE_HTTP is on, which is only allowed when every PUBLIC_ORIGINS "
+                "entry is http; set AUTH_INSECURE_HTTP=false for an https address"
             )
         warnings.append(
-            "AUTH_INSECURE_HTTP is on: sign-in cookies are sent without Secure. "
-            "Only for a plain-http local stack; never on a network you don't trust."
+            "AUTH_INSECURE_HTTP is on: sign-in cookies are sent without Secure, and the "
+            "password crosses the network unencrypted. Only for plain http on this "
+            "machine or a private network you trust; add HTTPS before relying on it."
         )
     # Once Cabinet has its admin (the claimed marker), the setup code is
     # ignored for good, so a leftover SETUP_CODE can't stop a start.

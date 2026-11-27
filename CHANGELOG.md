@@ -8,6 +8,54 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+The first run. The usual way to try a self-hosted app is Docker on a
+server and a browser on a laptop, and for Cabinet that ended in an empty
+reply with nothing to search for. No migration.
+
+### Added
+
+- **One Compose file that needs nothing beside it.**
+  [deploy/docker-compose.yaml](deploy/docker-compose.yaml) runs the
+  published images with every setting inline and a default for each: an
+  empty folder, a database password, and `docker compose up -d`. It is the
+  README's quick start now, and it pastes into Portainer, Dockge, or a
+  NAS's container manager. Building from source is unchanged.
+- **[HTTPS on a private network](docs/https-private-network.md)**: three
+  ways to put HTTPS in front without a public address (Caddy with its own
+  certificates, Tailscale Serve, a real certificate by DNS challenge), and
+  the three settings Cabinet needs for any of them.
+- **CI walks the quick start**: the pull-and-run file in an empty folder,
+  the setup code from the log, a wrong address, a LAN name over plain
+  http, an https address, and `.env.example` unchanged.
+
+### Changed
+
+- **A wrong address gets a page, not silence.** An address that isn't in
+  `PUBLIC_ORIGINS` or `ALLOWED_HOSTS` used to get no reply at all (the
+  connection closed, which a browser shows as an empty response). It now
+  gets one plain page, status `421`, saying this isn't an address Cabinet
+  answers and which setting fixes it. Nothing of the app is served under
+  a wrong name, as before. If a monitor or a script of yours recognized
+  the closed connection, it will now see `421`.
+- **Plain http on a network you trust is a supported way to start.** The
+  docs used to allow it on the Docker host only. Set `PUBLIC_ORIGINS` to
+  the address you will type (`http://nas.local:8080`) and it works from
+  another machine; the docs say plainly that the password then crosses
+  that network unencrypted, and point to the HTTPS page for lasting use.
+  No behavior changed: the setting always worked this way.
+- The backend's message when `AUTH_INSECURE_HTTP` sits beside an https
+  address now says what to set (`AUTH_INSECURE_HTTP=false`) instead of
+  "remove it".
+- `CABINET_PORT` is documented as taking a bind address
+  (`127.0.0.1:8080`), and as having to agree with `PUBLIC_ORIGINS`.
+- The source Compose file no longer hands the whole `.env` to the
+  database container, which needs three of its values.
+- The deployment guide's upgrade section covers the published images
+  (`docker compose pull`), pinning a version, and PostgreSQL's major
+  version.
+
 ## [0.40.0] - 2026-11-26
 
 Images for arm64, and a release you can check. No migration, no change to

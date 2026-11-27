@@ -3,9 +3,10 @@
 ## Overview
 
 Cabinet is a single-user, self-hosted numismatics web application. All
-components run as containers managed by a single `docker-compose.yaml`
-(`deploy/docker-stack.yaml` is the same stack for a Docker Swarm, from the
-published images). The stack is deliberately small (three services) because
+components run as containers managed by a single Compose file:
+`deploy/docker-compose.yaml` runs the published images and needs nothing
+beside it, `docker-compose.yaml` builds from source, and
+`deploy/docker-stack.yaml` is the same stack for a Docker Swarm. The stack is deliberately small (three services) because
 a single-user collection manager has modest performance needs.
 
 ```
@@ -32,8 +33,9 @@ a single-user collection manager has modest performance needs.
 The single public entry point. It answers only the Host names of
 `PUBLIC_ORIGINS` plus `ALLOWED_HOSTS` (written into `server_name` by
 `proxy/40-cabinet-config.sh` when the container starts, which stops the
-container on a bad value); a default server closes the connection on any
-other Host (444). The same script writes `cabinet-identity.conf`, which
+container on a bad value); a default server answers any other Host with
+one static page saying so (421, from v0.41.0; it closed the connection
+before), never the app. The same script writes `cabinet-identity.conf`, which
 blanks every forward-auth identity header except the one
 `TRUSTED_ASSERTION_HEADER` names (the trusted-header mode, v0.33.0). Every
 proxied location includes `cabinet-proxy.conf` (and through it that file),
@@ -188,12 +190,12 @@ app's Settings page and stored in the database.
 | `RESTORE_MAX_GB`  | Largest archive that may be uploaded for a restore, in GB (default `20`, which is also what nginx allows) |
 | `TAG`             | Image tag Compose names its builds with and the Swarm stack pulls (default `latest`; e.g. `0.40.0`) |
 | `PUBLIC_ORIGINS`  | Required. The exact origins browsers use (`https://cabinet.example.com`), comma-separated; read by the backend (checked at start) and the proxy (its Host names) |
-| `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets no response |
-| `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for a plain-http local stack; refused beside an https origin (default `false`) |
+| `ALLOWED_HOSTS`   | Extra Host names nginx answers (`cabinet_proxy`, a LAN name); any other Host gets a page saying it isn't one Cabinet answers (421) |
+| `AUTH_INSECURE_HTTP` | Sign-in cookies without `Secure`, for plain http on this machine or a private network you trust; refused beside an https origin (default `false`; the published-image Compose file and the sample `.env` set `true`, since both start on plain http) |
 | `SETUP_CODE` / `SETUP_CODE_FILE` | The one-time setup code, or a file holding it (a Docker secret); at least 32 characters, checked at start. Unset, one is generated |
 | `BACKUP_KEY_FILE` | The backup key (age identities, one a line, the first encrypting), typically a Docker secret, never modified by Cabinet; unreadable or unparsable stops startup. Unset, one is generated into `backup.key` on the state volume |
 | `BACKUP_KEY`      | The same key as a variable (identities separated by commas or newlines), for a secret manager that sets variables; written to a container-local file at start; not with `BACKUP_KEY_FILE` |
-| `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file) |
+| `CABINET_PORT`    | The port the proxy publishes (Compose default `80`; required by the Swarm stack file); may carry a bind address (`127.0.0.1:8080`), and `PUBLIC_ORIGINS` has to name a port that isn't the scheme's own |
 | `TRUSTED_ASSERTION_HEADER` | The header carrying a gateway's signed assertion for the trusted-header mode (v0.33.0), e.g. `X-authentik-jwt`; read by both the backend (to verify it) and the proxy (to pass only that one identity header through, blanking the rest). All four `TRUSTED_ASSERTION_*` variables or none |
 | `TRUSTED_ASSERTION_JWKS_URL` | Where the gateway's public keys are; `https://` required unless `AUTH_INSECURE_HTTP` |
 | `TRUSTED_ASSERTION_ISSUER` | The `iss` the gateway's assertion must carry |
