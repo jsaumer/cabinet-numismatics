@@ -23,6 +23,7 @@ from app.schemas import (
     ValueSpread,
 )
 from app.services import insights
+from app.services import tags as tags_service
 from app.services.app_settings import display_currency, get_setting
 from app.services.currency import Converter
 from app.services.pricing import detect_metal, resolve_display_value
@@ -159,10 +160,13 @@ def breakdowns(
         for d in ("country", "type", "decade", "grade", "tag", "metal", "acq_year")
     }
 
+    # The tag in any capitals, as the list's own filter reads it; a name
+    # that is no tag matches nothing.
+    wanted = tags_service.find(db, tag) if tag is not None else None
     for item in _load_items(db):
         if item.status != "owned":
             continue
-        if tag is not None and not any(t.name == tag for t in item.tags):
+        if tag is not None and not (wanted and any(t.id == wanted.id for t in item.tags)):
             continue
         if set_id is not None and item.set_id != set_id:
             continue

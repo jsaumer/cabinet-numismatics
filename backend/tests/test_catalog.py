@@ -42,7 +42,8 @@ def test_item_with_phase2_fields(client):
     body = resp.json()
     assert body["grade"]["code"] == "MS-64"
     assert body["tags"] == ["silver", "type set"]  # sorted by name
-    assert body["catalog_refs"] == [{"catalog": "numista", "ref_code": "N-1234"}]
+    # One form for a Numista reference, however it was typed.
+    assert body["catalog_refs"] == [{"catalog": "numista", "ref_code": "N#1234"}]
     assert body["weight_g"] == 6.25
 
     assert client.post("/api/items", json={**COIN, "grade_id": 99999}).status_code == 422
@@ -157,7 +158,7 @@ def test_csv_round_trip(client):
     row = next(csv.DictReader(io.StringIO(exported)))
     assert row["grade"] == "MS-65" and row["grade_scale"] == "sheldon"
     assert row["tags"] == "silver|type set"
-    assert row["catalog_refs"] == "numista:N-1"
+    assert row["catalog_refs"] == "numista:N#1"
 
     # delete everything for good (a trashed item's id still counts as known),
     # then re-import the export

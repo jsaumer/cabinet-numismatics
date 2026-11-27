@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.services import calendars
+from app.services import calendars, refs
 
 ItemTypeName = Literal["coin", "note", "bullion", "mint_set"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
@@ -64,12 +64,30 @@ class GradeOut(BaseModel):
 
 
 class CatalogRefIn(BaseModel):
+    """A reference as a client sends it. A Numista reference has one form,
+    `N#<digits>`: `1234`, `n#1234`, and `N# 1234` are saved as `N#1234`, and
+    anything that isn't the type's number is refused."""
+
     catalog: str = Field(min_length=1, max_length=50)
     ref_code: str = Field(min_length=1, max_length=100)
 
+    @model_validator(mode="after")
+    def _numista_form(self):
+        if self.catalog.strip().lower() == refs.NUMISTA:
+            code = refs.numista_ref(self.ref_code)
+            if code is None:
+                raise ValueError(refs.NUMISTA_REF_ERROR)
+            self.catalog, self.ref_code = refs.NUMISTA, code
+        return self
 
-class CatalogRefOut(CatalogRefIn):
+
+class CatalogRefOut(BaseModel):
+    """A reference as stored. No rules: reading never validates."""
+
     model_config = ConfigDict(from_attributes=True)
+
+    catalog: str
+    ref_code: str
 
 
 class TagOut(BaseModel):
@@ -498,12 +516,33 @@ class PhotoOrder(BaseModel):
     order: list[uuid.UUID] = Field(min_length=1)
 
 
+# What a price source's own estimates begin with (`pricing.ADAPTER_NAMES`;
+# a test keeps the two equal). A typed-in value may not carry one of these
+# as its source, alone or before a colon: it would count as that source's.
+RESERVED_SOURCES = ("melt", "numista", "pcgs", "comps")
+
+
 class EstimateCreate(BaseModel):
     estimated_value: float = Field(gt=0, lt=MONEY_MAX)
     currency: Currency = "USD"
     source: str = Field(default="manual", min_length=1, max_length=100)
     confidence: float | None = Field(default=None, ge=0, le=1)
     note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("source")
+    @classmethod
+    def _not_a_price_source(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Say where the value comes from, or leave the source out")
+        key = value.split(":", 1)[0].strip().lower()
+        if key in RESERVED_SOURCES:
+            raise ValueError(
+                f"{key!r} names one of Cabinet's own price sources, so a typed-in value "
+                "can't use it as its source. Write it another way, such as "
+                '"PCGS price guide" or "Numista catalog".'
+            )
+        return value
 
 
 class EstimateOut(BaseModel):
@@ -865,7 +904,7 @@ class NumistaType(BaseModel):
     url: str | None = None
     category: str | None = None
     fields: dict[str, bool | str | int | float]  # item fields, keyed like ItemCreate
-    catalog_refs: list[CatalogRefIn]
+    catalog_refs: list[CatalogRefOut]
     issues: list[NumistaIssue]
 
 
@@ -884,7 +923,7 @@ class PcgsCert(BaseModel):
     name: str | None = None
     fields: dict[str, str | int | float]  # item fields, keyed like ItemCreate
     grade: PcgsGrade | None = None
-    catalog_refs: list[CatalogRefIn]
+    catalog_refs: list[CatalogRefOut]
     population: int | None = None
     pop_higher: int | None = None
     price_guide_value: float | None = None

@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Item
 from app.services import alerts
 from app.services import app_settings as store
+from app.services import tags as tags_service
 from app.services.currency import get_rate
 from app.services.pricing import (
     CACHE_TTL,
@@ -189,6 +190,8 @@ def counts(item: Item) -> bool:
 
 
 def in_scope(item: Item, tag: str | None, set_id: int | None) -> bool:
+    """`tag` is a tag's own name, as stored: resolve what a caller typed
+    with `tags.find` first (a tag is one whatever the capitals)."""
     if tag is not None and not any(t.name == tag for t in item.tags):
         return False
     return not (set_id is not None and item.set_id != set_id)
@@ -227,11 +230,14 @@ def stack_figures(
     buckets: dict[str, _Bucket] = {}
     skipped = missing_spot = 0
     skipped_items: list[dict] = []
+    # The tag in any capitals; a name that is no tag matches nothing.
+    found = tags_service.find(db, tag) if tag is not None else None
+    tag_name = found.name if found else tag
 
     for item in _owned(db):
         metal = detect_metal(item.composition)
         # An unticked set is out by the owner's choice, not "left out".
-        if metal is None or not counts(item) or not in_scope(item, tag, set_id):
+        if metal is None or not counts(item) or not in_scope(item, tag_name, set_id):
             continue
         oz = item.fine_oz
         if oz is None:

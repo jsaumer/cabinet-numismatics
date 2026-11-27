@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     SmallInteger,
@@ -77,10 +78,16 @@ class Grade(Base):
 
 
 class Tag(Base):
+    """One per name whatever the capitals (migration 0024); look one up
+    through `services/tags.py`, which folds the case the way the index does."""
+
     __tablename__ = "tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(50), unique=True)
+
+
+Index("uq_tags_name_lower", func.lower(Tag.name), unique=True)
 
 
 class ItemSet(Base):

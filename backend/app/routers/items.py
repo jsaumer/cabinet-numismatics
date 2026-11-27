@@ -47,7 +47,9 @@ from app.services import (
     serials,
     trash,
 )
+from app.services import tags as tags_service
 from app.services.currency import Converter
+from app.services.refs import stored_form
 
 router = APIRouter(prefix="/api/items", tags=["items"])
 
@@ -212,23 +214,21 @@ def get_item_or_404(
 
 
 def resolve_tags(db: Session, names: list[str]) -> list[Tag]:
-    """Get-or-create tags by name (case-preserving, whitespace-trimmed)."""
-    tags = []
-    for name in dict.fromkeys(n.strip() for n in names if n.strip()):
-        tag = db.execute(select(Tag).where(Tag.name == name)).scalar_one_or_none()
-        if tag is None:
-            tag = Tag(name=name)
-            db.add(tag)
-            db.flush()
-        tags.append(tag)
-    return tags
+    """Get-or-create tags by name, whatever the capitals (`services/tags.py`)."""
+    return tags_service.resolve(db, names)
+
+
+def _like(text: str) -> str:
+    """`text` as a LIKE pattern that matches only itself: a `%` or `_` in a
+    search is the character typed, never a wildcard. Use with `escape="\\"`."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def resolve_catalog_refs(db: Session, refs) -> list[CatalogRef]:
     resolved = []
     seen = set()
     for ref in refs:
-        key = (ref.catalog.strip().lower(), ref.ref_code.strip())
+        key = stored_form(ref.catalog, ref.ref_code)
         if not key[0] or not key[1] or key in seen:
             continue
         seen.add(key)
@@ -339,7 +339,7 @@ def _filtered(
     if strike:
         stmt = stmt.where(Item.strike == strike)
     if country:
-        stmt = stmt.where(Item.country.ilike(country))
+        stmt = stmt.where(Item.country.ilike(_like(country), escape="\\"))
     if year is not None:
         stmt = stmt.where(Item.year == year)
     if year_min is not None:
@@ -351,7 +351,7 @@ def _filtered(
     if nd is not None:
         stmt = stmt.where(Item.year_nd.is_(bool(nd)))
     if tag:
-        stmt = stmt.where(Item.tags.any(Tag.name.ilike(tag)))
+        stmt = stmt.where(Item.tags.any(func.lower(Tag.name) == func.lower(tag.strip())))
     if set_id is not None:
         stmt = stmt.where(Item.set_id == set_id)
     if grade_min is not None:
@@ -363,23 +363,27 @@ def _filtered(
     if value_max is not None:
         stmt = stmt.where(_latest_value_subquery() <= value_max)
     if q:
-        like = f"%{q}%"
+        like = f"%{_like(q)}%"
+
+        def has(column):
+            return column.ilike(like, escape="\\")
+
         stmt = stmt.where(
             or_(
-                Item.notes.ilike(like),
-                Item.series.ilike(like),
-                Item.variety.ilike(like),
-                Item.country.ilike(like),
-                Item.denomination.ilike(like),
-                Item.cert_number.ilike(like),
-                Item.serial_number.ilike(like),
-                Item.prefix_block.ilike(like),
-                Item.issuer.ilike(like),
-                Item.charter_number.ilike(like),
-                Item.bank_city.ilike(like),
-                Item.printer.ilike(like),
-                Item.catalog_refs.any(CatalogRef.ref_code.ilike(like)),
-                Item.tags.any(Tag.name.ilike(like)),
+                has(Item.notes),
+                has(Item.series),
+                has(Item.variety),
+                has(Item.country),
+                has(Item.denomination),
+                has(Item.cert_number),
+                has(Item.serial_number),
+                has(Item.prefix_block),
+                has(Item.issuer),
+                has(Item.charter_number),
+                has(Item.bank_city),
+                has(Item.printer),
+                Item.catalog_refs.any(has(CatalogRef.ref_code)),
+                Item.tags.any(has(Tag.name)),
             )
         )
     if fancy:
@@ -1098,6 +1102,8 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
 
     add = resolve_tags(db, payload.add_tags)
     remove_names = {n.strip() for n in payload.remove_tags if n.strip()}
+    # By tag, not by spelling: removing "silver" takes "Silver" off.
+    remove_ids = {t.id for t in (tags_service.find(db, n) for n in remove_names) if t}
     summary = {f: [None, _jsonable(v)] for f, v in fields.items()}
     if payload.add_tags:
         summary["add_tags"] = [None, payload.add_tags]
@@ -1120,10 +1126,10 @@ def bulk_update(payload: BulkUpdate, db: Session = Depends(get_db)):
             setattr(item, field, value)
         _sync_derived(item, touched)
         if add:
-            existing = {t.name for t in item.tags}
-            item.tags.extend(t for t in add if t.name not in existing)
-        if remove_names:
-            item.tags = [t for t in item.tags if t.name not in remove_names]
+            existing = {t.id for t in item.tags}
+            item.tags.extend(t for t in add if t.id not in existing)
+        if remove_ids:
+            item.tags = [t for t in item.tags if t.id not in remove_ids]
         if summary:
             record_event(db, item.id, "updated", {"bulk": [None, True], **summary})
     db.commit()

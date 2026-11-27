@@ -372,6 +372,54 @@ print("yes" if sys.argv[1] in ids else "no")
   grep -q '^cabinet_items{status="owned",type="mint_set"}' "$STATE_DIR/metrics.txt"
   apif -X DELETE "$BASE/api/items/$sid" -o /dev/null
 
+  # the input rules settled before 1.0, on real Postgres (its ILIKE ... ESCAPE
+  # and its lower() index are what pytest's SQLite can't stand in for): a tag
+  # is one whatever the capitals, a Numista reference has one form, a search
+  # matches what was typed, and a typed-in value can't use a source's name
+  run="r$(date +%s)$$"
+  first=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d "{\"type\":\"coin\",\"country\":\"CI\",\"denomination\":\"1 rule\",\"year\":1901,\"notes\":\"$run 50% off\",\"tags\":[\"Rule$run\"],\"catalog_refs\":[{\"catalog\":\" Numista \",\"ref_code\":\"n- 4321\"}]}")
+  second=$(apif -X POST "$BASE/api/items" -H 'Content-Type: application/json' \
+    -d "{\"type\":\"coin\",\"country\":\"CI\",\"denomination\":\"1 rule\",\"year\":1902,\"notes\":\"$run 500 off\",\"tags\":[\"rule$run\",\"RULE$run\"],\"catalog_refs\":[{\"catalog\":\"numista\",\"ref_code\":\"4321\"}]}")
+  one=$(printf '%s' "$first" | field id)
+  two=$(printf '%s' "$second" | field id)
+  printf '%s\n%s\n' "$first" "$second" | "$PY" -c "
+import json, sys
+for item in map(json.loads, sys.stdin):
+    assert item['tags'] == ['Rule$run'], item['tags']
+    assert item['catalog_refs'] == [{'catalog': 'numista', 'ref_code': 'N#4321'}], item['catalog_refs']
+"
+  for spelling in "Rule$run" "rule$run" "RULE$run"; do
+    apif -G "$BASE/api/items" --data-urlencode "tag=$spelling" | "$PY" -c "
+import json, sys
+assert {i['id'] for i in json.load(sys.stdin)['items']} == {'$one', '$two'}, '$spelling'
+"
+    apif -G "$BASE/api/stats/breakdowns" --data-urlencode "tag=$spelling" | "$PY" -c "
+import json, sys
+assert sum(e['count'] for e in json.load(sys.stdin)['by_type']) == 2, '$spelling'
+"
+  done
+  apif "$BASE/api/tags" | "$PY" -c "
+import json, sys
+mine = [t for t in json.load(sys.stdin) if t['name'].lower() == 'rule$run']
+assert mine == [{'name': 'Rule$run', 'count': 2}], mine
+"
+  apif -G "$BASE/api/items" --data-urlencode "q=$run 50%" | "$PY" -c "
+import json, sys
+assert [i['id'] for i in json.load(sys.stdin)['items']] == ['$one']
+"
+  apif -G "$BASE/api/items" --data-urlencode "q=${run}_50" | grep -q '"total":0'
+  apif -G "$BASE/api/items/similar" --data-urlencode "ref=numista:4321" | grep -q "$one"
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" -X POST "$BASE/api/items" \
+    -H 'Content-Type: application/json' \
+    -d '{"type":"coin","country":"CI","denomination":"1 rule","year":1903,"catalog_refs":[{"catalog":"numista","ref_code":"see notes"}]}')" = 422
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" -X POST "$BASE/api/items/$one/estimates" \
+    -H 'Content-Type: application/json' -d '{"estimated_value": 5, "source": "pcgs: dealer said"}')" = 422
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" -X POST "$BASE/api/items/$one/estimates" \
+    -H 'Content-Type: application/json' -d '{"estimated_value": 5, "source": "PCGS price guide"}')" = 201
+  apif -X DELETE "$BASE/api/items/$one" -o /dev/null
+  apif -X DELETE "$BASE/api/items/$two" -o /dev/null
+
   # no webhook saved: the test alert says so rather than failing
   adminf -X POST "$BASE/api/alerts/test" | grep -q '"ok":false'
   echo "smoke test passed"

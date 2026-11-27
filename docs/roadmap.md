@@ -36,10 +36,11 @@ button, and a trusted-header mode for a gateway that already
 authenticates, [SPEC_0330](specs/SPEC_0330.md)) shipped in v0.33.0.
 **What's next**: nothing is queued from Phase 7, and v0.33.0 is validated
 live ([live-validation.md](live-validation.md)). The road to v1.0.0 has
-three items left, in this order: a CI check against a breaking OpenAPI
-change; "Add a run" and the Numista banknote mapping confirmed against a
-live account; then a README and quick-start pass, alongside whatever
-entering the rest of the collection turns up.
+two items left, in this order: "Add a run" and the Numista banknote mapping
+confirmed against a live account; then a README and quick-start pass,
+alongside whatever entering the rest of the collection turns up. The third,
+a CI check against a breaking OpenAPI change, is built and waits for the
+next release (v0.38.0), with the last input rules tightened beside it.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -412,7 +413,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
 - ✔ **[OSS]** Database migrations (not just create-on-startup) for safe
-  upgrades: Alembic since Phase 0, revisions `0001`–`0023` (and `a0001`–`a0002`
+  upgrades: Alembic since Phase 0, revisions `0001`–`0024` (and `a0001`–`a0002`
   for the sign-in chain), applied by the backend on startup since v0.11.1.
 
 ---
@@ -925,13 +926,21 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   and the policy are in `api.md`. Deliberately left alone: `/api/grades` and `/api/tags`
   sitting outside `/api/reference/`, and `POST /api/items/bulk` being a POST
   where a PATCH would read better.
-- A CI check that fails on a breaking change to the OpenAPI schema:
+- ✔ A CI check that fails on a breaking change to the OpenAPI schema:
   the committed `/api/openapi.json` of the last release compared with the
   build's, failing on a removed path, operation, field, or enum value and
   on a changed type, passing on additions; the stability policy in
-  `api.md` says which changes count. Small, and the last thing to add
-  before the API is declared stable, since from then on it is what stops
-  1.x from breaking a client by accident.
+  `api.md` says which changes count. **Built for v0.38.0**:
+  `docs/openapi.json` is the last release's schema,
+  `backend/tests/api_contract.py` compares the build with it inside the
+  test suite (so both required backend jobs run it), and the tool that
+  rewrites the committed schema at each release refuses a breaking change
+  from 1.0.0 on unless the major version went up.
+- ✔ The last input rules, tightened while a stricter rule is still free
+  (the 9 November 2026 review's list). **Built for v0.38.0** (migration
+  `0024`): a typed-in value can't use a price source's name as its source,
+  `%` and `_` in a search are the characters typed, a tag is one whatever
+  the capitals, and a Numista reference is stored in one form, `N#<digits>`.
 - ✔ A CI upgrade test: a database from an old release migrated to head.
   **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
@@ -1340,7 +1349,7 @@ handing them the keys.*
   comps: it is deterministic, needs no external agreement, and covers the
   bullion floor of most collections. Comps came last (v0.17.0).
 - **Migrations are real.** Alembic since Phase 0; every schema change is a
-  revision (`0001`–`0023`, and `a0001`–`a0002` for the sign-in chain), never
+  revision (`0001`–`0024`, and `a0001`–`a0002` for the sign-in chain), never
   create-on-startup.
 - **The September 2026 review reordered what comes next.** Catalog depth
   (Phase 5.7) went ahead of the photo niceties because the live collection
