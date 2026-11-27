@@ -207,6 +207,13 @@ most often use instead.
 - Three-container Compose stack, also published as versioned images on GHCR
   with a [Swarm stack file](../deploy/docker-stack.yaml); an OpenAPI schema at
   `/api/openapi.json`. The backend applies its own migrations on startup.
+- **A first run that starts with the collection**: an empty Cabinet offers
+  three ways in (add a piece, import a collection, or load a demo
+  collection of 17 pieces to look around, removed again in one step), with
+  the operations checklist (backups, alerts, a price-source key) in a
+  plain card under it. A new piece starts in your display currency, leaving
+  a half-filled form asks first, and a save the server refuses says why
+  beside the Save buttons, by the field's label.
 - Installs as an app from the browser ("Add to Home Screen" on a phone,
   "Install" on a desktop) where it is served over HTTPS; it still needs the
   server, nothing works offline.

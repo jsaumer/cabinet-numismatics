@@ -329,3 +329,11 @@ export interface Health {
   auth_schema?: SchemaState; // the sign-in chain (cabinet_auth), v0.30.0
   documents: "ok" | "not_mounted" | "unwritable" | "inside_photos";
 }
+
+/** The demo collection: `items` counts its pieces, the trash included (0
+ * means none is loaded), and `photos` says how far the fetch from Wikimedia
+ * Commons has got in this server process. */
+export interface DemoStatus {
+  items: number;
+  photos: { state: "idle" | "running" | "done"; total: number; fetched: number; failed: number };
+}

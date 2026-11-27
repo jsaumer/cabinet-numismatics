@@ -115,7 +115,9 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
   Playwright (`frontend/e2e/`, `npm run e2e` against a running stack,
   `BASE_URL` for another host). When an endpoint's or a page's behavior
   changes, update those too; pytest won't catch them.
-- Demo data: `python scripts/seed_demo.py` against a running stack.
+- Demo data: "Load the demo collection" on an empty dashboard, or
+  `python scripts/seed_demo.py` against a running stack (both are
+  `POST /api/demo`; the pieces live in `backend/app/services/demo_data.py`).
 - Price sources: `docker compose exec backend python scripts/check_sources.py
   --list` (then `-s <source> -i <item-id>`) probes a live price API and dumps
   the raw response; `--fresh` bypasses the cache and spends quota.
@@ -235,6 +237,15 @@ rules that bite most often:
   version still lives in one file. The web app manifest
   (`public/manifest.webmanifest`) has no service worker behind it, on
   purpose. See "Small items before 1.0" in the implementation notes.
+- **The demo collection** (after v0.42.0, `services/demo.py`,
+  `/api/demo`): loaded only into an empty collection, every piece marked
+  `import_source = "demo"` so removal deletes exactly those, and its photos
+  fetched on a background thread, never on the request. **Unsaved work is
+  guarded** by `components/unsaved.ts`, which needs the data router in
+  `main.tsx`; a page that navigates after its own save calls `allow()`
+  first. Every control on the item form carries its API name in
+  `data-field`, which is how a refused save names and marks the field. See
+  "The first run, in the app" in the implementation notes.
 - A share link shows no value from `share.PRIVATE_SOURCES` (Numista and
   PCGS: both licenses keep their data from third parties), and every page
   carries PCGS's credit once anything from PCGS is held

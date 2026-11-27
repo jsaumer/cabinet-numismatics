@@ -8,6 +8,68 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+The first-run pass from the 1.0 checklist: what a new owner meets on the
+first screens, and a form that no longer loses work. No migration. Three
+routes are new; nothing else in the API changes.
+
+### Added
+
+- **A welcome state for an empty collection**, on the dashboard and on the
+  collection page: three ways to start, side by side. Add a piece, import a
+  collection, or load a demo collection to look around first. It replaces a
+  red box of chores and a link to the longest form.
+- **The demo collection loads from one button**, and is removed with one.
+  Seventeen pieces with values and photos, loaded only into an empty
+  collection, so they can never mix with your own; each is marked as the
+  demo's, and "Remove the demo collection" (on the notice the dashboard and
+  the collection page show, and in Settings → General) deletes exactly
+  those. Cabinet fetches the photos itself from Wikimedia Commons, in the
+  background, which is the one outbound call the button makes; offline, the
+  demo simply has no photos. Behind it: `GET`, `POST`, and `DELETE
+  /api/demo` (see [api.md](docs/api.md#demo-collection)).
+  `scripts/seed_demo.py` now calls the same route, so it needs no data of
+  its own; its `--force` option is gone, since the route refuses to mix the
+  demo into a collection that holds anything.
+- **Leaving unsaved work asks first.** A half-filled piece on the full form
+  or the quick add, or a dashboard layout being edited, is no longer
+  dropped by a click on the sidebar, the search box, Back, or a reload.
+- **A refused save says why, where you are.** The reasons appear beside the
+  Save buttons as well as at the top, are announced to a screen reader,
+  name each field by its label on the form ("Currency", not `currency`),
+  and mark it; the field's name in the message takes you to it.
+- **"No date" in the quick add**, for a piece typed in by hand that carries
+  none.
+
+### Changed
+
+- **Every "add a piece" link opens the quick add**, which links on to the
+  full form and to "Add a run". The dashboard used to send a new owner to
+  the full form while the header's button opened the quick add.
+- **A new piece starts in your display currency** (Settings → General), in
+  the full form, the quick add, and "Add a run". It was always USD. The
+  API's own default is unchanged.
+- **The setup checklist is an ordinary card** headed "Before you rely on
+  it", with red kept for the lines that say something is broken (the
+  database schema, document storage, a failed backup). It no longer lists
+  an empty collection, puts what is broken first, and "Don't show this
+  again" now hides only what is merely switched off: a failure still shows.
+- **The demo collection's values are spread over time**, so the value chart
+  draws a line where it used to say "One data point so far".
+- A typed year alone in the quick add's lookup box ("1932") is searched as
+  a name. It was read as Numista type 1932; write `N# 1932` for that.
+- The item form shows "Loading" until the piece being edited has arrived,
+  where it showed an empty form that could be typed into.
+
+### Fixed
+
+- **A second lookup in the quick add replaces the first one's answer.**
+  Picking the wrong search result and looking again used to keep the wrong
+  piece's country, denomination, composition, and references.
+- The setup checklist's card stayed on an empty dashboard as an empty box
+  once it had been dismissed.
+
 ## [0.42.0] - 2026-11-27
 
 Small items from the 1.0 checklist. No migration, and nothing in the API

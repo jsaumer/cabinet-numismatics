@@ -3496,6 +3496,113 @@ change.
   On 3.10 the suite still warns; that ends when 3.10 leaves the matrix,
   which also means changing the ruleset's required check names.
 
+## The first run, in the app (after v0.42.0)
+
+Row 21 of the 1.0 checklist: what a new owner meets on the first screens,
+and the item form losing work. No migration; three new routes. The owner
+approved it on 27 November 2026 with the demo as a button.
+
+- **The demo collection is described once**, in
+  `backend/app/services/demo_data.py` (the pieces, each photo's Commons
+  page, license, and credit), and loaded by `services/demo.py` behind
+  `/api/demo`. `scripts/seed_demo.py` is a caller of the route with no data
+  of its own. A photo that isn't public domain or CC0 fails a test.
+- **It never mixes with a real collection.** `demo.load` refuses (409)
+  unless there is no live piece at all, and while demo pieces sit in the
+  trash (the unique origin key would collide). Every piece gets
+  `import_source = "demo"` and `import_key` its two-digit position, the
+  columns the importers use, so `demo.remove` deletes exactly those
+  (through `trash.purge`, the trash included) and nothing else can be
+  taken for the demo. Nothing in any other answer marks a demo piece.
+- **Loading is `write`, removing is `admin` and `fresh`.** Loading does
+  nothing a write token couldn't do call by call, and the script needs a
+  token to do it; removing deletes for good, like purging a piece. (The
+  proposal said "admin" for loading; it became `write` so the script could
+  stay a caller.)
+- **Nothing on the request reaches the network.** `load` commits the pieces
+  and values in one transaction and returns; only the `demo-photos` thread
+  talks to Commons, through `photos.fetch_remote_image` (so the URL
+  import's public-address and peer checks apply) and
+  `routers.photos._create_photo`. The download holds nothing; only the save
+  takes `maintenance.scheduled_task()`, so a slow Commons never makes a
+  backup or a restore wait, and a restore never starts mid-write. The
+  thread stops when maintenance begins or `demo._generation` moves (a
+  removal, another load, `reset_memory` after a restore). Progress is in
+  memory, per process. conftest never starts the thread and makes
+  `demo._sleep` a no-op; a test that wants the fetch replaces
+  `photos.fetch_remote_image` and runs `demo._spawn` inline.
+- **Demo values are backdated**, the newest of each piece 10 days or more
+  ago and earlier ones 13 months behind, so the value chart draws a line.
+  `melt_on_save` is deliberately not called: a melt value recorded now
+  would sit above the backdated typed-in ones. The unpriced demo pieces get
+  theirs from the next melt refresh.
+- **The welcome state is `components/welcome.tsx`**, shown by the dashboard
+  and the collection page whenever `stats.counts.total` is 0 (the count,
+  not the filtered list, so the Owned view of an empty collection shows it
+  too). Every "add a piece" link goes to `/items/add`; `/items/new` is
+  reached from the quick add, from "Save and fill in everything", and by
+  the two presets the quick add can't do (`?type=mint_set`, the Stack
+  page's bar link).
+- **The setup checklist is neutral**: `setupChecks` no longer takes the
+  item count or lists an empty collection, marks a check `failure` when
+  something is broken (schema, document mount, last backup) and puts those
+  first; `.setup-card` has an ordinary border and only `li.setup-failure`
+  is red. "Don't show this again" hides the rest, never a failure.
+  `SetupCard` (in `dashboard/widgets/value.tsx`) is the same list for the
+  empty page and renders nothing when there is nothing to say.
+- **`DemoNotice` and `useDemo`** (`components/demo-notice.tsx`): the notice
+  is on the dashboard and the collection page, polls `GET /api/demo` every
+  three seconds only while photos are running, and calls `onChange` when
+  they finish or the demo is removed so the page fetches again. "Keep it
+  for now" is `localStorage` `cabinet.demo.dismissed`, cleared by a new
+  load; Settings → General shows a removal row while demo pieces exist.
+  `docs/screenshots/capture.cjs` sets the key.
+- **The unsaved-changes guard needs a data router.** React Router offers
+  `useBlocker` nowhere else, so `main.tsx` builds `createBrowserRouter`
+  with one catch-all route holding `<App />`; the pages are still
+  `<Routes>` inside it, and nothing else uses the data router.
+  `useUnsavedGuard(dirty)` blocks a navigation to another path with
+  `window.confirm` and sets `beforeunload` while dirty. A page that
+  navigates after its own save calls the returned `allow()` first, or the
+  save would be asked about. "Dirty" is each page's own flag: the form's
+  `onChange` (which every input, select, and checkbox bubbles to) plus the
+  few changes made by buttons (a lookup's fill, a designation chip, a
+  removed reference or custom field); never a comparison with a snapshot,
+  because the form fills fields itself after it mounts (the type preset,
+  the display currency, the suggested names). A Playwright test that leaves
+  a touched form has to answer the dialog: Playwright dismisses one nobody
+  handles, which keeps the page where it is.
+- **A refused save is named from the page, not from a table.**
+  `ApiError.fields` carries the validation answer's fields (API names,
+  Pydantic's "Value error, " prefix removed). Every control on the item
+  form bound to a form field has `data-field="<api name>"`; `fieldControl`
+  finds it, `fieldLabel` reads the words of the `<label>` around it (so
+  "Denomination", "Product name", and "Set name" are each right for their
+  type with no second list), the control gets `aria-invalid`, and the
+  summary beside the Save buttons (`.form-errors`, `role="alert"`,
+  focused) lists each with a button that focuses it. A new field on the
+  form needs its `data-field`, or its error is shown under a spaced-out
+  API name with nothing marked.
+- **New pieces start in the display currency** in the form, the quick add,
+  and "Add a run": each replaces the form's own `USD` once settings arrive,
+  only while the field still holds that default. The API's default is
+  unchanged (it is part of the promise).
+- **Quick add**: a lookup's answer is remembered as `lastFill` (the fields
+  it set with the values it gave, and the references it added, an issue
+  picked afterwards included), and the next lookup first takes back
+  whatever still holds those values (`withoutFill`), so a second search
+  starts clean while anything typed over stays. `readLookup` reads a bare
+  four-digit number from 1000 to 2100 as a name to search, since a year is
+  what it nearly always is; `N# 1932` is still the type. "No date" is the
+  form's `year_nd`, and a coin or note with neither is stopped before the
+  request with a sentence of its own.
+- **Tests**: `backend/tests/test_demo.py`; `frontend/e2e/first-run.spec.ts`
+  answers a few requests itself where it needs an empty collection or a
+  Numista key (the suite's stack has neither) and unroutes after each
+  test; `stack-smoke.sh`'s `demo` step, first in the `smoke` phase, loads
+  and removes the demo for real on Postgres when the collection is empty
+  and checks only the refusal otherwise.
+
 ## Releases
 
 

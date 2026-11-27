@@ -70,6 +70,7 @@ from app.services import (
     archive_keys,
     backup,
     crypto,
+    demo,
     maintenance,
     metrics,
     photos,
@@ -1449,6 +1450,7 @@ def _finish(restore_id: str, entry: dict, engine: Engine, dump: Path | None, out
         dispose_engine(engine)
         metrics.reset_cache()
         alerts.reset_memory()
+        demo.reset_memory()
         _reload_sharing(engine, outcome.get("sharing"))
     except Exception:
         logger.exception("Restore: tidying up failed")

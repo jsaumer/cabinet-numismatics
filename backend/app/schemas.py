@@ -1380,3 +1380,25 @@ class Showcase(BaseModel):
     oldest: ShowcasePiece | None
     newest: ShowcasePiece | None
     on_this_day: list[ShowcasePiece]
+
+
+class DemoPhotos(BaseModel):
+    """The demo collection's photo fetch: `idle` (none asked for, or none
+    under way since this process started), `running`, or `done`."""
+
+    state: Literal["idle", "running", "done"]
+    total: int
+    fetched: int
+    failed: int
+
+
+class DemoStatus(BaseModel):
+    """`items` counts the demo's pieces, the trash included; 0 means no demo
+    collection is loaded."""
+
+    items: int
+    photos: DemoPhotos
+
+
+class DemoRemoved(BaseModel):
+    removed: int

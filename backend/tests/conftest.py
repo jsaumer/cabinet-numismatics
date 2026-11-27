@@ -87,10 +87,11 @@ def _fresh_monitoring_state():
     """Alert outcomes, the metrics cache, the sign-in throttles, and the
     sharing switch live in memory, per process."""
     from app.auth import audit, notify, oidc, throttle
-    from app.services import alerts, currency, metrics, pricing, restore, share
+    from app.services import alerts, currency, demo, metrics, pricing, restore, share
 
     alerts.reset_memory()
     currency.reset_memory()
+    demo.reset_memory()
     pricing.reset_memory()
     metrics.reset_cache()
     restore.reset_memory()
@@ -110,6 +111,17 @@ def _no_background_photo_pass(monkeypatch):
     from app.services import photos
 
     monkeypatch.setattr(photos, "_spawn", lambda fn: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_demo_photo_thread(monkeypatch):
+    """Loading the demo collection fetches its photos from Wikimedia Commons
+    on a thread; no test reaches the network. Tests that want the fetch run
+    it inline with `photos.fetch_remote_image` replaced."""
+    from app.services import demo
+
+    monkeypatch.setattr(demo, "_spawn", lambda fn: None)
+    monkeypatch.setattr(demo, "_sleep", lambda seconds: None)
 
 
 BASE_URL = "https://testserver"  # PUBLIC_ORIGINS, so CSRF's Origin rule matches

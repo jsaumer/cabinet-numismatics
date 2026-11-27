@@ -1147,8 +1147,10 @@ tr.import-duplicate td {
 .lookup-links {
   margin-top: 0.6rem;
 }
-.setup-card {
-  border-color: var(--danger-border);
+/* The setup checklist: an ordinary card. Red is for a line that says
+   something is broken, never for what is only switched off. */
+.setup-card li.setup-failure {
+  color: var(--danger);
 }
 .setup-card ul {
   margin: 0 0 0.6rem;
@@ -1156,6 +1158,103 @@ tr.import-duplicate td {
 }
 .setup-card li {
   margin: 0.25rem 0;
+}
+/* A refused save: the fields the server named, marked, and the reasons
+   beside the Save buttons (the message at the top can be a screen away). */
+[aria-invalid="true"] {
+  border-color: var(--danger);
+  outline: 1px solid var(--danger);
+}
+.form-errors:empty {
+  display: none;
+}
+.form-errors {
+  margin: 0 0 0.75rem;
+}
+.form-errors ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+.form-errors .link-button {
+  font-size: inherit;
+}
+/* Quick add's "No date" shares the Year cell: the year takes the room, the
+   checkbox keeps its own size. */
+.qa-year {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.qa-grid .field .qa-year input:not([type="checkbox"]) {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+.qa-grid .field .qa-year input[type="checkbox"] {
+  width: auto;
+}
+.qa-year .slot {
+  font-size: inherit;
+  white-space: nowrap;
+}
+/* What an empty collection shows: three ways to get a first piece in. */
+.welcome {
+  margin-bottom: 1rem;
+}
+.welcome h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.welcome-lede {
+  margin: 0 0 1rem;
+  max-width: 44rem;
+  color: var(--ink-2);
+}
+.welcome-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.welcome-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.welcome-action h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.welcome-action p {
+  margin: 0;
+  flex: 1;
+  color: var(--ink-2);
+}
+/* The pieces on screen are the demo's: said once, with the way to remove it. */
+.demo-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+.demo-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 }
 .trash-banner {
   margin: 0 0 1rem;

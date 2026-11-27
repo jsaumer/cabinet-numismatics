@@ -198,7 +198,7 @@ by the application, not as native postgres enum types.
 | `set_id`           | fk → sets null | the set or lot it belongs to; SET NULL when the set is deleted |
 | `custom_fields`    | json null     | user-defined key→value, max 20          |
 | `notes`            | text null     | free-form                               |
-| `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `cabinet`, `spreadsheet` |
+| `import_source`    | text null     | where an imported item came from: `numista`, `numista-file`, `opennumismat`, `cabinet`, `spreadsheet`; `demo` marks the demo collection's pieces |
 | `import_key`       | text null     | its id there; unique with `import_source`, so a re-import skips it; not copied by clone |
 | `deleted_at`       | timestamptz null | in the trash since; indexed. Every ORM query leaves trashed items out unless it opts in (`include_deleted`) |
 | `created_at`       | timestamptz   |                                         |

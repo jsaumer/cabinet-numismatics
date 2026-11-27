@@ -23,6 +23,7 @@ from app.routers import (
     checklists,
     comparables,
     dashboard,
+    demo,
     documents,
     estimates,
     health,
@@ -313,6 +314,7 @@ app.include_router(monitoring.router)
 app.include_router(restore.router)
 app.include_router(dashboard.router)
 app.include_router(appearance.router)
+app.include_router(demo.router)
 app.include_router(stack.router)
 app.include_router(share.router)
 app.include_router(share_links.router)

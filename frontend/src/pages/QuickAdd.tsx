@@ -14,6 +14,7 @@ import {
 } from "../api";
 import { DuplicateWarning } from "../components/duplicates";
 import { TYPE_INFO } from "../components/item-types";
+import { useUnsavedGuard } from "../components/unsaved";
 import { EMPTY, FormState, toPayload } from "./item-form/model";
 import { fillFromNumista, issueFields } from "./item-form/NumistaFill";
 import { fillFromCert } from "./item-form/PcgsFill";
@@ -24,8 +25,10 @@ type Lookup =
   | { kind: "cert"; cert: string }
   | { kind: "search"; q: string };
 
-/** "N# 1489", "n1489", or up to six digits is a Numista type; seven or more
- * digits (dashes allowed) is a PCGS cert; anything else is a name to search. */
+/** "N# 1489" or "n1489" is a Numista type, and so is a bare number of up to
+ * six digits unless it reads as a year ("1932" is the start of a name, not
+ * type 1932: write N# 1932 for that); seven or more digits (dashes allowed)
+ * is a PCGS cert; anything else is a name to search. */
 export function readLookup(input: string): Lookup | null {
   const q = input.trim();
   if (!q) return null;
@@ -33,9 +36,42 @@ export function readLookup(input: string): Lookup | null {
   if (numista) return { kind: "numista", id: Number(numista[1]) };
   const digits = q.replace(/-/g, "");
   if (/^\d+$/.test(digits)) {
-    return digits.length >= 7 ? { kind: "cert", cert: digits } : { kind: "numista", id: Number(digits) };
+    if (digits.length >= 7) return { kind: "cert", cert: digits };
+    const year = digits.length === 4 && Number(digits) >= 1000 && Number(digits) <= 2100;
+    return year ? { kind: "search", q } : { kind: "numista", id: Number(digits) };
   }
   return { kind: "search", q };
+}
+
+/** What a lookup put on the form, so the next lookup can take it back: the
+ * fields it set (with the value it gave each) and the references it added. */
+interface Fill {
+  fields: Partial<Record<keyof FormState, unknown>>;
+  refs: CatalogRef[];
+}
+const NO_FILL: Fill = { fields: {}, refs: [] };
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** The fields `after` changed from `before`, except the type: that is the
+ * owner's choice of what to look for, not something to take back. */
+function changes(before: FormState, after: FormState): Fill["fields"] {
+  const out: Fill["fields"] = {};
+  for (const key of Object.keys(after) as (keyof FormState)[]) {
+    if (key !== "type" && !same(before[key], after[key])) out[key] = after[key];
+  }
+  return out;
+}
+
+/** The form and references as they were before the last lookup filled them,
+ * keeping anything the owner has typed over since. */
+function withoutFill(form: FormState, refs: CatalogRef[], last: Fill) {
+  const next: FormState = { ...form };
+  for (const [key, value] of Object.entries(last.fields) as [keyof FormState, unknown][]) {
+    if (same(next[key], value)) (next as Record<string, unknown>)[key] = EMPTY[key];
+  }
+  const added = new Set(last.refs.map((r) => `${r.catalog}|${r.ref_code}`));
+  return { form: next, refs: refs.filter((r) => !added.has(`${r.catalog}|${r.ref_code}`)) };
 }
 
 // Sets stay out of quick add: Numista's API has no sets to look up.
@@ -79,16 +115,24 @@ export default function QuickAdd() {
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState<Added[]>([]);
   const [lookupKey, setLookupKey] = useState(0);
+  // What the last lookup filled in, which the next one replaces.
+  const [lastFill, setLastFill] = useState<Fill>(NO_FILL);
+  // Something typed or looked up that leaving would lose.
+  const [touched, setTouched] = useState(false);
+  const { allow } = useUnsavedGuard(touched);
 
   useEffect(() => {
     api
       .getSettings()
-      .then((s) =>
+      .then((s) => {
         setKeys({
           numista: s.sources.some((x) => x.key === "numista" && x.configured),
           pcgs: s.sources.some((x) => x.key === "pcgs" && x.configured),
-        }),
-      )
+        });
+        // A new piece starts in the display currency, unless one was typed.
+        const display = s.display_currency?.toUpperCase();
+        if (display) setForm((f) => (f.currency === EMPTY.currency ? { ...f, currency: display } : f));
+      })
       .catch(() => setKeys({ numista: false, pcgs: false }));
   }, []);
 
@@ -99,8 +143,18 @@ export default function QuickAdd() {
   const set = (field: keyof FormState) => (value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
-  function addRefs(newRefs: CatalogRef[]) {
-    if (newRefs.length) setRefs((rs) => [...rs, ...newRefs]);
+  /** Put a lookup's answer on the form in place of the last lookup's, not on
+   * top of it: a second search after a wrong pick starts clean. */
+  function applyLookup(
+    fill: (form: FormState, refs: CatalogRef[]) => { next: FormState; newRefs: CatalogRef[]; filled: string[] },
+  ) {
+    const base = withoutFill(form, refs, lastFill);
+    const result = fill(base.form, base.refs);
+    setForm(result.next);
+    setRefs([...base.refs, ...result.newRefs]);
+    setFilled(result.filled);
+    setLastFill({ fields: changes(base.form, result.next), refs: result.newRefs });
+    setTouched(true);
   }
 
   async function lookUp() {
@@ -126,10 +180,7 @@ export default function QuickAdd() {
         await applyType(lookup.id);
       } else {
         const [found, sheldon] = await Promise.all([api.pcgsCert(lookup.cert), api.listGrades("sheldon")]);
-        const result = fillFromCert(form, refs, found, sheldon);
-        setForm(result.next);
-        addRefs(result.newRefs);
-        setFilled(result.filled);
+        applyLookup((f, r) => fillFromCert(f, r, found, sheldon));
         setIssues([]);
         setSource(`PCGS cert ${found.cert}${found.name ? `, ${found.name}` : ""}`);
       }
@@ -142,10 +193,7 @@ export default function QuickAdd() {
 
   async function applyType(typeId: number) {
     const found = await api.numistaType(typeId);
-    const result = fillFromNumista(form, refs, found);
-    setForm(result.next);
-    addRefs(result.newRefs);
-    setFilled(result.filled);
+    applyLookup((f, r) => fillFromNumista(f, r, found));
     setIssues(found.issues);
     setResults(null);
     setSource(`${found.title} (N# ${found.type_id})`);
@@ -164,7 +212,10 @@ export default function QuickAdd() {
   }
 
   function pickIssue(issue: NumistaIssue) {
-    setForm((f) => issueFields(f, issue));
+    const next = issueFields(form, issue);
+    // The issue's year, mint mark, and mintage belong to the lookup too.
+    setLastFill((last) => ({ ...last, fields: { ...last.fields, ...changes(form, next) } }));
+    setForm(next);
   }
 
   function reset(keep: FormState) {
@@ -177,6 +228,8 @@ export default function QuickAdd() {
     setIssues([]);
     setSource(null);
     setFilled([]);
+    setLastFill(NO_FILL);
+    setTouched(false);
     setLookupKey((k) => k + 1); // remounts the box, which focuses it
   }
 
@@ -186,9 +239,14 @@ export default function QuickAdd() {
       setError("A piece needs at least a country and a denomination. Look it up, or type them in.");
       return;
     }
+    if (form.type !== "bullion" && !form.year.trim() && !form.year_nd) {
+      setError('Give the year, or tick "No date" if the piece carries none.');
+      return;
+    }
     setSaving(true);
     try {
       const saved = await api.createItem(toPayload(form, refs, []));
+      if (after !== "another") allow(); // saved: leaving loses nothing
       if (after === "open") navigate(`/collection/${saved.id}`);
       else if (after === "edit") navigate(`/items/${saved.id}/edit`);
       else {
@@ -345,7 +403,7 @@ export default function QuickAdd() {
           </div>
         )}
 
-        <form className="qa-form" onSubmit={submit}>
+        <form className="qa-form" onSubmit={submit} onChange={() => setTouched(true)}>
           <fieldset className="plain-fieldset">
             <legend className="qa-legend">The piece</legend>
             <div className="qa-grid">
@@ -357,10 +415,32 @@ export default function QuickAdd() {
                 {form.type === "bullion" ? "Product name" : "Denomination"}
                 <input value={form.denomination} onChange={(e) => set("denomination")(e.target.value)} />
               </label>
-              <label className="field">
-                Year
-                <input inputMode="numeric" value={form.year} onChange={(e) => set("year")(e.target.value)} />
-              </label>
+              {/* Year and "No date" share one cell, so the row stays four across.
+                  Two labels side by side, never one inside the other. */}
+              <div className="field">
+                <label htmlFor="qa-year">Year</label>
+                <span className="qa-year">
+                  <input
+                    id="qa-year"
+                    inputMode="numeric"
+                    value={form.year}
+                    onChange={(e) => set("year")(e.target.value)}
+                  />
+                  {form.type !== "bullion" && (
+                    <label
+                      className="slot"
+                      title="The piece carries no date; a year typed beside it is the one it is attributed to"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={form.year_nd}
+                        onChange={(e) => setForm((f) => ({ ...f, year_nd: e.target.checked }))}
+                      />
+                      No date
+                    </label>
+                  )}
+                </span>
+              </div>
               {form.type === "coin" && (
                 <label className="field">
                   Mint mark

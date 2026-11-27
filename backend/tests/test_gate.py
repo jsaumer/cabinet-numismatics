@@ -99,7 +99,7 @@ def spec_table() -> dict[tuple[str, str], permissions.Declared]:
 def test_every_operation_declares_what_the_spec_says():
     table = spec_table()
     ops = operations()
-    assert len(ops) == 140 == len(table)
+    assert len(ops) == 143 == len(table)
     for method, path in ops:
         found = declared(endpoint_for(method, path))
         assert found is not None, f"{method} {path} declares no @permission"
@@ -117,8 +117,9 @@ def test_class_counts():
     # v0.33.0's single sign-on: the 2 public flow routes and 6 admin ones,
     # then the trusted header's public sign-in and its admin link route;
     # then v0.35.0's appearance: one read, one admin; then v0.39.0's data
-    # credits: one read.
-    assert counts == {"public": 7, "read": 37, "write": 42, "admin": 49, "share": 5}
+    # credits: one read; then the demo collection: one read, one write, one
+    # admin.
+    assert counts == {"public": 7, "read": 38, "write": 43, "admin": 50, "share": 5}
 
 
 def test_completeness_every_operation_reaches_layer_two(client, dry_run):
@@ -275,8 +276,9 @@ def test_fresh_matrix(client, stale_client, token_client, dry_run):
     # photo and document deletions (section 16), plus making, changing,
     # regenerating, and revoking a share link (v0.32.0), plus changing the
     # sign-in settings and adding, changing, or removing a provider or a
-    # linked identity (v0.33.0), plus linking the trusted header's identity.
-    assert len(ops) == 26
+    # linked identity (v0.33.0), plus linking the trusted header's identity,
+    # plus removing the demo collection.
+    assert len(ops) == 27
     tokens = [token_client(scope) for scope in ("read", "write", "metrics")]
     for method, path in ops:
         stale = call(stale_client, method, path)

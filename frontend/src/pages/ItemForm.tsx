@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import {
   api,
+  ApiError,
   CalendarReference,
   CatalogRef,
   Grade,
@@ -13,6 +14,8 @@ import {
   SetInfo,
   TROY_OUNCE_G,
 } from "../api";
+import { useDisplayCurrency } from "../components/display-currency";
+import { useUnsavedGuard } from "../components/unsaved";
 import {
   CustomField,
   DESIGNATIONS,
@@ -58,8 +61,18 @@ export default function ItemForm() {
   const [countries, setCountries] = useState<string[]>([]);
   const [setNames, setSetNames] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // The fields the server refused, named by their labels on this form.
+  const [problems, setProblems] = useState<Problem[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  // An edit shows nothing to type into until the piece has arrived.
+  const [loaded, setLoaded] = useState(!id);
+  // Something was typed or filled in that a navigation would lose.
+  const [touched, setTouched] = useState(false);
+  const { allow } = useUnsavedGuard(touched);
+  const displayCurrency = useDisplayCurrency();
+  const formRef = useRef<HTMLFormElement>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
   const [calendars, setCalendars] = useState<CalendarReference | null>(null);
   const [axisOther, setAxisOther] = useState(false);
   // The date as struck in Gregorian years, or why it couldn't be converted.
@@ -103,6 +116,12 @@ export default function ItemForm() {
     // Deliberately depends on `id` only: this is a one-time preset for a new
     // item, not a live sync with the URL.
   }, [id]);
+
+  // A new piece starts in the display currency, unless one was already typed.
+  useEffect(() => {
+    if (id || !displayCurrency) return;
+    setForm((f) => (f.currency === EMPTY.currency ? { ...f, currency: displayCurrency } : f));
+  }, [id, displayCurrency]);
 
   // The product name (bullion) or set name (a set) suggestion: filled only
   // while it's empty, or still holds this form's own earlier suggestion, the
@@ -190,9 +209,21 @@ export default function ItemForm() {
         setCustomFields(
           Object.entries(item.custom_fields ?? {}).map(([key, value]) => ({ key, value })),
         );
+        setLoaded(true);
       })
       .catch((e: Error) => setError(e.message));
   }, [id]);
+
+  // Mark the refused fields, and say so where the Save buttons are.
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+    for (const problem of problems) {
+      fieldControl(form, problem.field)?.setAttribute("aria-invalid", "true");
+    }
+    if (problems.length) summaryRef.current?.focus();
+  }, [problems]);
 
   async function newSet() {
     const name = window.prompt("New set name:");
@@ -228,25 +259,30 @@ export default function ItemForm() {
   const setRef = (index: number, field: keyof CatalogRef, value: string) =>
     setRefs((rs) => rs.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
 
-  const toggleDesignation = (code: string) =>
+  const toggleDesignation = (code: string) => {
+    setTouched(true);
     setForm((f) => ({
       ...f,
       designations: f.designations.includes(code)
         ? f.designations.filter((d) => d !== code)
         : [...f.designations, code],
     }));
+  };
 
   async function save(addAnother: boolean) {
     setSaving(true);
     setError(null);
+    setProblems([]);
     setSavedNote(null);
     try {
       const payload = toPayload(form, refs, customFields);
       const saved = id ? await api.updateItem(id, payload) : await api.createItem(payload);
       if (!addAnother) {
+        allow(); // saved: leaving loses nothing
         navigate(`/items/${saved.id}`);
         return;
       }
+      setTouched(false);
       // keep the fields that tend to repeat during a bulk-entry session
       setForm((f) => ({
         ...EMPTY,
@@ -270,8 +306,16 @@ export default function ItemForm() {
       window.scrollTo(0, 0);
       setSaving(false);
     } catch (err) {
-      setError((err as Error).message);
+      const refused = err instanceof ApiError ? err.fields.filter((f) => f.field) : [];
+      const named = refused.map((f) => ({ ...f, label: fieldLabel(formRef.current, f.field) }));
+      setProblems(named);
+      setError(
+        named.length
+          ? named.map((f) => `${f.label}: ${f.message}`).join("; ")
+          : (err as Error).message,
+      );
       setSaving(false);
+      if (!named.length) summaryRef.current?.focus();
     }
   }
 
@@ -282,6 +326,7 @@ export default function ItemForm() {
 
   // A catalogue fill hands back the whole form plus references it didn't have.
   function applyFill(next: FormState, newRefs: CatalogRef[]) {
+    setTouched(true);
     setForm(next);
     if (newRefs.length) {
       setRefs((rs) => [...rs.filter((r) => r.catalog.trim() || r.ref_code.trim()), ...newRefs]);
@@ -291,7 +336,7 @@ export default function ItemForm() {
   const text = (field: TextField, label: string, props: object = {}) => (
     <label className="field">
       {label}
-      <input value={form[field]} onChange={(e) => set(field)(e.target.value)} {...props} />
+      <input data-field={field} value={form[field]} onChange={(e) => set(field)(e.target.value)} {...props} />
     </label>
   );
 
@@ -299,6 +344,7 @@ export default function ItemForm() {
     <label className="slot" title={title}>
       <input
         type="checkbox"
+        data-field={field}
         checked={form[field]}
         onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.checked }))}
       />
@@ -343,6 +389,7 @@ export default function ItemForm() {
       <span style={{ display: "flex", gap: "0.3rem" }}>
         <input
           type="number" step="0.0001" min={0} style={{ flex: 1 }}
+          data-field="weight_g"
           value={weightDisplay}
           onChange={(e) => setWeightDisplay(e.target.value)}
         />
@@ -368,8 +415,14 @@ export default function ItemForm() {
         )}
       </div>
       {error && <p className="error">{error}</p>}
-      {savedNote && <p className="muted">{savedNote}</p>}
-      <form onSubmit={submit}>
+      {savedNote && <p className="muted" role="status">{savedNote}</p>}
+      {!loaded && !error && <p className="muted">Loading…</p>}
+      <form
+        ref={formRef}
+        onSubmit={submit}
+        onChange={() => setTouched(true)}
+        hidden={!loaded}
+      >
         {/* Neither fills a set: a set has no cert, and Numista's API has no sets. */}
         {!isSet && <PcgsFill form={form} refs={refs} onApply={applyFill} />}
         {!isSet && <NumistaFill form={form} refs={refs} onApply={applyFill} />}
@@ -390,7 +443,7 @@ export default function ItemForm() {
             <label className="field">
               Type
               <select
-                value={form.type}
+                data-field="type" value={form.type}
                 onChange={(e) => {
                   const type = e.target.value as ItemType;
                   // Switching type switches grading scale and designations; nothing
@@ -465,7 +518,7 @@ export default function ItemForm() {
                 <input
                   type="number"
                   required={isSet || (!isBullion && !hasStruckDate && !form.year_nd)}
-                  value={form.year}
+                  data-field="year" value={form.year}
                   placeholder={isBullion || form.year_nd ? "optional" : undefined}
                   title={
                     form.year_nd ? "The year it is known or believed to be from" : undefined
@@ -481,7 +534,7 @@ export default function ItemForm() {
                 <label className="field" title="For a date written in another calendar">
                   Date as struck: calendar
                   <select
-                    value={form.struck_calendar}
+                    data-field="struck_calendar" value={form.struck_calendar}
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
@@ -501,7 +554,7 @@ export default function ItemForm() {
                     {form.struck_calendar === "japanese" && (
                       <label className="field">
                         Era
-                        <select value={form.struck_era} required
+                        <select data-field="struck_era" value={form.struck_era} required
                           onChange={(e) => set("struck_era")(e.target.value)}>
                           <option value="">choose…</option>
                           {calendars?.eras.map((era) => (
@@ -512,7 +565,7 @@ export default function ItemForm() {
                     )}
                     <label className="field">
                       Year as struck
-                      <input type="number" min={1} max={9999} step={1} value={form.struck_year}
+                      <input type="number" min={1} max={9999} step={1} data-field="struck_year" value={form.struck_year}
                         onChange={(e) => set("struck_year")(e.target.value)} />
                       {converted != null && <span className="muted">= {converted} CE</span>}
                       {convertError && <span className="muted">{convertError}</span>}
@@ -530,7 +583,7 @@ export default function ItemForm() {
             {isSet && (
               <label className="field">
                 Kind
-                <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
+                <select data-field="strike" value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
                   <option value="proof">Proof set</option>
                   <option value="business">Uncirculated set</option>
                   <option value="specimen">Specimen set</option>
@@ -540,7 +593,7 @@ export default function ItemForm() {
             {!isBullion && !isSet && (
               <label className="field">
                 Strike
-                <select value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
+                <select data-field="strike" value={form.strike} onChange={(e) => set("strike")(e.target.value)}>
                   <option value="business">{isCoin ? "Business strike" : "Regular issue"}</option>
                   {isCoin && <option value="proof">Proof</option>}
                   <option value="specimen">Specimen</option>
@@ -556,7 +609,7 @@ export default function ItemForm() {
             <label className="field">
               Set / lot
               <span style={{ display: "flex", gap: "0.3rem" }}>
-                <select value={form.set_id} style={{ flex: 1 }}
+                <select data-field="set_id" value={form.set_id} style={{ flex: 1 }}
                   onChange={(e) => set("set_id")(e.target.value)}>
                   <option value="">none</option>
                   {sets.map((s) => (
@@ -584,7 +637,7 @@ export default function ItemForm() {
             <div className="item-form">
               <label className="field">
                 Packaging
-                <select value={form.packaging} onChange={(e) => set("packaging")(e.target.value)}>
+                <select data-field="packaging" value={form.packaging} onChange={(e) => set("packaging")(e.target.value)}>
                   <option value="">not recorded</option>
                   {(Object.keys(PACKAGING_LABELS) as Packaging[]).map((p) => (
                     <option key={p} value={p}>{PACKAGING_LABELS[p]}</option>
@@ -612,7 +665,7 @@ export default function ItemForm() {
             <div className="item-form">
               <label className="field">
                 Grade ({gradeScaleFor(form.type)})
-                <select value={form.grade_id} onChange={(e) => set("grade_id")(e.target.value)}>
+                <select data-field="grade_id" value={form.grade_id} onChange={(e) => set("grade_id")(e.target.value)}>
                   <option value="">ungraded</option>
                   {grades.map((g) => (
                     <option key={g.id} value={g.id}>
@@ -645,7 +698,7 @@ export default function ItemForm() {
               {isCoin && (
                 <label className="field">
                   CAC sticker
-                  <select value={form.cac_sticker} onChange={(e) => set("cac_sticker")(e.target.value)}>
+                  <select data-field="cac_sticker" value={form.cac_sticker} onChange={(e) => set("cac_sticker")(e.target.value)}>
                     <option value="">none</option>
                     <option value="green">Green</option>
                     <option value="gold">Gold</option>
@@ -791,12 +844,12 @@ export default function ItemForm() {
                   <span className="size-pair">
                     <input
                       type="number" step="0.01" min={0} aria-label="Width (mm)" placeholder="width"
-                      value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
+                      data-field="width_mm" value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
                     />
                     <span className="muted">×</span>
                     <input
                       type="number" step="0.01" min={0} aria-label="Height (mm)" placeholder="height"
-                      value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
+                      data-field="height_mm" value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
                     />
                   </span>
                 </div>
@@ -813,12 +866,12 @@ export default function ItemForm() {
                   <span className="size-pair">
                     <input
                       type="number" step="0.01" min={0} aria-label="Width (mm)" placeholder="width"
-                      value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
+                      data-field="width_mm" value={form.width_mm} onChange={(e) => set("width_mm")(e.target.value)}
                     />
                     <span className="muted">×</span>
                     <input
                       type="number" step="0.01" min={0} aria-label="Height (mm)" placeholder="height"
-                      value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
+                      data-field="height_mm" value={form.height_mm} onChange={(e) => set("height_mm")(e.target.value)}
                     />
                   </span>
                 </div>
@@ -869,7 +922,7 @@ export default function ItemForm() {
                 <span style={{ display: "flex", gap: "0.3rem" }}>
                   <input
                     type="number" step="0.01" min={0} style={{ flex: 1 }}
-                    value={form.spot_at_purchase}
+                    data-field="spot_at_purchase" value={form.spot_at_purchase}
                     onChange={(e) => set("spot_at_purchase")(e.target.value)}
                   />
                   <button
@@ -889,7 +942,7 @@ export default function ItemForm() {
             {text("storage_location", "Storage location", { placeholder: "album, slab box, safe…" })}
             <label className="field">
               Status
-              <select value={form.status} onChange={(e) => set("status")(e.target.value)}>
+              <select data-field="status" value={form.status} onChange={(e) => set("status")(e.target.value)}>
                 <option value="owned">Owned</option>
                 <option value="sold">Sold</option>
                 <option value="wishlist">Wishlist</option>
@@ -903,7 +956,7 @@ export default function ItemForm() {
                 })}
                 <label className="field">
                   Priority
-                  <select value={form.priority} onChange={(e) => set("priority")(e.target.value)}>
+                  <select data-field="priority" value={form.priority} onChange={(e) => set("priority")(e.target.value)}>
                     <option value=""></option>
                     <option value="1">High</option>
                     <option value="2">Medium</option>
@@ -933,7 +986,7 @@ export default function ItemForm() {
               Catalog references
               {refs.map((ref, i) => (
                 <div className="ref-row" key={i}>
-                  <input value={ref.catalog} list="catalog-options"
+                  <input aria-label="Catalog" value={ref.catalog} list="catalog-options"
                     placeholder={
                       isCoin
                         ? "catalog (krause, numista…)"
@@ -944,10 +997,14 @@ export default function ItemForm() {
                             : "catalog (pick, friedberg…)"
                     }
                     onChange={(e) => setRef(i, "catalog", e.target.value)} />
-                  <input value={ref.ref_code} placeholder="reference code"
+                  <input data-field="catalog_refs" aria-label="Reference code" value={ref.ref_code}
+                    placeholder="reference code"
                     onChange={(e) => setRef(i, "ref_code", e.target.value)} />
                   <button type="button" title="Remove"
-                    onClick={() => setRefs((rs) => rs.filter((_, j) => j !== i))}>
+                    onClick={() => {
+                      setTouched(true);
+                      setRefs((rs) => rs.filter((_, j) => j !== i));
+                    }}>
                     ✕
                   </button>
                 </div>
@@ -973,7 +1030,10 @@ export default function ItemForm() {
                     onChange={(e) => setCustomFields((cf) =>
                       cf.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
                   <button type="button" title="Remove"
-                    onClick={() => setCustomFields((cf) => cf.filter((_, j) => j !== i))}>
+                    onClick={() => {
+                      setTouched(true);
+                      setCustomFields((cf) => cf.filter((_, j) => j !== i));
+                    }}>
                     ✕
                   </button>
                 </div>
@@ -987,12 +1047,37 @@ export default function ItemForm() {
             </div>
             <label className="field full">
               Notes
-              <textarea rows={4} value={form.notes}
+              <textarea rows={4} data-field="notes" value={form.notes}
                 onChange={(e) => set("notes")(e.target.value)} />
             </label>
           </div>
         </div>
 
+        {/* Beside the buttons, since the message at the top is a long way
+            up: announced, focused after a refused save, each field a way to
+            jump to it. */}
+        <div ref={summaryRef} tabIndex={-1} role="alert" className="form-errors">
+          {error && problems.length === 0 && <p className="error">{error}</p>}
+          {problems.length > 0 && (
+            <>
+              <p className="error">This piece wasn't saved. Check:</p>
+              <ul>
+                {problems.map((problem) => (
+                  <li key={problem.field}>
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => fieldControl(formRef.current, problem.field)?.focus()}
+                    >
+                      {problem.label}
+                    </button>
+                    : {problem.message}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
         <div className="actions" style={{ marginBottom: "1.5rem" }}>
           <button className="primary" type="submit" disabled={saving}>
             {saving ? "Saving…" : id ? "Save changes" : "Add item"}
@@ -1011,4 +1096,36 @@ export default function ItemForm() {
       </form>
     </>
   );
+}
+
+interface Problem {
+  field: string;
+  label: string;
+  message: string;
+}
+
+/** The control a refused field belongs to: `catalog_refs.0.ref_code` is
+ * looked up as `catalog_refs`. Every control bound to a form field carries
+ * its API name in `data-field`. */
+function fieldControl(form: HTMLFormElement | null, field: string): HTMLElement | null {
+  const name = field.split(".")[0];
+  return form?.querySelector<HTMLElement>(`[data-field="${CSS.escape(name)}"]`) ?? null;
+}
+
+/** What the form calls a field: its label's own words, which differ by type
+ * ("Denomination", "Product name", "Set name"), so no second list of names
+ * is kept here. A field with no control on screen gets its API name, spaced. */
+function fieldLabel(form: HTMLFormElement | null, field: string): string {
+  const label = fieldControl(form, field)?.closest("label");
+  const words = [...(label?.childNodes ?? [])]
+    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .map((node) => node.textContent ?? "")
+    .join(" ")
+    .replace(/\s*\*\s*$/, "")
+    .trim();
+  if (words) return words;
+  if (field.startsWith("catalog_refs")) return "Catalog references";
+  if (field.startsWith("custom_fields")) return "Custom fields";
+  const name = field.split(".")[0].replace(/_/g, " ");
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }

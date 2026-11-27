@@ -46,8 +46,7 @@ function gainsTable(entries: GainEntry[], valueHead: string, currency: string) {
 }
 
 /** What's still switched off on a fresh install. */
-export function SetupWidget() {
-  const stats = useWidgetData("stats", () => api.collectionStats());
+function useSetup() {
   const settings = useWidgetData("settings", () => api.getSettings());
   const backups = useWidgetData("backups", () => api.listBackups());
   const health = useWidgetData("health", () => api.health());
@@ -55,16 +54,34 @@ export function SetupWidget() {
 
   // The backup list and health are extras: a failure there leaves their checks
   // out rather than the whole card.
-  const ready = stats.settled && settings.settled && backups.settled && health.settled;
-  const checks =
-    stats.data && settings.data
-      ? setupChecks(stats.data.counts.total, settings.data, backups.data, health.data)
-      : null;
-  useWidgetEmpty(dismissed || (ready && (checks === null || checks.length === 0)));
+  const ready = settings.settled && backups.settled && health.settled;
+  const all = settings.data ? setupChecks(settings.data, backups.data, health.data) : null;
+  // "Don't show this again" hides what is merely switched off, never what
+  // is broken.
+  const checks = (all && dismissed ? all.filter((c) => c.failure) : all) ?? [];
+  return { ready, pending: settings.pending, checks, onDismiss: dismissed ? undefined : dismiss };
+}
 
-  if (!ready) return stats.pending;
-  if (dismissed || !checks || checks.length === 0) return null;
-  return <SetupList checks={checks} onDismiss={dismiss} />;
+export function SetupWidget() {
+  const { ready, pending, checks, onDismiss } = useSetup();
+  useWidgetEmpty(ready && checks.length === 0);
+
+  if (!ready) return pending;
+  if (checks.length === 0) return null;
+  return <SetupList checks={checks} onDismiss={onDismiss} />;
+}
+
+/** The same checklist in a card of its own, for the page an empty collection
+ * shows (there is no dashboard grid to put a widget in yet). Nothing at all
+ * once there is nothing to say. */
+export function SetupCard() {
+  const { ready, checks, onDismiss } = useSetup();
+  if (!ready || checks.length === 0) return null;
+  return (
+    <div className="card setup-card">
+      <SetupList checks={checks} onDismiss={onDismiss} />
+    </div>
+  );
 }
 
 /** The value hero: the collection's estimated value and the headline figures. */

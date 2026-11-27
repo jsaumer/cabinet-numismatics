@@ -172,13 +172,10 @@ start; `docker compose logs backend` ends with the reason.
 **Building from source?** Clone the repository, `cp .env.example .env`, and
 `docker compose up --build`. No Node or Python is needed on the host.
 
-**Want something to look at first?** Create a write token in Settings →
-Account, then, from a clone of the repository, load 17 demo pieces with
-photos:
-
-```bash
-python scripts/seed_demo.py --token cabinet_...
-```
+**Want something to look at first?** An empty Cabinet offers "Load the demo
+collection": 17 pieces with values and photos, removed again in one step
+when you're done. (`python scripts/seed_demo.py --token cabinet_...`, from
+a clone of the repository, does the same from a shell.)
 
 **Upgrading:** `docker compose pull && docker compose up -d`. Pin a release
 with `TAG=0.42.0` in `.env`; a version tag never changes. The backend

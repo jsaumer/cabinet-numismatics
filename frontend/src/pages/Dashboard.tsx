@@ -12,7 +12,10 @@ import {
 } from "../dashboard/edit";
 import { DEFAULT_WIDGETS, newWidget, REGISTRY, widgetTitle } from "../dashboard/registry";
 import { WidgetFrame } from "../dashboard/WidgetFrame";
-import { SetupWidget } from "../dashboard/widgets/value";
+import { SetupCard } from "../dashboard/widgets/value";
+import { DemoNotice } from "../components/demo-notice";
+import { useUnsavedGuard } from "../components/unsaved";
+import { Welcome } from "../components/welcome";
 
 /** Take the widget at `from` out and put it back at `to`. */
 function reorderList(widgets: DashboardWidget[], from: number, to: number): DashboardWidget[] {
@@ -33,6 +36,11 @@ export default function Dashboard() {
   const [announcement, setAnnouncement] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  // An edited layout that hasn't been saved is work a navigation would lose.
+  useUnsavedGuard(
+    editing && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved.widgets),
+    "Leave the dashboard? Your layout changes haven't been saved.",
+  );
 
   // Each visit starts from fresh data: without this, coming back after
   // adding a piece showed the totals (or "Nothing to report yet") from
@@ -156,12 +164,8 @@ export default function Dashboard() {
         <div className="detail-header">
           <h1>Dashboard</h1>
         </div>
-        <div className="card setup-card">
-          <SetupWidget />
-        </div>
-        <div className="empty">
-          Nothing to report yet. <Link to="/items/new">Add your first item</Link>.
-        </div>
+        <Welcome onLoaded={invalidateData} />
+        <SetupCard />
       </>
     );
   }
@@ -192,6 +196,7 @@ export default function Dashboard() {
           </button>
         )}
       </div>
+      <DemoNotice onChange={invalidateData} />
       {refreshNote && <p className="muted">{refreshNote}</p>}
       {layoutNote && <p className="error">{layoutNote}</p>}
 

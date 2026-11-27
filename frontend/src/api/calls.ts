@@ -5,7 +5,7 @@ import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDa
 import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { Appearance, DashboardLayout, DashboardWidget } from "./types/dashboard";
-import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
+import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupList, BackupRun, DemoStatus, Health, MonitorOutcome, PricingCoverage, RestoreInspection, RestoreStatus, SourcesReport, StaleReport } from "./types/settings";
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
 import type { ApiToken, AuditEntry, AuthSession, AuthState, DryRunResult, IdentitySummary, LoginResult, LogoutResult, Me, NewApiToken, PasswordChangeResult, ProviderBody, ProviderPatch, SavedProvider, SigninConfig, SigninConfigPatch, TokenScope } from "./types/auth";
 import type { NewShareLink, ShareChecklistView, ShareItem, ShareItemsPage, ShareLink, ShareLinkCreate, ShareLinkPatch, ShareManifest } from "./types/share";
@@ -205,6 +205,12 @@ export const api = {
     req<RefreshResult>(`/api/estimates/refresh?source=${source}`, { method: "POST" }),
 
   dataCredits: () => req<DataCredit[]>("/api/reference/data-credits"),
+
+  demo: () => req<DemoStatus>("/api/demo"),
+  /** Loads the demo collection into an empty collection; 409 otherwise. */
+  loadDemo: () => req<DemoStatus>("/api/demo", { method: "POST" }),
+  /** Deletes the demo's pieces for good (asks for the password again). */
+  removeDemo: () => req<{ removed: number }>("/api/demo", { method: "DELETE" }),
 
   itemHistory: (id: string, offset = 0) =>
     req<Page<ItemEvent>>(`/api/items/${id}/history?limit=${HISTORY_PAGE}&offset=${offset}`),
