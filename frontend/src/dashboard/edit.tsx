@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import { api, DashboardWidget, SetInfo, TagInfo, WidgetOptions, WidgetSize } from "../api";
+import { Overlay } from "../components/overlay";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -398,26 +399,10 @@ function Dialog({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <Overlay label={label} onClose={onClose}>
       <div className="modal-body card">{children}</div>
-    </div>
+    </Overlay>
   );
 }
 

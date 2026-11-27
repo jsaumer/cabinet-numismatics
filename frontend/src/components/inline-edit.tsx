@@ -139,10 +139,12 @@ export function EditableValue({
           type="button"
           className="fact-edit"
           title={`Change ${label.toLowerCase()}`}
-          aria-label={`${label}: change`}
           onClick={() => setEditing(true)}
         >
-          {shown}
+          {/* The name a screen reader hears holds the value on screen:
+              "Change storage: Box 7". An aria-label would have replaced it. */}
+          <span className="visually-hidden">Change {label.toLowerCase()}: </span>
+          <span>{shown}</span>
         </button>
         {saved && <span className="saved-tick" role="status">Saved</span>}
       </>

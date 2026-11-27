@@ -4,6 +4,7 @@ import { Angle, api, ItemDetail, Photo, photoUrl } from "../api";
 import { FileButton } from "./controls";
 import { CameraIcon, UploadIcon, WebcamIcon } from "./icons";
 import { Lightbox, PhotoEditor, WebcamCapture } from "./photos";
+import { ErrorNote, StatusNote } from "./notes";
 
 const ANGLES: Angle[] = ["obverse", "reverse", "edge", "other"];
 
@@ -129,8 +130,8 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
       }}
     >
       <h2>Photos</h2>
-      {photoError && <p className="error">{photoError}</p>}
-      {photoNote && <p className="muted">{photoNote}</p>}
+      {photoError && <ErrorNote>{photoError}</ErrorNote>}
+      <StatusNote>{photoNote}</StatusNote>
       {item.photos.length === 0 && (
         <p className="muted">No photos yet.</p>
       )}
@@ -138,6 +139,7 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
         {item.photos.map((photo, index) => (
           <div key={photo.id} className={`photo-card${photo.is_primary ? " primary" : ""}`}>
             <button type="button" className="photo-open" title="View larger"
+              aria-label={`View the ${photo.angle ?? "photo"} larger`}
               onClick={() => setLightbox(index)}>
               {/* A photo whose file has gone still gets a tile, so it can be deleted. */}
               <img src={photoUrl(photo.thumb_key ?? photo.file_key)}
@@ -145,9 +147,10 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
                 onError={(e) => e.currentTarget.classList.add("missing")} />
             </button>
             <div className="row">
-              <button title="Move left" disabled={index === 0}
+              <button title="Move left" aria-label="Move photo left" disabled={index === 0}
                 onClick={() => movePhoto(index, -1)}>←</button>
               <select
+                aria-label="Which side this photo shows"
                 value={photo.angle ?? ""}
                 onChange={(e) =>
                   act(() => api.updatePhoto(photo.id, { angle: e.target.value as Angle }))()
@@ -158,10 +161,11 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
                   <option key={a} value={a}>{a}</option>
                 ))}
               </select>
-              <button title="Move right" disabled={index === item.photos.length - 1}
+              <button title="Move right" aria-label="Move photo right" disabled={index === item.photos.length - 1}
                 onClick={() => movePhoto(index, 1)}>→</button>
               <button
                 title="Delete photo"
+                aria-label="Delete photo"
                 onClick={() => {
                   if (window.confirm("Delete this photo?")) {
                     act(() => api.deletePhoto(photo.id))();
@@ -179,7 +183,7 @@ export function PhotoGallery({ item, onChanged }: { item: ItemDetail; onChanged:
                   Make primary
                 </button>
               )}
-              <button title="Crop, turn, or straighten" onClick={() => setEditing(photo)}>
+              <button title="Crop, turn, or straighten" aria-label="Edit photo: crop, turn, or straighten" onClick={() => setEditing(photo)}>
                 ✎ Edit
               </button>
             </div>

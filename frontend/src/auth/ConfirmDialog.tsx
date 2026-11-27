@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { api, setReauthHandler } from "../api";
+import { Overlay } from "../components/overlay";
+import { ErrorNote } from "../components/notes";
 
 // The "confirm your password to continue" dialog (SPEC_0300 section 5): one
 // instance, mounted once by <ConfirmDialogHost/> in App.tsx. Two callers open
@@ -91,15 +93,6 @@ export function ConfirmDialogHost() {
     window.location.assign(api.oidcStartUrl(providerId, marked, "confirm"));
   }
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cancel();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
   function cancel() {
     setOpen(false);
     pending.current?.reject(new Error("Confirmation canceled."));
@@ -125,14 +118,8 @@ export function ConfirmDialogHost() {
   if (!open) return null;
 
   return (
-    <div className="modal" role="presentation" onClick={cancel}>
-      <div
-        className="card modal-body confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Confirm your password"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Overlay label="Confirm your password" onClose={cancel}>
+      <div className="card modal-body confirm-dialog">
         <h2>Confirm your password to continue.</h2>
         <form onSubmit={submit} className="estimate-form" style={{ flexDirection: "column", alignItems: "stretch" }}>
           <label className="field">
@@ -146,7 +133,7 @@ export function ConfirmDialogHost() {
               required
             />
           </label>
-          {error && <p className="error">{error}</p>}
+          {error && <ErrorNote>{error}</ErrorNote>}
           <div className="estimate-form" style={{ marginTop: 0 }}>
             <button type="submit" className="primary" disabled={busy || !password}>
               {busy ? "Confirming…" : "Confirm"}
@@ -167,6 +154,6 @@ export function ConfirmDialogHost() {
           </>
         )}
       </div>
-    </div>
+    </Overlay>
   );
 }

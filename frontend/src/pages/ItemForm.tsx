@@ -38,6 +38,7 @@ import { NumistaFill } from "./item-form/NumistaFill";
 import { PcgsFill } from "./item-form/PcgsFill";
 import { DuplicateWarning } from "../components/duplicates";
 import { ITEM_TYPES, TYPE_INFO } from "../components/item-types";
+import { useTitle } from "../components/title";
 
 // Catalogues the reference rows suggest; any other name is accepted too.
 const CATALOGS: Record<ItemType, string[]> = {
@@ -51,6 +52,7 @@ const WEIGHT_UNIT_KEY = "cabinet.form.weightUnit";
 
 export default function ItemForm() {
   const { id } = useParams();
+  useTitle(id ? "Edit a piece" : "Add a piece, every field");
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -414,6 +416,8 @@ export default function ItemForm() {
           </>
         )}
       </div>
+      {/* Plain here: the summary beside the Save buttons is the one that is
+          announced, and saying it twice would be noise. */}
       {error && <p className="error">{error}</p>}
       {savedNote && <p className="muted" role="status">{savedNote}</p>}
       {!loaded && !error && <p className="muted">Loading…</p>}
@@ -616,7 +620,7 @@ export default function ItemForm() {
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
-                <button type="button" onClick={newSet} title="Create a new set">+</button>
+                <button type="button" onClick={newSet} title="Create a new set" aria-label="Create a new set">+</button>
               </span>
             </label>
             {isSet && (
@@ -705,7 +709,7 @@ export default function ItemForm() {
                   </select>
                 </label>
               )}
-              <div className="field full">
+              <div className="field full" role="group" aria-label="Grade qualifiers">
                 Grade qualifiers
                 <div className="chip-row">
                   {flag("grade_plus", "Plus grade (+)")}
@@ -713,7 +717,7 @@ export default function ItemForm() {
                 </div>
               </div>
               {!isBullion && (
-                <div className="field full">
+                <div className="field full" role="group" aria-label="Designations">
                   Designations
                   <div className="chip-row">
                     {DESIGNATIONS[form.type].map(([code, meaning]) => (
@@ -721,6 +725,7 @@ export default function ItemForm() {
                         type="button"
                         key={code}
                         title={meaning}
+                        aria-pressed={form.designations.includes(code)}
                         className={form.designations.includes(code) ? "chip active" : "chip"}
                         onClick={() => toggleDesignation(code)}
                       >
@@ -1000,7 +1005,7 @@ export default function ItemForm() {
                   <input data-field="catalog_refs" aria-label="Reference code" value={ref.ref_code}
                     placeholder="reference code"
                     onChange={(e) => setRef(i, "ref_code", e.target.value)} />
-                  <button type="button" title="Remove"
+                  <button type="button" title="Remove" aria-label="Remove reference"
                     onClick={() => {
                       setTouched(true);
                       setRefs((rs) => rs.filter((_, j) => j !== i));
@@ -1023,13 +1028,13 @@ export default function ItemForm() {
               Custom fields
               {customFields.map((f, i) => (
                 <div className="ref-row" key={i}>
-                  <input value={f.key} placeholder="field name"
+                  <input aria-label="Custom field name" value={f.key} placeholder="field name"
                     onChange={(e) => setCustomFields((cf) =>
                       cf.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} />
-                  <input value={f.value} placeholder="value"
+                  <input aria-label="Custom field value" value={f.value} placeholder="value"
                     onChange={(e) => setCustomFields((cf) =>
                       cf.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)))} />
-                  <button type="button" title="Remove"
+                  <button type="button" title="Remove" aria-label="Remove custom field"
                     onClick={() => {
                       setTouched(true);
                       setCustomFields((cf) => cf.filter((_, j) => j !== i));

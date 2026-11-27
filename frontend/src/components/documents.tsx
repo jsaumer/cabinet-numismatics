@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { FileButton } from "./controls";
 import { UploadIcon } from "./icons";
 import { api, DocumentKind, ItemDetail, ItemDocument, ItemListEntry } from "../api";
+import { ErrorNote, StatusNote } from "./notes";
 
 export const DOCUMENT_KINDS: { key: DocumentKind; label: string }[] = [
   { key: "receipt", label: "Receipt" },
@@ -141,8 +142,8 @@ export function DocumentsCard({ item, onChanged }: { item: ItemDetail; onChanged
       }}
     >
       <h2>Documents</h2>
-      {error && <p className="error">{error}</p>}
-      {note && <p className="gain">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote tone="gain">{note}</StatusNote>
       {item.documents.length === 0 && (
         <p className="muted">
           No documents yet. Attach receipts, certificates of authenticity, invoices, or grading

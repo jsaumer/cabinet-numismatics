@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 
 import { api, CollectionStats, ItemListEntry, money, photoUrl } from "../api";
 import { packagingLine, setKind } from "../components/item-types";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 /* Print-optimized insurance report: use the browser's Print → Save as PDF.
    The site chrome is hidden by the print stylesheet. */
 export default function Report() {
+  useTitle("Insurance report");
   const [items, setItems] = useState<ItemListEntry[] | null>(null);
   const [stats, setStats] = useState<CollectionStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export default function Report() {
       .catch((e: Error) => setError(e.message));
   }, []);
 
-  if (error) return <p className="error">{error}</p>;
+  if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!items || !stats) return <p className="muted">Preparing report…</p>;
 
   const cur = stats.currency;

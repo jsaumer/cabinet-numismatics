@@ -9,9 +9,16 @@
   --hover: #f1ece1;
   --border: #ddd5c5;
   --border-soft: #ebe5d8;
+  /* The outline of an input, a select, or a text area: 3:1 or better
+     against the page, a card, and the sidebar, in every theme and mode, so
+     a field can be found before it is focused. Cards and dividers keep the
+     softer --border. */
+  --field-border: #8c867b;
   --ink: #26221c;
   --ink-2: #5f584c;
-  --ink-3: #7a7263; /* 4.5:1 on a card; #91897a was 3.4 (v0.35.0) */
+  /* Muted text: 4.5:1 or better on the page, a card, the sidebar, a hovered
+     row, and a selected one, in every theme and mode. */
+  --ink-3: #6e6759;
   --link: #6d4f14;
   --header-bg: #211d17;
   --header-ink: #ffffff;
@@ -50,9 +57,10 @@
   --hover: #29241d;
   --border: #3d372c;
   --border-soft: #2e2921;
+  --field-border: #726c61;
   --ink: #ece7dc;
   --ink-2: #c4bba8;
-  --ink-3: #8f8775;
+  --ink-3: #958d7b;
   --link: #d9b96e;
   --header-bg: #0d0b09;
   --header-ink: #ffffff;
@@ -97,9 +105,10 @@
   --hover: #e6e9ed;
   --border: #d3d8de;
   --border-soft: #e4e7eb;
+  --field-border: #83878d;
   --ink: #1d2127;
   --ink-2: #4f5763;
-  --ink-3: #6c7480;
+  --ink-3: #616874;
   --link: #3f5370;
   --header-bg: #1f242b;
   --header-ink: #ffffff;
@@ -124,6 +133,7 @@
   --hover: #252a31;
   --border: #343b45;
   --border-soft: #262c34;
+  --field-border: #696f78;
   --ink: #e6e9ee;
   --ink-2: #b5bdc8;
   --ink-3: #8a939f;
@@ -151,9 +161,10 @@
   --hover: #e1eae3;
   --border: #cbd8cf;
   --border-soft: #dfe8e2;
+  --field-border: #7c8880;
   --ink: #17221c;
   --ink-2: #48584e;
-  --ink-3: #66766c;
+  --ink-3: #5b6a61;
   --link: #6e5312;
   --header-bg: #1d3a2e;
   --header-ink: #f4f1e6;
@@ -178,9 +189,10 @@
   --hover: #1f3329;
   --border: #2c4438;
   --border-soft: #213429;
+  --field-border: #64776d;
   --ink: #e6eee9;
   --ink-2: #b2c4ba;
-  --ink-3: #859a8e;
+  --ink-3: #889d91;
   --link: #d7b765;
   --header-bg: #0a120e;
   --header-ink: #f4f1e6;
@@ -205,9 +217,10 @@
   --hover: #e9e9e5;
   --border: #d6d6d0;
   --border-soft: #e6e6e1;
+  --field-border: #878784;
   --ink: #111111;
   --ink-2: #4a4a46;
-  --ink-3: #6b6b66;
+  --ink-3: #686863;
   --link: #7d2e2e;
   --header-bg: #ffffff;
   --header-ink: #111111;
@@ -232,9 +245,10 @@
   --hover: #282828;
   --border: #383838;
   --border-soft: #2a2a2a;
+  --field-border: #6e6e6e;
   --ink: #ededeb;
   --ink-2: #b8b8b4;
-  --ink-3: #8d8d88;
+  --ink-3: #91918c;
   --link: #e08a80;
   --header-bg: #0b0b0b;
   --header-ink: #ffffff;
@@ -283,6 +297,20 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+/* A link inside a sentence is underlined: its color alone is too close to
+   the text around it to tell them apart. Navigation, buttons, and rows of
+   links stay as they are. */
+p a:not(.button),
+li.setup-failure a,
+.setup-card li a,
+.muted a:not(.button),
+.empty a:not(.button),
+.dup-warning a,
+.error a:not(.button),
+.setting-row-help a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .site-header {
@@ -353,6 +381,27 @@ a:hover {
   filter: none;
 }
 
+/* The first thing Tab reaches: off screen until it has focus. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 60;
+  padding: 0.5rem 0.9rem;
+  background: var(--surface);
+  color: var(--link);
+  border: 1px solid var(--field-border);
+  border-radius: 6px;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+/* Focus put there by the app after a navigation, not by Tab: no ring. */
+main:focus,
+main h1:focus {
+  outline: none;
+}
 main {
   max-width: 68rem;
   margin: 1.5rem auto;
@@ -389,13 +438,29 @@ select,
 textarea {
   font: inherit;
   padding: 0.4rem 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 6px;
   background: var(--surface);
   color: var(--ink);
 }
 textarea {
   resize: vertical;
+}
+/* What is typed is read more than its label: a labeled field's text is
+   14px, where it used to take the label's 12px. */
+.field input,
+.field select,
+.field textarea {
+  font-size: 0.875rem;
+}
+/* On a touch screen every field is 16px, whatever rule sized it: below
+   that, iOS zooms the whole page when a field takes focus. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
 
 button,
@@ -781,6 +846,26 @@ dl.facts dd {
 .photo-drop.dragging {
   outline: 2px dashed var(--accent);
   outline-offset: -6px;
+}
+/* Every overlay is the browser's own <dialog> (components/overlay.tsx),
+   stretched over the viewport so it is its own backdrop. These rules undo
+   what a dialog looks like by default; .modal and .lightbox below give it
+   its look. */
+dialog.overlay {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: inherit;
+}
+dialog.overlay:not([open]) {
+  display: none;
+}
+dialog.overlay::backdrop {
+  background: transparent;
 }
 .lightbox {
   position: fixed;

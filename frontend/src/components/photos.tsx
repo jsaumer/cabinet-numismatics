@@ -8,19 +8,10 @@ import {
 } from "react";
 
 import { Photo, photoUrl } from "../api";
+import { Overlay } from "./overlay";
+import { ErrorNote } from "./notes";
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
-/** Keeps the page behind an overlay from scrolling while it's open. */
-function useNoScroll() {
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-}
 
 function Modal({
   title,
@@ -31,21 +22,13 @@ function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
-  useNoScroll();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
-      <div className="card modal-body" onClick={(e) => e.stopPropagation()}>
+    <Overlay label={title} onClose={onClose}>
+      <div className="card modal-body">
         <h2>{title}</h2>
         {children}
       </div>
-    </div>
+    </Overlay>
   );
 }
 
@@ -66,7 +49,6 @@ export function Lightbox({
   const [origin, setOrigin] = useState({ x: 50, y: 50 });
   const count = photos.length;
   const photo = photos[index];
-  useNoScroll();
 
   useEffect(() => {
     setZoom(1);
@@ -75,8 +57,8 @@ export function Lightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
+      // Escape is the dialog's own (components/overlay.tsx).
+      if (e.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
       else if (e.key === "ArrowLeft" && count > 1) onIndex((index - 1 + count) % count);
       else if (e.key === "+" || e.key === "=") setZoom((z) => clamp(z * 1.5, 1, 8));
       else if (e.key === "-") setZoom((z) => clamp(z / 1.5, 1, 8));
@@ -84,7 +66,7 @@ export function Lightbox({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, count, onIndex, onClose]);
+  }, [index, count, onIndex]);
 
   // The pointer's position as a percentage of the stage: the image fills the
   // stage box, so this is also the point on the image to zoom around.
@@ -97,8 +79,7 @@ export function Lightbox({
   };
 
   return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer"
-      onClick={onClose}>
+    <Overlay label="Photo viewer" className="lightbox" onClose={onClose}>
       <div
         className="lightbox-stage"
         style={{ cursor: zoom > 1 ? "zoom-out" : "zoom-in" }}
@@ -124,7 +105,7 @@ export function Lightbox({
       </div>
       <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
         {count > 1 && (
-          <button onClick={() => onIndex((index - 1 + count) % count)} title="Previous (←)">
+          <button onClick={() => onIndex((index - 1 + count) % count)} title="Previous (←)" aria-label="Previous photo">
             ←
           </button>
         )}
@@ -135,16 +116,16 @@ export function Lightbox({
           {` · ${Math.round(zoom * 100)}%`}
         </span>
         {count > 1 && (
-          <button onClick={() => onIndex((index + 1) % count)} title="Next (→)">
+          <button onClick={() => onIndex((index + 1) % count)} title="Next (→)" aria-label="Next photo">
             →
           </button>
         )}
         <a className="button" href={photoUrl(photo.file_key)} target="_blank" rel="noreferrer">
           Original ↗
         </a>
-        <button onClick={onClose} title="Close (Esc)">✕</button>
+        <button onClick={onClose} title="Close (Esc)" aria-label="Close">✕</button>
       </div>
-    </div>
+    </Overlay>
   );
 }
 
@@ -351,7 +332,7 @@ export function PhotoEditor({
         Drag the box or its corners to crop. Result: {outW} × {outH} px. Replacing overwrites
         this photo; saving as a new photo keeps the original.
       </p>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       <div className="actions">
         <button className="primary" disabled={!img || !changed || saving} onClick={() => save(false)}>
           {saving ? "Saving…" : "Replace photo"}
@@ -441,7 +422,7 @@ export function WebcamCapture({
   return (
     <Modal title="Webcam" onClose={() => !busy && onCancel()}>
       {!error && <video ref={videoRef} className="webcam-video" playsInline muted />}
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {taken > 0 && (
         <p className="muted">
           {taken} photo{taken > 1 ? "s" : ""} added. Take another, or close.

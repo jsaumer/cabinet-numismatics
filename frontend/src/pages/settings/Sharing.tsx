@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, ChecklistSummary, NewShareLink, SetInfo, ShareKind, ShareLink } from "../../api";
 import { EXPOSURE_GUIDANCE_URL, EXPOSURE_WARNING } from "../../auth/exposureWarning";
 import { Section, SettingRow, useSettings } from "./shared";
+import { ErrorNote } from "../../components/notes";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "–");
 
@@ -376,7 +377,7 @@ export default function SharingSection() {
     api.listChecklists().then(setChecklists).catch(() => setChecklists([]));
   }, []);
 
-  if (error && !settings) return <p className="error">{error}</p>;
+  if (error && !settings) return <ErrorNote>{error}</ErrorNote>;
   if (!settings) return <p className="muted">Loading…</p>;
 
   return (
@@ -415,7 +416,7 @@ export default function SharingSection() {
         </p>
       )}
 
-      {linksError && <p className="error">{linksError}</p>}
+      {linksError && <ErrorNote>{linksError}</ErrorNote>}
       {!links ? (
         <p className="muted">Loading links…</p>
       ) : links.length === 0 ? (

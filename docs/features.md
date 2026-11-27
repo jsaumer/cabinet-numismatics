@@ -207,6 +207,13 @@ most often use instead.
 - Three-container Compose stack, also published as versioned images on GHCR
   with a [Swarm stack file](../deploy/docker-stack.yaml); an OpenAPI schema at
   `/api/openapi.json`. The backend applies its own migrations on startup.
+- **Accessibility basics, checked on every change**: every page passes an
+  automated scan (WCAG 2.0 to 2.2, levels A and AA) in light and dark, as a
+  browser test that fails the build. Dialogs hold focus and hand it back,
+  errors are announced, field outlines meet 3:1 in every theme, each page
+  has a title, the keyboard can skip to the content, and the single-key
+  shortcuts can be switched off. A scan can't judge everything: it checks
+  structure and contrast, not whether the words make sense.
 - **A first run that starts with the collection**: an empty Cabinet offers
   three ways in (add a piece, import a collection, or load a demo
   collection of 17 pieces to look around, removed again in one step), with
@@ -221,7 +228,7 @@ most often use instead.
   the header toggle, and **four color themes** (Bronze, the default;
   Silver; Album; Ledger) chosen in Settings → General, saved on the server
   so the choice follows you to every device, the logo and the browser-tab
-  icon with it. Each was checked for WCAG AA contrast in light and dark. System fonts and inline SVG icons only: the
+  icon with it. Each was checked for WCAG AA contrast in light and dark, text and field outlines alike. System fonts and inline SVG icons only: the
   page loads nothing from outside the app.
 - **Backups from the app**: download the collection as one encrypted,
   tamper-evident archive (database + photos + documents + manifest, `.zip.age`,

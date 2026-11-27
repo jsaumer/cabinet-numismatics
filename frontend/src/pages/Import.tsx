@@ -15,6 +15,8 @@ import {
   ItemType,
   money,
 } from "../api";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 type Source = "numista" | "file";
 
@@ -46,6 +48,7 @@ const formatBytes = (n: number) =>
   n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
 
 export default function Import() {
+  useTitle("Import");
   const [source, setSource] = useState<Source>("numista");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -219,7 +222,7 @@ export default function Import() {
         ))}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
 
       {source === "numista" && (
         <div className="card">

@@ -3,20 +3,8 @@ import { Link, useParams } from "react-router-dom";
 
 import { api, money, ShareItem, ShareItemPhoto, sharePhotoUrl } from "../../api";
 import { packagingLine, TypeIcon, typeBadge } from "../../components/item-types";
+import { Overlay } from "../../components/overlay";
 import { shareItemLabel } from "./ShareGrid";
-
-/** Keeps the page behind the lightbox from scrolling while it's open, the
- * same as components/photos.tsx's Lightbox (unexported there, so repeated
- * here rather than reworking that file for one caller). */
-function useNoScroll() {
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-}
 
 /** A read-only viewer for a shared piece's photos: the same look as the
  * item page's lightbox (arrows, Esc, a caption), without the zoom-and-pan
@@ -34,28 +22,27 @@ function ShareLightbox({
   onIndex: (index: number) => void;
   onClose: () => void;
 }) {
-  useNoScroll();
   const count = photos.length;
   const photo = photos[index];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      else if (e.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
+      // Escape is the dialog's own (components/overlay.tsx).
+      if (e.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
       else if (e.key === "ArrowLeft" && count > 1) onIndex((index - 1 + count) % count);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, count, onIndex, onClose]);
+  }, [index, count, onIndex]);
 
   return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" onClick={onClose}>
+    <Overlay label="Photo viewer" className="lightbox" onClose={onClose}>
       <div className="lightbox-stage" onClick={(e) => e.stopPropagation()}>
         <img src={sharePhotoUrl(token, photo.id, "full")} alt={photo.angle ?? "photo"} draggable={false} />
       </div>
       <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
         {count > 1 && (
-          <button onClick={() => onIndex((index - 1 + count) % count)} title="Previous (←)">
+          <button onClick={() => onIndex((index - 1 + count) % count)} title="Previous (←)" aria-label="Previous photo">
             ←
           </button>
         )}
@@ -64,15 +51,15 @@ function ShareLightbox({
           {photo.angle ? ` · ${photo.angle}` : ""}
         </span>
         {count > 1 && (
-          <button onClick={() => onIndex((index + 1) % count)} title="Next (→)">
+          <button onClick={() => onIndex((index + 1) % count)} title="Next (→)" aria-label="Next photo">
             →
           </button>
         )}
-        <button onClick={onClose} title="Close (Esc)">
+        <button onClick={onClose} title="Close (Esc)" aria-label="Close">
           ✕
         </button>
       </div>
-    </div>
+    </Overlay>
   );
 }
 

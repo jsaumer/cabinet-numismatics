@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api, money, ShareItem, ShareManifest, sharePhotoUrl } from "../../api";
 import { TypeIcon } from "../../components/item-types";
+import { ErrorNote } from "../../components/notes";
 
 const PAGE_SIZE = 100;
 
@@ -78,7 +79,7 @@ export default function ShareGrid({ token, manifest }: { token: string; manifest
         placeholder="Search this share…"
         aria-label="Search"
       />
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {!loading && items.length === 0 && !error && <p className="empty">Nothing to show here yet.</p>}
       {q && filtered.length === 0 && items.length > 0 && (
         <p className="empty">No pieces match &quot;{query}&quot;.</p>

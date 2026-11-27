@@ -12,12 +12,14 @@ import {
 } from "../api";
 import { DocumentsCard } from "../components/documents";
 import { ItemFacts } from "../components/item-facts";
-import { ItemHero } from "../components/item-hero";
+import { heroTitle, ItemHero } from "../components/item-hero";
 import { LookupLinks } from "../components/lookup";
 import { PhotoGallery } from "../components/photo-gallery";
 import { SalesLog } from "../components/sales";
 import { useSerialTraits } from "../components/serial-traits";
 import { ValueHistory } from "../components/value-history";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 type Tab = "overview" | "value" | "files" | "history";
 const TABS: { key: Tab; label: string }[] = [
@@ -123,6 +125,9 @@ export default function ItemDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedded, tab, id, events]);
 
+  // Beside the collection list the page is the list's; on its own, the piece's.
+  useTitle(embedded ? null : missing ? "No such piece" : item ? heroTitle(item) : "");
+
   if (missing) {
     return (
       <div className="card">
@@ -137,7 +142,7 @@ export default function ItemDetail({
       </div>
     );
   }
-  if (error) return <p className="error">{error}</p>;
+  if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!item) return <p className="muted">Loading…</p>;
 
   async function cloneItem() {

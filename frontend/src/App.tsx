@@ -40,6 +40,8 @@ import SharePage from "./pages/share/SharePage";
 import Setup from "./pages/Setup";
 import Stack from "./pages/Stack";
 import Trash from "./pages/Trash";
+import { useTitle } from "./components/title";
+import { shortcutsEnabled, useShortcutsEnabled } from "./components/shortcuts";
 
 /** The dashboard is the home page. Before v0.16.0 the collection list lived at
  * "/", so a "/" link carrying list filters or paging still opens the list. */
@@ -53,6 +55,7 @@ function Home() {
  * the brand, since there is nothing from the collection to show yet. */
 /** An address that names no page. */
 function NotFound() {
+  useTitle("Page not found");
   return (
     <div className="card">
       <h1>There is no page here</h1>
@@ -90,7 +93,7 @@ function FailedSignInsNotice() {
     day: "numeric",
   });
   return (
-    <p className="error notice-bar no-print">
+    <p className="error notice-bar no-print" role="status">
       {notice.count} failed sign-in{notice.count === 1 ? "" : "s"} since your last visit on{" "}
       {since}. <Link to="/settings/account">See the audit log.</Link>{" "}
       <button type="button" className="link-button" onClick={() => setNotice(null)}>
@@ -147,6 +150,15 @@ function ConfirmReturnNotice() {
  * succeeds the signed-in app renders at /login?next=..., before the sign-in
  * page's own navigation has run, so this route decides where the owner
  * lands: back where they were sent from, not always the dashboard. */
+/** Put focus on the page's heading, or on the content area while the page
+ * is still loading and has none yet. */
+function focusContent(main: HTMLElement) {
+  const heading = main.querySelector<HTMLElement>("h1");
+  const target = heading ?? main;
+  if (heading && !heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+  target.focus();
+}
+
 function AfterSignIn() {
   const [params] = useSearchParams();
   return <Navigate to={safeNext(params.get("next"))} replace />;
@@ -161,6 +173,39 @@ function AuthedApp({
 }) {
   const { me, signOut } = useAuth();
   const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  const lastPath = useRef(location.pathname);
+
+  // After a move to another page, focus goes to its heading, so a screen
+  // reader says where it landed and Tab starts from the content. Not while
+  // moving through the collection list (each piece is a new address there,
+  // and the keys have to stay with the list), and not when the page put
+  // focus somewhere itself (the quick add's lookup box).
+  useEffect(() => {
+    const from = lastPath.current;
+    lastPath.current = location.pathname;
+    if (from === location.pathname) return;
+    if (from.startsWith("/collection") && location.pathname.startsWith("/collection")) return;
+    const main = mainRef.current;
+    if (!main) return;
+    const active = document.activeElement;
+    if (active && active !== main && main.contains(active)) return;
+    focusContent(main);
+    // A page that is still loading has no heading yet: when it arrives, and
+    // focus is still where this put it, move on to the heading.
+    if (main.querySelector("h1")) return;
+    const waiting = new MutationObserver(() => {
+      if (!main.querySelector("h1")) return;
+      waiting.disconnect();
+      if (document.activeElement === main) focusContent(main);
+    });
+    waiting.observe(main, { childList: true, subtree: true });
+    const giveUp = window.setTimeout(() => waiting.disconnect(), 5000);
+    return () => {
+      waiting.disconnect();
+      window.clearTimeout(giveUp);
+    };
+  }, [location.pathname]);
 
   // The server holds the theme; the copy in this browser only covers the
   // moments before sign-in. A failed read keeps whatever is showing.
@@ -175,6 +220,17 @@ function AuthedApp({
 
   return (
     <>
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(e) => {
+          // Focus, not a hash in the address: the router owns the address.
+          e.preventDefault();
+          if (mainRef.current) focusContent(mainRef.current);
+        }}
+      >
+        Skip to content
+      </a>
       <ConfirmDialogHost />
       <header className="site-header no-print">
         <Link className="brand" to="/">
@@ -206,7 +262,7 @@ function AuthedApp({
       </header>
       <div className="shell">
       <Sidebar />
-      <main>
+      <main id="main" ref={mainRef} tabIndex={-1}>
         <VersionNotice />
         <FailedSignInsNotice />
         <ConfirmReturnNotice />
@@ -248,6 +304,7 @@ function HeaderSearch() {
   const location = useLocation();
   const [text, setText] = useState("");
   const ref = useRef<HTMLInputElement>(null);
+  const slash = useShortcutsEnabled();
 
   useEffect(() => {
     if (location.pathname.startsWith("/collection")) {
@@ -258,6 +315,7 @@ function HeaderSearch() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!shortcutsEnabled()) return; // switched off in Settings, General
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return;
       e.preventDefault();
@@ -285,7 +343,7 @@ function HeaderSearch() {
         placeholder="Search the collection"
         aria-label="Search the collection"
       />
-      <kbd aria-hidden="true">/</kbd>
+      {slash && <kbd aria-hidden="true">/</kbd>}
     </form>
   );
 }

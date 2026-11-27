@@ -16,6 +16,8 @@ import { SetupCard } from "../dashboard/widgets/value";
 import { DemoNotice } from "../components/demo-notice";
 import { useUnsavedGuard } from "../components/unsaved";
 import { Welcome } from "../components/welcome";
+import { ErrorNote, StatusNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 /** Take the widget at `from` out and put it back at `to`. */
 function reorderList(widgets: DashboardWidget[], from: number, to: number): DashboardWidget[] {
@@ -26,6 +28,7 @@ function reorderList(widgets: DashboardWidget[], from: number, to: number): Dash
 }
 
 export default function Dashboard() {
+  useTitle("Dashboard");
   const [saved, setSaved] = useState<DashboardLayout | null>(null);
   const [draft, setDraft] = useState<DashboardWidget[]>([]);
   const [layoutNote, setLayoutNote] = useState<string | null>(null);
@@ -155,7 +158,7 @@ export default function Dashboard() {
     }
   }
 
-  if (stats.error) return <p className="error">{stats.error}</p>;
+  if (stats.error) return <ErrorNote>{stats.error}</ErrorNote>;
   if (!stats.data || !saved) return <p className="muted">Loading…</p>;
 
   if (stats.data.counts.total === 0) {
@@ -197,8 +200,8 @@ export default function Dashboard() {
         )}
       </div>
       <DemoNotice onChange={invalidateData} />
-      {refreshNote && <p className="muted">{refreshNote}</p>}
-      {layoutNote && <p className="error">{layoutNote}</p>}
+      <StatusNote>{refreshNote}</StatusNote>
+      {layoutNote && <ErrorNote>{layoutNote}</ErrorNote>}
 
       {editing && (
         <DashboardEditBar

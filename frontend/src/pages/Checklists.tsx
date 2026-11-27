@@ -2,8 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { api, ChecklistDetail, ChecklistSummary } from "../api";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 export default function Checklists() {
+  useTitle("Checklists");
   const [lists, setLists] = useState<ChecklistSummary[]>([]);
   const [open, setOpen] = useState<ChecklistDetail | null>(null);
   // The sidebar links straight to one checklist with ?id=.
@@ -120,7 +123,7 @@ export default function Checklists() {
         <div className="spacer" />
         <Link className="button" to="/items/run">Add a run</Link>
       </div>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
 
       {lists.length === 0 && (
         <div className="empty">

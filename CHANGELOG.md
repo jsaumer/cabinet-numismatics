@@ -10,8 +10,56 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+Accessibility basics from the 1.0 checklist, measured first with an
+automated scan (axe, WCAG 2.0 to 2.2 at levels A and AA) and then kept in
+the browser tests. No migration, and nothing in the API changes. Two of the
+changes are visible on every page: field outlines are darker, and links
+inside sentences are underlined.
+
+### Added
+
+- **Every page has a title of its own** ("Stack · Cabinet", "Settings,
+  Backups · Cabinet", a piece's own name), where every tab, history entry,
+  and screen-reader announcement used to say "Cabinet".
+- **A "Skip to content" link**, the first thing the Tab key reaches, and
+  focus that moves to the new page's heading after a navigation, so a
+  screen reader says where it landed.
+- **A switch for the single-key shortcuts** in Settings → General, kept per
+  browser. J, K, E, N, and / collide with speech input and with other
+  tools' own keys; the arrow keys, Enter, and Escape always work.
+- **The accessibility scan is a browser test** (`frontend/e2e/a11y.spec.ts`,
+  with `@axe-core/playwright` as a development dependency): the main pages
+  in light and dark, the other three themes' contrast, field outlines,
+  page titles, the skip link, and a dialog's focus.
+
 ### Changed
 
+- **Dialogs hold focus.** The password confirmation, the photo viewer, the
+  photo editor and webcam, and the dashboard's widget dialogs are now the
+  browser's own dialog element: focus moves in when one opens, Tab stays
+  inside, the page behind can't be reached, and focus returns to what
+  opened it. Before, focus stayed on the page behind and Tab walked out.
+- **Errors are announced.** Every error message that appears and
+  disappears is now read out by a screen reader, and success notes are
+  announced politely; 3 of 64 were before.
+- **Field outlines can be seen**: 3:1 or better against the page, a card,
+  and the sidebar in all four themes, light and dark (they were about
+  1.5:1). Cards and dividers keep their softer line.
+- **What you type is larger**: 14 px in a labeled field (it took the
+  label's 12 px), and 16 px on a touch screen, below which iOS zooms the
+  whole page when a field takes focus.
+- **Links inside sentences are underlined.** Their color alone was too
+  close to the text around them. Navigation, buttons, and rows of links
+  are unchanged.
+- **Muted text is a little darker** (lighter in dark mode) so it reaches
+  4.5:1 on the sidebar, a hovered row, and a selected one, not only on a
+  card.
+- Controls that had no name now have one (three settings selects, the
+  backup key field, a photo's angle, the trash's checkboxes, the form's
+  catalog and custom field boxes), the two charts describe themselves, an
+  edit-in-place button reads the value it shows ("Change storage: Box 7"),
+  icon-only buttons carry a real label, and a designation chip says
+  whether it is on.
 - **The roadmap is a short page** (about 200 lines, from 1,450): what is
   left before 1.0, what might come after, what was cut and why, and one
   line per release. The feature list it used to repeat is

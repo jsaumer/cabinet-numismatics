@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api, CatalogRef, Grade, PcgsCert } from "../../api";
 import { FormState, TextField } from "./model";
+import { ErrorNote, StatusNote } from "../../components/notes";
 
 // Fields a cert lookup can fill, with how the "filled …" message names them.
 const CERT_FIELDS: Partial<Record<TextField, string>> = {
@@ -156,8 +157,8 @@ export function PcgsFill({
               {busy ? "Looking up…" : "Fill in"}
             </button>
           </div>
-          {error && <p className="error">{error}</p>}
-          {note && <p className="muted">{note}</p>}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <StatusNote>{note}</StatusNote>
           <p className="muted" style={{ marginBottom: 0 }}>
             Fills the coin, its grade and designations, the cert, and the PCGS number, empty
             fields only. One request from the 100/day quota; pricing the item afterwards reuses

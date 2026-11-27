@@ -4,6 +4,7 @@ import { api } from "../api";
 import { SavedTick, useSavedTick } from "../pages/settings/shared";
 import { DEFAULT_THEME, isThemeKey, ThemeKey, THEMES } from "../themes";
 import { applyPalette } from "./theme";
+import { ErrorNote } from "./notes";
 
 /** Settings → General's theme cards. A choice applies at once and is saved
  * on the server (PUT /api/appearance, admin but no password again), so it
@@ -66,7 +67,7 @@ export function ThemePicker() {
         ))}
       </div>
       <SavedTick shown={saved} />
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

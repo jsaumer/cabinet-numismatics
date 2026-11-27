@@ -250,6 +250,15 @@ rules that bite most often:
   first. Every control on the item form carries its API name in
   `data-field`, which is how a refused save names and marks the field. See
   "The first run, in the app" in the implementation notes.
+- **Accessibility is tested, not remembered** (after v0.43.0):
+  `frontend/e2e/a11y.spec.ts` scans the main pages with axe in light and
+  dark and fails on any finding, so a new page or control has to pass it.
+  Every overlay is `components/overlay.tsx` (the native `<dialog>`), never
+  a hand-built one; an error that comes and goes is `<ErrorNote>` and a
+  success note `<StatusNote>` (`components/notes.tsx`); every page calls
+  `useTitle`; inputs take `--field-border`, which each of the eight theme
+  blocks defines at 3:1 or better. See "Accessibility basics" in the
+  implementation notes.
 - A share link shows no value from `share.PRIVATE_SOURCES` (Numista and
   PCGS: both licenses keep their data from third parties), and every page
   carries PCGS's credit once anything from PCGS is held

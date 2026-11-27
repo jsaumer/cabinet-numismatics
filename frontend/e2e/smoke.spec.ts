@@ -239,18 +239,18 @@ test("a fact changes in place beside the list, and Escape puts it back", async (
   await page.goto(`/collection/${id}?q=${encodeURIComponent(COUNTRY)}`);
   const inspector = page.getByRole("region", { name: "Selected piece" });
   await inspector.getByRole("button", { name: "Show empty fields" }).click();
-  const storage = inspector.getByRole("button", { name: "Storage: change" });
+  const storage = inspector.getByRole("button", { name: /^Change storage: / });
   await storage.click();
   const field = inspector.getByLabel("Storage", { exact: true });
   await field.fill("Box 7, row 2");
   await field.press("Enter");
   await expect(inspector.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
-  await expect(storage).toHaveText("Box 7, row 2");
+  await expect(storage).toHaveAccessibleName("Change storage: Box 7, row 2");
 
   await storage.click();
   await inspector.getByLabel("Storage", { exact: true }).fill("nowhere");
   await inspector.getByLabel("Storage", { exact: true }).press("Escape");
-  await expect(storage).toHaveText("Box 7, row 2");
+  await expect(storage).toHaveAccessibleName("Change storage: Box 7, row 2");
   await expect(page).toHaveURL(new RegExp(`/collection/${id}`)); // Escape in a field keeps the piece open
 
   await page.goto(itemUrl);

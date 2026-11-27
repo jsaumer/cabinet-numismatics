@@ -18,6 +18,8 @@ import { useUnsavedGuard } from "../components/unsaved";
 import { EMPTY, FormState, toPayload } from "./item-form/model";
 import { fillFromNumista, issueFields } from "./item-form/NumistaFill";
 import { fillFromCert } from "./item-form/PcgsFill";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 /** What one box can be: a Numista type number, a PCGS cert, or a name. */
 type Lookup =
@@ -100,6 +102,7 @@ interface Added {
 }
 
 export default function QuickAdd() {
+  useTitle("Add a piece");
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>({ ...EMPTY });
   const [refs, setRefs] = useState<CatalogRef[]>([]);
@@ -524,7 +527,7 @@ export default function QuickAdd() {
             refs={refs}
           />
 
-          {error && <p className="error" role="alert">{error}</p>}
+          <ErrorNote>{error}</ErrorNote>
 
           <div className="qa-actions">
             <button type="submit" className="primary" disabled={saving}>

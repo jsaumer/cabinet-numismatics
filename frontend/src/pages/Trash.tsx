@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 
 import { api, photoUrl, TrashList } from "../api";
 import { typeBadge } from "../components/item-types";
+import { ErrorNote, StatusNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 const when = (iso: string) => new Date(iso).toLocaleDateString();
 
@@ -15,6 +17,7 @@ function untilPurge(iso: string): string {
 /** Items deleted from the collection, waiting to be restored or deleted for
  * good. Emptied automatically after the retention set in Settings. */
 export default function Trash() {
+  useTitle("Trash");
   const [trash, setTrash] = useState<TrashList | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export default function Trash() {
     act(() => api.emptyTrash(), (n) => `Emptied the trash (${plural(n)}).`);
   };
 
-  if (!trash) return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
+  if (!trash) return error ? <ErrorNote>{error}</ErrorNote> : <p className="muted">Loading…</p>;
   const ids = [...selected];
   const allSelected = trash.items.length > 0 && selected.size === trash.items.length;
 
@@ -83,8 +86,8 @@ export default function Trash() {
           : "They stay until you delete them; automatic emptying is off"}{" "}
         (<Link to="/settings/general">Settings</Link>).
       </p>
-      {error && <p className="error">{error}</p>}
-      {note && <p className="gain">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote tone="gain">{note}</StatusNote>
 
       {trash.items.length === 0 ? (
         <div className="empty">The trash is empty.</div>
@@ -119,6 +122,7 @@ export default function Trash() {
                 <tr key={item.id}>
                   <td>
                     <input type="checkbox" checked={selected.has(item.id)}
+                      aria-label={`Select ${item.label}`}
                       onChange={() =>
                         setSelected((prev) => {
                           const next = new Set(prev);

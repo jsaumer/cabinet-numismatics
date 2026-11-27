@@ -10,6 +10,7 @@ import PricingSection from "./settings/Pricing";
 import SharingSection from "./settings/Sharing";
 import SigninSection from "./settings/Signin";
 import { SETTINGS_SECTIONS, useSettings } from "./settings/shared";
+import { useTitle } from "../components/title";
 
 const SECTION_KEYS = new Set(SETTINGS_SECTIONS.map((s) => s.key));
 
@@ -31,6 +32,7 @@ export default function Settings() {
   const { section } = useParams<{ section: string }>();
   const key = section && SECTION_KEYS.has(section) ? section : "general";
   const Content = SECTION_COMPONENTS[key];
+  useTitle(`Settings, ${SETTINGS_SECTIONS.find((s) => s.key === key)?.label ?? "General"}`);
 
   // Fetched here only for the "secrets cleared" notice, which applies
   // regardless of which section is open.

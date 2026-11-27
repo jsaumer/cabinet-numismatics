@@ -3,11 +3,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { AuthBrand } from "../auth/Brand";
+import { useTitle } from "../components/title";
 
 /** The setup page: the first person to present the setup code becomes the
  * admin (docs/specs/SPEC_0300.md section 6). Shown instead of the app for as
  * long as the instance is unclaimed. */
 export default function Setup() {
+  useTitle("Set up");
   const { refresh } = useAuth();
   const [code, setCode] = useState("");
   const [username, setUsername] = useState("");
@@ -113,7 +115,9 @@ export default function Setup() {
           </p>
           {error && (
             <p className="error">
-              {error}
+              {/* The countdown stays outside the alert, or every second
+                  would be read out. */}
+              <span role="alert">{error}</span>
               {waiting && ` Try again in ${retryAfter}s.`}
             </p>
           )}

@@ -8,6 +8,7 @@ import { applyTheme, initialTheme } from "../../components/theme";
 import ShareChecklist from "./ShareChecklist";
 import ShareGrid from "./ShareGrid";
 import SharePiece from "./SharePiece";
+import { useTitle } from "../../components/title";
 
 /** <meta name="robots"> while a share page is mounted, on top of nginx's own
  * X-Robots-Tag header on /s/ (proxy/nginx.conf) and the API's on every
@@ -54,6 +55,8 @@ export default function SharePage() {
   const [notFound, setNotFound] = useState(false);
 
   useNoIndex();
+  // The link's own name, which the visitor sees on the page anyway.
+  useTitle(notFound ? "Link not active" : manifest ? manifest.name : "");
 
   useEffect(() => {
     setManifest(null);

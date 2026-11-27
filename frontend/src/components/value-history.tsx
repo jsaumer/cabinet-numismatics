@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api, Estimate, ItemDetail, money, SourceKey, SourceStatus } from "../api";
 import { LineChart } from "./charts";
 import { chipName, Provenance, SOURCE_LABELS } from "./provenance";
+import { ErrorNote } from "./notes";
 
 /** The item page's Value history card: the estimates with their provenance,
  * a per-source filter, the automatic-source buttons, and the manual form.
@@ -248,7 +249,7 @@ export function ValueHistory({
           </span>
         </p>
       )}
-      {historyError && <p className="error">{historyError}</p>}
+      {historyError && <ErrorNote>{historyError}</ErrorNote>}
       <div className="estimate-form">
         {sources
           .filter((s) => s.available)
@@ -262,7 +263,7 @@ export function ValueHistory({
               {estimating === s.key ? "Estimating…" : SOURCE_LABELS[s.key] ?? s.name}
             </button>
           ))}
-        {estimateError && <span className="error">{estimateError}</span>}
+        {estimateError && <ErrorNote inline>{estimateError}</ErrorNote>}
         {needsNumistaRef && (
           <span>
             <Link to={`/items/${item.id}/edit`}>Find it on Numista</Link>:{" "}

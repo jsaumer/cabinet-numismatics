@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 
 import { api, ApiToken, AuditEntry, AuthSession, NewApiToken, TokenScope } from "../api";
 import { CloseIcon } from "./icons";
+import { ErrorNote, StatusNote } from "./notes";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "–");
 
@@ -121,8 +122,8 @@ function PasswordSection() {
             required
           />
         </label>
-        {error && <p className="error">{error}</p>}
-        {note && <p className="muted">{note}</p>}
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <StatusNote>{note}</StatusNote>
         <div className="estimate-form" style={{ marginTop: 0 }}>
           <button className="primary" type="submit" disabled={busy}>
             {busy ? "Changing…" : "Change password"}
@@ -183,8 +184,8 @@ function UsernameSection() {
             required
           />
         </label>
-        {error && <p className="error">{error}</p>}
-        {note && <p className="muted">{note}</p>}
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <StatusNote>{note}</StatusNote>
         <div className="estimate-form" style={{ marginTop: 0 }}>
           <button className="primary" type="submit" disabled={busy || !username.trim()}>
             {busy ? "Changing…" : "Change username"}
@@ -240,7 +241,7 @@ function SessionsSection() {
   return (
     <>
       <h3>Sessions</h3>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {!sessions ? (
         <p className="muted">Loading…</p>
       ) : (
@@ -350,7 +351,7 @@ function TokensSection() {
   return (
     <>
       <h3>API tokens</h3>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {created && (
         <div className="estimate-form" style={{ flexDirection: "column", alignItems: "stretch" }}>
           <p>
@@ -479,7 +480,7 @@ function AuditSection() {
   return (
     <>
       <h3>Audit log</h3>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {rows.length === 0 && !busy ? (
         <p className="muted">Nothing recorded yet.</p>
       ) : (
