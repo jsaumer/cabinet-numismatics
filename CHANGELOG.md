@@ -8,6 +8,15 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+### Changed
+
+- **The roadmap is a short page** (about 200 lines, from 1,450): what is
+  left before 1.0, what might come after, what was cut and why, and one
+  line per release. The feature list it used to repeat is
+  [features.md](docs/features.md); the history is this changelog.
+
 ## [0.43.0] - 2026-11-27
 
 The first-run pass from the 1.0 checklist: what a new owner meets on the
