@@ -108,7 +108,9 @@ scripts/                 backup.sh, restore.sh, seed_demo.py
   not require a running database (in-memory SQLite, every outbound call
   mocked). CI (`.github/workflows/ci.yml`) runs ruff + pytest on 3.10/3.15, a
   frontend typecheck, the smoke script against the stack on a native arm64
-  runner (v0.40.0), and a compose build/migrate/smoke job that drives the
+  runner (v0.40.0), an upgrade job (from v0.29.1, and from the newest
+  release and v0.30.0 with the old release's own archive restored in the
+  app: `scripts/ci/upgrade-restore-test.sh`), and a compose build/migrate/smoke job that drives the
   API with curl (smoke test, backup → restore drill) and the pages with
   Playwright (`frontend/e2e/`, `npm run e2e` against a running stack,
   `BASE_URL` for another host). When an endpoint's or a page's behavior
@@ -226,6 +228,13 @@ rules that bite most often:
   docs/api.md (statuses, error bodies, environment variables, container
   commands, archives, exports, upgrades, share links, metrics). Read it
   before changing any of those; the contract check sees almost none of it.
+- **The web interface carries its release** (after v0.41.0):
+  `frontend/vite.config.ts` bakes in the version from
+  `backend/pyproject.toml`, `src/version.ts` is its one reader, and a
+  notice shows on every page when `/api/health` reports another. The
+  version still lives in one file. The web app manifest
+  (`public/manifest.webmanifest`) has no service worker behind it, on
+  purpose. See "Small items before 1.0" in the implementation notes.
 - A share link shows no value from `share.PRIVATE_SOURCES` (Numista and
   PCGS: both licenses keep their data from third parties), and every page
   carries PCGS's credit once anything from PCGS is held

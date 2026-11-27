@@ -253,6 +253,15 @@ smoke() {
   test "$(status_of -H 'Host: elsewhere.example' "$BASE/api/health")" = 421
   curl -s -H 'Host: elsewhere.example' -o "$STATE_DIR/wrong-host.html" "$BASE/"
   grep -q 'PUBLIC_ORIGINS' "$STATE_DIR/wrong-host.html"
+  # the web app manifest, served with the type nginx's own list lacks
+  test "$(curl -s -o /dev/null -w '%{content_type}' "$BASE/manifest.webmanifest")" = "application/manifest+json"
+  test "$(status_of "$BASE/icon-192.png")" = 200
+  # the page was built knowing the release the backend reports, which is
+  # what lets it say when the two images are on different versions
+  version=$(adminf "$BASE/api/health" | field version)
+  app_js=$(curl -fsS "$BASE/" | grep -o '/assets/index-[^"]*\.js' | head -1)
+  curl -fsS "$BASE$app_js" -o "$STATE_DIR/app.js"
+  grep -qF "$version" "$STATE_DIR/app.js"
   # sign-in and setup take at most 8 KiB, refused by nginx itself
   test "$(head -c 9216 /dev/zero | curl -s -o /dev/null -w '%{http_code}' \
     -X POST --data-binary @- "$BASE/api/auth/login")" = 413

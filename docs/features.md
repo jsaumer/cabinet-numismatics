@@ -207,6 +207,9 @@ most often use instead.
 - Three-container Compose stack, also published as versioned images on GHCR
   with a [Swarm stack file](../deploy/docker-stack.yaml); an OpenAPI schema at
   `/api/openapi.json`. The backend applies its own migrations on startup.
+- Installs as an app from the browser ("Add to Home Screen" on a phone,
+  "Install" on a desktop) where it is served over HTTPS; it still needs the
+  server, nothing works offline.
 - Responsive UI for phone/tablet, **dark by default** with a light theme on
   the header toggle, and **four color themes** (Bronze, the default;
   Silver; Album; Ledger) chosen in Settings → General, saved on the server

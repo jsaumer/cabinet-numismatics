@@ -492,10 +492,11 @@ docs/backup-restore.md. What a change here has to respect:
   folder and calls `restore.reset_memory()`. Real Postgres is covered by
   CI's in-app drill (after the restore.sh drill) and the Playwright restore
   test, which is last in `smoke.spec.ts` on purpose.
-- **Not covered** (as of v0.26.0; v0.26.1 met NFS live, and a v0.30.0
-  archive was restored by hand on the v0.39.0 build): NFS volumes, and an
-  archive from a genuinely older release in CI (the older-revision path
-  runs against a rewritten manifest). The
+- **Not covered** (as of v0.26.0; v0.26.1 met NFS live): NFS volumes. An
+  archive from a genuinely older release was restored by hand on the
+  v0.39.0 build and is in CI from the release after v0.41.0
+  (`scripts/ci/upgrade-restore-test.sh`, below under "Small items before
+  1.0"). The
   manifest isn't in `SHA256SUMS`, so verification catches corruption only.
 - nginx: `location /api/restore` (20g, `proxy_request_buffering off`, 60m)
   sits before `location /api/`; `RESTORE_MAX_GB` above 20 needs it raised.
@@ -3427,6 +3428,73 @@ supported way to start.
   marked as not checked. Keep that honesty when editing it.
 - **The database gets no `env_file`** in the source file any more: `.env`
   holds keys that have no business in the Postgres container.
+
+## Small items before 1.0 (after v0.41.0)
+
+Row 25 of the 1.0 checklist: five small things, no migration, no API
+change.
+
+- **`scripts/ci/upgrade-restore-test.sh [FROM_TAG]` starts from a published
+  release**, 0.30.0 or later (it claims the instance, which v0.29.1 can't
+  be; `upgrade-test.sh` keeps that step). It always pulls `FROM_TAG`, since
+  a local build may hold the `latest` tag, and tags its own build
+  `under-test` so the two can't be confused. `latest` is the default: the
+  newest stable release on the registry, which on a release's own pull
+  request is the one before it, so the script needs no version written
+  into it. CI runs it twice in the `upgrade` job (`latest`, then `0.30.0`),
+  each in its own project. The job's name still says v0.29.1 because the
+  ruleset on `main` requires a check by that name; a test pins it.
+- **What that script proves is what an old release wrote, not a fixture**:
+  the piece's Numista reference goes in as `1234` (0.30.0 stores it so) and
+  must read `N#1234` after the upgrade and again after the restore, which
+  is migration `0024` running both times; the share link made after the
+  archive must open after a restore of an archive from before `0022`. The
+  confirmation phrase is read from the inspection (`confirm_phrase`), never
+  assumed. An API call by cookie from curl needs the `Origin` header, a
+  `GET` included; without it the gate answers 403, which a check for 404
+  reads as "still there".
+- **The page knows its release.** `frontend/vite.config.ts` reads
+  `backend/pyproject.toml` and defines `__CABINET_VERSION__`; the build
+  fails if the file isn't there, so `frontend/Dockerfile` copies it to
+  `/backend/pyproject.toml` (the same `../backend` from `/src`) before
+  `npm run build`. `src/version.ts` is the one reader. `VersionNotice`
+  (in the signed-in shell) and Settings → About compare it with
+  `/api/health`'s `version`. A health answer with no version (anonymous, or
+  any caller during a restore) is not a mismatch. The release process
+  needs nothing new: the version still lives in one file.
+- **The manifest's type is added, not replaced.** nginx's `mime.types` has
+  no entry for `.webmanifest`. `proxy/nginx.conf` adds one in a `types`
+  block at the http level, where it joins the list the image's own
+  `nginx.conf` already included. The same block inside a `server` or a
+  `location` would replace the whole list there, and every script and
+  stylesheet would be served as `application/octet-stream`. The smoke
+  script checks the manifest's type, and Playwright loads the app from the
+  same build.
+- **The manifest's icons are `logo-tile.svg` rendered by
+  `scripts/theme_icons.py`** (rsvg-convert, in the container one-liner in
+  frontend/README.md). ImageMagick's own SVG reader drops the dashed
+  reeding, the inner ring, and the C; don't render the logo with it. The
+  tile's coin is at 78% scale, inside the safe zone a maskable icon needs,
+  so each file is listed for both purposes.
+- **No service worker, on purpose.** The manifest gives an installed
+  Cabinet a window and an icon. A service worker would cache what has to
+  come fresh from the server, and a stale page is exactly what the version
+  notice exists to catch.
+- **Where a sign-in lands is decided by the signed-in app's `/login`
+  route** (`AfterSignIn` in `App.tsx`), not by the sign-in page. The moment
+  a sign-in succeeds the signed-in routes render at `/login?next=...`, and
+  that route's redirect runs before the sign-in page's own `navigate(next)`;
+  it sent everyone to the dashboard until it read `next` itself. Both go
+  through `auth/next.ts`'s `safeNext`, which never follows an address
+  outside the app.
+- **`httpx2` is a test dependency only** (`[dev]`, marked
+  `python_version >= '3.11'`: it has no release for 3.10). Starlette's test
+  client picks it over `httpx` by itself. The app's own outbound calls,
+  and every `httpx.MockTransport` in the tests, stay on `httpx`, which is
+  what the image's lockfile holds. `test_the_test_client_runs_on_httpx2`
+  imports the test client in a fresh interpreter with warnings as errors.
+  On 3.10 the suite still warns; that ends when 3.10 leaves the matrix,
+  which also means changing the ruleset's required check names.
 
 ## Releases
 

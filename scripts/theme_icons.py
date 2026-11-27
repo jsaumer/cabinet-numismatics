@@ -6,6 +6,10 @@ frontend/public/logo-<theme>.svg, plus favicon-<theme>.ico (16, 32, 48, and
 shows before the app has loaded, and what the README and a Homepage tile
 link to. The theme keys must match frontend/src/themes.ts.
 
+Also the two icons the web app manifest names (icon-192.png, icon-512.png),
+from logo-tile.svg: the Bronze coin on its dark tile, small enough inside it
+to survive a round or squircle mask on a phone's home screen.
+
 Needs rsvg-convert and ImageMagick; the one-liner in frontend/README.md runs
 it in a throwaway Alpine container.
 """
@@ -18,6 +22,7 @@ from pathlib import Path
 
 PUBLIC = Path(__file__).resolve().parents[1] / "frontend" / "public"
 SIZES = (16, 32, 48, 64)
+APP_ICON_SIZES = (192, 512)
 
 # rim, reeding, face, inner ring, the C
 THEMES = {
@@ -55,6 +60,15 @@ def main() -> None:
                 pngs.append(str(png))
             subprocess.run(["magick", *pngs, str(PUBLIC / f"favicon-{theme}.ico")], check=True)
         print(f"logo-{theme}.svg, favicon-{theme}.ico")
+    for size in APP_ICON_SIZES:
+        png = PUBLIC / f"icon-{size}.png"
+        subprocess.run(
+            ["rsvg-convert", "-w", str(size), "-h", str(size), str(PUBLIC / "logo-tile.svg"), "-o", str(png)],
+            check=True,
+        )
+        # No timestamps or other text chunks: the file is the same every run.
+        subprocess.run(["magick", str(png), "-strip", str(png)], check=True)
+        print(png.name)
 
 
 if __name__ == "__main__":

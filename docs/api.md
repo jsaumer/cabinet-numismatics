@@ -1700,7 +1700,8 @@ applied), `ahead` (the database was migrated by a newer build), or `unknown`
 chain (`cabinet_auth`, revision `a0001` onward). `documents` says whether attached documents can be
 stored: `ok`, `not_mounted` (`DOCUMENT_DIR` isn't a mounted volume, so
 uploads are refused), `unwritable`, or `inside_photos`. Settings → About
-displays both.
+displays both. The web interface compares `version` with the release it was
+built from and says so on every page when they differ.
 
 ## Conventions
 

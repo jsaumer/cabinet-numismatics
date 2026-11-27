@@ -26,7 +26,11 @@ Run in `frontend/`, after `npm ci` (which installs exactly what
 ## Layout
 
 ```
-index.html            the shell: data-theme="dark", favicon and touch icon
+index.html            the shell: data-theme="dark", favicon, touch icon, and
+                      the web app manifest's link
+vite.config.ts        also bakes in the release's version (__CABINET_VERSION__,
+                      from ../backend/pyproject.toml); see "The build's
+                      version" below
 public/               served at the site root, copied into dist/ as is
   logo.svg              the logo in Bronze (README, and the tab icon before the
                         app loads)
@@ -36,6 +40,9 @@ public/               served at the site root, copied into dist/ as is
                         below
   logo-512.png          for dashboards such as a Homepage tile
   apple-touch-icon.png  iOS home-screen icon
+  manifest.webmanifest  the web app manifest: name, colors, standalone display
+  icon-192.png,         the icons it names (the coin on its tile, sized to
+  icon-512.png          survive a round mask), written by scripts/theme_icons.py
   logo-tile.svg         the logo on its tile background, the source of the PNGs
 src/
   main.tsx, App.tsx   entry; the boot gate (setup/sign-in/restoring/signed in),
@@ -61,7 +68,11 @@ src/
                       first when it needs to), Brand.tsx (the logo and name
                       above the setup, sign-in, and boot screens),
                       failedNotice.ts (carries the
-                      failed-sign-ins count from the sign-in page to the app)
+                      failed-sign-ins count from the sign-in page to the app),
+                      next.ts (safeNext: the one check of a `next` address,
+                      used by the sign-in page and by the signed-in app's
+                      /login route, which is the one that decides where a
+                      sign-in lands)
   dashboard/          the customizable dashboard: registry.tsx (every widget
                       type, its catalog entry, default size and options),
                       widgets/ (one file per group, including showcase.tsx:
@@ -126,6 +137,8 @@ src/
                         its own pages (v0.39.0); the sales log
     data-credits.tsx    the credit a data source's terms ask for, at the
                         foot of every signed-in page (PCGS, v0.39.0)
+    version-notice.tsx  the notice at the top of every signed-in page when
+                        the page and the server are different releases
     documents.tsx, duplicates.tsx, lookup.tsx
                         attached documents; the duplicate warning; outbound
                         lookup links (eBay sold, Photograde, CoinFacts, and
@@ -429,6 +442,19 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   `unreachable` state shows a waiting screen that retries. The collection
   list's keys move the selection only on a wide screen, and Enter is taken
   only from the page itself or the selected row.
+- **The build's version.** `vite.config.ts` reads the version from
+  `../backend/pyproject.toml` (the Dockerfile copies the file to the same
+  relative place) and defines `__CABINET_VERSION__`; `src/version.ts`
+  exports it as `BUILD_VERSION` with `versionsDiffer(server)`. Read the
+  version through that module, never the global. `VersionNotice` asks
+  `/api/health` when the app loads and whenever the tab comes back into
+  view, and Settings → About shows both versions. An answer with no
+  version (anonymous, or during a restore) is never a mismatch.
+- **The web app manifest** is `public/manifest.webmanifest`, linked from
+  `index.html`; nginx serves it as `application/manifest+json`
+  (`proxy/nginx.conf` adds the type). There is no service worker and
+  nothing is cached for offline use: the manifest only gives an installed
+  Cabinet its own window, name, and icon.
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 

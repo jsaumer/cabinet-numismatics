@@ -48,7 +48,10 @@ baked in), so `docker compose up --build` needs no host Node install. It serves
 the frontend and photo files directly, and proxies `/api/` to the backend. The
 built frontend includes what is in `frontend/public`, so the logo and icons
 are served at `/logo.svg`, `/logo-512.png`, `/favicon.ico`, and
-`/apple-touch-icon.png`. `client_max_body_size` is 25 MB for photo and
+`/apple-touch-icon.png`, and the web app manifest at `/manifest.webmanifest`
+(with `/icon-192.png` and `/icon-512.png`). The page is built knowing its
+release (the version in `backend/pyproject.toml`), and says so when
+`/api/health` reports another. `client_max_body_size` is 25 MB for photo and
 document uploads, and 1 GB under `/api/imports` (an OpenNumismat file carries
 its photos); `/api/backup*` and `/api/imports` get a 30-minute read timeout.
 `/api/restore` has a location of its own: 20 GB bodies (an uploaded archive

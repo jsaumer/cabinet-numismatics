@@ -4,6 +4,7 @@ asks, so its published port must bind to loopback alone. The stack's own
 port is published the way the product publishes it; the mock is not the
 product. Also: the host scripts CI could not otherwise see failing."""
 
+import json
 import os
 import re
 import shutil
@@ -264,3 +265,71 @@ def test_every_shell_script_is_committed_executable():
             scripts[path] = mode
     assert "scripts/ci/quick-start-test.sh" in scripts
     assert {path for path, mode in scripts.items() if mode != "100755"} == set()
+
+
+def test_the_upgrade_job_starts_from_three_releases():
+    """One job, three starting points: v0.29.1 (before sign-in), the newest
+    published release, and v0.30.0 (the oldest whose archives restore), the
+    last two each restoring the old release's own archive in the app. The
+    job's name is one of the checks the ruleset on main requires, so it
+    stays as it is unless the ruleset changes with it."""
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load((REPO / ".github" / "workflows" / "ci.yml").read_text("utf-8"))
+    job = workflow["jobs"]["upgrade"]
+    assert job["name"] == "Upgrade test (v0.29.1 -> this commit)"
+    runs = [step.get("run", "").strip() for step in job["steps"]]
+    assert "scripts/ci/upgrade-test.sh" in runs
+    assert "scripts/ci/upgrade-restore-test.sh latest" in runs
+    assert "scripts/ci/upgrade-restore-test.sh 0.30.0" in runs
+    script = (REPO / "scripts" / "ci" / "upgrade-restore-test.sh").read_text(encoding="utf-8")
+    # The old release is pulled, never taken from a local build's tag, and
+    # the build under test is never tagged `latest`.
+    assert 'TAG="$FROM_TAG" compose pull' in script
+    assert 'TAG="$BUILD_TAG" compose up --build -d' in script
+    # The phrase comes from the inspection, not from an assumption.
+    assert "confirm_phrase" in script
+
+
+def _png_size(path: Path) -> tuple[int, int]:
+    header = path.read_bytes()[:24]
+    assert header[:8] == b"\x89PNG\r\n\x1a\n" and header[12:16] == b"IHDR", path.name
+    return int.from_bytes(header[16:20], "big"), int.from_bytes(header[20:24], "big")
+
+
+def test_the_web_app_manifest_names_files_that_exist():
+    """ "Add to Home Screen" opens Cabinet in a window of its own: the page
+    links a manifest, nginx serves it with the manifest type (its own list
+    has none for the extension), and every icon it names is in public/ at
+    the size it says, in a size for each of the two a phone asks for."""
+    public = REPO / "frontend" / "public"
+    manifest = json.loads((public / "manifest.webmanifest").read_text(encoding="utf-8"))
+    assert manifest["display"] == "standalone"
+    assert manifest["start_url"].startswith(manifest["scope"])
+    sizes = set()
+    for icon in manifest["icons"]:
+        assert icon["src"].startswith("/") and icon["type"] == "image/png"
+        width, height = _png_size(public / icon["src"].lstrip("/"))
+        assert icon["sizes"] == f"{width}x{height}", icon
+        sizes.add((icon["sizes"], icon["purpose"]))
+    for size in ("192x192", "512x512"):
+        assert (size, "any") in sizes and (size, "maskable") in sizes
+    index = (REPO / "frontend" / "index.html").read_text(encoding="utf-8")
+    assert '<link rel="manifest" href="/manifest.webmanifest" />' in index
+    conf = (REPO / "proxy" / "nginx.conf").read_text(encoding="utf-8")
+    assert "application/manifest+json webmanifest;" in conf
+
+
+def test_the_page_is_built_knowing_its_release():
+    """The web interface carries the version it was built from, so it can
+    say when the backend is another release (one image's tag moved and not
+    the other's). The version is read from the backend's pyproject.toml, the
+    one place it is written, in a local build and in the image's alike."""
+    config = (REPO / "frontend" / "vite.config.ts").read_text(encoding="utf-8")
+    assert '"../backend/pyproject.toml"' in config and "__CABINET_VERSION__" in config
+    dockerfile = (REPO / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+    copy = dockerfile.index("COPY backend/pyproject.toml /backend/pyproject.toml")
+    assert copy < dockerfile.index("RUN npm run build")
+    ignored = (REPO / ".dockerignore").read_text(encoding="utf-8").split()
+    assert "backend" not in ignored and "backend/pyproject.toml" not in ignored
+    version = (REPO / "frontend" / "src" / "version.ts").read_text(encoding="utf-8")
+    assert "__CABINET_VERSION__" in version
