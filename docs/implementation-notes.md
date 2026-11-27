@@ -3413,6 +3413,12 @@ supported way to start.
   nothing (use its `never`), and under `pipefail` a writer piped into
   `grep -q` dies of SIGPIPE on a match, so output goes to a file and the
   file is searched.
+- **A new script needs its executable bit set in git, not on disk.** This
+  repository has `core.fileMode` off (it came from a Windows machine), so
+  `chmod +x` never reaches a commit: use `git update-index --chmod=+x
+  <path>`. The quick-start script's first CI run failed with "Permission
+  denied" for exactly this; `test_every_shell_script_is_committed_executable`
+  now reads the modes from git's index.
 - **A new setup code is generated on every start until the instance is
   claimed**, so a script (or a person) must read it after the last
   restart, never before.

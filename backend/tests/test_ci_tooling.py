@@ -239,3 +239,28 @@ def test_a_wrong_address_gets_a_page_and_nothing_of_the_app():
     assert "PUBLIC_ORIGINS" in page and "ALLOWED_HOSTS" in page
     assert "Content-Security-Policy \"default-src 'none'\"" in block
     assert 'Cache-Control "no-store"' in block
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_every_shell_script_is_committed_executable():
+    """CI and the docs run the scripts under scripts/ by path. The mode that
+    counts is the one in git's index, not the one on disk: this repository
+    came from a Windows machine with `core.fileMode` off, where a `chmod`
+    never reaches a commit (use `git update-index --chmod=+x`). A script
+    committed 100644 fails its job with "Permission denied" before its first
+    line. (The images' own scripts are made executable by their Dockerfiles.)"""
+    listed = subprocess.run(
+        ["git", "ls-files", "-s", "--", "scripts"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    if listed.returncode != 0 or not listed.stdout.strip():
+        pytest.skip("not a git checkout")
+    scripts = {}
+    for line in listed.stdout.splitlines():
+        mode, _hash, _stage, path = line.split(maxsplit=3)
+        if path.endswith(".sh"):
+            scripts[path] = mode
+    assert "scripts/ci/quick-start-test.sh" in scripts
+    assert {path for path, mode in scripts.items() if mode != "100755"} == set()
