@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { certLookupUrl, ItemDetail, money, photoUrl, PRIORITY_LABELS } from "../api";
 import { packagingLine, setKind, TypeIcon, typeBadge } from "./item-types";
 import { Lightbox } from "./photos";
-import { latestBySource, timeSince } from "./provenance";
+import { chipName, timeSince } from "./provenance";
 
 /** The top of the item page: the piece itself, large, and the handful of facts
  * worth reading before anything else. The photos card below still manages
@@ -17,8 +17,9 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
     item.photos.findIndex((p) => p.is_primary),
   );
   const photo = item.photos[primary];
-  const sourceValues = latestBySource(item.estimates);
-  const latest = item.estimates[0] ?? null;
+  // One per source, newest first, so the first is the newest of all.
+  const sourceValues = item.latest_estimates;
+  const latest = sourceValues[0] ?? null;
   const cost = item.cost_basis;
   // Only comparable in one currency: nothing is converted here.
   const gain =
@@ -150,9 +151,9 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
         )}
         {sourceValues.length > 1 && (
           <div className="chip-row">
-            {sourceValues.map(([key, est]) => (
-              <span key={key} className="chip">
-                {key}: {money(est.estimated_value, est.currency)}{" "}
+            {sourceValues.map((est) => (
+              <span key={est.source_key} className="chip">
+                {chipName(est)}: {money(est.estimated_value, est.currency)}{" "}
                 <span className="muted">({timeSince(est.fetched_at)})</span>
               </span>
             ))}

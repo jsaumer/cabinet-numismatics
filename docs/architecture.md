@@ -204,7 +204,10 @@ app's Settings page and stored in the database.
 values and fixes the container paths itself: `PHOTO_DIR=/data/photos`,
 `BACKUP_DIR=/data/backups`, `DOCUMENT_DIR=/data/documents`, and
 `SECRET_KEY_FILE=/data/state/secret.key` on the private `backend_state`
-volume, used when `SECRET_KEY` is unset. Change where data lives by changing
+volume, used when `SECRET_KEY` is unset. That variable differs from the
+other `*_FILE` ones: `BACKUP_KEY_FILE`, `SETUP_CODE_FILE`, and `SSO_CA_FILE`
+name a file Cabinet only ever reads, while `SECRET_KEY_FILE` is read when
+the file exists and written, with a generated key, when it doesn't. Change where data lives by changing
 the mounts, not these. See [security.md](security.md) for key management and
 rotation.
 

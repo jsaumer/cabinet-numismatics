@@ -71,7 +71,7 @@ def test_numista_export_imports_each_set_as_one(client, tmp_path, builder):
         "Contents: N#9101 1985 S, N#9102 1985 S, N#9103 1985 S, N#9104 1985 S, N#9105 1985 S\n"
         "Proof issue\nOuter box a little worn"
     )
-    assert proof["catalog_refs"] == [] and proof["estimates"] == []
+    assert proof["catalog_refs"] == [] and proof["latest_estimates"] == []
     specimen = sets["Specimen Set"]
     assert (specimen["strike"], specimen["country"], specimen["year"]) == (
         "specimen",

@@ -417,6 +417,26 @@ assert [i['id'] for i in json.load(sys.stdin)['items']] == ['$one']
     -H 'Content-Type: application/json' -d '{"estimated_value": 5, "source": "pcgs: dealer said"}')" = 422
   test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" -X POST "$BASE/api/items/$one/estimates" \
     -H 'Content-Type: application/json' -d '{"estimated_value": 5, "source": "PCGS price guide"}')" = 201
+  # the item carries its newest estimate per source; the history and the edit
+  # log are pages (v0.39.0)
+  apif "$BASE/api/items/$one" | "$PY" -c '
+import json, sys
+item = json.load(sys.stdin)
+assert "estimates" not in item, list(item)
+assert [(e["source_key"], e["source"]) for e in item["latest_estimates"]] == [("manual", "PCGS price guide")], item["latest_estimates"]
+'
+  apif "$BASE/api/items/$one/estimates?source=manual&limit=1" | "$PY" -c '
+import json, sys
+page = json.load(sys.stdin)
+assert (page["total"], page["limit"], page["offset"], len(page["items"])) == (1, 1, 0, 1), page
+'
+  apif "$BASE/api/items/$one/estimates?source=pcgs" | grep -q '"total":0'
+  test "$(status_of -H "Authorization: Bearer $WRITE_TOKEN" "$BASE/api/items/$one/estimates?source=moon")" = 422
+  apif "$BASE/api/items/$one/history?limit=1" | "$PY" -c '
+import json, sys
+page = json.load(sys.stdin)
+assert page["total"] >= 1 and len(page["items"]) == 1 and page["limit"] == 1, page
+'
   apif -X DELETE "$BASE/api/items/$one" -o /dev/null
   apif -X DELETE "$BASE/api/items/$two" -o /dev/null
 

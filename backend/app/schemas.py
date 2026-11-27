@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.services import calendars, refs
+from app.services import calendars, refs, sources
 
 ItemTypeName = Literal["coin", "note", "bullion", "mint_set"]
 ItemStatusName = Literal["owned", "sold", "wishlist"]
@@ -519,7 +519,8 @@ class PhotoOrder(BaseModel):
 # What a price source's own estimates begin with (`pricing.ADAPTER_NAMES`;
 # a test keeps the two equal). A typed-in value may not carry one of these
 # as its source, alone or before a colon: it would count as that source's.
-RESERVED_SOURCES = ("melt", "numista", "pcgs", "comps")
+RESERVED_SOURCES = sources.ADAPTERS
+SourceKey = Literal["melt", "numista", "pcgs", "comps", "manual"]
 
 
 class EstimateCreate(BaseModel):
@@ -551,6 +552,8 @@ class EstimateOut(BaseModel):
     id: uuid.UUID
     item_id: uuid.UUID
     source: str
+    # `source` is a sentence for people; this is the key to group by.
+    source_key: SourceKey
     estimated_value: float
     currency: str
     confidence: float | None
@@ -768,6 +771,24 @@ class EventOut(BaseModel):
     at: datetime
     action: str
     changes: dict | None
+
+
+class EstimatePage(BaseModel):
+    """A page of an item's estimate history, newest first."""
+
+    items: list[EstimateOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class EventPage(BaseModel):
+    """A page of an item's edit history, newest first."""
+
+    items: list[EventOut]
+    total: int
+    limit: int
+    offset: int
 
 
 class ChecklistCreate(BaseModel):
@@ -1001,8 +1022,13 @@ class ItemListEntry(ItemOut):
 
 
 class ItemDetail(ItemOut):
+    """One item with what belongs to it. `latest_estimates` is the newest
+    estimate per source (at most five); the whole history, which grows with
+    every scheduled refresh, is `GET /api/items/{id}/estimates`, a page at a
+    time. The other lists only grow when the owner adds to them."""
+
     photos: list[PhotoOut] = []
-    estimates: list[EstimateOut] = []
+    latest_estimates: list[EstimateOut] = []
     comparables: list[ComparableOut] = []
     documents: list[DocumentOut] = []
 

@@ -55,7 +55,7 @@ def test_a_typed_value_cannot_use_a_price_sources_name(client, coin, source):
     )
     assert resp.status_code == 422, resp.text
     assert "price sources" in resp.text
-    assert client.get(f"/api/items/{coin['id']}/estimates").json() == []
+    assert client.get(f"/api/items/{coin['id']}/estimates").json()["items"] == []
 
 
 @pytest.mark.parametrize(

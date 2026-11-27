@@ -20,10 +20,11 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import httpx
+from sqlalchemy import and_, not_, or_
 from sqlalchemy.orm import Session
 
 from app.models import EstimateAttempt, Item, PriceEstimate, SourceCache, SpotPrice
-from app.services import alerts
+from app.services import alerts, sources
 from app.services.currency import Converter
 
 TROY_OUNCE_G = Decimal("31.1034768")
@@ -443,7 +444,7 @@ def melt_on_save(db: Session, item: Item) -> PriceEstimate | None:
 
 # Adapter registry. Sources are resolved lazily so each adapter module can
 # import this one for the shared contract without a circular import.
-ADAPTER_NAMES = ("melt", "numista", "pcgs", "comps")
+ADAPTER_NAMES = sources.ADAPTERS
 
 
 def get_adapter(name: str):
@@ -523,8 +524,17 @@ AVERAGEABLE_SOURCES = ("melt", "numista", "pcgs", "comps")  # pluggable sources 
 
 def source_key(source: str) -> str:
     """Reduce a free-text estimate `source` (e.g. "numista:N#123 XF") to its
-    adapter key ("numista"). Manual entries with no ":" pass through as-is."""
+    adapter key ("numista"). Manual entries with no ":" pass through as-is.
+    The API's `source_key` (`sources.key_of`) calls every typed-in value
+    `manual` instead; this one keeps each typed source apart for the blend."""
     return source.split(":", 1)[0]
+
+
+def source_is(key: str):
+    """A SQL condition: estimates whose `source_key` is `key`."""
+    if key in ADAPTER_NAMES:
+        return or_(PriceEstimate.source == key, PriceEstimate.source.like(f"{key}:%"))
+    return and_(*(not_(source_is(name)) for name in ADAPTER_NAMES))
 
 
 def resolve_display_value(

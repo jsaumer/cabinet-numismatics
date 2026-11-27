@@ -44,6 +44,7 @@ export default function ItemDetail({
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
   const [events, setEvents] = useState<ItemEvent[] | null>(null);
+  const [eventTotal, setEventTotal] = useState(0);
   const [sources, setSources] = useState<SourceStatus[]>([]);
   const [numistaSales, setNumistaSales] = useState(false);
   const [calendars, setCalendars] = useState<CalendarReference | null>(null);
@@ -66,9 +67,26 @@ export default function ItemDetail({
       .catch(() => setSources([]));
   }, []);
 
+  // The edit history comes a page at a time, newest first.
   const loadHistory = () => {
     if (!id) return;
-    api.itemHistory(id).then(setEvents).catch(() => setEvents([]));
+    api
+      .itemHistory(id)
+      .then((page) => {
+        setEvents(page.items);
+        setEventTotal(page.total);
+      })
+      .catch(() => setEvents([]));
+  };
+  const loadOlderHistory = () => {
+    if (!id || !events) return;
+    api
+      .itemHistory(id, events.length)
+      .then((page) => {
+        setEvents([...events, ...page.items]);
+        setEventTotal(page.total);
+      })
+      .catch(() => undefined);
   };
 
   const reload = useCallback(() => {
@@ -221,6 +239,16 @@ export default function ItemDetail({
           )}
         </div>
       ))}
+      {events && events.length < eventTotal && (
+        <p>
+          <button type="button" className="link-button" onClick={loadOlderHistory}>
+            Show older
+          </button>{" "}
+          <span className="muted">
+            {events.length} of {eventTotal} shown
+          </span>
+        </p>
+      )}
     </>
   );
 
@@ -349,6 +377,16 @@ export default function ItemDetail({
             )}
           </div>
         ))}
+        {events && events.length < eventTotal && (
+          <p>
+            <button type="button" className="link-button" onClick={loadOlderHistory}>
+              Show older
+            </button>{" "}
+            <span className="muted">
+              {events.length} of {eventTotal} shown
+            </span>
+          </p>
+        )}
       </details>
       </fieldset>
     </>

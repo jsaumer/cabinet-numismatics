@@ -96,11 +96,6 @@ def spec_table() -> dict[tuple[str, str], permissions.Declared]:
     return table
 
 
-# The current password in their bodies is the confirmation (see
-# routers/auth.py), and ending one's own session never asks.
-BODY_CONFIRMED = {("POST", "/api/auth/password"), ("POST", "/api/auth/username")}
-
-
 def test_every_operation_declares_what_the_spec_says():
     table = spec_table()
     ops = operations()
@@ -108,10 +103,7 @@ def test_every_operation_declares_what_the_spec_says():
     for method, path in ops:
         found = declared(endpoint_for(method, path))
         assert found is not None, f"{method} {path} declares no @permission"
-        want = table[(method, path)]
-        if (method, path) in BODY_CONFIRMED:
-            want = permissions.Declared(want.cls, want.metrics_ok, False)
-        assert found == want, (method, path)
+        assert found == table[(method, path)], (method, path)
 
 
 def test_class_counts():

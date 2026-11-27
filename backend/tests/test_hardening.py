@@ -450,18 +450,18 @@ def test_sending_the_same_numbers_back_is_not_an_edit(client):
     finally:
         db.close()
     before = client.get(f"/api/items/{item['id']}").json()
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
 
     numbers = ("weight_g", "fineness", "acquisition_price", "acquisition_fees", "diameter_mm")
     same = {key: before[key] for key in (*numbers, "spot_at_purchase")}
     assert client.patch(f"/api/items/{item['id']}", json=same).status_code == 200
     after = client.get(f"/api/items/{item['id']}").json()
-    assert client.get(f"/api/items/{item['id']}/history").json() == history
+    assert client.get(f"/api/items/{item['id']}/history").json()["items"] == history
     assert after["spot_at_purchase_source"] == "auto"
 
     # A real change is still recorded, with both values.
     client.patch(f"/api/items/{item['id']}", json={"weight_g": 31.2})
-    latest = client.get(f"/api/items/{item['id']}/history").json()[0]
+    latest = client.get(f"/api/items/{item['id']}/history").json()["items"][0]
     assert latest["changes"] == {"weight_g": [31.1035, 31.2]}
 
     # And the same holds for a bulk edit, which re-stamps what hangs off a field.

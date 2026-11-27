@@ -59,6 +59,60 @@ covers them. Error statuses and error bodies are outside it. The committed
 schema is written again with each release, and from v1.0.0 the tool that
 writes it refuses a breaking change unless the major version went up.
 
+### What else is promised
+
+Paths and fields are not all a script, a dashboard tile, or a deployment
+leans on. From v1.0.0 these hold within a major version too:
+
+| Surface | The promise |
+|---|---|
+| A next major version | There are no side-by-side versions: Cabinet is one install, and its clients are upgraded with it. A path or a field that a major version will remove is marked `deprecated` in the schema and named in the changelog at least one minor release before that major version. |
+| Success statuses | Covered: the `200`, `201`, or `204` an operation answers stays. |
+| Error statuses | `401` (not signed in), `403` (not allowed, or the password is wanted again), `404`, `429` with `Retry-After`, and `503` with `Retry-After` during a restore keep their meaning. Whether a particular refusal is `409` or `422` is not covered. |
+| Error bodies | `detail` is a sentence, or for a request that doesn't parse a list of `{loc, msg, type}`. The one addition is `reauth_required: true` beside `detail` on the `403` that wants the password again. The wording is for people. |
+| Objects without a schema | The keys this reference documents inside `details`, `changes`, `counts`, `fields`, and a widget's `options` are stable. A key it doesn't mention may change. The check above cannot see inside them, so this rests on the policy alone. |
+| Money | An amount is a JSON number with two decimal places, beside its `currency`. A currency with three decimal places loses its last digit. |
+| Permissions | A route never needs a higher class than it does now, and a token's scope never loses a route. A token keeps the lifetime it was issued with; longer lifetimes may be offered, shorter ones never imposed on a token that exists. |
+| Environment variables | The names and meanings in [architecture.md](architecture.md#configuration) are stable. No release within a major version adds a variable that must be set. A renamed variable keeps answering to its old name until the next major version. |
+| Container commands | The names, arguments, and exit status (zero for success) of `python -m app.cli` commands, and of `scripts/backup.sh` and `scripts/restore.sh`. What they print is for people, except the key `backup-key new` prints, which is `age-keygen`'s format. |
+| Archives | Any release restores an archive written by the same or an earlier release, back to v0.30.0 (the first encrypted ones). A build refuses an archive format newer than itself. |
+| Exports | Columns of the CSV and Excel export are only added, never renamed or removed, so an export from an earlier release imports into a later one. |
+| Upgrades | Any release from v0.30.0 on upgrades to any later one by changing the image tag; the backend migrates on startup. Going back means restoring a backup. |
+| Share links | A link that was handed out keeps opening the same thing until it is revoked or regenerated. |
+| Metrics and alerts | The names and labels of the `cabinet_*` metrics, and the keys of the generic webhook message. |
+| Images | The two image names, and a version tag never moving once pushed. |
+
+Not covered: the web interface and its addresses (other than a share
+link), cookie names, log lines, and the database schema, which belongs to
+the migrations.
+
+### What today's item fields will keep meaning
+
+Richer records (a tree of storage locations, several purchases or sales
+per piece, a pedigree) may arrive in any release as additions. When they
+do, the fields that exist today stay, and stay true:
+
+- **`storage_location` is always the place in the owner's words.** A
+  location chosen from a tree would arrive as its own optional field, and
+  the server would write that location's path into `storage_location`, so a
+  client that reads only the text keeps working.
+- **The acquisition fields are the row's totals.** With several purchase
+  records, `acquisition_price` and `acquisition_fees` are their sums,
+  `acquisition_date` the earliest, and `acquisition_source` the first
+  record's. A piece with one purchase reads exactly as it does now, and
+  `cost_basis` and every gain keep their meaning.
+- **The sale fields describe the whole row leaving.** Selling part of a
+  quantity means splitting the row first, as it does today.
+- **A pedigree is information only** and never enters cost basis.
+- **`status` may gain values** (a gift, a trade, a loss), like any field
+  that lists its values.
+
+Amounts are per row, not per piece: `acquisition_price`, `sold_price`,
+every estimate, and `target_price` (which is compared with the row's newest
+estimate) are for the whole quantity. Two things are per piece: `weight_g`
+(for a set, the set's precious metal) and a logged sale's `price` in the
+sales log.
+
 Renamed for v0.30.0, the one pass made before 1.0:
 
 | Before | Now |
@@ -66,6 +120,15 @@ Renamed for v0.30.0, the one pass made before 1.0:
 | `POST /api/items/import` | removed; `POST /api/imports` then `.../{upload_id}/run` (the `cabinet` format) is the one import path |
 | `POST /api/estimates/refresh-melt` | `POST /api/estimates/refresh?source=melt` |
 | `POST /api/items/{id}/estimate?source=` | `POST /api/items/{id}/estimates/auto?source=` |
+
+Changed for v0.39.0, so an item's answer stops growing with every scheduled
+refresh:
+
+| Before | Now |
+|--------|-----|
+| `estimates` on `GET /api/items/{id}`: the whole history | `latest_estimates`: the newest estimate per source, at most five |
+| `GET /api/items/{id}/estimates` answers an array | a page: `{items, total, limit, offset}`, with `limit`, `offset`, and `source` |
+| `GET /api/items/{id}/history` answers an array | a page, the same shape, with `limit` and `offset` |
 
 ## Sign-in and permissions
 
@@ -206,10 +269,10 @@ answers `503` with `Retry-After` instead.
 | `POST`   | `/api/items`              | Create an item                      |
 | `GET`    | `/api/items/export.csv`   | Export the collection as CSV        |
 | `GET`    | `/api/items/export.xlsx`  | Export the collection as Excel      |
-| `GET`    | `/api/items/{id}`         | Get one item with photos/estimates  |
+| `GET`    | `/api/items/{id}`         | Get one item with its photos, newest estimate per source, sales log, and documents |
 | `PATCH`  | `/api/items/{id}`         | Update fields on an item            |
 | `POST`   | `/api/items/{id}/clone`   | Duplicate an item (not its photos)  |
-| `GET`    | `/api/items/{id}/history` | Edit history (created/updated diffs)|
+| `GET`    | `/api/items/{id}/history` | Edit history (created/updated diffs), newest first, a page at a time: `{items, total, limit, offset}`; `limit` (default 100, 1–500), `offset` |
 | `POST`   | `/api/items/bulk`         | Bulk field updates + add/remove tags|
 | `DELETE` | `/api/items/{id}`         | Move an item to the trash; `?permanent=true` (or an item already there) deletes it for good |
 | `POST`   | `/api/items/{id}/restore` | Take an item out of the trash       |
@@ -509,7 +572,7 @@ aren't shown, and deletes the old files.
 | Method | Path                          | Purpose                                  |
 |--------|-------------------------------|------------------------------------------|
 | `POST` | `/api/items/{id}/estimates`   | Record a manually researched value       |
-| `GET`  | `/api/items/{id}/estimates`   | List estimate history for an item        |
+| `GET`  | `/api/items/{id}/estimates`   | An item's estimate history, newest first, a page at a time |
 | `DELETE` | `/api/items/{id}/estimates/{estimate_id}` | Delete a value that was typed in |
 | `POST` | `/api/items/{id}/estimates/auto` | Produce an automatic estimate (`?source=`) |
 | `POST` | `/api/estimates/refresh`      | Re-run one source's stale estimates now (`?source=melt`) |
@@ -525,8 +588,23 @@ fine and "pcgs: dealer said" is not. The one exception is
 a value typed in by hand, which `DELETE .../estimates/{estimate_id}` removes
 (`204`): a mistake shouldn't have to stay in the chart. An estimate from a
 price source (`melt`, `numista`, `pcgs`, `comps`) is `409`, and one that
-belongs to another item is `404`. Every estimate in a
-response carries `id`, `item_id`, `source`, `estimated_value`, `currency`,
+belongs to another item is `404`.
+
+**The history and the item (v0.39.0).** `GET .../estimates` answers
+`{items, total, limit, offset}`: `limit` (default 100, 1–500), `offset`,
+and `source` to narrow it to one source's (`melt`, `numista`, `pcgs`,
+`comps`, or `manual` for every typed-in value; anything else is `422`).
+The item itself (`GET /api/items/{id}`) carries only `latest_estimates`,
+the newest estimate per source, newest first, at most five: scheduled
+refreshes add a row per source every week, and an answer fetched on every
+selection shouldn't grow with them. The item's other lists (`photos`,
+`comparables`, `documents`) hold only what was added by hand and come
+whole.
+
+Every estimate in a
+response carries `id`, `item_id`, `source`, `source_key` (`melt`, `numista`,
+`pcgs`, `comps`, or `manual`: the key to group by, where `source` is a
+sentence for people such as `numista:N#1234 XF`), `estimated_value`, `currency`,
 `confidence`, `sample_size`, `fetched_at`, and `details`: the provenance an
 automatic source recorded (see [price-sources.md](price-sources.md)),
 `{"note": …}` for a manual entry given a note, or `null`.
@@ -1233,10 +1311,12 @@ auction archives that often give its sale price and date; with `show_tags`,
 `tags` (names); with `show_notes`, `notes`;
 with `show_values`, `value`: the list's shown value (the `value_strategy`
 setting) in the display currency, `{"amount", "currency"}`, worked out
-without any estimate carrying Numista's data (a Numista estimate, or a
-comps median that used a sale fetched from Numista), since Numista's API
-license lets an individual keep its data for a private project but not
-show it to third parties (section 8.4); `null` when nothing else is left,
+without any estimate carrying Numista's or PCGS's data (an estimate from
+either, or a comps median that used a sale fetched from Numista), since
+Numista's API license lets an individual keep its data for a private
+project but not show it to third parties (section 8.4), and PCGS's terms,
+as far as they can be read without an account, forbid public use (v0.39.0;
+see [data-sources.md](data-sources.md)); `null` when nothing else is left,
 the piece has none, or it can't be converted from the cached exchange
 rates (a public route never fetches a rate). Never a cost, fee, gain, acquisition
 or sale field, the estimate's source or history, a storage location, a
@@ -1629,6 +1709,9 @@ displays both.
   saved as `USD`, anything else is 422.
 - **IDs** are UUIDs for items/photos/estimates/documents; sales, checklists,
   edit-history events, and reference tables use integers.
-- **Errors** follow a consistent JSON shape: `{ "detail": "..." }`, matching
-  FastAPI defaults, with appropriate HTTP status codes. The one addition is
-  `reauth_required: true` on a `403` that wants the password again.
+- **Errors** are JSON with a `detail`: a sentence for most refusals, and
+  for a request that doesn't parse (a `422` from validation) a list of
+  `{loc, msg, type}` naming each bad field. The one addition is
+  `reauth_required: true` on a `403` that wants the password again. Which
+  statuses are promised is under "What else is promised" in the stability
+  policy.

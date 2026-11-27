@@ -259,7 +259,8 @@ most often use instead.
   link can be made and every link answers not found. Each link chooses what
   it shows (photos, grades, tags, notes, the estimated value, and the cert
   number, each its own toggle); never a cost, gain, storage location,
-  document, serial number, or custom field. Shared photos carry no
+  document, serial number, or custom field, and never a value made from
+  Numista's or PCGS's data, whose terms keep it private. Shared photos carry no
   metadata, the same as every stored photo. The token is shown once and
   stored only as its hash, with a Regenerate for a lost link and a Revoke
   that kills it at once. See [docs/security.md](security.md).

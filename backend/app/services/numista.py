@@ -6,10 +6,11 @@ quotes it per grade bucket. The adapter resolves that chain: the item's
 item (year or ND, mint mark, replacement, references) and tried best first, and
 the item's grade is mapped onto Numista's seven buckets.
 
-Every upstream response is kept in `source_cache` (catalog data and prices
-for 7 days). The API license's personal-project exception (section 8.4) is
-what lets a self-hosted tool keep them at all, and 7 days is the limit
-section 8.3 sets for catalog metadata, applied here to everything. A stale
+Every upstream response is kept in `source_cache` and refreshed after 7
+days. The API license's personal-project exception (section 8.4) is what
+lets a self-hosted tool keep them, and it sets no time limit: the 7 days are
+Cabinet's own choice of freshness (section 8.3's seven days cover only the
+issuers, mints, and catalogues endpoints, which nothing here calls). A stale
 entry is preferred over a failed request, the same discipline spot prices
 and exchange rates use. The free plan allows 2,000 requests a month.
 
@@ -40,7 +41,7 @@ from app.services.pricing import (
 )
 
 API_ROOT = "https://api.numista.com/api/v3"
-CATALOG_TTL = timedelta(days=7)  # the licence caps catalogue caching at 7 days
+CATALOG_TTL = timedelta(days=7)  # Cabinet's choice; the license sets none for a personal project
 PRICE_TTL = timedelta(days=7)
 MAX_CANDIDATES = 4  # issues an estimate will try before giving up (one request each)
 

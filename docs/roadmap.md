@@ -40,7 +40,9 @@ two items left, in this order: "Add a run" and the Numista banknote mapping
 confirmed against a live account; then a README and quick-start pass,
 alongside whatever entering the rest of the collection turns up. The third,
 a CI check against a breaking OpenAPI change, shipped in v0.38.0, with the
-last input rules tightened beside it.
+last input rules tightened beside it; the four contract decisions that
+followed (what an item embeds, what today's fields will mean, the wider
+promise, and the third-party terms) are built for v0.39.0.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -946,6 +948,20 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   `0024`): a typed-in value can't use a price source's name as its source,
   `%` and `_` in a search are the characters typed, a tag is one whatever
   the capitals, and a Numista reference is stored in one form, `N#<digits>`.
+- ✔ The four contract decisions from the same review, proposed and
+  approved on 26 November 2026. **Built for v0.39.0**: an item carries its
+  newest estimate per source and the history is its own paged route (with
+  `source_key` on every estimate, and the edit history paged the same
+  way); today's storage and purchase fields are kept, with what they will
+  mean beside richer records written down; the wider promise (statuses,
+  error bodies, environment variables, container commands, archives,
+  exports, upgrades, share links, metrics) is in `api.md`; and the
+  third-party terms were read again: Numista's seven days turned out not
+  to apply to a personal project, a share link no longer shows a value
+  made from PCGS's data, and [data-sources.md](data-sources.md) says what
+  each service asks of the person whose key it is. Still the owner's:
+  reading PCGS's API agreement, and a question to Numista about catalog
+  facts on a share link.
 - ✔ A CI upgrade test: a database from an old release migrated to head.
   **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,
@@ -1046,8 +1062,9 @@ v0.26.0.
   put back; a journal on the state volume finishes an interrupted swap on
   the next start. Safety backups (`-prerestore`) sit outside the retention
   count, newest three kept. During the run everything but health and the
-  restore status answers 503, and health doesn't touch the database. Not
-  yet tried on NFS or with an archive from a genuinely older release; see
+  restore status answers 503, and health doesn't touch the database. An
+  archive from a genuinely older release (v0.30.0) was restored by hand on
+  the v0.39.0 build; NFS was first tried live in v0.26.1; see
   [backup-restore.md](backup-restore.md#restore-from-inside-the-app).
 - ✔ **P3: Wish-list depth** (M). A target price and a priority on wish-list
   items, a wish-list view sorted by either, the gap between target and the

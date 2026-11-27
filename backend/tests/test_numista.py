@@ -231,7 +231,7 @@ def test_refresh_source_estimates_ignores_a_fresher_manual_estimate(client, upst
     result = pricing.refresh_source_estimates(_session(), "numista", 7)
     assert result == {"updated": 1, "skipped": 0, "failed": 0}
 
-    history = client.get(f"/api/items/{item['id']}/estimates").json()
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     numista_entries = [h for h in history if h["source"].startswith("numista:")]
     assert len(numista_entries) == 2  # refreshed despite manual being the overall-latest
     assert numista_entries[0]["details"]["grade_used"] == "vf"  # scheduled rows carry it too

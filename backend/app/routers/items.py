@@ -25,7 +25,7 @@ from app.schemas import (
     YEAR_REQUIRED,
     BulkResult,
     BulkUpdate,
-    EventOut,
+    EventPage,
     ItemCreate,
     ItemDetail,
     ItemList,
@@ -1050,17 +1050,26 @@ def _sync_derived(item: Item, changed) -> None:
         item.spot_at_purchase_source = "manual" if item.spot_at_purchase is not None else None
 
 
-@router.get("/{item_id}/history", response_model=list[EventOut])
+@router.get("/{item_id}/history", response_model=EventPage)
 @permission("read")
-def item_history(item_id: uuid.UUID, db: Session = Depends(get_db)):
+def item_history(
+    item_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=1_000_000),
+    db: Session = Depends(get_db),
+):
+    """An item's edit history, newest first, a page at a time."""
     get_item_or_404(db, item_id)
-    return (
+    where = ItemEvent.item_id == item_id
+    total = db.execute(select(func.count()).select_from(ItemEvent).where(where)).scalar_one()
+    rows = (
         db.execute(
-            select(ItemEvent).where(ItemEvent.item_id == item_id).order_by(ItemEvent.id.desc())
+            select(ItemEvent).where(where).order_by(ItemEvent.id.desc()).limit(limit).offset(offset)
         )
         .scalars()
         .all()
     )
+    return EventPage(items=rows, total=total, limit=limit, offset=offset)
 
 
 @router.post("/bulk", response_model=BulkResult)

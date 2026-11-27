@@ -55,7 +55,7 @@ def test_melt_estimate(client, spot):
 
     # estimate is in the item's history like any other
     detail = client.get(f"/api/items/{item['id']}").json()
-    assert len(detail["estimates"]) == 1
+    assert len(detail["latest_estimates"]) == 1
 
 
 def test_melt_multiplies_by_quantity(client, spot):
@@ -220,7 +220,7 @@ def test_melt_on_save_adds_an_estimate_from_a_fresh_cache(client, spot):
     item = _create(client, {**SILVER, "denomination": "1/2 dollar"})
     assert spot["count"] == 1  # only the seed item's fetch; the save read the cache
 
-    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     assert len(history) == 1
     row = history[0]
     assert row["source"].startswith("melt:silver")
@@ -237,26 +237,30 @@ def test_melt_on_save_adds_an_estimate_from_a_fresh_cache(client, spot):
 
 def test_melt_on_save_skips_a_missing_or_stale_cache(client, spot, monkeypatch):
     empty = _create(client, SILVER)  # no cache at all yet
-    assert client.get(f"/api/items/{empty['id']}").json()["estimates"] == []
+    assert client.get(f"/api/items/{empty['id']}/estimates").json()["items"] == []
 
     _warm_cache(client, spot)
     monkeypatch.setattr(pricing, "CACHE_TTL", timedelta(0))  # the cache is now stale
     stale = _create(client, {**SILVER, "denomination": "1/2 dollar"})
-    assert client.get(f"/api/items/{stale['id']}").json()["estimates"] == []
+    assert client.get(f"/api/items/{stale['id']}/estimates").json()["items"] == []
 
 
 def test_melt_on_save_no_duplicate_on_an_unrelated_edit(client, spot):
     _warm_cache(client, spot)
     item = _create(client, {**SILVER, "denomination": "1/2 dollar"})
-    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 1
+    assert len(client.get(f"/api/items/{item['id']}/estimates").json()["items"]) == 1
 
     unrelated = client.patch(f"/api/items/{item['id']}", json={"notes": "album 3"})
     assert unrelated.status_code == 200
-    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 1  # no duplicate
+    assert (
+        len(client.get(f"/api/items/{item['id']}/estimates").json()["items"]) == 1
+    )  # no duplicate
 
     reweighed = client.patch(f"/api/items/{item['id']}", json={"weight_g": 30.0})
     assert reweighed.status_code == 200
-    assert len(client.get(f"/api/items/{item['id']}").json()["estimates"]) == 2  # inputs changed
+    assert (
+        len(client.get(f"/api/items/{item['id']}/estimates").json()["items"]) == 2
+    )  # inputs changed
 
 
 def _backdate_estimates(item_id, days=1):
@@ -288,7 +292,7 @@ def test_melt_on_save_never_buries_a_typed_in_value(client, spot):
 
     reweighed = client.patch(f"/api/items/{item['id']}", json={"weight_g": 30.0})
     assert reweighed.status_code == 200
-    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     assert [row["source"].split(":")[0] for row in history] == ["manual", "melt"]
     listed = client.get("/api/items", params={"q": "1/2 dollar"}).json()["items"][0]
     assert listed["latest_value"] == 5000
@@ -302,24 +306,24 @@ def test_melt_on_save_leaves_a_piece_with_only_a_typed_value_alone(client, spot)
 
     edited = client.patch(f"/api/items/{item['id']}", json={"storage_location": "Safe"})
     assert edited.status_code == 200
-    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     assert len(history) == 1 and history[0]["estimated_value"] == 500
 
 
 def test_melt_on_save_is_owned_pieces_only(client, spot):
     _warm_cache(client, spot)
     wishlist = _create(client, {**SILVER, "status": "wishlist"})
-    assert client.get(f"/api/items/{wishlist['id']}").json()["estimates"] == []
+    assert client.get(f"/api/items/{wishlist['id']}/estimates").json()["items"] == []
 
 
 def test_refresh_melt_takes_an_owned_piece_with_no_estimate(client, monkeypatch):
     monkeypatch.setattr(pricing, "fetch_spot_price", lambda metal: Decimal("1.0"))
     item = _create(client, SILVER)  # cache empty: no save-time estimate yet
-    assert client.get(f"/api/items/{item['id']}").json()["estimates"] == []
+    assert client.get(f"/api/items/{item['id']}/estimates").json()["items"] == []
 
     result = client.post("/api/estimates/refresh?source=melt").json()
     assert result == {"updated": 1, "skipped": 0, "failed": 0}
-    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     assert len(history) == 1 and history[0]["source"].startswith("melt:silver")
 
 
@@ -330,5 +334,5 @@ def test_refresh_melt_leaves_a_manual_latest_item_alone(client, monkeypatch):
 
     result = client.post("/api/estimates/refresh?source=melt").json()
     assert result == {"updated": 0, "skipped": 1, "failed": 0}
-    history = client.get(f"/api/items/{item['id']}").json()["estimates"]
+    history = client.get(f"/api/items/{item['id']}/estimates").json()["items"]
     assert len(history) == 1 and history[0]["source"] == "manual"

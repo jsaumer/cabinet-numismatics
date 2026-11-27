@@ -47,7 +47,7 @@ def test_upload_a_pdf(client):
 
     detail = client.get(f"/api/items/{item['id']}").json()
     assert [d["id"] for d in detail["documents"]] == [doc["id"]]
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
     assert history[0]["changes"] == {"document": [None, "Show receipt"]}
 
     thumb = client.get(f"/api/documents/{doc['id']}/thumb")

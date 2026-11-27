@@ -100,7 +100,7 @@ def test_physical_and_banknote_fields(client):
     assert client.get("/api/items", params={"strike": "restrike"}).status_code == 422
 
     client.patch(f"/api/items/{note['id']}", json={"serial_number": "B00000001"})
-    latest = client.get(f"/api/items/{note['id']}/history").json()[0]
+    latest = client.get(f"/api/items/{note['id']}/history").json()["items"][0]
     assert latest["changes"]["serial_number"] == ["A12345678*", "B00000001"]
 
 

@@ -50,14 +50,14 @@ def test_a_trashed_item_keeps_everything_and_comes_back(client):
     assert client.delete(f"/api/items/{item['id']}").status_code == 204
     detail = client.get(f"/api/items/{item['id']}").json()
     assert detail["deleted_at"] is not None
-    assert (len(detail["photos"]), len(detail["estimates"])) == (1, 1)
+    assert (len(detail["photos"]), len(detail["latest_estimates"])) == (1, 1)
     assert (len(detail["comparables"]), len(detail["documents"])) == (1, 1)
 
     resp = client.post(f"/api/items/{item['id']}/restore")
     assert resp.status_code == 200
     assert resp.json()["deleted_at"] is None
     assert client.get("/api/items").json()["total"] == 1
-    actions = [e["action"] for e in client.get(f"/api/items/{item['id']}/history").json()]
+    actions = [e["action"] for e in client.get(f"/api/items/{item['id']}/history").json()["items"]]
     assert actions[:2] == ["restored", "trashed"]
 
 

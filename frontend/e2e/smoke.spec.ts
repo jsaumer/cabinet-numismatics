@@ -76,6 +76,37 @@ test("record a value by hand", async ({ page }) => {
   await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
 });
 
+test("a long value history comes a page at a time", async ({ page }) => {
+  // The item carries only its newest value per source; the history is its
+  // own route, 100 rows at a time (v0.39.0).
+  await page.goto(itemUrl);
+  const origin = { Origin: new URL(page.url()).origin };
+  const made = await page.request.post("/api/items", {
+    headers: origin,
+    data: { type: "coin", country: "Long history", denomination: "1 page", year: 2026 },
+  });
+  expect(made.status()).toBe(201);
+  const id = (await made.json()).id as string;
+  for (let n = 1; n <= 103; n += 1) {
+    const added = await page.request.post(`/api/items/${id}/estimates`, {
+      headers: origin,
+      data: { estimated_value: 1000 + n, source: "dealer quote" },
+    });
+    expect(added.status()).toBe(201);
+  }
+
+  await page.goto(`/items/${id}`);
+  const rows = page.locator("table.estimates tbody tr");
+  await expect(rows).toHaveCount(100);
+  await expect(page.getByText("100 of 103 shown")).toBeVisible();
+  await page.getByRole("button", { name: "Show older" }).click();
+  await expect(rows).toHaveCount(103);
+  await expect(page.getByRole("button", { name: "Show older" })).toHaveCount(0);
+
+  // To the trash; it has its own country, so the trash test's row stays unique.
+  await page.request.delete(`/api/items/${id}`, { headers: origin });
+});
+
 // Needs an item, so it sits after the one above: an empty collection shows the
 // "nothing to report yet" page instead of the grid.
 test("the dashboard can be rearranged, and put back", async ({ page }) => {

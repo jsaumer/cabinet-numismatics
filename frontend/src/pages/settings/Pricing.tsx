@@ -7,6 +7,10 @@ import { Section, useSettings } from "./shared";
 // Sources with nothing to configure beyond on/off.
 const KEYLESS = new Set(["melt", "comps"]);
 
+/** What each outside service asks of the person whose key it is. */
+const DATA_SOURCES_URL =
+  "https://github.com/jsaumer/cabinet-numismatics/blob/main/docs/data-sources.md";
+
 /** Settings → Pricing: the price-source keys (Price sources) and the
  * cached market data they and the stack view feed from (Cached market
  * data). One card, keys first. */
@@ -188,6 +192,13 @@ export default function PricingSection() {
       <p className="muted" style={{ marginTop: 0 }}>
         <LockIcon /> Keys are encrypted before they are stored and can never be read back, only
         replaced or removed.
+      </p>
+      <p className="muted" style={{ marginTop: 0 }}>
+        A key is yours, and so are the terms you accepted to get it: Numista's and PCGS's allow a
+        private collection, not a public service.{" "}
+        <a href={DATA_SOURCES_URL} target="_blank" rel="noreferrer">
+          Data sources and their terms
+        </a>
       </p>
       {settings.sources.map(sourceCard)}
 

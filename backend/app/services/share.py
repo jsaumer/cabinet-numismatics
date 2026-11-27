@@ -310,28 +310,39 @@ def value_context(db: Session) -> tuple[str, str | None, Converter]:
     return strategy, preferred, converter
 
 
-def from_numista(estimate: PriceEstimate) -> bool:
-    """Whether an estimate carries Numista's data: its own price, or a comps
-    median that used a sale fetched from Numista. Numista's license (section
-    8.4) lets an individual store its data for a private project, not make it
-    available to third parties, so a share link never shows one."""
+# Sources whose terms keep their data from third parties, so a share link
+# never shows a value made from it. Numista: its API license (section 8.4)
+# lets an individual store its data for a private project, not make it
+# available to others. PCGS (v0.39.0): its API agreement is shown only to a
+# signed-in account and has not been read; the public terms of its parent
+# forbid public use of its content without written permission, so the value
+# stays private until the agreement says otherwise. A new price source whose
+# terms say the same joins this tuple.
+PRIVATE_SOURCES = ("numista", "pcgs")
+
+
+def from_private_source(estimate: PriceEstimate) -> bool:
+    """Whether an estimate carries data a share link may not show: a price
+    from one of `PRIVATE_SOURCES`, or a comps median that used a sale fetched
+    from one."""
     key = pricing.source_key(estimate.source)
-    if key == "numista":
+    if key in PRIVATE_SOURCES:
         return True
     if key != "comps":
         return False
     sales = (estimate.details or {}).get("sales")
     return isinstance(sales, list) and any(
-        isinstance(sale, dict) and sale.get("source") == "numista" for sale in sales
+        isinstance(sale, dict) and sale.get("source") in PRIVATE_SOURCES for sale in sales
     )
 
 
 def shown_value(item: Item, values: tuple[str, str | None, Converter]) -> dict | None:
     """The list's shown value in the display currency, worked out as the
-    owner's list does but without any estimate from Numista, or None when
-    nothing else is left or it can't be converted from the cache."""
+    owner's list does but without any estimate from a source whose terms
+    keep it private (`PRIVATE_SOURCES`), or None when nothing else is left or
+    it can't be converted from the cache."""
     strategy, preferred, converter = values
-    estimates = [e for e in item.estimates if not from_numista(e)]
+    estimates = [e for e in item.estimates if not from_private_source(e)]
     resolved = pricing.resolve_display_value(estimates, strategy, preferred, converter)
     if resolved is None:
         return None

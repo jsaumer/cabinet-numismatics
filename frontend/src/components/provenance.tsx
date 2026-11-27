@@ -39,16 +39,9 @@ export function sourceKey(source: string): string {
   return i === -1 ? source : source.slice(0, i);
 }
 
-/** Each source's most recent estimate, in the order they first appear
- * (the estimates arrive newest first). */
-export function latestBySource(estimates: Estimate[]): [string, Estimate][] {
-  const bySource = new Map<string, Estimate>();
-  for (const est of estimates) {
-    const key = sourceKey(est.source);
-    if (!bySource.has(key)) bySource.set(key, est);
-  }
-  return [...bySource.entries()];
-}
+/** What a source chip calls an estimate: the source's key, or for a typed-in
+ * value the words it was given ("dealer quote"). */
+export const chipName = (est: Estimate) => (est.source_key === "manual" ? est.source : est.source_key);
 
 type Details = Record<string, unknown>;
 const num = (value: unknown) => (typeof value === "number" ? value : null);

@@ -249,7 +249,7 @@ def test_a_value_from_numista_is_never_shared(client, anon_client):
     add_estimates(item["id"], ("melt", 300, None), ("numista:N#100 XF", 900, None))
     assert (
         client.get(f"/api/items/{item['id']}")
-        .json()["estimates"][0]["source"]
+        .json()["latest_estimates"][0]["source"]
         .startswith("numista")
     )
     token, _ = make_link(client, show_values=True)
@@ -283,6 +283,25 @@ def test_a_piece_valued_only_by_numista_shares_no_value(client, anon_client):
     token, _ = make_link(client, show_values=True)
     view = anon_client.get(f"/api/share/{token}/items/{item['id']}").json()
     assert view["value"] is None
+
+
+def test_a_value_from_pcgs_is_never_shared(client, anon_client):
+    # The PCGS API agreement has not been read (it is shown only to a
+    # signed-in account), and the public terms forbid public use: private
+    # until the agreement says otherwise.
+    assert share.PRIVATE_SOURCES == ("numista", "pcgs")
+    enable(client)
+    both = make_item(client)
+    add_estimates(both["id"], ("melt", 300, None), ("pcgs:apr cert 123", 1200, None))
+    only = make_item(client, country="Canada")
+    add_estimates(only["id"], ("pcgs:guide 3912", 75, None))
+    token, _ = make_link(client, show_values=True)
+    view = anon_client.get(f"/api/share/{token}/items/{both['id']}").json()
+    assert view["value"] == {"amount": 300.0, "currency": "USD"}
+    assert anon_client.get(f"/api/share/{token}/items/{only['id']}").json()["value"] is None
+    # The owner's own list is unchanged.
+    mine = {i["id"]: i["latest_value"] for i in client.get("/api/items").json()["items"]}
+    assert (mine[both["id"]], mine[only["id"]]) == (1200.0, 75.0)
 
 
 @pytest.mark.parametrize("strategy", ["preferred_source", "average"])
