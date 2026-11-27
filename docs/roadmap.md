@@ -7,10 +7,11 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.40.0 (images for arm64 as well as amd64, with
-build provenance and an SBOM; v0.39.0 before it settled four contract
-decisions before 1.0, and v0.38.0 added a CI check against breaking the
-API) is the latest published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.41.0 (the first run: a one-file install from
+the published images, and a readable page where a wrong address got an
+empty reply; v0.40.0 before it added arm64 images with build provenance,
+v0.39.0 settled four contract decisions, and v0.38.0 added a CI check
+against breaking the API) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -410,7 +411,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,480 tests as of v0.40.0) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,480 tests as of v0.41.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -840,7 +841,7 @@ pieces turned up, each shipped as a small release:
   runner, each carries labels, build provenance, and an SBOM, every GitHub
   Action is pinned by commit, and a stable release from 1.0.0 will also
   move `1` and `1.0` tags. Nine routine dependency updates rode along.
-- v0.41.0 (built, not yet released): row 19, the first run. One Compose
+- ✔ v0.41.0: row 19, the first run. One Compose
   file that runs the published images from an empty folder, a readable
   page where a wrong address used to get an empty reply, plain http on a
   trusted LAN as a supported way to start, a page on HTTPS without a

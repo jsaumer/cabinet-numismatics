@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml/badge.svg)](https://github.com/jsaumer/cabinet-numismatics/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.40.0-informational)
+![Version](https://img.shields.io/badge/version-0.41.0-informational)
 
 Cabinet catalogs your collection, keeps the photos and paperwork with each
 piece, and tracks what it is worth over time from sources you can check. It
@@ -16,7 +16,7 @@ subscription, and nothing about your collection leaves it.
 It is for one collector who is comfortable running Docker on a home server
 or NAS.
 
-**Status:** v0.40.0, in use on its author's own collection. 1.0 will mean a
+**Status:** v0.41.0, in use on its author's own collection. 1.0 will mean a
 stable HTTP API; until then the API may still change.
 [Changelog](CHANGELOG.md) · [Roadmap](docs/roadmap.md)
 
@@ -181,7 +181,7 @@ python scripts/seed_demo.py --token cabinet_...
 ```
 
 **Upgrading:** `docker compose pull && docker compose up -d`. Pin a release
-with `TAG=0.40.0` in `.env`; a version tag never changes. The backend
+with `TAG=0.41.0` in `.env`; a version tag never changes. The backend
 migrates the database itself on startup, and Settings → About shows the
 version and whether the schema is current. The
 [deployment guide](docs/deployment.md) covers a lasting install: single
