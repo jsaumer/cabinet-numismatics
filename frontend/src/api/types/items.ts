@@ -187,6 +187,14 @@ export interface Photo {
  * typed-in value, whatever its source text says. */
 export type SourceKey = "melt" | "numista" | "pcgs" | "comps" | "manual";
 
+/** A credit a data source's terms ask for wherever its data is shown. */
+export interface DataCredit {
+  source: string;
+  name: string;
+  url: string;
+  notice: string;
+}
+
 /** A page of one of an item's histories, newest first. */
 export interface Page<T> {
   items: T[];

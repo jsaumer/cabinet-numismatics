@@ -40,6 +40,13 @@ services it reads. No migration.
   changing the tag, share links, and metric names. It also says what
   today's storage and purchase fields will keep meaning if richer records
   arrive later.
+- **PCGS's credit line.** PCGS's API agreement asks that every page using
+  its data link back to PCGS and carry a set sentence naming it as the
+  licensed source. Once anything from PCGS is held (the source switched on,
+  a cached answer, an estimate, a population), every page and printed
+  report carries that line at its foot. `GET /api/reference/data-credits`
+  gives it to other clients. The agreement also names a logo, which is not
+  shown: its exhibit is not attached to the agreement.
 - **[Data sources and their terms](docs/data-sources.md)**: what Numista,
   PCGS, and the three keyless services ask of the person whose key it is,
   what Cabinet does on their behalf, and what stays theirs. Linked from
@@ -48,10 +55,9 @@ services it reads. No migration.
 ### Changed
 
 - **A share link no longer shows a value made from PCGS's data**, as it
-  never showed one from Numista. PCGS's API agreement is shown only inside
-  a signed-in account, and the public terms of its parent company forbid
-  public use of its content. A piece priced only by PCGS shares no value;
-  your own pages are unchanged.
+  never showed one from Numista. PCGS's API End User Agreement forbids
+  making its data available to any third party. A piece priced only by
+  PCGS shares no value; your own pages are unchanged.
 - The item page's value history loads a page at a time, with "Show older"
   for the rest; the edit history does the same. On the item's source
   chips, typed-in values are one chip, the newest.

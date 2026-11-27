@@ -411,6 +411,44 @@ test("a wishlist coin shows its target price", async ({ page }) => {
   await deleteForGood(page, url, country);
 });
 
+test("PCGS's credit shows on every page while its data is held", async ({ page }) => {
+  // PCGS's API agreement asks for a link back and a set sentence wherever
+  // its data is used (v0.39.0). Switching the source on is enough to owe it.
+  await page.goto("/");
+  const origin = { Origin: new URL(page.url()).origin };
+  const credit = page.locator("footer.data-credits");
+  await expect(credit).toHaveCount(0);
+
+  const settings = async (data: Record<string, unknown>) => {
+    await page.request.post("/api/auth/confirm", {
+      headers: origin,
+      data: { password: CABINET_PASSWORD },
+    });
+    const put = await page.request.put("/api/settings", { headers: origin, data });
+    expect(put.status()).toBe(200);
+  };
+  await settings({ pcgs_api_token: "e2e-not-a-real-token", pcgs_enabled: true });
+  try {
+    for (const path of ["/", "/collection", "/report"]) {
+      await page.goto(path);
+      await expect(credit).toContainText(
+        "The Data is obtained from and is subject to a license agreement with Collectors Universe",
+      );
+      await expect(credit.getByRole("link", { name: "PCGS" })).toHaveAttribute(
+        "href",
+        "https://www.pcgs.com",
+      );
+    }
+    // At least 10-point type, as the agreement asks (10pt is 13.33px).
+    const size = await credit.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(size).toBeGreaterThanOrEqual(13.34);
+  } finally {
+    await settings({ pcgs_enabled: false, pcgs_api_token: "" });
+  }
+  await page.goto("/");
+  await expect(credit).toHaveCount(0);
+});
+
 test("the security headers are set and nothing trips the policy", async ({ page }) => {
   const violations: string[] = [];
   page.on("console", (message) => {

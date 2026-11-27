@@ -313,11 +313,10 @@ def value_context(db: Session) -> tuple[str, str | None, Converter]:
 # Sources whose terms keep their data from third parties, so a share link
 # never shows a value made from it. Numista: its API license (section 8.4)
 # lets an individual store its data for a private project, not make it
-# available to others. PCGS (v0.39.0): its API agreement is shown only to a
-# signed-in account and has not been read; the public terms of its parent
-# forbid public use of its content without written permission, so the value
-# stays private until the agreement says otherwise. A new price source whose
-# terms say the same joins this tuple.
+# available to others. PCGS (v0.39.0): its API End User Agreement, read by
+# the account holder on 26 November 2026, forbids distributing its data or
+# making it available to any third party. A new price source whose terms say
+# the same joins this tuple.
 PRIVATE_SOURCES = ("numista", "pcgs")
 
 

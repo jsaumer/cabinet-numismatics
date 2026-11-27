@@ -440,6 +440,15 @@ assert page["total"] >= 1 and len(page["items"]) == 1 and page["limit"] == 1, pa
   apif -X DELETE "$BASE/api/items/$one" -o /dev/null
   apif -X DELETE "$BASE/api/items/$two" -o /dev/null
 
+  # the credits a data source's terms ask for (v0.39.0): a list for a read
+  # token, nothing for a stranger
+  apif "$BASE/api/reference/data-credits" | "$PY" -c '
+import json, sys
+credits = json.load(sys.stdin)
+assert isinstance(credits, list) and all(c["notice"] and c["url"] for c in credits), credits
+'
+  test "$(status_of "$BASE/api/reference/data-credits")" = 401
+
   # no webhook saved: the test alert says so rather than failing
   adminf -X POST "$BASE/api/alerts/test" | grep -q '"ok":false'
   echo "smoke test passed"

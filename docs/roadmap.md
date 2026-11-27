@@ -959,9 +959,12 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   third-party terms were read again: Numista's seven days turned out not
   to apply to a personal project, a share link no longer shows a value
   made from PCGS's data, and [data-sources.md](data-sources.md) says what
-  each service asks of the person whose key it is. Still the owner's:
-  reading PCGS's API agreement, and a question to Numista about catalog
-  facts on a share link.
+  each service asks of the person whose key it is. PCGS's API agreement
+  was then read from the owner's account: it forbids showing its data to
+  third parties and asks for a credit on every page that uses it, which
+  the app now shows once anything from PCGS is held. Still the owner's: a
+  question to Numista about catalog facts on a share link, and one to PCGS
+  about whether a private collection is a use its agreement covers.
 - ✔ A CI upgrade test: a database from an old release migrated to head.
   **Shipped with v0.30.0**: `scripts/ci/upgrade-test.sh` starts the last
   release before sign-in (v0.29.1, from GHCR), adds an item anonymously,

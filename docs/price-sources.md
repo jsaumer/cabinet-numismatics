@@ -265,11 +265,14 @@ Requirements and limits:
 - 100 calls a day by default (more on request from PCGS, apis@pcgs.com);
   responses are cached in `source_cache` for 7 days. PCGS documents no usage
   endpoint, no quota headers, and no reset time.
-- PCGS's API agreement is shown only inside a signed-in account, so this
-  project has not read it; the public terms of its parent company forbid
-  public use of its content without written permission. A share link
-  therefore never shows a value made from PCGS's data (v0.39.0), as it
-  never shows one from Numista. See [data-sources.md](data-sources.md).
+- PCGS's API End User Agreement (shown inside a signed-in account; read on
+  26 November 2026) forbids making its data available to any third party,
+  and asks for a credit wherever the data is used. So a share link never
+  shows a value made from PCGS's data, as it never shows one from Numista,
+  and once anything from PCGS is held every page carries the agreement's
+  credit line at its foot (both v0.39.0). The agreement also limits use to
+  one's own sales, auction offerings, and research.
+  See [data-sources.md](data-sources.md).
 - PCGS signals failure in the body, not the status: `IsValidRequest: false`
   means the request values were malformed, and `"No data found"` means no such
   coin. Both surface as 422 with the reason. A 401, or a 500 (which usually

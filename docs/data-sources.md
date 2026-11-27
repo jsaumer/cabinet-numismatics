@@ -65,11 +65,28 @@ service on it, or building a copy of the catalog (sections 8.4 and 11).
 ## PCGS
 
 **The agreement.** PCGS shows its API End User Agreement when you sign in
-to create your API access. Read it there: it is the document that binds
-you, and it is not published where this project could read it. The public
-terms of PCGS's parent company allow personal, non-commercial use of its
-content and forbid public use without written permission, and Cabinet
-assumes the API agreement is no looser.
+to create your API access, and using the data means accepting it. It was
+read for this page on 26 November 2026 by the holder of an account; read
+your own copy, since it is the one that binds you. It is written with
+dealers in mind, and it is stricter than Numista's.
+
+**What it allows.** Downloading, storing, and using PCGS's data, which it
+defines as population data, price guide data, and everything else on its
+site. No time limit is set on keeping it.
+
+**What it does not allow, and asks for.**
+
+- Distributing the data, hosting it for others, or making it available to
+  any third party.
+- Use for anything but your own sales, auction offerings, and research.
+  One sentence narrows that to reference in support of specific sales.
+  Valuing your own collection is research at most. Whether PCGS reads it
+  that way is for PCGS to say; the project has not been told.
+- A credit wherever the data is used: a working link back to PCGS on each
+  page, a set sentence naming Collectors Universe and its divisions as the
+  licensed source in at least 10-point type, and a PCGS logo from an
+  exhibit to the agreement.
+- Deleting every stored copy if the agreement ends.
 
 **What Cabinet does.**
 
@@ -77,14 +94,30 @@ assumes the API agreement is no looser.
   estimate that follows share one request, answers are kept for seven
   days, the scheduled refresh is weekly and off by default, and Settings
   warns once a collection has more than 100 pieces PCGS can price.
-- Labels a PCGS value as one ("PCGS value") and links a cert to PCGS's own
-  page for it.
 - Never puts a value made from PCGS's price guide or auction prices on a
-  share link (from v0.39.0), and never the population figures. If the
-  agreement you accepted allows showing them, tell the project: the rule
-  exists because the agreement could not be read.
+  share link (from v0.39.0), and never the population figures.
+- Shows the credit, with the agreement's own sentence and a link to PCGS,
+  at the foot of every page and every printed report once anything from
+  PCGS is held: the source switched on, a cached answer, an estimate, or a
+  population on a piece (from v0.39.0). It stays for as long as the data
+  does, whether or not the source is still on.
+- Labels a PCGS value as one ("PCGS value") and links a PCGS number to
+  PCGS's own page for the coin.
 
-**What stays yours.** Your token, and the agreement you accepted to get it.
+**What Cabinet does not do.**
+
+- **Show the logo.** The agreement points to an exhibit that is not
+  attached to it, and PCGS's parent company's trademark policy allows its
+  marks only under a signed license. The name and the link are shown; the
+  logo is not.
+- **Delete PCGS's data in one step.** If your access ends, switch the
+  source off and remove its token in Settings; the cached answers and the
+  PCGS estimates then have to be removed from the database by hand, since
+  the app keeps a price source's history on purpose. A command for this
+  does not exist yet.
+
+**What stays yours.** Your token, the agreement you accepted to get it,
+and the question of whether your use is one it covers.
 
 ## The three keyless services
 

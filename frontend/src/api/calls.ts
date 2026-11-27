@@ -1,7 +1,7 @@
 // Every endpoint the frontend calls, one method each.
 
 import { json, req, ReqOptions } from "./client";
-import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Page, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, SourceKey, TagInfo } from "./types/items";
+import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DataCredit, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Page, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, SourceKey, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { Appearance, DashboardLayout, DashboardWidget } from "./types/dashboard";
@@ -203,6 +203,8 @@ export const api = {
   // Only "melt" can be refreshed by hand for now; the server refuses the rest.
   refreshEstimates: (source: "melt") =>
     req<RefreshResult>(`/api/estimates/refresh?source=${source}`, { method: "POST" }),
+
+  dataCredits: () => req<DataCredit[]>("/api/reference/data-credits"),
 
   itemHistory: (id: string, offset = 0) =>
     req<Page<ItemEvent>>(`/api/items/${id}/history?limit=${HISTORY_PAGE}&offset=${offset}`),

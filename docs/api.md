@@ -845,6 +845,7 @@ layout; add them from "Edit dashboard".
 | `PATCH`  | `/api/sets/{id}`    | Rename / edit a set; `409` when another set has the name |
 | `DELETE` | `/api/sets/{id}`    | Delete a set (items are detached, not deleted) |
 | `GET`    | `/api/reference/serial-traits` | The fancy-serial traits, in order   |
+| `GET`    | `/api/reference/data-credits` | The credits to show with the collection (v0.39.0): `[{source, name, url, notice}]`, one per data source whose terms ask for one and whose data is held. Today that is PCGS's, once the source is on or anything from it is stored; `[]` otherwise. A client that shows values to the owner should print each `notice` with a link to `url` |
 | `GET`    | `/api/reference/calendars`     | Calendars for a date as struck, and the Japanese eras |
 | `GET`    | `/api/reference/convert-date`  | A struck year as a Gregorian year   |
 | `GET`    | `/api/reference/historic-spot` | A metal's spot price on a past day (see [Bullion stack](#bullion-stack)) |
@@ -1314,8 +1315,8 @@ setting) in the display currency, `{"amount", "currency"}`, worked out
 without any estimate carrying Numista's or PCGS's data (an estimate from
 either, or a comps median that used a sale fetched from Numista), since
 Numista's API license lets an individual keep its data for a private
-project but not show it to third parties (section 8.4), and PCGS's terms,
-as far as they can be read without an account, forbid public use (v0.39.0;
+project but not show it to third parties (section 8.4), and PCGS's API
+agreement forbids making its data available to any third party (v0.39.0;
 see [data-sources.md](data-sources.md)); `null` when nothing else is left,
 the piece has none, or it can't be converted from the cached exchange
 rates (a public route never fetches a rate). Never a cost, fee, gain, acquisition

@@ -3300,9 +3300,20 @@ approved on 26 November 2026. No migration.
   The hero and the chips read `item.latest_estimates`.
 - **The share link's private sources are `share.PRIVATE_SOURCES`**
   (`numista`, `pcgs`), read by `share.from_private_source` (was
-  `from_numista`). PCGS is there because its API agreement could not be
-  read; if the owner reads it and it allows display, PCGS comes off the
-  tuple and docs/data-sources.md changes with it.
+  `from_numista`). PCGS's API End User Agreement, read by the owner's
+  account on 26 November 2026, forbids making its data available to any
+  third party, so it stays on the tuple.
+- **PCGS's credit is `services/credits.py`**, behind `GET
+  /api/reference/data-credits` and `components/data-credits.tsx` at the
+  foot of the signed-in shell's `<main>`, so every page and every printed
+  report carries it. It is due whenever anything from PCGS is held
+  (`credits.holds_pcgs_data`: the source on, a `source_cache` row, an
+  estimate, a population, the trash included), not only while the source is
+  on. `PCGS_NOTICE` is the agreement's own sentence: don't rephrase it, and
+  keep `.data-credits` at 10 points or more (0.875rem). No logo: the
+  agreement's exhibit isn't attached, and the marks need a license. A new
+  place that shows PCGS data outside the shell (a share page never does)
+  needs the credit too.
 - **The promise is text, and most of it has no check.** "What else is
   promised" in docs/api.md covers statuses, error bodies, variables,
   commands, archives, exports, upgrades, share links, and metrics. Only

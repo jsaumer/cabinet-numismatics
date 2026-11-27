@@ -773,6 +773,16 @@ class EventOut(BaseModel):
     changes: dict | None
 
 
+class DataCredit(BaseModel):
+    """A credit a data source's terms ask for on every page that shows its
+    data: who, where to link, and the sentence to print."""
+
+    source: str
+    name: str
+    url: str
+    notice: str
+
+
 class EstimatePage(BaseModel):
     """A page of an item's estimate history, newest first."""
 

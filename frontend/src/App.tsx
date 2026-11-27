@@ -4,6 +4,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 import { MoonIcon, SunIcon } from "./components/icons";
 import { PageErrorBoundary } from "./components/error-boundary";
 import { Logo } from "./components/logo";
+import { DataCredits } from "./components/data-credits";
 import { Sidebar } from "./components/sidebar";
 import { applyPalette, applyTheme, initialTheme } from "./components/theme";
 import { isThemeKey } from "./themes";
@@ -213,6 +214,7 @@ function AuthedApp({
           <Route path="*" element={<NotFound />} />
         </Routes>
         </PageErrorBoundary>
+        <DataCredits />
       </main>
       </div>
     </>

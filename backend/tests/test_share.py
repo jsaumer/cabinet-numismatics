@@ -286,9 +286,8 @@ def test_a_piece_valued_only_by_numista_shares_no_value(client, anon_client):
 
 
 def test_a_value_from_pcgs_is_never_shared(client, anon_client):
-    # The PCGS API agreement has not been read (it is shown only to a
-    # signed-in account), and the public terms forbid public use: private
-    # until the agreement says otherwise.
+    # PCGS's API End User Agreement forbids making its data available to any
+    # third party (read by the account holder, 26 November 2026).
     assert share.PRIVATE_SOURCES == ("numista", "pcgs")
     enable(client)
     both = make_item(client)

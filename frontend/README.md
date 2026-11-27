@@ -124,6 +124,8 @@ src/
                         estimates and their provenance (also timeSince,
                         sourceKey, chipName); the value history fetches
                         its own pages (v0.39.0); the sales log
+    data-credits.tsx    the credit a data source's terms ask for, at the
+                        foot of every signed-in page (PCGS, v0.39.0)
     documents.tsx, duplicates.tsx, lookup.tsx
                         attached documents; the duplicate warning; outbound
                         lookup links (eBay sold, Photograde, CoinFacts, and
