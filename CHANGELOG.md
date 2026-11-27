@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-11-27
+
 Accessibility basics from the 1.0 checklist, measured first with an
 automated scan (axe, WCAG 2.0 to 2.2 at levels A and AA) and then kept in
 the browser tests. No migration, and nothing in the API changes. Two of the
@@ -2552,5 +2554,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.44.0...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
