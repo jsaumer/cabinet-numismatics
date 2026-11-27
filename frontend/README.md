@@ -478,7 +478,7 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   the label around that control, marked with `aria-invalid`, and listed
   beside the Save buttons; a new field needs the attribute too.
 
-## Accessibility (after v0.43.0)
+## Accessibility (v0.44.0)
 
 - `components/overlay.tsx` is the one modal: the native `<dialog>`, which
   traps focus and gives it back. Never build another overlay by hand.

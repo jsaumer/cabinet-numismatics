@@ -3603,7 +3603,7 @@ approved it on 27 November 2026 with the demo as a button.
   and removes the demo for real on Postgres when the collection is empty
   and checks only the refusal otherwise.
 
-## Accessibility basics (after v0.43.0)
+## Accessibility basics (v0.44.0)
 
 Row 22 of the 1.0 checklist. Frontend only: no migration, no API change.
 The review's findings were made by reading, so they were measured first
