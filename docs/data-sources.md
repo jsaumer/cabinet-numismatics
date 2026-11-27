@@ -133,6 +133,18 @@ One service is deliberately not used: the LBMA price series reaches back
 further than any of these, and its terms need a license to use the data
 for valuation. See [price-sources.md](price-sources.md).
 
+## The demo collection's photos
+
+Pressing "Load the demo collection" on an empty Cabinet (v0.43.0) makes
+Cabinet fetch 22 photos from
+[Wikimedia Commons](https://commons.wikimedia.org); it contacts Commons at
+no other time, unless you import a photo from there by its address
+yourself. Each photo is in the public domain or under CC0,
+checked when it was chosen; its Commons page, license, and credit are
+recorded beside its piece in `backend/app/services/demo_data.py`, and a
+test fails if one is added under any other license. Nothing is sent but
+the request for the file. Removing the demo deletes the photos.
+
 ## Names and trademarks
 
 Cabinet is not affiliated with, endorsed by, or sponsored by Numista,

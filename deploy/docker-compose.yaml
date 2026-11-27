@@ -47,7 +47,7 @@ x-logging: &logging
 
 services:
   backend:
-    # Pin a release (TAG=0.42.0) once you rely on it: a version tag never
+    # Pin a release (TAG=0.43.0) once you rely on it: a version tag never
     # changes, and `latest` moves with every release.
     image: ghcr.io/jsaumer/cabinet-numismatics-backend:${TAG:-latest}
     environment:

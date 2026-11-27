@@ -3496,7 +3496,7 @@ change.
   On 3.10 the suite still warns; that ends when 3.10 leaves the matrix,
   which also means changing the ruleset's required check names.
 
-## The first run, in the app (after v0.42.0)
+## The first run, in the app (v0.43.0)
 
 Row 21 of the 1.0 checklist: what a new owner meets on the first screens,
 and the item form losing work. No migration; three new routes. The owner
