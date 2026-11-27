@@ -7,10 +7,11 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.38.0 (a CI check against breaking the API,
-and the last input rules tightened before 1.0; v0.37.x before it carried
-proof and mint sets, Numista's 2026 terms, Python 3.15, and two batches of
-fixes from a full review) is the latest published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.39.0 (four contract decisions before 1.0:
+what an item's answer carries, the wider stability promise, and the terms
+of the services Cabinet reads; v0.38.0 before it added a CI check against
+breaking the API and tightened the last input rules) is the latest
+published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -42,7 +43,7 @@ alongside whatever entering the rest of the collection turns up. The third,
 a CI check against a breaking OpenAPI change, shipped in v0.38.0, with the
 last input rules tightened beside it; the four contract decisions that
 followed (what an item embeds, what today's fields will mean, the wider
-promise, and the third-party terms) are built for v0.39.0.
+promise, and the third-party terms) shipped in v0.39.0.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -410,7 +411,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,450 tests as of v0.38.0) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,470 tests as of v0.39.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -828,6 +829,13 @@ pieces turned up, each shipped as a small release:
   were tightened while a stricter rule is still free: a typed-in value's
   source, `%` and `_` in a search, tags in any capitals, and the form of a
   Numista reference.
+- ✔ v0.39.0: rows 14, 15, 16, and 18 of the same checklist. An item's
+  answer carries its newest estimate per source and the history is a paged
+  route; `api.md` says what 1.0 promises beyond paths and fields; a share
+  link no longer shows a value made from PCGS's data; every page carries
+  PCGS's credit line once its data is held; and
+  [data-sources.md](data-sources.md) tells users what each service's terms
+  ask of them.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -949,7 +957,7 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   `%` and `_` in a search are the characters typed, a tag is one whatever
   the capitals, and a Numista reference is stored in one form, `N#<digits>`.
 - ✔ The four contract decisions from the same review, proposed and
-  approved on 26 November 2026. **Built for v0.39.0**: an item carries its
+  approved on 26 November 2026. **Shipped in v0.39.0**: an item carries its
   newest estimate per source and the history is its own paged route (with
   `source_key` on every estimate, and the edit history paged the same
   way); today's storage and purchase fields are kept, with what they will
