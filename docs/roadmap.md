@@ -7,11 +7,10 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.39.0 (four contract decisions before 1.0:
-what an item's answer carries, the wider stability promise, and the terms
-of the services Cabinet reads; v0.38.0 before it added a CI check against
-breaking the API and tightened the last input rules) is the latest
-published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.40.0 (images for arm64 as well as amd64, with
+build provenance and an SBOM; v0.39.0 before it settled four contract
+decisions before 1.0, and v0.38.0 added a CI check against breaking the
+API) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -411,7 +410,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,470 tests as of v0.39.0) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,480 tests as of v0.40.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -836,6 +835,11 @@ pieces turned up, each shipped as a small release:
   PCGS's credit line once its data is held; and
   [data-sources.md](data-sources.md) tells users what each service's terms
   ask of them.
+- ✔ v0.40.0: rows 20 and 24, the first of the checklist's packaging tier.
+  Both images are built for arm64 as well as amd64 and tested on an arm64
+  runner, each carries labels, build provenance, and an SBOM, every GitHub
+  Action is pinned by commit, and a stable release from 1.0.0 will also
+  move `1` and `1.0` tags. Nine routine dependency updates rode along.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -872,7 +876,7 @@ for it, and new ones found while entering the collection outrank these.
   app day to day. Noted in the 20 September 2026 review.
 - ✔ **Multi-architecture images**: the publish job built `amd64` only; an
   `arm64` build covers a Raspberry Pi or Apple Silicon homelab host.
-  Noted in the 20 September 2026 review. **Built for v0.40.0** (rows 20 and
+  Noted in the 20 September 2026 review. **Shipped in v0.40.0** (rows 20 and
   24 of the 1.0 checklist): both images for both platforms, CI building and
   smoke-testing the stack on a native arm64 runner, every GitHub Action
   pinned by commit, image labels, build provenance and an SBOM stored with

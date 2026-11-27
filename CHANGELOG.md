@@ -8,7 +8,7 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
-## [Unreleased]
+## [0.40.0] - 2026-11-26
 
 Images for arm64, and a release you can check. No migration, no change to
 the app itself.
@@ -35,6 +35,13 @@ the app itself.
 - A pull request that touches a Dockerfile, a lockfile, or the proxy's
   files now builds both images for both platforms in CI, so a build that
   breaks on one of them shows up before a release tag does.
+
+### Changed
+
+- Routine dependency updates: FastAPI 0.162.5, Pydantic 2.14.4, Click
+  8.5.1, PyYAML 6.0.4, and typing-inspection 0.4.5 in the backend image;
+  React Router 7.18.6 in the web interface; Vite 8.3.8, its React plugin
+  6.3.0, and Playwright 1.65.1 for building and testing.
 
 ## [0.39.0] - 2026-11-26
 
@@ -2335,5 +2342,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.40.0...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0
