@@ -7,10 +7,10 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.37.5 (proof and mint sets, with Numista's
-2026 terms, a fix to the Numista export import, Python 3.15, two batches
-of fixes from a full review, and a dependency advisory fixed) is the latest
-published release**, with versioned images published to GHCR from each
+**Status (November 2026): v0.38.0 (a CI check against breaking the API,
+and the last input rules tightened before 1.0; v0.37.x before it carried
+proof and mint sets, Numista's 2026 terms, Python 3.15, and two batches of
+fixes from a full review) is the latest published release**, with versioned images published to GHCR from each
 tagged release and running on a homelab Docker Swarm. Phases 0–5 are
 built, pricing-program M1–M5 are done (settings
 backbone, the Numista and PCGS adapters, per-source value display with a
@@ -39,8 +39,8 @@ live ([live-validation.md](live-validation.md)). The road to v1.0.0 has
 two items left, in this order: "Add a run" and the Numista banknote mapping
 confirmed against a live account; then a README and quick-start pass,
 alongside whatever entering the rest of the collection turns up. The third,
-a CI check against a breaking OpenAPI change, is built and waits for the
-next release (v0.38.0), with the last input rules tightened beside it.
+a CI check against a breaking OpenAPI change, shipped in v0.38.0, with the
+last input rules tightened beside it.
 A ✔ marks shipped items below. A second review on 19 September 2026, with
 v0.21.0 live and the real collection still to be entered, surveyed what
 other coin-collection tools offer and re-planned everything unshipped into
@@ -408,7 +408,7 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,400 tests as of v0.37.5) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,450 tests as of v0.38.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -821,6 +821,11 @@ pieces turned up, each shipped as a small release:
   errors, a price service being down stalled every page, and exports,
   the URL photo import, the sign-in limit, and the generated key were
   hardened.
+- ✔ v0.38.0: rows 17 and 13 of the same review's 1.0 checklist. Every
+  build is compared with the last release's API schema, and four inputs
+  were tightened while a stricter rule is still free: a typed-in value's
+  source, `%` and `_` in a search, tags in any capitals, and the form of a
+  Numista reference.
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a
@@ -930,14 +935,14 @@ own, and 1.0.0 is cut when the list is ticked. The checklist:
   the committed `/api/openapi.json` of the last release compared with the
   build's, failing on a removed path, operation, field, or enum value and
   on a changed type, passing on additions; the stability policy in
-  `api.md` says which changes count. **Built for v0.38.0**:
+  `api.md` says which changes count. **Shipped in v0.38.0**:
   `docs/openapi.json` is the last release's schema,
   `backend/tests/api_contract.py` compares the build with it inside the
   test suite (so both required backend jobs run it), and the tool that
   rewrites the committed schema at each release refuses a breaking change
   from 1.0.0 on unless the major version went up.
 - ✔ The last input rules, tightened while a stricter rule is still free
-  (the 9 November 2026 review's list). **Built for v0.38.0** (migration
+  (the 9 November 2026 review's list). **Shipped in v0.38.0** (migration
   `0024`): a typed-in value can't use a price source's name as its source,
   `%` and `_` in a search are the characters typed, a tag is one whatever
   the capitals, and a Numista reference is stored in one form, `N#<digits>`.

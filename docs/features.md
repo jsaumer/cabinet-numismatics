@@ -57,7 +57,8 @@ most often use instead.
   box, safe).
 - **Lifecycle**: `owned` / `sold` / `wishlist` status with sold date and
   realized price; sets/lots for pieces held or sold together; catalog
-  references (Krause, Numista, Red Book…); free-form tags.
+  references (Krause, Numista, Red Book…); free-form tags, one per name
+  whatever the capitals.
 - **Wish list**: a target price and a priority per piece, the gap between
   the newest estimate and the target, a "target reached" filter, and one
   webhook message when an estimate first reaches the target.

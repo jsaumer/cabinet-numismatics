@@ -820,6 +820,7 @@
     "type": "object"
    },
    "CatalogRefIn": {
+    "description": "A reference as a client sends it. A Numista reference has one form,\n`N#<digits>`: `1234`, `n#1234`, and `N# 1234` are saved as `N#1234`, and\nanything that isn't the type's number is refused.",
     "properties": {
      "catalog": {
       "maxLength": 50,
@@ -842,16 +843,13 @@
     "type": "object"
    },
    "CatalogRefOut": {
+    "description": "A reference as stored. No rules: reading never validates.",
     "properties": {
      "catalog": {
-      "maxLength": 50,
-      "minLength": 1,
       "title": "Catalog",
       "type": "string"
      },
      "ref_code": {
-      "maxLength": 100,
-      "minLength": 1,
       "title": "Ref Code",
       "type": "string"
      }
@@ -7991,7 +7989,7 @@
     "properties": {
      "catalog_refs": {
       "items": {
-       "$ref": "#/components/schemas/CatalogRefIn"
+       "$ref": "#/components/schemas/CatalogRefOut"
       },
       "title": "Catalog Refs",
       "type": "array"
@@ -8127,7 +8125,7 @@
     "properties": {
      "catalog_refs": {
       "items": {
-       "$ref": "#/components/schemas/CatalogRefIn"
+       "$ref": "#/components/schemas/CatalogRefOut"
       },
       "title": "Catalog Refs",
       "type": "array"
@@ -11707,7 +11705,7 @@
  },
  "info": {
   "title": "Cabinet API",
-  "version": "0.37.5"
+  "version": "0.38.0"
  },
  "openapi": "3.1.0",
  "paths": {
