@@ -163,14 +163,19 @@ Requirements and limits:
 - A free API key (numista.com), stored encrypted in Settings; the source is
   disabled until you switch it on.
 - 2,000 requests a month on the free plan (license section 5, unchanged by
-  the new license of July 2026). Every response is kept in `source_cache`:
-  issues and prices for 7 days. The license forbids storing its data (§8.1)
-  apart from identifiers (§8.2), catalog metadata for seven days (§8.3),
-  and an individual's personal project (§8.4); §8.4 is what covers a
-  self-hosted Cabinet, and it keeps §8.3's seven days for everything. It
+  the new license of July 2026). Every response is kept in `source_cache`
+  and refreshed after 7 days. The license forbids storing its data (§8.1)
+  apart from identifiers (§8.2), "catalogue metadata" for seven days
+  (§8.3: the issuers, mints, and catalogs endpoints, none of which Cabinet
+  calls), and an individual's personal project (§8.4); §8.4 is what covers
+  a self-hosted Cabinet, and it sets no time limit, so the seven days are
+  Cabinet's own choice of freshness, not a license term (corrected in
+  v0.39.0 after reading the text again; earlier versions of this page said
+  §8.4 kept §8.3's seven days). It
   does not cover publishing the data, making it available to third parties,
   or running a public service, which is why a share link never shows a
-  value from Numista (v0.37.0). Applications must also name Numista as the
+  value from Numista (v0.37.0). [data-sources.md](data-sources.md) has the
+  whole reading, and what stays the owner's responsibility. Applications must also name Numista as the
   source and show the N# beside a catalog search result (§4): Cabinet labels
   a value "Numista value" and every search hit carries its N#. A stale
   entry is used when the upstream fails. An item missing its prerequisites
@@ -260,6 +265,14 @@ Requirements and limits:
 - 100 calls a day by default (more on request from PCGS, apis@pcgs.com);
   responses are cached in `source_cache` for 7 days. PCGS documents no usage
   endpoint, no quota headers, and no reset time.
+- PCGS's API End User Agreement (shown inside a signed-in account; read on
+  26 November 2026) forbids making its data available to any third party,
+  and asks for a credit wherever the data is used. So a share link never
+  shows a value made from PCGS's data, as it never shows one from Numista,
+  and once anything from PCGS is held every page carries the agreement's
+  credit line at its foot (both v0.39.0). The agreement also limits use to
+  one's own sales, auction offerings, and research.
+  See [data-sources.md](data-sources.md).
 - PCGS signals failure in the body, not the status: `IsValidRequest: false`
   means the request values were malformed, and `"No data found"` means no such
   coin. Both surface as 422 with the reason. A 401, or a 500 (which usually

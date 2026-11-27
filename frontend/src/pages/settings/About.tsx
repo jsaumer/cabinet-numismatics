@@ -84,6 +84,10 @@ export default function AboutSection() {
           </div>
         </dl>
       )}
+      <p className="muted">
+        Cabinet is free software under the MIT license. It is not affiliated with or endorsed by
+        Numista, PCGS, NGC, or PMG; their names say only where a value or a lookup comes from.
+      </p>
     </Section>
   );
 }

@@ -23,8 +23,16 @@ key→value, max 20).
 
 **Money convention:** `acquisition_price`, `sold_price`, and
 `estimated_value` are all **per row** (the whole lot as entered), never
-per-piece. Automatic estimates multiply per-piece value by `quantity` to
-match.
+per-piece, and so is `target_price`. Automatic estimates multiply per-piece
+value by `quantity` to match. Two things are per piece: `weight_g` and a
+logged sale's `price`.
+
+**What these fields will keep meaning.** `storage_location` and the
+acquisition and sale columns are flat on purpose, and they stay through
+1.x: a location tree, several purchases per piece, or a pedigree would
+arrive as additions beside them, with the flat fields kept true (the
+location's path, the purchases' totals). The wording a client may rely on
+is in [api.md](api.md#what-todays-item-fields-will-keep-meaning).
 
 ## Sign-in data: the cabinet_auth schema (v0.30.0)
 

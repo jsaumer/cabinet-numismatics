@@ -2141,12 +2141,24 @@
      "source": {
       "title": "Source",
       "type": "string"
+     },
+     "source_key": {
+      "enum": [
+       "melt",
+       "numista",
+       "pcgs",
+       "comps",
+       "manual"
+      ],
+      "title": "Source Key",
+      "type": "string"
      }
     },
     "required": [
      "id",
      "item_id",
      "source",
+     "source_key",
      "estimated_value",
      "currency",
      "confidence",
@@ -2154,6 +2166,38 @@
      "fetched_at"
     ],
     "title": "EstimateOut",
+    "type": "object"
+   },
+   "EstimatePage": {
+    "description": "A page of an item's estimate history, newest first.",
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/EstimateOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "EstimatePage",
     "type": "object"
    },
    "EventOut": {
@@ -2191,6 +2235,38 @@
      "changes"
     ],
     "title": "EventOut",
+    "type": "object"
+   },
+   "EventPage": {
+    "description": "A page of an item's edit history, newest first.",
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/EventOut"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "EventPage",
     "type": "object"
    },
    "GainEntry": {
@@ -3630,6 +3706,7 @@
     "type": "object"
    },
    "ItemDetail": {
+    "description": "One item with what belongs to it. `latest_estimates` is the newest\nestimate per source (at most five); the whole history, which grows with\nevery scheduled refresh, is `GET /api/items/{id}/estimates`, a page at a\ntime. The other lists only grow when the owner adds to them.",
     "properties": {
      "acquired_from": {
       "anyOf": [
@@ -3900,14 +3977,6 @@
       ],
       "title": "Edge"
      },
-     "estimates": {
-      "default": [],
-      "items": {
-       "$ref": "#/components/schemas/EstimateOut"
-      },
-      "title": "Estimates",
-      "type": "array"
-     },
      "fine_oz": {
       "anyOf": [
        {
@@ -4008,6 +4077,14 @@
        }
       ],
       "title": "Issuer"
+     },
+     "latest_estimates": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/EstimateOut"
+      },
+      "title": "Latest Estimates",
+      "type": "array"
      },
      "mint_mark": {
       "anyOf": [
@@ -15799,6 +15876,7 @@
   },
   "/api/items/{item_id}/estimates": {
    "get": {
+    "description": "An item's estimate history, newest first, a page at a time: `source`\nnarrows it to one source's (`manual` is every typed-in value). The item\nitself carries only the newest per source (`latest_estimates`).",
     "operationId": "list_estimates_api_items__item_id__estimates_get",
     "parameters": [
      {
@@ -15810,6 +15888,53 @@
        "title": "Item Id",
        "type": "string"
       }
+     },
+     {
+      "in": "query",
+      "name": "source",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "enum": [
+          "melt",
+          "numista",
+          "pcgs",
+          "comps",
+          "manual"
+         ],
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Source"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 100,
+       "maximum": 500,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "maximum": 1000000,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
      }
     ],
     "responses": {
@@ -15817,11 +15942,7 @@
       "content": {
        "application/json": {
         "schema": {
-         "items": {
-          "$ref": "#/components/schemas/EstimateOut"
-         },
-         "title": "Response List Estimates Api Items  Item Id  Estimates Get",
-         "type": "array"
+         "$ref": "#/components/schemas/EstimatePage"
         }
        }
       },
@@ -15999,6 +16120,7 @@
   },
   "/api/items/{item_id}/history": {
    "get": {
+    "description": "An item's edit history, newest first, a page at a time.",
     "operationId": "item_history_api_items__item_id__history_get",
     "parameters": [
      {
@@ -16010,6 +16132,30 @@
        "title": "Item Id",
        "type": "string"
       }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 100,
+       "maximum": 500,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "maximum": 1000000,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
      }
     ],
     "responses": {
@@ -16017,11 +16163,7 @@
       "content": {
        "application/json": {
         "schema": {
-         "items": {
-          "$ref": "#/components/schemas/EventOut"
-         },
-         "title": "Response Item History Api Items  Item Id  History Get",
-         "type": "array"
+         "$ref": "#/components/schemas/EventPage"
         }
        }
       },

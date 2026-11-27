@@ -26,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship, with_loader_criteria
 
 from app.db import Base
+from app.services import sources
 
 ItemType = Enum(
     "coin", "note", "bullion", "mint_set", name="item_type", native_enum=False, length=10
@@ -295,6 +296,16 @@ class Item(Base):
             parts.append("★")
         label = " ".join(parts)
         return f"{label} Details ({self.grade_details})" if self.grade_details else label
+
+    @property
+    def latest_estimates(self) -> list["PriceEstimate"]:
+        """The newest estimate from each source, newest first: one per price
+        source and one for the typed-in values. What the item answer carries;
+        the whole history is its own route."""
+        newest: dict[str, PriceEstimate] = {}
+        for estimate in self.estimates:  # newest first
+            newest.setdefault(estimate.source_key, estimate)
+        return list(newest.values())
 
     @property
     def target_gap(self) -> Decimal | None:
@@ -579,6 +590,11 @@ class PriceEstimate(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     item: Mapped[Item] = relationship(back_populates="estimates")
+
+    @property
+    def source_key(self) -> str:
+        """`melt`, `numista`, `pcgs`, `comps`, or `manual` (`sources.key_of`)."""
+        return sources.key_of(self.source)
 
 
 class Comparable(Base):

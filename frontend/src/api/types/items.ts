@@ -183,10 +183,31 @@ export interface Photo {
   uploaded_at: string;
 }
 
+/** What an estimate is grouped under: a price source, or "manual" for every
+ * typed-in value, whatever its source text says. */
+export type SourceKey = "melt" | "numista" | "pcgs" | "comps" | "manual";
+
+/** A credit a data source's terms ask for wherever its data is shown. */
+export interface DataCredit {
+  source: string;
+  name: string;
+  url: string;
+  notice: string;
+}
+
+/** A page of one of an item's histories, newest first. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface Estimate {
   id: string;
   item_id: string;
   source: string;
+  source_key: SourceKey;
   estimated_value: number;
   currency: string;
   confidence: number | null;
@@ -260,7 +281,9 @@ export interface ItemDocument {
 
 export interface ItemDetail extends Item {
   photos: Photo[];
-  estimates: Estimate[];
+  /** The newest estimate per source, newest first. The whole history is
+   * `api.itemEstimates`, a page at a time. */
+  latest_estimates: Estimate[];
   comparables: Comparable[];
   documents: ItemDocument[];
 }

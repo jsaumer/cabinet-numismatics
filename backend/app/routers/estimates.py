@@ -1,19 +1,21 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.permissions import permission
 from app.db import get_db
 from app.models import PriceEstimate
 from app.routers.items import get_item_or_404
-from app.schemas import EstimateCreate, EstimateOut, RefreshResult
+from app.schemas import EstimateCreate, EstimateOut, EstimatePage, RefreshResult, SourceKey
 from app.services import pricing
 from app.services.app_settings import effective_reestimate_days, get_setting
 
 router = APIRouter(prefix="/api/items/{item_id}", tags=["estimates"])
 refresh_router = APIRouter(prefix="/api/estimates", tags=["estimates"])
+
+MAX_OFFSET = 1_000_000  # past bigint range is a database error, not a 422
 
 
 @refresh_router.post("/refresh", response_model=RefreshResult)
@@ -29,19 +31,35 @@ def refresh(source: str, db: Session = Depends(get_db)):
     return pricing.refresh_melt_estimates(db, effective_reestimate_days(db))
 
 
-@router.get("/estimates", response_model=list[EstimateOut])
+@router.get("/estimates", response_model=EstimatePage)
 @permission("read")
-def list_estimates(item_id: uuid.UUID, db: Session = Depends(get_db)):
+def list_estimates(
+    item_id: uuid.UUID,
+    source: SourceKey | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=MAX_OFFSET),
+    db: Session = Depends(get_db),
+):
+    """An item's estimate history, newest first, a page at a time: `source`
+    narrows it to one source's (`manual` is every typed-in value). The item
+    itself carries only the newest per source (`latest_estimates`)."""
     get_item_or_404(db, item_id)
-    return (
+    where = [PriceEstimate.item_id == item_id]
+    if source:
+        where.append(pricing.source_is(source))
+    total = db.execute(select(func.count()).select_from(PriceEstimate).where(*where)).scalar_one()
+    rows = (
         db.execute(
             select(PriceEstimate)
-            .where(PriceEstimate.item_id == item_id)
-            .order_by(PriceEstimate.fetched_at.desc())
+            .where(*where)
+            .order_by(PriceEstimate.fetched_at.desc(), PriceEstimate.id)
+            .limit(limit)
+            .offset(offset)
         )
         .scalars()
         .all()
     )
+    return EstimatePage(items=rows, total=total, limit=limit, offset=offset)
 
 
 @router.post("/estimates", response_model=EstimateOut, status_code=201)

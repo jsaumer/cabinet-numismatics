@@ -1,7 +1,7 @@
 // Every endpoint the frontend calls, one method each.
 
 import { json, req, ReqOptions } from "./client";
-import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, TagInfo } from "./types/items";
+import type { Angle, CalendarReference, Comparable, ComparableInput, ConvertedDate, DataCredit, DocumentKind, Estimate, Grade, Item, ItemDetail, ItemDocument, ItemListEntry, ItemPage, ItemPayload, Page, Photo, SalesFetchResult, SerialTrait, SetInfo, SimilarItem, SourceKey, TagInfo } from "./types/items";
 import type { ImportOptions, ImportPreview, ImportRunResult, ImportUpload, NumistaImportOptions, NumistaSearchResult, NumistaType, PcgsCert } from "./types/imports";
 import type { Breakdowns, ChecklistDetail, ChecklistGenerate, ChecklistSlot, ChecklistSummary, DataHealth, RunCreate, RunResult, CollectionStats, Gains, ItemEvent, NotesBySignature, QualityStats, RefreshResult, Showcase, TrashList, ValueHistory, ValueSpread } from "./types/stats";
 import type { Appearance, DashboardLayout, DashboardWidget } from "./types/dashboard";
@@ -9,6 +9,9 @@ import type { AccuracyReport, AppSettings, AppSettingsUpdate, BackupKey, BackupL
 import type { HistoricSpot, StackBackfillResult, StackReport } from "./types/stack";
 import type { ApiToken, AuditEntry, AuthSession, AuthState, DryRunResult, IdentitySummary, LoginResult, LogoutResult, Me, NewApiToken, PasswordChangeResult, ProviderBody, ProviderPatch, SavedProvider, SigninConfig, SigninConfigPatch, TokenScope } from "./types/auth";
 import type { NewShareLink, ShareChecklistView, ShareItem, ShareItemsPage, ShareLink, ShareLinkCreate, ShareLinkPatch, ShareManifest } from "./types/share";
+
+/** How many rows of an item's estimate or edit history come at a time. */
+const HISTORY_PAGE = 100;
 
 export const api = {
   // Sign-in, the account, sessions, tokens, and the audit log (v0.30.0).
@@ -201,7 +204,18 @@ export const api = {
   refreshEstimates: (source: "melt") =>
     req<RefreshResult>(`/api/estimates/refresh?source=${source}`, { method: "POST" }),
 
-  itemHistory: (id: string) => req<ItemEvent[]>(`/api/items/${id}/history`),
+  dataCredits: () => req<DataCredit[]>("/api/reference/data-credits"),
+
+  itemHistory: (id: string, offset = 0) =>
+    req<Page<ItemEvent>>(`/api/items/${id}/history?limit=${HISTORY_PAGE}&offset=${offset}`),
+
+  /** An item's estimate history, newest first; `source` narrows it to one
+   * source's ("manual" is every typed-in value). */
+  itemEstimates: (id: string, source: SourceKey | null = null, offset = 0) =>
+    req<Page<Estimate>>(
+      `/api/items/${id}/estimates?limit=${HISTORY_PAGE}&offset=${offset}` +
+        (source ? `&source=${source}` : ""),
+    ),
 
   dashboardLayout: () => req<DashboardLayout>("/api/dashboard/layout"),
   appearance: () => req<Appearance>("/api/appearance"),

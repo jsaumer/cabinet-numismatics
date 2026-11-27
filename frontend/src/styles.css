@@ -1594,6 +1594,19 @@ details.history summary {
   margin-top: 1rem;
 }
 
+/* The credits a data source's terms ask for (PCGS: at least 10-point type,
+   so never below 0.84rem at the 16px base; 0.875rem is 10.5pt). */
+.data-credits {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--ink-2);
+  font-size: 0.875rem;
+}
+.data-credits p {
+  margin: 0.2rem 0;
+}
+
 @media print {
   :root,
   :root[data-theme="dark"] {

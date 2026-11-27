@@ -218,7 +218,7 @@ def test_imported_items_record_their_origin_and_clones_do_not(client, tmp_path):
     upload = _upload(client, samples.opennumismat(tmp_path / "c.db", 10))
     _run(client, upload)
     ike = _items(client)["United States 1 Dollar 1978"]
-    history = client.get(f"/api/items/{ike['id']}/history").json()
+    history = client.get(f"/api/items/{ike['id']}/history").json()["items"]
     assert history[-1]["changes"]["via"] == ["import", "OpenNumismat: c.db"]
     copy = client.post(f"/api/items/{ike['id']}/clone")
     assert copy.status_code == 201  # the origin isn't copied, so no unique clash

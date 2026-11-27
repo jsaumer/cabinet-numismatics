@@ -237,7 +237,8 @@ off the machine.
   [Backup and restore](docs/backup-restore.md) ·
   [Monitoring](docs/monitoring.md) · [Security](docs/security.md)
 - **Using it:** [Features](docs/features.md) ·
-  [Price sources](docs/price-sources.md)
+  [Price sources](docs/price-sources.md) ·
+  [Data sources and their terms](docs/data-sources.md)
 - **Building on it:** [API](docs/api.md) ·
   [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) ·
   [Roadmap](docs/roadmap.md) · [Changelog](CHANGELOG.md)

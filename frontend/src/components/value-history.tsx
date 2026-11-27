@@ -1,12 +1,14 @@
 import { FormEvent, Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { api, ItemDetail, money, SourceStatus } from "../api";
+import { api, Estimate, ItemDetail, money, SourceKey, SourceStatus } from "../api";
 import { LineChart } from "./charts";
-import { latestBySource, Provenance, SOURCE_LABELS, sourceKey } from "./provenance";
+import { chipName, Provenance, SOURCE_LABELS } from "./provenance";
 
-/** The item page's Value history card: every estimate with its provenance,
- * a per-source filter, the automatic-source buttons, and the manual form. */
+/** The item page's Value history card: the estimates with their provenance,
+ * a per-source filter, the automatic-source buttons, and the manual form.
+ * The item carries only the newest estimate per source, so the history is
+ * fetched here, a page at a time ("Show older"). */
 export function ValueHistory({
   item,
   sources,
@@ -24,9 +26,13 @@ export function ValueHistory({
   const [estimating, setEstimating] = useState<string | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [estimateSuccess, setEstimateSuccess] = useState<string | null>(null);
-  const [historySource, setHistorySource] = useState<string | null>(null);
+  const [historySource, setHistorySource] = useState<SourceKey | null>(null);
+  const [history, setHistory] = useState<Estimate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [lastTried, setLastTried] = useState<string | null>(null);
+  const [changes, setChanges] = useState(0);
 
   // default the manual-estimate currency to the item's own currency
   const itemCurrency = item.currency;
@@ -48,6 +54,7 @@ export function ValueHistory({
       });
       setEstValue("");
       setEstNote("");
+      setChanges((n) => n + 1);
       onChanged();
     } catch (err) {
       setEstimateError((err as Error).message);
@@ -55,7 +62,7 @@ export function ValueHistory({
   }
 
   // Only a typed-in value can go; what a source said is the record.
-  const typed = (source: string) => !(sourceKey(source) in SOURCE_LABELS);
+  const typed = (est: Estimate) => est.source_key === "manual";
 
   async function removeEstimate(id: string) {
     if (!window.confirm("Delete this value? It can't be brought back.")) return;
@@ -63,6 +70,7 @@ export function ValueHistory({
     setEstimateSuccess(null);
     try {
       await api.deleteEstimate(item.id, id);
+      setChanges((n) => n + 1);
       onChanged();
     } catch (err) {
       setEstimateError((err as Error).message);
@@ -77,6 +85,7 @@ export function ValueHistory({
     try {
       await api.autoEstimate(item.id, source);
       setEstimateSuccess(`${SOURCE_LABELS[source] ?? source} updated.`);
+      setChanges((n) => n + 1);
       onChanged();
     } catch (err) {
       setEstimateError((err as Error).message);
@@ -91,12 +100,43 @@ export function ValueHistory({
     lastTried === "numista" &&
     !item.catalog_refs.some((r) => r.catalog.trim().toLowerCase() === "numista");
 
-  const sourceValues = latestBySource(item.estimates);
+  const sourceValues = item.latest_estimates;
   const activeSource =
-    historySource && sourceValues.some(([key]) => key === historySource) ? historySource : null;
-  const history = activeSource
-    ? item.estimates.filter((est) => sourceKey(est.source) === activeSource)
-    : item.estimates;
+    historySource && sourceValues.some((est) => est.source_key === historySource)
+      ? historySource
+      : null;
+
+  // The first page again whenever the piece, the filter, or its values change
+  // (the newest ids cover a refresh made elsewhere; `changes`, one made here
+  // that left the newest as it was, such as deleting an older typed-in value).
+  const newest = sourceValues.map((est) => est.id).join(",");
+  useEffect(() => {
+    let stale = false;
+    setHistoryError(null);
+    api
+      .itemEstimates(item.id, activeSource)
+      .then((page) => {
+        if (stale) return;
+        setHistory(page.items);
+        setTotal(page.total);
+      })
+      .catch((err) => {
+        if (!stale) setHistoryError((err as Error).message);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [item.id, activeSource, newest, changes]);
+
+  async function showOlder() {
+    try {
+      const page = await api.itemEstimates(item.id, activeSource, history.length);
+      setHistory((shown) => [...shown, ...page.items]);
+      setTotal(page.total);
+    } catch (err) {
+      setHistoryError((err as Error).message);
+    }
+  }
   const toggleExpanded = (estId: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -108,7 +148,7 @@ export function ValueHistory({
   return (
     <div className="card">
       <h2>Value history</h2>
-      {item.estimates.length === 0 && (
+      {sourceValues.length === 0 && (
         <p className="muted">
           No value recorded yet. Add one you researched, or try an automatic estimate.
         </p>
@@ -122,14 +162,14 @@ export function ValueHistory({
           >
             All
           </button>
-          {sourceValues.map(([key]) => (
+          {sourceValues.map((est) => (
             <button
-              key={key}
+              key={est.source_key}
               type="button"
-              className={activeSource === key ? "chip active" : "chip"}
-              onClick={() => setHistorySource(key)}
+              className={activeSource === est.source_key ? "chip active" : "chip"}
+              onClick={() => setHistorySource(est.source_key)}
             >
-              {key}
+              {est.source_key === "manual" ? "typed in" : chipName(est)}
             </button>
           ))}
         </div>
@@ -173,7 +213,7 @@ export function ValueHistory({
                           {open ? "▾ details" : "▸ details"}
                         </button>
                       )}
-                      {typed(est.source) && (
+                      {typed(est) && (
                         <button
                           type="button"
                           className="link-button danger-link"
@@ -198,6 +238,17 @@ export function ValueHistory({
           </tbody>
         </table>
       )}
+      {history.length < total && (
+        <p>
+          <button type="button" className="link-button" onClick={showOlder}>
+            Show older
+          </button>{" "}
+          <span className="muted">
+            {history.length} of {total} shown
+          </span>
+        </p>
+      )}
+      {historyError && <p className="error">{historyError}</p>}
       <div className="estimate-form">
         {sources
           .filter((s) => s.available)

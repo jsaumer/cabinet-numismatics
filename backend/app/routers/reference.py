@@ -10,6 +10,7 @@ from app.models import Grade, Item, ItemSet, Tag, item_tags
 from app.schemas import (
     CalendarReference,
     ConvertedDate,
+    DataCredit,
     GradeOut,
     HistoricSpot,
     SerialTraitOut,
@@ -18,7 +19,7 @@ from app.schemas import (
     SetWithCount,
     TagOut,
 )
-from app.services import calendars, pricing, serials, stack
+from app.services import calendars, credits, pricing, serials, stack
 
 router = APIRouter(prefix="/api", tags=["reference"])
 
@@ -113,6 +114,15 @@ def serial_traits():
         {"key": key, "label": label, "description": description}
         for key, (label, description) in serials.TRAITS.items()
     ]
+
+
+@router.get("/reference/data-credits", response_model=list[DataCredit])
+@permission("read")
+def data_credits(db: Session = Depends(get_db)):
+    """The credits to show wherever the collection is shown: one per data
+    source whose terms ask for one and whose data is held here. Empty until
+    PCGS has been used."""
+    return credits.due(db)
 
 
 @router.get("/reference/calendars", response_model=CalendarReference)

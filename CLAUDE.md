@@ -211,6 +211,21 @@ rules that bite most often:
   new forms; from 1.0.0 the tool refuses without a new major version. Every
   release PR runs `python -m tests.api_contract update`, since a test
   fails while the committed schema names another version.
+- **The item answer carries `latest_estimates`** (v0.39.0), the newest per
+  source; a list that grows by itself gets its own paged route
+  (`{items, total, limit, offset}`), never a place on the item. The API's
+  `source_key` is `sources.key_of` (`manual` for every typed-in value);
+  `pricing.source_key` keeps typed sources apart for the blend.
+- **1.0's promise is wider than the schema**: "What else is promised" in
+  docs/api.md (statuses, error bodies, environment variables, container
+  commands, archives, exports, upgrades, share links, metrics). Read it
+  before changing any of those; the contract check sees almost none of it.
+- A share link shows no value from `share.PRIVATE_SOURCES` (Numista and
+  PCGS: both licenses keep their data from third parties), and every page
+  carries PCGS's credit once anything from PCGS is held
+  (`services/credits.py`, the agreement's own sentence, at least 10-point
+  type). docs/data-sources.md is what users are told about each service's
+  terms and must change with the code.
 - A tag is one per name whatever the capitals (`services/tags.py`, the
   unique index on `lower(name)`), and a Numista reference is stored as
   `N#<digits>` (`services/refs.py`; `schemas.CatalogRefIn` refuses anything
@@ -382,7 +397,11 @@ they have since v0.33.0's spec was reviewed.
 the Numista banknote mapping confirmed against a live account, and a README
 and quick-start pass), then v1.0.0 itself; the CI check against a breaking
 OpenAPI change and the last input rules shipped in v0.38.0 (see "The API
-contract check and the last input rules" in the implementation notes); labels, a phone app, and more accounts are
+contract check and the last input rules" in the implementation notes), and
+the four contract decisions after them are built for v0.39.0 ("Four
+contract decisions"), with two questions left for the owner to send: to
+Numista about catalog facts on a share link, and to PCGS about whether a
+private collection is a use its agreement covers; labels, a phone app, and more accounts are
 optional. Research and propose each before building, as always. Before
 that, the roadmap's Phase 5.9 was demoted
 on 19 September 2026 from a release train to one next item plus unordered

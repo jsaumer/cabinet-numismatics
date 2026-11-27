@@ -11,7 +11,7 @@ def test_create_and_get_item(client, coin):
     detail = resp.json()
     assert detail["denomination"] == "25 cents"
     assert detail["photos"] == []
-    assert detail["estimates"] == []
+    assert detail["latest_estimates"] == []
 
 
 def test_get_missing_item_404(client):

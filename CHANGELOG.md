@@ -8,6 +8,69 @@ Database changes always ship as Alembic revisions. From 0.11.1 the backend
 applies them itself on startup; for earlier releases, run
 `docker compose exec backend alembic upgrade head` after upgrading.
 
+## [Unreleased]
+
+Four contract decisions before 1.0: what an item's answer carries, what
+1.0 promises beyond paths and fields, and where Cabinet stands with the
+services it reads. No migration.
+
+### Changed (breaking for API clients)
+
+- **An item carries its newest estimate per source, not its whole
+  history.** `GET /api/items/{id}` has `latest_estimates` (one per source,
+  newest first, at most five) where it had `estimates`. With scheduled
+  refreshes on, the old list grew by about 150 rows a year per piece and
+  came with every item fetch.
+- **The estimate history is a page.** `GET /api/items/{id}/estimates`
+  answers `{items, total, limit, offset}` where it answered an array, with
+  `limit` (default 100, at most 500), `offset`, and `source` to narrow it
+  to one source's.
+- **The edit history is a page too.** `GET /api/items/{id}/history`
+  answers the same shape, with `limit` and `offset`.
+
+### Added
+
+- **`source_key` on every estimate**: `melt`, `numista`, `pcgs`, `comps`,
+  or `manual` for a typed-in value. `source` stays the sentence for people
+  ("numista:N#1234 XF"); a client no longer has to split it.
+- **The wider promise, written down.** [docs/api.md](docs/api.md) now says
+  what 1.0 will keep stable besides paths and fields: success and error
+  statuses, the shape of an error, environment variable names, the
+  container commands, the archive format, export columns, upgrades by
+  changing the tag, share links, and metric names. It also says what
+  today's storage and purchase fields will keep meaning if richer records
+  arrive later.
+- **PCGS's credit line.** PCGS's API agreement asks that every page using
+  its data link back to PCGS and carry a set sentence naming it as the
+  licensed source. Once anything from PCGS is held (the source switched on,
+  a cached answer, an estimate, a population), every page and printed
+  report carries that line at its foot. `GET /api/reference/data-credits`
+  gives it to other clients. The agreement also names a logo, which is not
+  shown: its exhibit is not attached to the agreement.
+- **[Data sources and their terms](docs/data-sources.md)**: what Numista,
+  PCGS, and the three keyless services ask of the person whose key it is,
+  what Cabinet does on their behalf, and what stays theirs. Linked from
+  Settings, Pricing.
+
+### Changed
+
+- **A share link no longer shows a value made from PCGS's data**, as it
+  never showed one from Numista. PCGS's API End User Agreement forbids
+  making its data available to any third party. A piece priced only by
+  PCGS shares no value; your own pages are unchanged.
+- The item page's value history loads a page at a time, with "Show older"
+  for the rest; the edit history does the same. On the item's source
+  chips, typed-in values are one chip, the newest.
+
+### Fixed
+
+- The docs said Numista's license limits a personal project's stored data
+  to seven days. It does not: that limit covers four catalog endpoints
+  Cabinet never calls. The seven-day refresh is Cabinet's own choice.
+- The sign-in spec's route table listed `POST /api/auth/password` and
+  `/username` as needing a recent password. They never did, since the
+  current password is in the request; the table now says so.
+
 ## [0.38.0] - 2026-11-26
 
 The API contract check, and the last inputs tightened while a stricter rule

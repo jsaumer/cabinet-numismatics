@@ -76,6 +76,37 @@ test("record a value by hand", async ({ page }) => {
   await expect(page.getByRole("cell", { name: "$20.00" })).toBeVisible();
 });
 
+test("a long value history comes a page at a time", async ({ page }) => {
+  // The item carries only its newest value per source; the history is its
+  // own route, 100 rows at a time (v0.39.0).
+  await page.goto(itemUrl);
+  const origin = { Origin: new URL(page.url()).origin };
+  const made = await page.request.post("/api/items", {
+    headers: origin,
+    data: { type: "coin", country: "Long history", denomination: "1 page", year: 2026 },
+  });
+  expect(made.status()).toBe(201);
+  const id = (await made.json()).id as string;
+  for (let n = 1; n <= 103; n += 1) {
+    const added = await page.request.post(`/api/items/${id}/estimates`, {
+      headers: origin,
+      data: { estimated_value: 1000 + n, source: "dealer quote" },
+    });
+    expect(added.status()).toBe(201);
+  }
+
+  await page.goto(`/items/${id}`);
+  const rows = page.locator("table.estimates tbody tr");
+  await expect(rows).toHaveCount(100);
+  await expect(page.getByText("100 of 103 shown")).toBeVisible();
+  await page.getByRole("button", { name: "Show older" }).click();
+  await expect(rows).toHaveCount(103);
+  await expect(page.getByRole("button", { name: "Show older" })).toHaveCount(0);
+
+  // To the trash; it has its own country, so the trash test's row stays unique.
+  await page.request.delete(`/api/items/${id}`, { headers: origin });
+});
+
 // Needs an item, so it sits after the one above: an empty collection shows the
 // "nothing to report yet" page instead of the grid.
 test("the dashboard can be rearranged, and put back", async ({ page }) => {
@@ -378,6 +409,44 @@ test("a wishlist coin shows its target price", async ({ page }) => {
   await expect(target).toContainText("$1,000.00");
 
   await deleteForGood(page, url, country);
+});
+
+test("PCGS's credit shows on every page while its data is held", async ({ page }) => {
+  // PCGS's API agreement asks for a link back and a set sentence wherever
+  // its data is used (v0.39.0). Switching the source on is enough to owe it.
+  await page.goto("/");
+  const origin = { Origin: new URL(page.url()).origin };
+  const credit = page.locator("footer.data-credits");
+  await expect(credit).toHaveCount(0);
+
+  const settings = async (data: Record<string, unknown>) => {
+    await page.request.post("/api/auth/confirm", {
+      headers: origin,
+      data: { password: CABINET_PASSWORD },
+    });
+    const put = await page.request.put("/api/settings", { headers: origin, data });
+    expect(put.status()).toBe(200);
+  };
+  await settings({ pcgs_api_token: "e2e-not-a-real-token", pcgs_enabled: true });
+  try {
+    for (const path of ["/", "/collection", "/report"]) {
+      await page.goto(path);
+      await expect(credit).toContainText(
+        "The Data is obtained from and is subject to a license agreement with Collectors Universe",
+      );
+      await expect(credit.getByRole("link", { name: "PCGS" })).toHaveAttribute(
+        "href",
+        "https://www.pcgs.com",
+      );
+    }
+    // At least 10-point type, as the agreement asks (10pt is 13.33px).
+    const size = await credit.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(size).toBeGreaterThanOrEqual(13.34);
+  } finally {
+    await settings({ pcgs_enabled: false, pcgs_api_token: "" });
+  }
+  await page.goto("/");
+  await expect(credit).toHaveCount(0);
 });
 
 test("the security headers are set and nothing trips the policy", async ({ page }) => {

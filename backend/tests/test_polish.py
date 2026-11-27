@@ -12,25 +12,25 @@ def _create(client, payload):
 def test_edit_history(client):
     item = _create(client, COIN)
 
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
     assert len(history) == 1
     assert history[0]["action"] == "created"
 
     client.patch(f"/api/items/{item['id']}", json={"quantity": 3, "notes": "moved"})
     client.patch(f"/api/items/{item['id']}", json={"quantity": 3})  # no-op: no event
 
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
     assert len(history) == 2
     assert history[0]["action"] == "updated"
     assert history[0]["changes"]["quantity"] == [1, 3]
     assert history[0]["changes"]["notes"] == [None, "moved"]
 
     clone = client.post(f"/api/items/{item['id']}/clone").json()
-    clone_history = client.get(f"/api/items/{clone['id']}/history").json()
+    clone_history = client.get(f"/api/items/{clone['id']}/history").json()["items"]
     assert clone_history[0]["changes"]["cloned_from"] == [None, item["id"]]
 
     client.post("/api/items/bulk", json={"ids": [item["id"]], "add_tags": ["bulked"]})
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
     assert history[0]["changes"]["bulk"] == [None, True]
     assert history[0]["changes"]["add_tags"] == [None, ["bulked"]]
 
@@ -38,7 +38,7 @@ def test_edit_history(client):
 def test_tag_change_recorded(client):
     item = _create(client, {**COIN, "tags": ["a"]})
     client.patch(f"/api/items/{item['id']}", json={"tags": ["b"]})
-    history = client.get(f"/api/items/{item['id']}/history").json()
+    history = client.get(f"/api/items/{item['id']}/history").json()["items"]
     assert history[0]["changes"]["tags"] == [["a"], ["b"]]
 
 

@@ -492,8 +492,10 @@ docs/backup-restore.md. What a change here has to respect:
   folder and calls `restore.reset_memory()`. Real Postgres is covered by
   CI's in-app drill (after the restore.sh drill) and the Playwright restore
   test, which is last in `smoke.spec.ts` on purpose.
-- **Not covered**: NFS volumes, and an archive from a genuinely older
-  release (the older-revision path ran against a rewritten manifest). The
+- **Not covered** (as of v0.26.0; v0.26.1 met NFS live, and a v0.30.0
+  archive was restored by hand on the v0.39.0 build): NFS volumes, and an
+  archive from a genuinely older release in CI (the older-revision path
+  runs against a rewritten manifest). The
   manifest isn't in `SHA256SUMS`, so verification catches corruption only.
 - nginx: `location /api/restore` (20g, `proxy_request_buffering off`, 60m)
   sits before `location /api/`; `RESTORE_MAX_GB` above 20 needs it raised.
@@ -1632,7 +1634,8 @@ permission class. Rules a later change has to respect:
   or sale field, a location, a document, a serial, custom fields, the
   population, wish-list fields, spot at purchase, the import origin, or a
   timestamp. `value` is the one money field, behind `show_values`, and
-  from v0.37.0 it never carries Numista's data (`share.from_numista`: a
+  from v0.37.0 it never carries Numista's data (`share.from_private_source`,
+  `from_numista` until v0.39.0, which added PCGS: a
   Numista estimate, or a comps median that used a Numista sale), since
   Numista's API license (section 8.4) keeps a personal project's stored
   data from third parties. A new price source whose terms say the same
@@ -2872,7 +2875,8 @@ and mint sets. Rules:
 - **A share link never shows Numista's data.** The license's
   personal-project section (8.4) lets an individual store Numista data, not
   make it available to third parties, and a share link with values on is a
-  public page. `share.from_numista` leaves out a Numista estimate and a
+  public page. `share.from_private_source` (`from_numista` until v0.39.0)
+  leaves out a Numista estimate and a
   comps median that used a sale fetched from Numista (`details.sales[].source`)
   before the value is worked out, whatever `value_strategy` says, so a piece
   priced only by Numista shares no value. The owner's own pages are
@@ -3264,6 +3268,66 @@ Migration `0024`.
   both link tables have the pair as their primary key.
   `tests/test_input_rules.py` runs it on SQLite through alembic's
   `Operations`; `stack-smoke.sh smoke` checks the rules on Postgres.
+
+## Four contract decisions (v0.39.0)
+
+Rows 14, 15, 16, and 18 of the 1.0 checklist, proposed to the owner and
+approved on 26 November 2026. No migration.
+
+- **The item answer carries `latest_estimates`, never the history.**
+  `Item.latest_estimates` is the newest estimate per `source_key`, and
+  `ItemDetail` has no `estimates`. Don't put a list on the item answer that
+  grows without the owner adding to it; give it a route of its own that
+  answers `{items, total, limit, offset}`, as `/estimates` and `/history`
+  now do. The relationship still loads the whole history to pick the
+  newest; that is internal and can change.
+- **Two source keys, on purpose.** `services/sources.py` (nothing imports
+  into it) holds the adapter names, and `sources.key_of` is the API's
+  `source_key`: one of the four adapters, or `manual` for every typed-in
+  value. `pricing.source_key` is the older one and keeps each typed source
+  text apart, because the blended value and the reports group by it. A new
+  response field uses `sources.key_of`; `pricing.source_is(key)` is the
+  same grouping as a SQL condition.
+- **`schemas.RESERVED_SOURCES` and `pricing.ADAPTER_NAMES` are both
+  `sources.ADAPTERS` now**, so a fifth price source is one edit there, plus
+  the `SourceKey` literal in `schemas.py` (a `Literal` can't be built from
+  a tuple in a way the type checker reads) and the frontend's `SourceKey`.
+- **The value history fetches its own pages.** `components/value-history.tsx`
+  asks `api.itemEstimates` for the first page whenever the piece, the
+  source filter, or the item's newest estimate ids change, and after any
+  change made in the card (`changes`: deleting an older typed-in value
+  leaves the newest ids as they were). "Show older" appends the next page.
+  The hero and the chips read `item.latest_estimates`.
+- **The share link's private sources are `share.PRIVATE_SOURCES`**
+  (`numista`, `pcgs`), read by `share.from_private_source` (was
+  `from_numista`). PCGS's API End User Agreement, read by the owner's
+  account on 26 November 2026, forbids making its data available to any
+  third party, so it stays on the tuple.
+- **PCGS's credit is `services/credits.py`**, behind `GET
+  /api/reference/data-credits` and `components/data-credits.tsx` at the
+  foot of the signed-in shell's `<main>`, so every page and every printed
+  report carries it. It is due whenever anything from PCGS is held
+  (`credits.holds_pcgs_data`: the source on, a `source_cache` row, an
+  estimate, a population, the trash included), not only while the source is
+  on. `PCGS_NOTICE` is the agreement's own sentence: don't rephrase it, and
+  keep `.data-credits` at 10 points or more (0.875rem). No logo: the
+  agreement's exhibit isn't attached, and the marks need a license. A new
+  place that shows PCGS data outside the shell (a share page never does)
+  needs the credit too.
+- **The promise is text, and most of it has no check.** "What else is
+  promised" in docs/api.md covers statuses, error bodies, variables,
+  commands, archives, exports, upgrades, share links, and metrics. Only
+  success statuses are compared by the contract check. Before changing any
+  of those surfaces, read that table; a change that breaks a line of it
+  needs the same care as a removed field.
+- **Numista's seven days are Cabinet's, not the license's.** Section 8.4
+  sets no limit for a personal project; 8.3's seven days cover the issuers,
+  mints, and catalogues endpoints, which nothing calls. Don't add a cache
+  purge on the license's account. If Cabinet ever calls one of those three
+  endpoints, 8.3 applies to that data.
+- **The spec table and the gate agree again**: `POST /api/auth/password`
+  and `/username` are `admin`, not `fresh`, in SPEC_0300's appendix, and
+  `test_gate` no longer carries an exception for them.
 
 ## Releases
 

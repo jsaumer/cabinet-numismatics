@@ -267,7 +267,7 @@ def test_struck_date_on_update(client, coin):
     assert cleared["struck_calendar"] is None
     assert patch(client, coin, year=None).status_code == 422  # nothing to convert from
 
-    history = client.get(f"/api/items/{coin['id']}/history").json()
+    history = client.get(f"/api/items/{coin['id']}/history").json()["items"]
     assert history[-2]["changes"]["struck_year"] == [None, 1340]  # edits are recorded as usual
 
 
@@ -610,7 +610,7 @@ def test_bulk_edit_sets_priority(client):
     )
     client.post("/api/items/bulk", json={"ids": ids, "set": {"priority": None}})
     assert {i["priority"] for i in listed(client)} == {None}
-    history = client.get(f"/api/items/{a['id']}/history").json()
+    history = client.get(f"/api/items/{a['id']}/history").json()["items"]
     assert history[0]["changes"] == {"bulk": [None, True], "priority": [None, None]}
 
 

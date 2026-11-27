@@ -487,9 +487,13 @@ bodies and long requests; see
   database was restored, the file swap was refused, and the files were put
   back. The swap is renames within one volume, and `.nfs*` placeholder files
   (an NFS client's stand-ins for open files) are skipped.
-- **Not tested with an archive made by a genuinely older release.** The
-  older-revision path (dropping newer tables, then migrating) was exercised
-  with an archive whose manifest was rewritten to an older revision.
+- **An archive made by an older release**: tried by hand on 26 November
+  2026, not yet in CI. A stack from the published v0.30.0 images (the first
+  with encrypted archives, collection revision `0021`) wrote an archive,
+  was upgraded to the v0.39.0 build, and restored that archive from this
+  page: the database came back and migrated to `0024`, on local volumes.
+  CI still exercises the older-revision path only with an archive whose
+  manifest was rewritten to an older revision.
 - Rehearsed in CI on every push, against real Postgres (see Notes). If it
   goes wrong, or the app won't start, use the script below.
 

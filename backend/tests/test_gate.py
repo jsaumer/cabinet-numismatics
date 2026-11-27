@@ -96,22 +96,14 @@ def spec_table() -> dict[tuple[str, str], permissions.Declared]:
     return table
 
 
-# The current password in their bodies is the confirmation (see
-# routers/auth.py), and ending one's own session never asks.
-BODY_CONFIRMED = {("POST", "/api/auth/password"), ("POST", "/api/auth/username")}
-
-
 def test_every_operation_declares_what_the_spec_says():
     table = spec_table()
     ops = operations()
-    assert len(ops) == 139 == len(table)
+    assert len(ops) == 140 == len(table)
     for method, path in ops:
         found = declared(endpoint_for(method, path))
         assert found is not None, f"{method} {path} declares no @permission"
-        want = table[(method, path)]
-        if (method, path) in BODY_CONFIRMED:
-            want = permissions.Declared(want.cls, want.metrics_ok, False)
-        assert found == want, (method, path)
+        assert found == table[(method, path)], (method, path)
 
 
 def test_class_counts():
@@ -124,8 +116,9 @@ def test_class_counts():
     # then v0.32.0's share view: 5 public share routes and 5 admin ones; then
     # v0.33.0's single sign-on: the 2 public flow routes and 6 admin ones,
     # then the trusted header's public sign-in and its admin link route;
-    # then v0.35.0's appearance: one read, one admin.
-    assert counts == {"public": 7, "read": 36, "write": 42, "admin": 49, "share": 5}
+    # then v0.35.0's appearance: one read, one admin; then v0.39.0's data
+    # credits: one read.
+    assert counts == {"public": 7, "read": 37, "write": 42, "admin": 49, "share": 5}
 
 
 def test_completeness_every_operation_reaches_layer_two(client, dry_run):
