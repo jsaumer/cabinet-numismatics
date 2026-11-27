@@ -7,10 +7,13 @@ cataloging, valuation, and insights. Open-sourcing is a possible endgame, so
 phases that matter for that (docs, packaging, polish) are called out explicitly
 rather than assumed.
 
-**Status (November 2026): v0.42.0 (small items from the 1.0 checklist: the
-web interface says when it and the server are different releases, a web
-app manifest, and CI restoring an older release's archive; v0.41.0 before
-it was the first run, a one-file install from the published images and a
+**Status (November 2026): v0.43.0 (the first-run pass from the 1.0
+checklist: a welcome state for an empty collection, a demo collection
+loaded and removed from one button, and a form that asks before it loses
+work and says why a save was refused; v0.42.0 before it was the
+checklist's small items, the web interface saying when it and the server
+are different releases, a web app manifest, and CI restoring an older
+release's archive; v0.41.0 was the first run on the install side, a one-file install from the published images and a
 readable page for a wrong address, v0.40.0 added arm64 images with build
 provenance, v0.39.0 settled four contract decisions, and v0.38.0 added a
 CI check against breaking the API) is the latest published release**, with versioned images published to GHCR from each
@@ -409,12 +412,12 @@ Only relevant if Cabinet is released publicly, but cheap to keep in mind.
   auth, storage, scheduled backups, upgrades).
 - ✔ **[OSS]** Seed/demo data and screenshots: a 17-item demo collection
   (with public domain photos from Wikimedia Commons, from v0.36.0), loaded
-  by `scripts/seed_demo.py` and, from the release after v0.42.0, by a button
+  by `scripts/seed_demo.py` and, from v0.43.0, by a button
   on an empty Cabinet, and removed again in one step; screenshots are captured headlessly at a fixed
   viewport, with the exact command recorded in `docs/screenshots/README.md`
   so they can be regenerated rather than re-staged by hand.
 - ✔ **[OSS]** Automated tests and CI on pull requests: GitHub Actions runs
-  ruff, the backend test suite (about 1,490 tests as of v0.42.0) on Python 3.10 and 3.15, a frontend typecheck, and a
+  ruff, the backend test suite (about 1,510 tests as of v0.43.0) on Python 3.10 and 3.15, a frontend typecheck, and a
   full compose build with migrations and an API smoke test.
 - ✔ **[OSS]** Versioned releases and a changelog: `CHANGELOG.md`, version
   reported by `GET /api/health` and in the OpenAPI spec.
@@ -855,6 +858,15 @@ pieces turned up, each shipped as a small release:
   release and from v0.30.0 and restoring each one's archive in the app,
   the tests on `httpx2`, and signing in going back to the page that asked
   for it.
+- ✔ v0.43.0: row 21, the first-run pass. An empty collection shows three
+  ways to start where it showed a red box of chores; the demo collection
+  loads from one button into an empty collection and is removed with one;
+  every "add" link opens the quick add; a new piece starts in the display
+  currency; the setup checklist is a plain card with red kept for what is
+  broken; leaving unsaved work asks first; a refused save says why beside
+  the Save buttons, by the field's label; and three quick-add fixes (a
+  second lookup replacing the first, "No date", a bare year read as a
+  name).
 
 Confirmed against the real services along the way: the PCGS cert fill,
 grade and designation parsing, and PCGS pricing. Still to confirm: "Add a

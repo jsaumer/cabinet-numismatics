@@ -461,7 +461,7 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 - **Writing.** No em dashes in interface text or comments; an empty value in
   a table or field shows an en dash.
 
-## The first run (after v0.42.0)
+## The first run (v0.43.0)
 
 - `components/welcome.tsx` is what an empty collection shows, on the
   dashboard and the collection page: add a piece (the quick add, the one

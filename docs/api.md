@@ -1381,7 +1381,7 @@ here: that stays a per-browser choice on the header's toggle.
 | `POST`   | `/api/demo` | Load the demo collection into an empty collection    |
 | `DELETE` | `/api/demo` | Delete the demo's pieces for good, and nothing else  |
 
-From the release after v0.42.0. Seventeen pieces (coins, notes, two bars, a
+From v0.43.0. Seventeen pieces (coins, notes, two bars, a
 proof set, a sold piece, a wish-list piece) with values and photos, for
 looking around before any real data is entered.
 

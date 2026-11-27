@@ -154,8 +154,7 @@ they were Windows paths too, silently breaking the bind mounts.
   the 17 pieces (the two bullion pieces have none), so the stack needs to
   reach `upload.wikimedia.org` while it seeds; Commons refuses bursts, so
   the photos take about a minute. `--no-photos` skips them.
-- The demo's values are recorded on different days (from the release after
-  v0.42.0), so the value-over-time chart draws a line.
+- The demo's values are recorded on different days (from v0.43.0), so the value-over-time chart draws a line.
 - A loaded demo shows a "This is the demo collection" notice on the
   dashboard and the collection page; `capture.cjs` sets the key that hides
   it (`cabinet.demo.dismissed`), as "Keep it for now" does.

@@ -54,7 +54,7 @@ def request(base: str, method: str, path: str, token: str | None = None):
             ) from None
         if exc.code == 404:
             raise SystemExit(
-                f"{base} has no demo collection to load: it needs the release after v0.42.0."
+                f"{base} has no demo collection to load: it needs v0.43.0 or later."
             ) from None
         return exc.code, {"detail": detail}
     except urllib.error.URLError as exc:

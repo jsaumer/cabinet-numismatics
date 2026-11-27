@@ -1794,6 +1794,71 @@
     "title": "DeletedArchive",
     "type": "object"
    },
+   "DemoPhotos": {
+    "description": "The demo collection's photo fetch: `idle` (none asked for, or none\nunder way since this process started), `running`, or `done`.",
+    "properties": {
+     "failed": {
+      "title": "Failed",
+      "type": "integer"
+     },
+     "fetched": {
+      "title": "Fetched",
+      "type": "integer"
+     },
+     "state": {
+      "enum": [
+       "idle",
+       "running",
+       "done"
+      ],
+      "title": "State",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "state",
+     "total",
+     "fetched",
+     "failed"
+    ],
+    "title": "DemoPhotos",
+    "type": "object"
+   },
+   "DemoRemoved": {
+    "properties": {
+     "removed": {
+      "title": "Removed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "removed"
+    ],
+    "title": "DemoRemoved",
+    "type": "object"
+   },
+   "DemoStatus": {
+    "description": "`items` counts the demo's pieces, the trash included; 0 means no demo\ncollection is loaded.",
+    "properties": {
+     "items": {
+      "title": "Items",
+      "type": "integer"
+     },
+     "photos": {
+      "$ref": "#/components/schemas/DemoPhotos"
+     }
+    },
+    "required": [
+     "items",
+     "photos"
+    ],
+    "title": "DemoStatus",
+    "type": "object"
+   },
    "Disagreement": {
     "properties": {
      "item_id": {
@@ -11811,7 +11876,7 @@
  },
  "info": {
   "title": "Cabinet API",
-  "version": "0.42.0"
+  "version": "0.43.0"
  },
  "openapi": "3.1.0",
  "paths": {
@@ -13393,6 +13458,92 @@
     "summary": "Save Layout",
     "tags": [
      "dashboard"
+    ]
+   }
+  },
+  "/api/demo": {
+   "delete": {
+    "description": "Delete every demo piece for good, with its photos and values. Pieces\nentered by hand or imported are never touched.",
+    "operationId": "remove_demo_api_demo_delete",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DemoRemoved"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Remove Demo",
+    "tags": [
+     "demo"
+    ]
+   },
+   "get": {
+    "description": "How many demo pieces there are (the trash included) and how far the\nphoto fetch has got.",
+    "operationId": "demo_status_api_demo_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DemoStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Demo Status",
+    "tags": [
+     "demo"
+    ]
+   },
+   "post": {
+    "description": "Load the demo collection into an empty collection. The pieces and\ntheir values are there when this answers; the photos follow in the\nbackground, and `GET /api/demo` says how far they have got.",
+    "operationId": "load_demo_api_demo_post",
+    "parameters": [
+     {
+      "description": "Fetch the photos from Wikimedia Commons",
+      "in": "query",
+      "name": "photos",
+      "required": false,
+      "schema": {
+       "default": true,
+       "description": "Fetch the photos from Wikimedia Commons",
+       "title": "Photos",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DemoStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Load Demo",
+    "tags": [
+     "demo"
     ]
    }
   },

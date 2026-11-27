@@ -185,8 +185,8 @@ most often use instead.
   removed, resized, retitled, and arranged by drag or keyboard, saved on the
   server so it follows the collection; the default layout is today's fixed
   page (the group C widgets are opt-in), and a setup checklist widget says
-  what is still off (scheduled backups, the alert webhook, a price-source
-  key).
+  what is broken (in red) and what is still off (scheduled backups, the
+  alert webhook, a price-source key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
   grades, tags, refs, sets, and custom fields) with per-row error reporting.
   A text cell that a spreadsheet would run as a formula is exported as plain
