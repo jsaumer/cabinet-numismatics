@@ -3603,6 +3603,88 @@ approved it on 27 November 2026 with the demo as a button.
   and removes the demo for real on Postgres when the collection is empty
   and checks only the refusal otherwise.
 
+## Accessibility basics (after v0.43.0)
+
+Row 22 of the 1.0 checklist. Frontend only: no migration, no API change.
+The review's findings were made by reading, so they were measured first
+(an axe scan of 23 pages in light and dark on a 0.42.0 stack), and the
+scan found a different list than the reading had. The owner approved the
+build on 27 November 2026, with input text at 14 px on a desktop and 16 px
+on a touch screen.
+
+- **The scan is a test.** `frontend/e2e/a11y.spec.ts` runs axe (WCAG 2.0
+  to 2.2, levels A and AA, `@axe-core/playwright`, a development
+  dependency under MPL-2.0 that never reaches an image's final stage) over
+  the main pages in light and dark and fails on any finding. It creates a
+  piece of its own, with a photo, so the item page and the dashboard have
+  content whatever the stack holds, and trashes it afterwards. It sorts
+  first among the specs. What a scan can't see has its own tests there:
+  field outlines (worked out in the page from computed colors, since axe
+  doesn't check non-text contrast), titles, the skip link, a dialog's
+  focus, the shortcut switch.
+- **A finding is fixed, never excluded.** The spec has no rule switched
+  off and no element left out. If a rule ever has to be, say why beside it.
+- **One overlay.** `components/overlay.tsx` is the native `<dialog>` opened
+  with `showModal()`: the focus trap, the inert page, and focus returned on
+  close are the browser's. The dialog element is stretched over the
+  viewport and is its own backdrop (`dialog.overlay` resets the browser's
+  look; `.modal` and `.lightbox` are unchanged), so a click whose target is
+  the dialog itself is a click outside. Escape arrives as the `cancel`
+  event, which is always prevented and passed to `onClose`: the caller
+  decides (an editor mid-save does nothing). A browser may close a dialog
+  on a second Escape regardless, so the `close` event re-opens it if the
+  caller kept it mounted. Tab also visits the browser's own toolbar; a test
+  for "focus stays inside" has to allow the moment the page has no focused
+  element, and check that nothing behind the dialog ever has it.
+- **Two notes.** `components/notes.tsx`: `<ErrorNote>` is `role="alert"`
+  and renders nothing when empty; `<StatusNote>` is `role="status"`. An
+  error that comes and goes is one of these. A warning that is part of the
+  page from the start (where the backup key is stored, plain http on the
+  sign-in page) is not an alert and stays plain `className="error"` text:
+  an alert present at load is read out on every visit. A countdown ("Try
+  again in 12s") stays outside the alert, or every second is announced. The
+  item form's top message is plain on purpose: the summary beside the Save
+  buttons is the alert, and two would say it twice.
+- **Tokens.** `--field-border` is new in all eight theme blocks, 3:1 or
+  better against `--page`, `--surface`, and `--surface-alt`, and is what
+  `input`, `select`, and `textarea` are outlined with; `--border` stays for
+  cards and dividers. `--ink-3` moved in seven of the eight blocks to reach
+  4.5:1 on `--page`, `--surface`, `--surface-alt`, `--hover`, and
+  `--chip-bg` (the selected row), where it had been checked on a card only.
+  A new theme defines both, and the spec checks every theme and mode.
+- **Input text** is 0.875rem inside a `.field` (it inherited the label's
+  0.75rem), and 16px for every input under `@media (pointer: coarse)`, with
+  `!important` because that rule has to beat whatever sized the field. The
+  phone zoom it prevents is iOS behavior that was not tested on a phone.
+- **Links in running text are underlined** by a short list of selectors
+  (`p a`, `.muted a`, `.error a`, `.empty a`, `.setup-card li a`,
+  `.dup-warning a`, `.setting-row-help a`), never all links: navigation,
+  buttons, and rows of links are told apart by where they are. A new
+  container of prose with links in it joins the list, and the scan says so
+  (`link-in-text-block`) when one is missed.
+- **Titles.** `useTitle` (`components/title.ts`) sets "<page> · Cabinet";
+  `null` leaves the title alone, which is how a piece open beside the
+  collection list keeps the list's title. `heroTitle` in
+  `components/item-hero.tsx` is the hero's heading and the item page's
+  title: the same builder, not a sixth one.
+- **Focus after a navigation** goes to the page's `h1` (`App.tsx`,
+  `focusContent`), or to `<main>` and then the heading once a loading page
+  renders one. Not between `/collection` addresses, where every piece is a
+  new address and the keys have to stay with the list, and not when the
+  page focused something itself (the quick add's box). The skip link calls
+  the same function rather than adding a hash the router would see.
+- **Shortcuts.** `components/shortcuts.ts` holds the per-browser switch
+  (`localStorage` `cabinet.shortcuts`, "off"); the collection's J, K, E, N
+  and the header's "/" ask it. Arrow keys, Enter, and Escape don't: they
+  are not characters. A new single-letter shortcut has to ask it too.
+- **Names.** An edit-in-place button's name is built from its content, a
+  hidden "Change storage: " before the value in a span of its own, never
+  an `aria-label`, which would replace the value a sighted person reads.
+  An icon-only button gets an `aria-label` beside its `title`.
+- **The share test's old flake** was a label: `getByLabel("Cert number")`
+  also matches "PCGS cert number" once a PCGS token is configured, which a
+  second run on the same stack can leave behind. It is exact now.
+
 ## Releases
 
 

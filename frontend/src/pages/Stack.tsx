@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { api, METAL_LABELS, money, StackReport, TagInfo } from "../api";
 import { delta } from "../dashboard/widgets/value";
 import { timeSince } from "../components/provenance";
+import { ErrorNote, StatusNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 const oz = (v: number) =>
   v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
@@ -11,6 +13,7 @@ const oz = (v: number) =>
 const pct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
 export default function Stack() {
+  useTitle("Stack");
   const [tag, setTag] = useState("");
   const [tags, setTags] = useState<TagInfo[]>([]);
   const [data, setData] = useState<StackReport | null>(null);
@@ -52,7 +55,7 @@ export default function Stack() {
     }
   }
 
-  if (error) return <p className="error">{error}</p>;
+  if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!data) return <p className="muted">Loading…</p>;
 
   const empty = data.metals.length === 0;
@@ -92,7 +95,7 @@ export default function Stack() {
           </button>
         )}
       </div>
-      {backfillNote && <p className="muted">{backfillNote}</p>}
+      <StatusNote>{backfillNote}</StatusNote>
 
       {empty ? (
         <>

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { SourceStatus } from "../../api";
 import { LockIcon } from "../../components/icons";
 import { Section, useSettings } from "./shared";
+import { ErrorNote, StatusNote } from "../../components/notes";
 
 // Sources with nothing to configure beyond on/off.
 const KEYLESS = new Set(["melt", "comps"]);
@@ -18,7 +19,7 @@ export default function PricingSection() {
   const { settings, error, note, saving, apply } = useSettings();
   const [keys, setKeys] = useState<Record<string, string>>({});
 
-  if (error && !settings) return <p className="error">{error}</p>;
+  if (error && !settings) return <ErrorNote>{error}</ErrorNote>;
   if (!settings) return <p className="muted">Loading…</p>;
 
   const sourceCard = (source: SourceStatus) => {
@@ -185,8 +186,8 @@ export default function PricingSection() {
 
   return (
     <Section title="Pricing">
-      {error && <p className="error">{error}</p>}
-      {note && <p className="muted">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote>{note}</StatusNote>
 
       <h3>Price sources</h3>
       <p className="muted" style={{ marginTop: 0 }}>

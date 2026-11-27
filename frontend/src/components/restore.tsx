@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, RestoreInspection, RestoreOutcome, RestoreSharing, RestoreStatus } from "../api";
 import { FileButton } from "./controls";
+import { ErrorNote } from "./notes";
 
 // Settings → Backups → Restore: pick an archive, read the summary, type the
 // phrase, then watch the steps. The backend answers 503 to everything but the
@@ -270,7 +271,7 @@ export function RestoreBlock({
         </div>
       )}
 
-      {restore.error && phase !== "failed" && <p className="error">{restore.error}</p>}
+      {restore.error && phase !== "failed" && <ErrorNote>{restore.error}</ErrorNote>}
 
       {phase === "review" && inspection && (
         <>

@@ -9,6 +9,19 @@ import { chipName, timeSince } from "./provenance";
 /** The top of the item page: the piece itself, large, and the handful of facts
  * worth reading before anything else. The photos card below still manages
  * photos; this only shows the primary one and opens the lightbox. */
+/** The piece's title as the page's heading and the browser tab show it. One
+ * of the places a title is built (see "Proof and mint sets" in the
+ * implementation notes for the others that must agree). */
+export function heroTitle(item: ItemDetail): string {
+  if (item.type === "bullion") {
+    return [item.issuer || item.country, item.denomination, item.year_label].filter(Boolean).join(" ");
+  }
+  if (item.type === "mint_set") {
+    return [item.year_label, item.issuer || item.country, item.denomination].filter(Boolean).join(" ");
+  }
+  return `${item.country} ${item.denomination}, ${item.year_label}${item.mint_mark ? ` "${item.mint_mark}"` : ""}`;
+}
+
 export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNode }) {
   const [lightbox, setLightbox] = useState<number | null>(null);
 
@@ -65,6 +78,7 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
       <div className="hero-photo">
         {photo ? (
           <button type="button" className="hero-photo-open" title="View larger"
+            aria-label={`View the ${photo.angle ?? "photo"} larger`}
             onClick={() => setLightbox(primary)}>
             <img src={photoUrl(photo.thumb_key ?? photo.file_key)} alt={photo.angle ?? "photo"} />
           </button>
@@ -76,22 +90,7 @@ export function ItemHero({ item, actions }: { item: ItemDetail; actions: ReactNo
       </div>
       <div className="hero-main">
         <div className="detail-header">
-          <h1>
-            {item.type === "bullion"
-              ? [item.issuer || item.country, item.denomination, item.year_label]
-                  .filter(Boolean)
-                  .join(" ")
-              : item.type === "mint_set"
-                ? [item.year_label, item.issuer || item.country, item.denomination]
-                    .filter(Boolean)
-                    .join(" ")
-                : (
-                <>
-                  {item.country} {item.denomination}, {item.year_label}
-                  {item.mint_mark ? ` "${item.mint_mark}"` : ""}
-                </>
-              )}
-          </h1>
+          <h1>{heroTitle(item)}</h1>
           <span className={`badge ${item.type}`}>{typeBadge(item.type)}</span>
           {item.status !== "owned" && (
             <span className={`badge status-${item.status}`}>{item.status}</span>

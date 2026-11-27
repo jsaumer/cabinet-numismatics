@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 
 import { api, Comparable, ComparableInput, ItemDetail, money } from "../api";
+import { ErrorNote, StatusNote } from "./notes";
 
 // Numista's grade buckets, and the Sheldon/PMG rank cutoffs the backend uses
 // (services/numista.py): a sale with a known bucket counts only when it matches.
@@ -164,8 +165,8 @@ export function SalesLog({
         fewer than three are that recent), converted to your display currency; confidence grows
         with the number of sales and shrinks when they disagree.
       </p>
-      {error && <p className="error">{error}</p>}
-      {note && <p className="gain">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote tone="gain">{note}</StatusNote>
 
       {sales.length === 0 ? (
         <p className="muted">No sales logged yet.</p>

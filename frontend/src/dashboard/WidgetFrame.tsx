@@ -12,6 +12,7 @@ import {
 
 import type { DashboardWidget, WidgetOptions } from "../api";
 import { Loaded, useData } from "./data";
+import { ErrorNote } from "../components/notes";
 
 export interface WidgetProps {
   options: WidgetOptions;
@@ -68,7 +69,7 @@ export function useWidgetData<T>(
   const { near } = useContext(WidgetContext);
   const state = useData(key, load, near && enabled);
   const pending = state.error ? (
-    <p className="error">{state.error}</p>
+    <ErrorNote>{state.error}</ErrorNote>
   ) : (
     <p className="muted">Loading…</p>
   );

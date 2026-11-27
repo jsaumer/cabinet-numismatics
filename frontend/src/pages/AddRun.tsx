@@ -2,6 +2,8 @@ import { FormEvent, KeyboardEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, Grade, gradeScaleFor, ndYearLabel, NumistaSearchResult, NumistaType, SetInfo } from "../api";
+import { ErrorNote, StatusNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 const issueKey = (i: { year: number | null; mint_letter: string | null }) =>
   `${i.year}|${(i.mint_letter ?? "").trim().toLowerCase()}`;
@@ -9,6 +11,7 @@ const issueKey = (i: { year: number | null; mint_letter: string | null }) =>
 /** Add a run: pick a Numista type, tick its issues, and get one item per
  * date and mint mark: a fifty-coin run in one form instead of fifty. */
 export default function AddRun() {
+  useTitle("Add a run");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<NumistaSearchResult[] | null>(null);
@@ -177,8 +180,8 @@ export default function AddRun() {
         <div className="spacer" />
         <Link className="button" to="/collection">Back to the collection</Link>
       </div>
-      {error && <p className="error">{error}</p>}
-      {note && <p className="gain">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote tone="gain">{note}</StatusNote>
 
       <div className="card">
         <h2>1 · The type</h2>

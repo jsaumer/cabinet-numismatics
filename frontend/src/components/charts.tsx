@@ -73,6 +73,7 @@ export function Columns({ data, format }: { data: ChartDatum[]; format: (v: numb
       viewBox={`0 0 ${width} ${H + 22}`}
       style={{ width: "100%", maxWidth: `${width}px` }}
       role="img"
+      aria-label={`Column chart. ${data.map((d) => `${d.label ?? d.key}: ${format(d.value)}`).join(", ")}.`}
     >
       {/* gridline at the clean max + baseline */}
       <line x1={0} x2={width} y1={H - scaleY(niceMax)} y2={H - scaleY(niceMax)}
@@ -140,7 +141,13 @@ export function LineChart({
   const ticks = Math.max(2, Math.floor(data.length / 6));
 
   return (
-    <svg className="linechart" viewBox={`0 0 ${W} ${H + 20}`} style={{ width: "100%" }} role="img">
+    <svg
+      className="linechart"
+      viewBox={`0 0 ${W} ${H + 20}`}
+      style={{ width: "100%" }}
+      role="img"
+      aria-label={`Line chart, ${data.length} points, from ${format(data[0].value)} on ${data[0].key} to ${format(last.value)} on ${last.key}.`}
+    >
       <line x1={0} x2={W} y1={y(niceMax)} y2={y(niceMax)} stroke={GRID} strokeWidth={1} />
       <text x={0} y={y(niceMax) - 3} fontSize={10} fill={MUTED}>{format(niceMax)}</text>
       <line x1={0} x2={W} y1={H} y2={H} stroke={AXIS} strokeWidth={1} />

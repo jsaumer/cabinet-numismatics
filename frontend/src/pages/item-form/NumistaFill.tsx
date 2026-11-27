@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { api, CatalogRef, ItemType, ndYearLabel, NumistaIssue, NumistaSearchResult, NumistaType } from "../../api";
 import { FormState, TextField } from "./model";
+import { ErrorNote, StatusNote } from "../../components/notes";
 
 // Fields a Numista lookup can fill, with how the "filled …" message names them.
 const NUMISTA_FIELDS: Partial<Record<TextField, string>> = {
@@ -221,8 +222,8 @@ export function NumistaFill({
               </label>
             )}
           </div>
-          {error && <p className="error">{error}</p>}
-          {note && <p className="muted">{note}</p>}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <StatusNote>{note}</StatusNote>
           {results &&
             (results.length === 0 ? (
               <p className="muted">No matches on Numista.</p>

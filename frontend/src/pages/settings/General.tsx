@@ -4,6 +4,8 @@ import { SourceStatus, ValueStrategy } from "../../api";
 import { useDemo } from "../../components/demo-notice";
 import { ThemePicker } from "../../components/theme-picker";
 import { Section, SavedTick, SettingRow, useSavedTick, useSettings } from "./shared";
+import { ErrorNote, StatusNote } from "../../components/notes";
+import { setShortcutsEnabled, useShortcutsEnabled } from "../../components/shortcuts";
 
 /** Settings → General: the colour theme, display currency, melt cadence,
  * the blended-value strategy, and the trash's automatic clear-out. */
@@ -15,6 +17,8 @@ export default function GeneralSection() {
   const [preferredSource, setPreferredSource] = useState("");
   const [retentionSaved, triggerRetentionSaved] = useSavedTick();
 
+  const shortcuts = useShortcutsEnabled();
+
   useEffect(() => {
     if (!settings) return;
     setCurrency(settings.display_currency);
@@ -23,7 +27,7 @@ export default function GeneralSection() {
     setPreferredSource(settings.preferred_source ?? "");
   }, [settings]);
 
-  if (error && !settings) return <p className="error">{error}</p>;
+  if (error && !settings) return <ErrorNote>{error}</ErrorNote>;
   if (!settings) return <p className="muted">Loading…</p>;
 
   return (
@@ -31,8 +35,8 @@ export default function GeneralSection() {
       title="General"
       description="Amounts in other currencies convert at cached daily ECB rates; anything unconvertible is excluded from totals and counted, never guessed. The value strategy controls this single blended number; the item page always shows every source's own latest value."
     >
-      {error && <p className="error">{error}</p>}
-      {note && <p className="muted">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote>{note}</StatusNote>
       <SettingRow
         stacked
         label="Theme"
@@ -117,8 +121,9 @@ export default function GeneralSection() {
         </button>
       </SettingRow>
 
-      <SettingRow label="Empty the trash automatically">
+      <SettingRow label="Empty the trash automatically" htmlFor="trash-retention">
         <select
+          id="trash-retention"
           value={settings.trash_retention_days}
           disabled={saving}
           onChange={(e) => {
@@ -133,6 +138,19 @@ export default function GeneralSection() {
           <option value={365}>After a year</option>
         </select>
         <SavedTick shown={retentionSaved} />
+      </SettingRow>
+
+      <SettingRow
+        label="Single-key shortcuts"
+        htmlFor="single-key-shortcuts"
+        help="J and K move through the collection, E edits a piece, N adds one, and / goes to the search box. Turn them off if they get in the way of speech input or another tool's keys. The arrow keys, Enter, and Escape always work. Kept in this browser."
+      >
+        <input
+          id="single-key-shortcuts"
+          type="checkbox"
+          checked={shortcuts}
+          onChange={(e) => setShortcutsEnabled(e.target.checked)}
+        />
       </SettingRow>
 
       <DemoRow />

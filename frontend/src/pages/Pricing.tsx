@@ -11,6 +11,8 @@ import {
   StaleReport,
 } from "../api";
 import { sourceName } from "../components/provenance";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
 
 const STATUS_LABELS: Record<CoverageStatus, string> = {
   priced: "priced",
@@ -31,6 +33,7 @@ const STALE_DAYS = [7, 30, 90, 365];
 const pct = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
 export default function Pricing() {
+  useTitle("Pricing");
   const [coverage, setCoverage] = useState<PricingCoverage | null>(null);
   const [sources, setSources] = useState<SourcesReport | null>(null);
   const [accuracy, setAccuracy] = useState<AccuracyReport | null>(null);
@@ -55,7 +58,7 @@ export default function Pricing() {
       .catch((e: Error) => setError(e.message));
   }, [days]);
 
-  if (error) return <p className="error">{error}</p>;
+  if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!coverage || !sources || !accuracy) return <p className="muted">Loading…</p>;
 
   const cur = sources.currency;

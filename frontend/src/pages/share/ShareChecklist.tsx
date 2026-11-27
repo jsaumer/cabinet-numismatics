@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api, ShareChecklistSlot, ShareManifest } from "../../api";
+import { ErrorNote } from "../../components/notes";
 
 /** A checklist link's slots: filled ones only, since a share never shows a
  * want list (services/share.py's filled_slots). A slot links to its piece
@@ -25,7 +26,7 @@ export default function ShareChecklist({ token, manifest }: { token: string; man
       <p className="muted">
         {manifest.filled ?? 0} of {manifest.total ?? 0} filled.
       </p>
-      {error && <p className="error">{error}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {!slots && !error && <p className="muted">Loading…</p>}
       {slots && slots.length === 0 && <p className="empty">Nothing filled here yet.</p>}
       {slots && slots.length > 0 && (

@@ -478,7 +478,25 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
   the label around that control, marked with `aria-invalid`, and listed
   beside the Save buttons; a new field needs the attribute too.
 
+## Accessibility (after v0.43.0)
+
+- `components/overlay.tsx` is the one modal: the native `<dialog>`, which
+  traps focus and gives it back. Never build another overlay by hand.
+- `components/notes.tsx` has `ErrorNote` (announced at once) and
+  `StatusNote` (announced politely) for messages that come and go.
+- `components/title.ts`'s `useTitle` names the page; every page calls it.
+- `components/shortcuts.ts` is the switch for the single-key shortcuts.
+- `--field-border` outlines every input, select, and text area, and each
+  theme block defines it at 3:1 or better; `--ink-3` is 4.5:1 on every
+  background muted text sits on.
+- `e2e/a11y.spec.ts` scans the main pages with axe in light and dark and
+  fails on any finding. A new page belongs in its list.
+
 ## End-to-end tests
+
+`e2e/a11y.spec.ts` is the accessibility scan and the checks beside it (see
+"Accessibility" above); it runs first.
+
 
 `e2e/first-run.spec.ts` covers the welcome state, the demo's button and
 notice, the display currency, a refused save, the unsaved-changes guard,

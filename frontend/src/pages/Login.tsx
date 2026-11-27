@@ -8,6 +8,7 @@ import { storeFailedNotice } from "../auth/failedNotice";
 import { ssoErrorMessage } from "../auth/ssoErrors";
 import { safeNext } from "../auth/next";
 import { GitHubIcon, GoogleIcon, KeyIcon, MicrosoftIcon } from "../components/icons";
+import { useTitle } from "../components/title";
 
 const PRESET_ICON: Record<string, () => ReactElement> = {
   google: GoogleIcon,
@@ -17,6 +18,7 @@ const PRESET_ICON: Record<string, () => ReactElement> = {
 };
 
 export default function Login() {
+  useTitle("Sign in");
   const { refresh, methods } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -168,9 +170,13 @@ export default function Login() {
           </label>
           {error && (
             <p className="error">
-              {busyStatus
-                ? "Cabinet is busy right now (a restore may be running). Try again shortly."
-                : error}
+              {/* The countdown stays outside the alert, or every second
+                  would be read out. */}
+              <span role="alert">
+                {busyStatus
+                  ? "Cabinet is busy right now (a restore may be running). Try again shortly."
+                  : error}
+              </span>
               {waiting && !busyStatus && ` Try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`}
             </p>
           )}

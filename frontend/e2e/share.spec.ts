@@ -59,7 +59,7 @@ test("a collection share link works for a signed-out visitor, then stops", async
   await page.getByLabel("Denomination *").fill(ITEM_DENOMINATION);
   await page.getByLabel("Year *").fill(ITEM_YEAR);
   await page.getByLabel("Cert service").fill(CERT_SERVICE);
-  await page.getByLabel("Cert number").fill(CERT_NUMBER);
+  await page.getByLabel("Cert number", { exact: true }).fill(CERT_NUMBER);
   await page.getByRole("button", { name: "Add item", exact: true }).click();
   await expect(page).toHaveURL(/\/items\/[0-9a-f-]{36}$/);
   const itemUrl = new URL(page.url()).pathname;

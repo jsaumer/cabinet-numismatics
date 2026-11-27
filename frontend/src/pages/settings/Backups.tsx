@@ -5,6 +5,7 @@ import { FreshLink } from "../../auth/FreshLink";
 import { EyeIcon, EyeOffIcon } from "../../components/icons";
 import { RestoreBlock, useRestore } from "../../components/restore";
 import { Section, SettingRow, useSettings } from "./shared";
+import { ErrorNote, StatusNote } from "../../components/notes";
 
 const DAILY_LABELS: Record<number, string> = {
   7: "7 days",
@@ -152,7 +153,7 @@ export default function BackupsSection() {
       </div>
     );
   }
-  if (error && !settings) return <p className="error">{error}</p>;
+  if (error && !settings) return <ErrorNote>{error}</ErrorNote>;
   if (!settings) return <p className="muted">Loading…</p>;
 
   const schedule = settings.backup_schedule ?? "daily"; // which choice set is in effect
@@ -170,8 +171,8 @@ export default function BackupsSection() {
         </>
       }
     >
-      {error && <p className="error">{error}</p>}
-      {note && <p className="muted">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote>{note}</StatusNote>
 
       {backups && (
         <>
@@ -179,6 +180,7 @@ export default function BackupsSection() {
           <div className="estimate-form" style={{ marginTop: 0 }}>
             <div className="key-field">
               <input
+                aria-label="Backup key, the public half"
                 type={keyVisible ? "text" : "password"}
                 readOnly
                 value={backups.key.fingerprint}
@@ -221,14 +223,15 @@ export default function BackupsSection() {
             </p>
           )}
           {backups.key.location_message && (
-            <p className="error">{backups.key.location_message}</p>
+            <ErrorNote>{backups.key.location_message}</ErrorNote>
           )}
         </>
       )}
 
       <h3>Schedule and retention</h3>
-      <SettingRow label="Schedule">
+      <SettingRow label="Schedule" htmlFor="backup-schedule">
         <select
+          id="backup-schedule"
           value={settings.backup_schedule ?? ""}
           disabled={saving}
           onChange={(e) => changeSchedule(e.target.value ? (e.target.value as "daily" | "weekly") : null)}
@@ -238,8 +241,9 @@ export default function BackupsSection() {
           <option value="weekly">Weekly</option>
         </select>
       </SettingRow>
-      <SettingRow label="Keep archives for">
+      <SettingRow label="Keep archives for" htmlFor="backup-retention">
         <select
+          id="backup-retention"
           value={String(settings.backup_retention_days)}
           disabled={saving}
           onChange={(e) => {
@@ -264,8 +268,9 @@ export default function BackupsSection() {
           limit. Delete archives below by hand, or choose a retention.
         </p>
       )}
-      <SettingRow label="Include photos">
+      <SettingRow label="Include photos" htmlFor="backup-photos">
         <input
+          id="backup-photos"
           type="checkbox"
           aria-label="Include photos"
           checked={settings.backup_include_photos}
@@ -295,8 +300,8 @@ export default function BackupsSection() {
         The download starts once the archive is built; allow a minute for a large photo
         collection. Confirms your password first if it's been more than a few minutes.
       </p>
-      {backupError && <p className="error">{backupError}</p>}
-      {backupNote && <p className="muted">{backupNote}</p>}
+      {backupError && <ErrorNote>{backupError}</ErrorNote>}
+      <StatusNote>{backupNote}</StatusNote>
       {backups && (
         <>
           <p className="muted">

@@ -20,6 +20,9 @@ import { TraitBadges, useSerialTraits } from "../components/serial-traits";
 import { Welcome } from "../components/welcome";
 import ItemDetail from "./ItemDetail";
 import { detectMetal } from "./item-form/model";
+import { ErrorNote } from "../components/notes";
+import { useTitle } from "../components/title";
+import { useShortcutsEnabled } from "../components/shortcuts";
 
 const PAGE_SIZE = 50;
 
@@ -291,6 +294,8 @@ export default function ItemList() {
   const search = params.toString() ? `?${params.toString()}` : "";
   const rowLink = (itemId: string) => (wide ? `/collection/${itemId}${search}` : `/items/${itemId}`);
 
+  const letters = useShortcutsEnabled();
+
   // Keyboard moves through the list while nothing is being typed into.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -320,20 +325,25 @@ export default function ItemList() {
           document.getElementById(`row-${next.id}`)?.scrollIntoView({ block: "nearest" });
         }
       };
-      if (beside && (e.key === "j" || e.key === "ArrowDown")) move(selectedIndex + 1);
-      else if (beside && (e.key === "k" || e.key === "ArrowUp"))
+      // The letters can be switched off in Settings, General; the arrows,
+      // Enter, and Escape can't, since they aren't characters.
+      const letter = (key: string) => letters && e.key === key;
+      if (beside && (letter("j") || e.key === "ArrowDown")) move(selectedIndex + 1);
+      else if (beside && (letter("k") || e.key === "ArrowUp"))
         move(selectedIndex < 0 ? 0 : selectedIndex - 1);
       else if (e.key === "Enter" && selectedId && !onControl && !onOtherRow) {
         e.preventDefault();
         navigate(`/items/${selectedId}`);
       }
-      else if (e.key === "e" && selectedId) navigate(`/items/${selectedId}/edit`);
-      else if (e.key === "n") navigate("/items/add");
+      else if (letter("e") && selectedId) navigate(`/items/${selectedId}/edit`);
+      else if (letter("n")) navigate("/items/add");
       else if (e.key === "Escape" && selectedId) navigate(`/collection${search}`, { replace: true });
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  useTitle(viewTitle === "Everything" ? "Collection" : viewTitle);
 
   const listHeader = (
     <div className="wb-head">
@@ -558,7 +568,7 @@ export default function ItemList() {
         {filters}
         {bulk}
         <DemoNotice onChange={reload} />
-        {error && <p className="error">{error}</p>}
+        {error && <ErrorNote>{error}</ErrorNote>}
         {page && items.length === 0 && (stats?.counts.total === 0 ? (
           <Welcome onLoaded={reload} />
         ) : (
@@ -698,10 +708,16 @@ export default function ItemList() {
             </button>
           </div>
         )}
-        <p className="wb-keys muted" aria-hidden="true">
-          <kbd>J</kbd> <kbd>K</kbd> move · <kbd>Enter</kbd> open · <kbd>E</kbd> edit ·{" "}
-          <kbd>N</kbd> new · <kbd>/</kbd> search · <kbd>Esc</kbd> close
-        </p>
+        {letters ? (
+          <p className="wb-keys muted">
+            <kbd>J</kbd> <kbd>K</kbd> move · <kbd>Enter</kbd> open · <kbd>E</kbd> edit ·{" "}
+            <kbd>N</kbd> new · <kbd>/</kbd> search · <kbd>Esc</kbd> close
+          </p>
+        ) : (
+          <p className="wb-keys muted">
+            <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open · <kbd>Esc</kbd> close
+          </p>
+        )}
       </section>
       {wide && (
         <section className="wb-inspector" aria-label="Selected piece">

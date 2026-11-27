@@ -15,6 +15,7 @@ import { EXPOSURE_GUIDANCE_URL, EXPOSURE_WARNING } from "../../auth/exposureWarn
 import { ssoErrorMessage } from "../../auth/ssoErrors";
 import { EyeIcon, EyeOffIcon } from "../../components/icons";
 import { Section, SettingRow, SavedTick, useSavedTick } from "./shared";
+import { ErrorNote, StatusNote } from "../../components/notes";
 
 const PRESET_LABELS: Record<ProviderPreset, string> = {
   google: "Google",
@@ -686,14 +687,14 @@ export default function SigninSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (error && !config) return <p className="error">{error}</p>;
+  if (error && !config) return <ErrorNote>{error}</ErrorNote>;
   if (!config) return <p className="muted">Loading…</p>;
 
   return (
     <Section title="Sign-in">
       <ExposureNotice />
-      {error && <p className="error">{error}</p>}
-      {note && <p className="muted">{note}</p>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <StatusNote>{note}</StatusNote>
 
       <h3>Sign-in providers</h3>
       {config.providers.length === 0 ? (
