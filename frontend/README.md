@@ -492,7 +492,7 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 - `e2e/a11y.spec.ts` scans the main pages with axe in light and dark and
   fails on any finding. A new page belongs in its list.
 
-## The address and the cookie (after v0.44.0)
+## The address and the cookie (v0.44.1)
 
 - The boot check (`auth/AuthContext.tsx`) has a `refused` state for a 403
   from `/api/auth/state` or `/api/auth/me`: the page's address isn't one of

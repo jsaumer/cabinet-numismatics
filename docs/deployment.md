@@ -120,7 +120,7 @@ Edit `.env`:
   answer 404 and `scripts/restore.sh` is the only way).
 - `RESTORE_MAX_GB` (optional, default `20`): the largest archive that may be
   uploaded for a restore. The bundled nginx allows 20 GB.
-- `TAG` (optional, default `latest`): the image tag, e.g. `TAG=0.44.0`. The
+- `TAG` (optional, default `latest`): the image tag, e.g. `TAG=0.44.1`. The
   published-image file pulls it; the source file's `--build` builds locally
   whatever the tag and names the result with it.
 
@@ -859,7 +859,7 @@ docker compose up -d
 ```
 
 `latest` moves with every release. To choose when you upgrade, pin one in
-`.env` (`TAG=0.44.0`) and change the number when you are ready; a version
+`.env` (`TAG=0.44.1`) and change the number when you are ready; a version
 tag is never moved. An image you once built locally keeps its name, so
 after switching from the source file to the published images run `pull`
 once, or Compose goes on using the local build.
@@ -982,7 +982,7 @@ git clone https://github.com/jsaumer/cabinet-numismatics.git
 cd cabinet-numismatics
 cp .env.example .env        # edit secrets
 set -a; . ./.env; set +a    # stack deploy reads the shell, not .env
-TAG=0.44.0 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
+TAG=0.44.1 CABINET_PORT=8080 docker stack deploy -c deploy/docker-stack.yaml cabinet
 ```
 
 `PUBLIC_ORIGINS` and `CABINET_PORT` are required by the stack file (deploy

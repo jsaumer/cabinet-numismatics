@@ -10,7 +10,7 @@ code are in [implementation-notes.md](implementation-notes.md).
 
 ## Status
 
-**v0.44.0 is the latest release (November 2026).** Versioned images are
+**v0.44.1 is the latest release (November 2026).** Versioned images are
 published to GHCR from every tagged release, for amd64 and arm64.
 
 Everything planned through Phase 7 (the parity plan the owner chose on 20
@@ -34,10 +34,7 @@ Left, in order:
    printer, watermark, demonetization, added in v0.29.0). It was written
    without a key, so it reads every shape defensively and has never met a
    real answer.
-3. **A README and quick-start pass**, read as a stranger installing for the
-   first time, with the screenshots retaken. Last, so it describes the 1.0
-   build.
-4. **v1.0.0 itself**: the version, a changelog entry stating the stability
+3. **v1.0.0 itself**: the version, a changelog entry stating the stability
    promise, a release page, and the `1` and `1.0` image tags. No code
    change of its own.
 
@@ -63,6 +60,7 @@ Done on the way here:
 | Upgrades from older releases tested with their own archives restored; the page says when it and the server are different releases | v0.42.0 |
 | The first-run pass: a welcome state, a demo collection from one button, a form that keeps your work | v0.43.0 |
 | Accessibility basics: dialogs that hold focus, announced errors, field outlines that can be seen, a title on every page, and an automated scan kept in the browser tests | v0.44.0 |
+| A README and quick-start pass: the install documents read as a stranger and every command run, a troubleshooting page, the screenshots retaken | v0.44.1 |
 
 ## After 1.0
 
@@ -186,7 +184,7 @@ phases by name, so the names are kept. The detail is in the changelog.
 | 5.9 | Photos for the demo collection | v0.36.0 |
 | 5.9 | Proof and mint sets ([SPEC_0370](specs/SPEC_0370.md)) | v0.37.0 |
 | Road to 1.0 | Fixes from a full review, in two batches | v0.37.3, v0.37.5 |
-| Road to 1.0 | See the table under "The road to v1.0.0" | v0.38.0 to v0.44.0 |
+| Road to 1.0 | See the table under "The road to v1.0.0" | v0.38.0 to v0.44.1 |
 
 ## How the order was decided
 
