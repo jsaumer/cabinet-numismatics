@@ -10,6 +10,8 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+## [0.44.1] - 2026-11-27
+
 The README and quick-start pass from the 1.0 checklist: the install
 documents read as a stranger would, every command in them run, and the two
 dead ends that turned up fixed in the app. No migration, and nothing in the
@@ -2607,5 +2609,5 @@ data model and migration path are considered stable.
 - Photo lightbox, drag-and-drop upload, URL import, and in-browser editing
   are not built yet.
 
-[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/jsaumer/cabinet-numismatics/compare/v0.44.1...HEAD
 [0.9.0]: https://github.com/jsaumer/cabinet-numismatics/releases/tag/v0.9.0

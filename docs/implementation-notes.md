@@ -3685,7 +3685,7 @@ on a touch screen.
   also matches "PCGS cert number" once a PCGS token is configured, which a
   second run on the same stack can leave behind. It is exact now.
 
-## The README and quick-start pass (after v0.44.0)
+## The README and quick-start pass (v0.44.1)
 
 Row 23 of the 1.0 checklist: the install documents read by someone who had
 never seen the project (a fresh-context reviewer given only those files),
