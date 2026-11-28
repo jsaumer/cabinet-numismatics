@@ -2001,6 +2001,12 @@ main {
   margin-top: 0;
   font-size: 1.4rem;
 }
+/* The address to put in PUBLIC_ORIGINS, on the page a refused address gets:
+   on a line of its own, and never wider than the card. */
+.refused-origin {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
 /* A sign-in provider button (v0.33.0): a plain link styled as .button, icon
    and name side by side, full width so several stack cleanly above the
    password form. */

@@ -210,7 +210,20 @@ tar files) with them.
 
 ## Backing up from the host
 
-With the compose stack running:
+Both host scripts run `docker compose` from the folder above them, so they
+belong in a `scripts` folder beside your Compose file. A clone of the
+repository has them there. Beside the published-image file
+(`deploy/docker-compose.yaml`, the README's quick start), fetch them once,
+from the folder that holds it:
+
+```bash
+mkdir -p scripts && cd scripts
+curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/scripts/backup.sh
+curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/scripts/restore.sh
+chmod +x backup.sh restore.sh && cd ..
+```
+
+Then, with the compose stack running:
 
 ```bash
 ./scripts/backup.sh               # writes ./backups/cabinet-backup-<UTC stamp>.zip.age
@@ -505,9 +518,13 @@ The disaster-recovery path: it needs the host, Docker, and the running `db`
 and `backend` containers, but not a working web app.
 
 ```bash
-./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
-AGE_IDENTITY=key.txt ./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
+./scripts/restore.sh backups/cabinet-backup-20260914-031500.zip.age
+AGE_IDENTITY=key.txt ./scripts/restore.sh backups/cabinet-backup-20260914-031500.zip.age
 ```
+
+The archive's path is read from the folder that holds your Compose file,
+whichever folder you run the script from, so name the folder it is in
+(`backups/` is where `backup.sh` writes) or give a full path.
 
 The script decrypts the archive into a private temporary folder (0700,
 removed on exit, also after an interrupt), never beside the archive: with
@@ -562,9 +579,12 @@ Two things differ from the in-app restore (v0.32.0):
   by hand.
 
 Restoring into a *fresh* deployment works the same way: bring the stack up
-with your saved backup key (`BACKUP_KEY_FILE`), wait until `/api/health`
+with your saved backup key, wait until `/api/health`
 reports `schema.status: "ok"` (the backend creates the schema on startup),
-then restore. `restore.sh` needs no sign-in, since it never touches
+then restore. Under Compose the simplest way to supply the key is one line
+in `.env` before the first start, `BACKUP_KEY=AGE-SECRET-KEY-1...` (the
+line `backup-key show` printed); `BACKUP_KEY_FILE` needs the file mounted
+into the backend container, as the Swarm stack file does with a secret. `restore.sh` needs no sign-in, since it never touches
 `cabinet_auth`, so it can run before or after the machine is claimed. The
 in-app path needs an admin session, so claim the fresh instance with a
 setup code first, then restore from Settings → Backups. Either order leaves

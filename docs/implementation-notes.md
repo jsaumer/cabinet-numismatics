@@ -3685,6 +3685,61 @@ on a touch screen.
   also matches "PCGS cert number" once a PCGS token is configured, which a
   second run on the same stack can leave behind. It is exact now.
 
+## The README and quick-start pass (after v0.44.0)
+
+Row 23 of the 1.0 checklist: the install documents read by someone who had
+never seen the project (a fresh-context reviewer given only those files),
+every command in them run on the published images, and each failure a
+first install can meet reproduced for its exact words. Two of those
+failures were dead ends in the app and were fixed. No migration, no API
+change.
+
+- **The boot check has a `refused` state.** A 403 from `GET
+  /api/auth/state` or `/api/auth/me` is the gate's CSRF refusal: the
+  page's own address isn't in `PUBLIC_ORIGINS`. nginx matches a Host by
+  name alone, so a wrong port or scheme still loads the page, and a browser
+  on plain http to anything but `localhost` sends no `Sec-Fetch-Site`, so
+  the gate falls back to comparing `Origin`. `App.tsx`'s `RefusedScreen`
+  shows `window.location.origin`, the value to add. It is not retried: no
+  retry fixes it. Over `localhost` the mismatch can't happen (the browser
+  sends `Sec-Fetch-Site: same-origin`), so reproducing it needs another
+  name, such as the proxy's on the compose network.
+- **`refresh()` answers the status it found.** `AuthContext`'s `check`
+  returns it, and the sign-in page (password and gateway header alike)
+  treats `"anon"` right after an accepted sign-in as a cookie the browser
+  dropped (`cookieNotKept`): a `Secure` or `__Host-` cookie over plain
+  http, which is `AUTH_INSECURE_HTTP=false` on an http address. A new
+  caller of `refresh()` can ignore the answer.
+- **docs/troubleshooting.md quotes messages as the code prints them.**
+  Changing the wording of a startup refusal, a restore refusal, a price
+  source's reason, or one of the boot screens means changing the page too;
+  nothing checks it. Its entries were each reproduced or read from the
+  code, never written from memory.
+- **The host scripts work beside any Compose file**, because both `cd` to
+  the folder above them and run plain `docker compose` there. That is also
+  why a clone's copy can't drive a one-file install in another folder, and
+  why the archive path given to `restore.sh` is read from the Compose
+  folder (`backups/...`), whatever the shell's own folder is. The
+  quick-start test copies them into `scripts/` beside the published-image
+  file and runs both, with `COMPOSE_PROJECT_NAME` naming the test's
+  project; it also runs `backup-key show`, the README's third step.
+- **A Compose override replaces nothing by default.** `ports: []` merges
+  with the base list, and a `networks:` list on a service drops `default`
+  unless it is named. Check an override with `docker compose config`
+  before it goes in a document.
+- **`DB_PASSWORD` is interpolated into `DATABASE_URL` unescaped** in all
+  three Compose files, so the documents say letters and digits only, and
+  Postgres keeps the password it first started with.
+- **Screenshots** were retaken with `docs/screenshots/README.md`'s
+  procedure on this build; the procedure's Playwright image tag follows
+  `frontend/package.json`.
+- **Not done, on purpose**: the "from vX" notes through deployment.md and
+  backup-restore.md (history a new reader doesn't need, but upgraders do),
+  a `BACKUP_KEY_FILE` recipe for Compose (the documents point to
+  `BACKUP_KEY` in `.env`, which was tested), `TZ` (passed by two of the
+  Compose files and documented nowhere), and a user guide, which the
+  roadmap keeps for after 1.0.
+
 ## Releases
 
 

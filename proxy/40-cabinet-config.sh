@@ -145,7 +145,7 @@ mv "$dir/hosts.conf.new" "$dir/hosts.conf"
 } >"$dir/cabinet-identity.conf.new"
 mv "$dir/cabinet-identity.conf.new" "$dir/cabinet-identity.conf"
 
-echo "cabinet: answering Host$names; any other Host gets no response"
+echo "cabinet: answering Host$names; any other Host gets the not-at-this-address page (421)"
 if [ -n "$passed" ]; then
     echo "cabinet: passing the trusted assertion header $passed to the backend; every other identity header is blanked"
 else

@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, Page, test } from "@playwright/test";
 
 // The first screens a new owner meets, and the form that used to lose work.
@@ -34,6 +35,27 @@ async function emptyCollection(page: Page) {
     await route.fulfill({ response, json: { items: [], total: 0, limit: 50, offset: 0 } });
   });
 }
+
+test("an address PUBLIC_ORIGINS doesn't name gets a page that says so, with the value to set", async ({ page }) => {
+  // What the gate answers a signed-in browser whose address isn't on the
+  // list: a port left out of PUBLIC_ORIGINS still loads the page (nginx
+  // matches the name alone), and then every request is refused. The page
+  // used to say Cabinet wasn't answering yet, and to wait forever.
+  await page.route("**/api/auth/state", (route) =>
+    route.fulfill({ status: 403, json: { detail: "Cross-site request refused." } }),
+  );
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Cabinet refused this address" })).toBeVisible();
+  await expect(page.locator(".auth-card")).toContainText("PUBLIC_ORIGINS");
+  await expect(page.locator(".refused-origin")).toHaveText(new URL(page.url()).origin);
+  await expect(page).toHaveTitle("Wrong address · Cabinet");
+  await expect(page.getByText("isn't answering yet")).toHaveCount(0);
+  // It is a page of its own, outside the ones a11y.spec.ts visits.
+  const scan = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(scan.violations.map((v) => v.id)).toEqual([]);
+});
 
 test("an empty collection offers three ways to start, and no red box", async ({ page }) => {
   await emptyCollection(page);

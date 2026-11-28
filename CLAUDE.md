@@ -47,8 +47,9 @@ deploy/docker-stack.yaml Swarm stack (pulled images)
 README.md, CLAUDE.md (this file), CHANGELOG.md
 docs/                    features, architecture, data-model, api, price-sources,
                          deployment, security, backup-restore, monitoring,
-                         live-validation, roadmap, implementation-notes,
-                         claude-code; specs/ holds build contracts;
+                         live-validation, troubleshooting, roadmap,
+                         implementation-notes, claude-code; specs/ holds
+                         build contracts;
                          screenshots/ and import-samples/ hold generated
                          assets; review briefs and reviews stay local
                          (gitignored) from v0.33.0
@@ -259,6 +260,14 @@ rules that bite most often:
   `useTitle`; inputs take `--field-border`, which each of the eight theme
   blocks defines at 3:1 or better. See "Accessibility basics" in the
   implementation notes.
+- **The install documents are tested, and quote the code** (after
+  v0.44.0): `scripts/ci/quick-start-test.sh` walks the README's quick start
+  including the backup-key step and the host scripts beside the one-file
+  install, so change the two together. `docs/troubleshooting.md` quotes
+  messages word for word; rewording a startup refusal, a restore refusal,
+  or a boot screen means changing it too. Check a Compose override with
+  `docker compose config` before documenting it. See "The README and
+  quick-start pass" in the implementation notes.
 - A share link shows no value from `share.PRIVATE_SOURCES` (Numista and
   PCGS: both licenses keep their data from third parties), and every page
   carries PCGS's credit once anything from PCGS is held

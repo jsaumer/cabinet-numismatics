@@ -34,12 +34,16 @@ There are two Compose files, and they take the same settings:
   cp .env.example .env
   ```
 
-Either way the settings live in `.env` beside the file. CI walks both on
-every change (`scripts/ci/quick-start-test.sh`).
+Either way the settings live in `.env` beside the file. With the
+published-image file only `DB_PASSWORD` has to be set, and the rest below
+is there for when you need it; from source, start from the sample `.env`
+and change `DB_PASSWORD` and `PUBLIC_ORIGINS`. If something doesn't come
+up, [troubleshooting.md](troubleshooting.md) lists what each failure looks
+like.
 
 Edit `.env`:
 
-- `PUBLIC_ORIGINS` (required): the exact address browsers use to reach
+- `PUBLIC_ORIGINS`: the exact address browsers use to reach
   Cabinet, `scheme://host[:port]`, comma-separated if there is more than one,
   for example `https://cabinet.example.com`. Both the backend and the proxy
   refuse to start without it, naming the variable. The published-image
@@ -49,12 +53,13 @@ Edit `.env`:
   `http://nas.local:8080`, or `https://cabinet.home.example` behind a
   reverse proxy.
 - `ALLOWED_HOSTS` (optional): extra Host names nginx answers besides those of
-  `PUBLIC_ORIGINS`: internal names such as `cabinet_proxy` (for Homepage or
-  Prometheus on the same network) or a LAN name. **Any other Host gets one
-  plain page saying this isn't an address Cabinet answers** (status 421,
-  from v0.41.0; no reply at all before that), so a request by bare IP
-  address, or by a name you didn't list, never reaches the app. Names only:
-  no scheme or port.
+  `PUBLIC_ORIGINS`: the name another container uses for the proxy (for
+  Homepage or Prometheus on the same Docker network: `proxy` or
+  `cabinet-proxy-1` under Compose, `cabinet_proxy` on a Swarm) or a LAN
+  name. **Any other Host gets one plain page saying this isn't an address
+  Cabinet answers** (status 421), so a request by bare IP address, or by a
+  name you didn't list, never reaches the app. Names only: no scheme or
+  port.
 - `AUTH_INSECURE_HTTP` (optional): sign-in cookies without `Secure`, for
   plain http. `true` in the published-image file and in the sample `.env`,
   since both start on plain http; **set it to `false` beside an https
@@ -90,7 +95,12 @@ Edit `.env`:
   volume), so they can stay set. The code's length is what protects an
   unclaimed instance: wrong codes are slowed after five, but a right one
   always passes, so use a random code, never a word.
-- `DB_PASSWORD`: a generated password, not the sample value.
+- `DB_PASSWORD`: a generated password, not the sample value
+  (`openssl rand -hex 16`). Letters and digits only, since it is written
+  into the database's address, where `@`, `:`, `/`, and `#` mean something
+  else. Postgres takes it on its first start and keeps it: changing the
+  line afterwards locks the backend out of the existing database, so
+  change it back, or change the password inside Postgres to match.
 - `SECRET_KEY`: generate one; it encrypts the secrets saved in Settings
   (price-source credentials, the alert webhook and heartbeat URLs):
 
@@ -101,7 +111,7 @@ Edit `.env`:
   If you skip it, a key is generated onto a private volume: workable, but you
   lose the stored API keys if that volume is ever recreated. See
   [security.md](security.md).
-- `PUID` / `PGID` (optional, not in `.env.example`): the user the backend
+- `PUID` / `PGID` (optional): the user the backend
   runs as and that owns its files, default `1000`:`1000`. Set them when the
   data sits on bind mounts or NFS owned by another account.
 - `RESTORE_ENABLED` (optional, default `true`): restore from Settings →
@@ -123,8 +133,10 @@ docker compose up -d
 The app is at the address in `PUBLIC_ORIGINS`: http://localhost/ on this
 machine by default. On a headless server, either open it from another
 machine at the address you set, or claim it first over an SSH port forward
-(`ssh -L 8080:localhost:8080 server`, with `PUBLIC_ORIGINS=http://localhost:8080`)
-and change the address afterwards. **Set it up first**: until the admin
+(`ssh -L 8080:localhost:80 server`, with
+`PUBLIC_ORIGINS=http://localhost:8080` on the server and
+http://localhost:8080 in your own browser) and change the address
+afterwards. **Set it up first**: until the admin
 exists, the setup page is all Cabinet serves. It asks for the setup code,
 which is your `SETUP_CODE`, or, if you set none, the one in the log:
 
@@ -312,19 +324,23 @@ First, stop publishing the port directly. In `docker-compose.override.yml`:
 ```yaml
 services:
   proxy:
-    ports: []            # reach it over the proxy network instead
-    networks: [edge]
+    ports: !reset []             # reach it over the edge proxy's network instead
+    networks: [default, edge]    # default is how it reaches the backend
 networks:
   edge:
     external: true
 ```
+
+`!reset` needs Compose 2.24 or later; a plain `ports: []` is merged with
+the base file's list and leaves the port published. `default` has to stay
+on the list, or the proxy can no longer reach the backend.
 
 ### Setting up a single sign-on provider
 
 Any of the platforms below can be configured at once; the sign-in page
 shows one button per provider you enable in Settings → Sign-in. Each
 subsection is self-contained: read only the one for your provider. The
-redirect URI (callback URL) is always `https://<your PUBLIC_ORIGIN>/api/auth/oidc/callback`,
+redirect URI (callback URL) is always `<a PUBLIC_ORIGINS entry>/api/auth/oidc/callback`,
 one per `PUBLIC_ORIGINS` entry; Settings → Sign-in shows the exact value(s)
 under the Add form. After creating a provider, sign in with your password,
 open Settings → Sign-in, and use **Link** next to the provider: you're sent
@@ -810,7 +826,11 @@ backup directory (`/data/backups`) on storage that isn't this host's disk
 writable; the last run's outcome stays visible there.
 
 To drive backups from the host instead, `scripts/backup.sh` captures the
-database, photos, and documents together:
+database, photos, and documents together. It runs `docker compose` from the
+folder above it, so it has to sit in a `scripts` folder beside your Compose
+file: a clone has it there, and
+[backup-restore.md](backup-restore.md#backing-up-from-the-host) shows how
+to fetch it beside the published-image file.
 
 ```cron
 # 03:15 daily, keeping the last 30 days
@@ -818,8 +838,11 @@ database, photos, and documents together:
 45 3 * * * find /srv/backups/cabinet -maxdepth 1 -type f -name 'cabinet-backup-*.zip.age' -mtime +30 -delete
 ```
 
-Copy backups off the host, and back up `.env` separately: it holds the
-database password and the encryption key. Rehearse a restore at least once;
+Copy backups off the host, and keep a copy of `.env` somewhere else: it
+holds the database password, and `SECRET_KEY` and `BACKUP_KEY` if you set
+them there. Keys you didn't set were generated onto the state volume; the
+backup key is the one to print and save
+(`docker compose exec backend python -m app.cli backup-key show`). Rehearse a restore at least once;
 [backup-restore.md](backup-restore.md) has the drill.
 
 So a failed backup doesn't go unnoticed, add an alert webhook and an Uptime

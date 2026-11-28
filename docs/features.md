@@ -20,13 +20,13 @@ most often use instead.
   mintage, quantity, and free-text notes (banknotes add serial number,
   prefix/block, signatures, issuer, and replacement notes), plus up to 20
   custom fields per item.
-- **Bars and rounds**: a third item type alongside coins and notes, with no
-  year required. A Metal select (gold, silver, platinum, palladium) fills
+- **Bars and rounds**: an item type of their own beside coins and notes,
+  with no year required. A Metal select (gold, silver, platinum, palladium) fills
   the composition and defaults the fineness to .999; weight can be entered
   in grams or troy ounces; the product name is suggested from weight,
   metal, and shape until you type your own. Filled in from Numista's
   bullion catalog too.
-- **Proof and mint sets**: a fourth item type for a set as the mint issued
+- **Proof and mint sets**: an item type for a set as the mint issued
   it (proof, uncirculated, or specimen), kept as one piece: the issuing
   mint, the year, a set name suggested from its kind and metal, how many
   pieces it holds, and its packaging (sealed, complete, or incomplete, with
@@ -179,12 +179,12 @@ most often use instead.
   country/decade/grade/tag/metal or one tag/set, acquisitions by year,
   top-movers tables, owned notes by series and signature pair, wish list,
   fancy serials, checklists, the bullion stack, pricing coverage, operations
-  status, and a "group C" of showcase widgets: most valuable, piece of the
+  status, and a group of showcase widgets: most valuable, piece of the
   day, oldest and newest pieces, on this day, a photo mosaic, certified
   share, value spread, population highlights, and data health) added,
   removed, resized, retitled, and arranged by drag or keyboard, saved on the
-  server so it follows the collection; the default layout is today's fixed
-  page (the group C widgets are opt-in), and a setup checklist widget says
+  server so it follows the collection; the default layout leaves the
+  showcase widgets for you to add, and a setup checklist widget says
   what is broken (in red) and what is still off (scheduled backups, the
   alert webhook, a price-source key).
 - Export to CSV or Excel; CSV import round-trips the export format (including
