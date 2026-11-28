@@ -196,7 +196,7 @@ service over a Docker network both share (`http://cabinet_proxy/...` on a
 Swarm, `http://proxy/...` in one compose project) so the requests skip the
 login; keep `href` as the public address. From v0.30.0, nginx answers only
 the Host names it is told, so add that internal name to `ALLOWED_HOSTS`
-(`ALLOWED_HOSTS=cabinet_proxy`), or the request gets the "not at this address" page (421) instead of the figures. The logo is served at
+(`ALLOWED_HOSTS=cabinet_proxy` on a Swarm; `proxy` or `cabinet-proxy-1` under Compose), or the request gets the "not at this address" page (421) instead of the figures. The logo is served at
 `/logo.svg`, `/logo-512.png`, and `/favicon.ico`.
 
 ## Metrics (Prometheus)

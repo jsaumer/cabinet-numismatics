@@ -17,6 +17,19 @@ const PRESET_ICON: Record<string, () => ReactElement> = {
   custom: KeyIcon,
 };
 
+/** The server accepted the sign-in and the very next request arrived signed
+ * out: the browser didn't keep the cookie. Over plain http that is a cookie
+ * marked for https only (AUTH_INSECURE_HTTP isn't true), which a browser
+ * drops without a word; the page used to show the empty form again. */
+function cookieNotKept(): string {
+  const start = "Cabinet accepted that, but your browser didn't keep the sign-in cookie, so you are still signed out. ";
+  return window.isSecureContext
+    ? start + "Check that the browser accepts cookies from this address."
+    : start +
+        "This address is plain http, and Cabinet is sending cookies meant for https only: set " +
+        "AUTH_INSECURE_HTTP=true and start Cabinet again, or open it over https.";
+}
+
 export default function Login() {
   useTitle("Sign in");
   const { refresh, methods } = useAuth();
@@ -55,7 +68,10 @@ export default function Login() {
     setTrustedBusy(true);
     try {
       await api.trustedSignIn();
-      await refresh();
+      if ((await refresh()) === "anon") {
+        setError(cookieNotKept());
+        return;
+      }
       navigate(next, { replace: true });
     } catch (err) {
       const e = err as ApiError;
@@ -84,7 +100,10 @@ export default function Login() {
           since: result.previous_sign_in_at,
         });
       }
-      await refresh();
+      if ((await refresh()) === "anon") {
+        setError(cookieNotKept());
+        return;
+      }
       navigate(next, { replace: true });
     } catch (err) {
       const e = err as ApiError;

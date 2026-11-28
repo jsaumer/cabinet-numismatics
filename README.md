@@ -107,19 +107,24 @@ OpenNumismat, CoinManage, and Numista.
 - **Bring your own keys.** There is no bundled catalog or price guide. Melt
   value needs no key; Numista and PCGS lookups use each service's free API
   key and stay inside its limits.
-- **amd64 and arm64 images** from v0.40.0, so a Raspberry Pi 4 or 5 (64-bit)
-  or an Apple Silicon host works. Earlier releases are amd64 only.
+- **amd64 and arm64 images**, so a Raspberry Pi 4 or 5 (64-bit) or an Apple
+  Silicon host works.
 - **English only**, with the Sheldon and PMG grading scales.
 - **Sized for a personal collection.** It is built and used at hundreds of
   pieces. At several thousand the lists stay quick, and the dashboard and
   reports take a few seconds.
 - **Estimates are guidance, not appraisals.** For insurance or a sale, get
   a professional appraisal or a grading-service valuation.
+- **Your records stay yours.** The catalog exports as CSV or Excel at any
+  time, and a backup is a standard Postgres dump with your photo and
+  document files, in an archive the [age](https://age-encryption.org) tool
+  opens with your key. Nothing needs Cabinet to read it.
 
 ## Quick start
 
-You need Docker with Compose v2 on an amd64 or arm64 machine. Cabinet uses about
-200 MB of memory at idle.
+You need Docker with Compose v2 on an amd64 or arm64 machine. Cabinet uses
+about 250 MB of memory at idle, and its disk use is mostly your photos,
+which are kept at full size.
 
 ```bash
 mkdir cabinet && cd cabinet
@@ -132,23 +137,33 @@ That [one file](deploy/docker-compose.yaml) is the whole install: nothing to
 clone and nothing to build. In Portainer, Dockge, or a NAS's container
 manager, paste it in as a stack and set `DB_PASSWORD` there.
 
-1. Open http://localhost/ on the same machine. Until it is claimed, Cabinet
-   serves nothing but its setup page.
+1. Open http://localhost/ on the same machine. Until the admin account
+   exists, Cabinet serves nothing but its setup page. (On a server you will
+   open from another computer, set the address first: see below.)
 2. Read the one-time setup code from the log, then enter it with the
-   username and password you want. That account is the only one.
+   username you want and a password of at least 12 characters. That account
+   is the only one.
 
    ```bash
    docker compose logs backend | grep "setup code"
    ```
 
-3. In Settings → Backups, save your backup key and switch on scheduled
-   backups. Every archive is encrypted with that key, and a lost key has no
-   recovery.
+   A stack manager shows the same line in the backend container's log. Each
+   start makes a new code until setup is done, so use the newest.
+3. Save your backup key, then switch on scheduled backups in Settings →
+   Backups. Every archive is encrypted with that key, the browser never
+   shows it, and a lost key has no recovery. Print it once and keep it in a
+   password manager:
+
+   ```bash
+   docker compose exec backend python -m app.cli backup-key show
+   ```
 
 **On a server, opened from another computer?** Cabinet answers only at the
 address it was told to expect, and any other gets a short page saying so.
-Add the exact address you will type to `.env`, then run `docker compose up
--d` again:
+Add the exact address you will type to `.env`, on lines of their own under
+`DB_PASSWORD` (keep that line: the database holds on to the password it
+first started with), then run `docker compose up -d` again:
 
 ```
 PUBLIC_ORIGINS=http://nas.local:8080
@@ -164,13 +179,17 @@ to add HTTPS that need no public address.
 **Port 80 already taken?** Set `CABINET_PORT=8080` and name the port in
 `PUBLIC_ORIGINS` too (`http://localhost:8080`). The two have to agree.
 
-**Nothing loads, or the wrong thing does?** A page titled "Cabinet isn't
-set up to answer at this address" means the address in your browser isn't
-the one in `PUBLIC_ORIGINS`. A "502 Bad Gateway" means the backend didn't
-start; `docker compose logs backend` ends with the reason.
+**Nothing loads, or the wrong thing does?** A page headed "Cabinet isn't
+set up to answer at this address", or "Cabinet refused this address" once
+you sign in, means the address in your browser isn't exactly the one in
+`PUBLIC_ORIGINS`, port included. "Cabinet isn't answering yet" that never
+goes away means the backend didn't start; `docker compose logs backend`
+ends with the reason. [Troubleshooting](docs/troubleshooting.md) has these
+and the rest.
 
-**Building from source?** Clone the repository, `cp .env.example .env`, and
-`docker compose up --build`. No Node or Python is needed on the host.
+**Building from source?** Clone the repository, `cp .env.example .env`,
+change `DB_PASSWORD` in it, and `docker compose up --build`. No Node or
+Python is needed on the host.
 
 **Want something to look at first?** An empty Cabinet offers "Load the demo
 collection": 17 pieces with values and photos, removed again in one step
@@ -218,8 +237,9 @@ in the architecture guide.
 
 | Variable | Purpose |
 |---|---|
-| `PUBLIC_ORIGINS` | Required. The exact address or addresses browsers use to reach Cabinet, comma-separated. Nothing starts without it, and no other address is answered |
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The Postgres account and database |
+| `PUBLIC_ORIGINS` | The exact address or addresses browsers use to reach Cabinet, comma-separated; no other address is answered. The one-file install starts at `http://localhost`; a build from source won't start without it |
+| `AUTH_INSECURE_HTTP` | Sign-in cookies that work over plain http. `true` in the one-file install; set it to `false` once the address is https, or the backend stops and says so |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | The Postgres account and database. Letters and digits only in the password (it goes into a URL), and it is fixed once the database has started |
 | `CABINET_PORT` | The port the proxy publishes (default `80`) |
 | `TAG` | The image version to run (default `latest`) |
 | `SETUP_CODE` or `SETUP_CODE_FILE` | Your own one-time setup code. Unset, one is generated and logged |
@@ -243,11 +263,20 @@ URL you paste.
 Settings → Backups downloads an encrypted archive of the database, photos,
 and documents, schedules them with retention, and restores one after taking
 a safety backup first. Keep a copy of the backup key outside Cabinet;
-without it nobody can open an archive. When the app itself won't start:
+without it nobody can open an archive.
+
+When the web interface won't load, two scripts do the same from the host
+while the containers run. A clone of the repository has them; beside a
+one-file install, fetch them into a `scripts` folder next to your Compose
+file (the restore also needs `unzip` and `sha256sum` on the host):
 
 ```bash
+mkdir -p scripts && cd scripts
+curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/scripts/backup.sh
+curl -fsSLO https://raw.githubusercontent.com/jsaumer/cabinet-numismatics/main/scripts/restore.sh
+chmod +x backup.sh restore.sh && cd ..
 ./scripts/backup.sh
-./scripts/restore.sh cabinet-backup-20260914-031500.zip.age
+./scripts/restore.sh backups/cabinet-backup-20260914-031500.zip.age
 ```
 
 See [docs/backup-restore.md](docs/backup-restore.md), and copy your backups
@@ -256,6 +285,7 @@ off the machine.
 ## Documentation
 
 - **Running it:** [Deployment](docs/deployment.md) ·
+  [Troubleshooting](docs/troubleshooting.md) ·
   [HTTPS on a private network](docs/https-private-network.md) ·
   [Backup and restore](docs/backup-restore.md) ·
   [Monitoring](docs/monitoring.md) · [Security](docs/security.md)
@@ -276,11 +306,12 @@ backend, and PostgreSQL. It is written by one maintainer working with
 [Claude Code](docs/claude-code.md), an AI coding assistant, and it is
 checked like this:
 
-- Since sign-in arrived, each large feature is specified, reviewed, and
-  approved before any code ([docs/specs](docs/specs/)). Sign-in, sharing,
-  and single sign-on each went through separate security reviews, with the
-  findings and fixes recorded in the spec.
-- About 1,360 backend tests and a browser test suite run on every change.
+- Each large feature is specified, reviewed, and approved before any code
+  ([docs/specs](docs/specs/)). Sign-in, sharing, and single sign-on each
+  went through separate security reviews, with the findings and fixes
+  recorded in the spec.
+- About 1,500 backend tests and a browser test suite, with an accessibility
+  scan of every main page, run on every change.
 - CI builds the whole stack each time, restores a backup into it, and
   upgrades a database from an older release.
 - Dependencies are hash-pinned, audited, and the images scanned on every

@@ -36,8 +36,11 @@ CABINET_PORT=127.0.0.1:8080
 - **The proxy has to pass the name through.** Cabinet answers by the `Host`
   it is sent. Caddy, Traefik, and Tailscale pass it unchanged; with nginx
   as the outer proxy add `proxy_set_header Host $host;`. If you get a page
-  titled "Cabinet isn't set up to answer at this address", the name
-  reaching Cabinet isn't the one in `PUBLIC_ORIGINS`.
+  headed "Cabinet isn't set up to answer at this address", the name
+  reaching Cabinet isn't the one in `PUBLIC_ORIGINS`; if you can sign in
+  and then get "Cabinet refused this address", the name is right and the
+  scheme or the port isn't
+  ([troubleshooting.md](troubleshooting.md#the-address)).
 
 You will have to sign in again after the switch: cookies belong to an
 address. Share links keep working at the new address, and a single sign-on

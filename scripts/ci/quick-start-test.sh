@@ -3,8 +3,9 @@
 # breaks a first run fails here instead of in someone's living room:
 #
 #   1. deploy/docker-compose.yaml in an empty folder with nothing set but
-#      DB_PASSWORD, then the setup code read from the log and the instance
-#      claimed at http://localhost;
+#      DB_PASSWORD, then the setup code read from the log, the instance
+#      claimed at http://localhost, the backup key printed, and the two host
+#      scripts run from a `scripts` folder beside the file;
 #   2. an address Cabinet wasn't told to expect gets the plain "not at this
 #      address" page (421), never the app and never an empty reply;
 #   3. the same stack moved to a LAN name over plain http: the name works,
@@ -133,6 +134,26 @@ claim() {  # claim <origin> [curl options]
 test "$(claim "$HERE")" = 201
 grep -q '"schema"' "$(body_of -b "$WORK/jar" -H "Origin: $HERE" "$HERE/api/health")"
 echo "   claimed at $HERE with the code from the log"
+
+# The README's third step: the backup key comes from the container, since
+# the browser never shows it.
+first exec -T backend python -m app.cli backup-key show > "$WORK/key.out" 2>&1
+grep -q '^AGE-SECRET-KEY-1' "$WORK/key.out"
+rm -f "$WORK/key.out"
+# And its host scripts, in a `scripts` folder beside the one file: a backup,
+# then that archive restored. (They run plain `docker compose` from the
+# folder, so the project this test started the stack under is named here.)
+mkdir "$FIRST/scripts"
+cp "$REPO/scripts/backup.sh" "$REPO/scripts/restore.sh" "$FIRST/scripts/"
+chmod +x "$FIRST/scripts/backup.sh" "$FIRST/scripts/restore.sh"
+beside() { (cd "$FIRST" && COMPOSE_PROJECT_NAME=cabinet-quick-start "$@"); }
+beside ./scripts/backup.sh > "$WORK/backup.out" 2>&1
+archive="$(cd "$FIRST" && ls backups/cabinet-backup-*.zip.age)"
+never "a restore by the archive's bare name" beside ./scripts/restore.sh "${archive#backups/}"
+beside ./scripts/restore.sh "$archive" > "$WORK/restore.out" 2>&1
+grep -q '^Restored from' "$WORK/restore.out"
+wait_for "$HERE/api/health"
+echo "   the backup key printed; backup.sh and restore.sh ran from beside the file"
 
 # --- 2. an address it wasn't told to expect ----------------------------------
 echo "== 2. a wrong address gets a page that says so =="

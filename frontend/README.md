@@ -492,6 +492,16 @@ checklist, without signing in ([SPEC_0320](../docs/specs/SPEC_0320.md)).
 - `e2e/a11y.spec.ts` scans the main pages with axe in light and dark and
   fails on any finding. A new page belongs in its list.
 
+## The address and the cookie (after v0.44.0)
+
+- The boot check (`auth/AuthContext.tsx`) has a `refused` state for a 403
+  from `/api/auth/state` or `/api/auth/me`: the page's address isn't one of
+  `PUBLIC_ORIGINS`. `App.tsx`'s `RefusedScreen` shows the origin to add and
+  does not retry.
+- `refresh()` returns the status it found. The sign-in page shows
+  `cookieNotKept()` when a sign-in the server accepted leaves the browser
+  signed out.
+
 ## End-to-end tests
 
 `e2e/a11y.spec.ts` is the accessibility scan and the checks beside it (see

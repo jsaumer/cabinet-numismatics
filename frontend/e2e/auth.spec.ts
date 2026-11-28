@@ -63,6 +63,26 @@ test("a wrong password, then the right one, shows the failed-attempts notice", a
   await expect(page.getByText(/failed sign-in.*since your last visit/)).toHaveCount(0);
 });
 
+test("a sign-in the browser doesn't keep says so, where the form used to come back empty", async ({ page }) => {
+  // What a browser on plain http does with a cookie marked for https only
+  // (AUTH_INSECURE_HTTP left false): the server answers 200, the cookie is
+  // dropped, and the next request is signed out. Answered here without a
+  // cookie, which is the same thing from the page's side.
+  await page.route("**/api/auth/login", (route) =>
+    route.fulfill({
+      status: 200,
+      json: { username: "owner", previous_sign_in_at: null, failed_since_previous: 0 },
+    }),
+  );
+  await page.goto("/login");
+  await page.getByLabel("Username").fill("owner");
+  await page.getByLabel("Password", { exact: true }).fill("anything at all");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("alert")).toContainText("didn't keep the sign-in cookie");
+  await expect(page).toHaveURL(/\/login/);
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 test("signing out clears the session; back navigation shows no collection data", async ({ page }) => {
   await signIn(page);
   await page.getByRole("button", { name: "Sign out" }).click();

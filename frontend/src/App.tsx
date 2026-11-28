@@ -67,6 +67,35 @@ function NotFound() {
   );
 }
 
+/** The server answered, and refused: this page's address isn't one of
+ * PUBLIC_ORIGINS. The usual cause is a port or a scheme left out, which
+ * still loads the page (nginx matches the name alone) and then fails every
+ * request a signed-in browser makes. Shown with the exact value to set,
+ * since retrying changes nothing. */
+function RefusedScreen() {
+  useTitle("Wrong address");
+  return (
+    <div className="auth-page">
+      <AuthBrand />
+      <div className="card auth-card">
+        <h1>Cabinet refused this address</h1>
+        <p>
+          Cabinet is running, but it only accepts requests from the addresses in{" "}
+          <code>PUBLIC_ORIGINS</code>, and this page's isn't one of them. The whole address has to
+          match: <code>http</code> or <code>https</code>, the name, and the port.
+        </p>
+        <p>
+          Add this to <code>PUBLIC_ORIGINS</code>, start Cabinet again (
+          <code>docker compose up -d</code>), and reload:
+        </p>
+        <p>
+          <code className="refused-origin">{window.location.origin}</code>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function BootScreen({ text }: { text: string }) {
   return (
     <div className="auth-page">
@@ -367,6 +396,7 @@ function Gate() {
       <BootScreen text="Cabinet isn't answering yet. It may still be starting; this page checks again every few seconds." />
     );
   }
+  if (status === "refused") return <RefusedScreen />;
   if (status === "setup") {
     return (
       <Routes>

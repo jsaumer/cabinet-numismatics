@@ -10,6 +10,59 @@ applies them itself on startup; for earlier releases, run
 
 ## [Unreleased]
 
+The README and quick-start pass from the 1.0 checklist: the install
+documents read as a stranger would, every command in them run, and the two
+dead ends that turned up fixed in the app. No migration, and nothing in the
+API changes.
+
+### Added
+
+- **A troubleshooting page** ([docs/troubleshooting.md](docs/troubleshooting.md)):
+  what each failure looks like, in the words Cabinet prints, and what to
+  change. The address, a backend that won't start, setup and sign-in,
+  upgrades, photos and documents, values, backups and restore, sharing, and
+  files on a NAS.
+- The quick-start test in CI now also prints the backup key and runs
+  `backup.sh` and `restore.sh` from a `scripts` folder beside the one-file
+  install, as the README says to.
+
+### Fixed
+
+- **An address with the wrong port or scheme no longer waits forever.** With
+  the name right and the rest wrong (`CABINET_PORT=8080` beside
+  `PUBLIC_ORIGINS=http://nas.local`), the page loaded, sign-in succeeded,
+  and Cabinet then said it "isn't answering yet" for good. It now says the
+  address was refused and shows the exact value to add to `PUBLIC_ORIGINS`.
+- **A sign-in the browser doesn't keep says so.** Over plain http with
+  `AUTH_INSECURE_HTTP` left `false`, the browser dropped the cookie and the
+  empty sign-in form came back with no message. The page now says the
+  cookie wasn't kept and names the setting.
+- **The README's restore example failed as printed**: the archive's path
+  needs its folder (`backups/...`). The host scripts also assumed a clone
+  of the repository; the README and the backup guide now show how to fetch
+  them beside a one-file install, where they work unchanged.
+- **The deployment guide's Compose override for an edge proxy** left the
+  port published and cut the proxy off from the backend. It is now
+  `ports: !reset []` and `networks: [default, edge]`, checked with
+  `docker compose config`. Its SSH port-forward example pointed at a port
+  nothing listened on.
+- The proxy's start-up log line said an unlisted Host "gets no response";
+  it has had the not-at-this-address page since v0.41.0.
+
+### Changed
+
+- **The README's quick start** says how to print the backup key (the
+  browser never shows it), the password's length, which setup code is
+  current, how to add to `.env` without replacing the database password,
+  and what each of the three wrong-address or not-started pages means. The
+  settings table gains `AUTH_INSECURE_HTTP`, and "Know before you install"
+  says how your records leave Cabinet.
+- The deployment guide says what `DB_PASSWORD` may contain and that it is
+  fixed after the first start, which name goes in `ALLOWED_HOSTS` under
+  Compose and on a Swarm, and where the generated keys live.
+- **The screenshots were retaken** on this build, with the demo
+  collection's value history drawn as a line.
+
 ## [0.44.0] - 2026-11-27
 
 Accessibility basics from the 1.0 checklist, measured first with an
